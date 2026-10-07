@@ -1,0 +1,24 @@
+name = "lean-forms"
+version = "0.1.0"
+defaultTargets = ["Forms", "forms", "tests"]
+testDriver = "tests"
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.34.1"
+
+[[lean_lib]]
+name = "Forms"
+
+[[lean_exe]]
+name = "forms"
+root = "Main"
+
+[[lean_exe]]
+name = "tests"
+root = "Tests"
