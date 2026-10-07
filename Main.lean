@@ -1,5 +1,6 @@
 import Forms.ExampleForms.Person
 import Forms.Technology.Terminal
+import Forms.Technology.NativeTerminal
 
 open Forms.Technology
 
@@ -15,10 +16,11 @@ instance : MonadTerminal IO where
       return none
     return some (line.dropEndWhile (fun char => char == '\n' || char == '\r')).toString
 
-def main : IO Unit := do
-  MonadTerminal.println "\n  LEAN FORMS\n  ----------"
-  MonadTerminal.println "  Set Subscribed to true to show the address."
-  let value ← Forms.Technology.Terminal.run Forms.ExampleForms.Person.form Forms.ExampleForms.Person.initial
+def main (args : List String) : IO Unit := do
+  let value ← if List.contains args "--plain" then
+      Forms.Technology.Terminal.run Forms.ExampleForms.Person.form Forms.ExampleForms.Person.initial
+    else
+      NativeTerminal.run Forms.ExampleForms.Person.form Forms.ExampleForms.Person.initial
   MonadTerminal.println "\n  Final values\n  ------------"
   MonadTerminal.println ("  Name        " ++ Forms.Path.get Forms.ExampleForms.Person.name value)
   MonadTerminal.println ("  Subscribed  " ++ toString (Forms.Path.get Forms.ExampleForms.Person.subscribed value))

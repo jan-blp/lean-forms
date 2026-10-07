@@ -2,6 +2,7 @@ import Mathlib.Data.Nat.Basic
 import Forms.ExampleForms.Person
 import Forms.Technology.Input
 import Forms.Technology.Terminal
+import Forms.Technology.Tui
 
 open Forms Forms.Technology
 
@@ -120,9 +121,78 @@ private def testTerminal : IO Unit := do
   check "TerminalDistinguishesBlankLineFromEndOfInput"
     (blankName == ("", (false, ("Lambda Lane", 12))))
 
+private structure TuiScript where
+  keys : List Key
+  frames : List Screen := []
+
+private instance : MonadTui (StateM TuiScript) where
+  readKey := do
+    let script ← get
+    match script.keys with
+    | [] => return .quit
+    | key :: rest =>
+      set { script with
+        keys := rest }
+      return key
+  screenSize := pure {
+    columns := 80
+    rows := 24
+  }
+  draw lines := modify fun script =>
+    { script with
+      frames := script.frames ++ [lines] }
+
+private def testTui : IO Unit := do
+  let form := ExampleForms.Person.form
+  let initial := ExampleForms.Person.initial
+  let (value, script) := StateT.run (Tui.run (m := StateM TuiScript) form initial) {
+    keys := [.up, .down, .character ' ', .down, .down, .down,
+      .enter, .clear, .character '-', .enter,
+      .clear, .character '4', .character '2', .enter,
+      .up, .up, .character ' ', .character ' ', .quit]
+  }
+  check "TuiEditsAndPreservesHiddenValues"
+    (value == ("Ada", (true, ("Lambda Lane", 42))) && List.isEmpty script.keys)
+  check "TuiShowsValidationErrors"
+    (List.any script.frames (fun screen =>
+      match screen.editor with
+      | some editor => editor.error == some (InputError.message .expectedNatural)
+      | none => false))
+  let (cancelled, _) := StateT.run (Tui.run (m := StateM TuiScript) form initial) {
+    keys := [.enter, .clear, .character 'x', .escape, .quit]
+  }
+  check "TuiCancelDiscardsDraft" (cancelled == initial)
+  let (blank, _) := StateT.run (Tui.run (m := StateM TuiScript) form initial) {
+    keys := [.enter, .clear, .enter, .quit]
+  }
+  check "TuiSavesEmptyText" (Path.get ExampleForms.Person.name blank == "")
+  let (unicode, _) := StateT.run (Tui.run (m := StateM TuiScript) form initial) {
+    keys := [.enter, .clear, .character 'é', .backspace, .character 'q', .enter, .quit]
+  }
+  check "TuiBackspaceAndLiteralQuitCharacter" (Path.get ExampleForms.Person.name unicode == "q")
+  let (vim, _) := StateT.run (Tui.run (m := StateM TuiScript) form initial) {
+    keys := [.character 'j', .character ' ', .character 'k', .character 'i',
+      .clear, .character 'j', .character 'k', .character 'i', .enter, .character 'q']
+  }
+  check "TuiVimKeysNavigateAndRemainLiteralWhileEditing"
+    (vim == ("jki", (true, ("Lambda Lane", 12))))
+  let (unfinished, _) := StateT.run (Tui.run (m := StateM TuiScript) form initial) {
+    keys := [.enter, .clear, .character 'x', .quit]
+  }
+  check "TuiQuitDiscardsDraft" (unfinished == initial)
+  let visible := Path.set ExampleForms.Person.subscribed true initial
+  let screen := Tui.screen form {
+    value := visible
+    selected := 3
+  }
+  check "TuiProvidesStructuredFieldsToRenderer"
+    (screen.selected == 3 && List.length screen.fields == 4 &&
+      List.map (fun field => field.value) screen.fields == ["Ada", "[x]", "Lambda Lane", "12"])
+
 def main : IO Unit := do
   testEditsAndVisibility
   testLabeledFields
   testInput
   testPredicates
   testTerminal
+  testTui
