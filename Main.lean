@@ -1,3 +1,4 @@
+import Forms.Runtime.Cli
 import Forms.ExampleForms.Person
 import Forms.Runtime.Terminal
 
@@ -15,8 +16,14 @@ instance : MonadTerminal IO where
       return none
     return some (line.dropEndWhile (fun char => char == '\n' || char == '\r')).toString
 
-def main : IO Unit := do
+private def runPerson (_ : Unit) : IO Unit := do
   MonadTerminal.println "\n  LEAN FORMS\n  ----------"
   let value ← Forms.Runtime.Terminal.run Forms.ExampleForms.Person.form Forms.ExampleForms.Person.initial
   MonadTerminal.println "\n  Final values\n  ------------"
   MonadTerminal.println ("  Name        " ++ Forms.Path.get Forms.ExampleForms.Person.name value)
+
+private def cli : Cli Unit where
+  examples := [("person", runPerson)]
+  initial := ()
+
+def main (args : List String) : IO Unit := cli.run args
