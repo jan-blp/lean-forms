@@ -1,8 +1,8 @@
-import Forms.Core.Form
+import Forms.Core.Composition
 import Lean.Data.Json
 
 namespace Forms
-open Lean
+open Lean Composition
 
 def DataType.toJson (t : DataType) : Json :=
   match t with
@@ -11,6 +11,9 @@ def DataType.toJson (t : DataType) : Json :=
   | .date => Json.mkObj [("kind", Lean.toJson "date")]
   | .natural => Json.mkObj [("kind", Lean.toJson "natural")]
   | .enum domain => Json.mkObj [("kind", Lean.toJson "enum"), ("options", Lean.toJson domain.options)]
+  | .record fieldNames fieldTypes => Json.mkObj [("kind", Lean.toJson "record"),
+      ("fields", Json.arr ((FinEnum.toList fieldNames).map fun i =>
+        Json.mkObj [("name", Lean.toJson (fieldNames.label i)), ("type", DataType.toJson (fieldTypes i))]).toArray)]
 
 namespace Runtime.JsonProtocol
 
@@ -21,6 +24,22 @@ def valueToJson {type : DataType} (value : ⟦type⟧) : Json :=
   | .date => Lean.toJson (Date.toString value)
   | .natural => Lean.toJson (toString value)
   | .enum domain => Lean.toJson (FinEnum.equiv (α := domain) value).val
+  | .record fieldNames fieldTypes => Json.mkObj ((FinEnum.toList fieldNames).map fun i =>
+      (fieldNames.label i, valueToJson (type := fieldTypes i) (value i)))
+
+private def sequenceFin {n : Nat} {α : Fin n → Type}
+    (values : (i : Fin n) → Except String (α i)) : Except String ((i : Fin n) → α i) :=
+  match n with
+  | 0 => pure (fun i => Fin.elim0 i)
+  | _ + 1 => do
+    let head ← values 0
+    let tail ← sequenceFin (fun i => values i.succ)
+    pure (Fin.cons head tail)
+
+private def sequence {ι : Type} [FinEnum ι] {α : ι → Type}
+    (values : (i : ι) → Except String (α i)) : Except String ((i : ι) → α i) := do
+  let result ← sequenceFin (fun i => values (FinEnum.equiv.symm i))
+  pure fun i => (FinEnum.equiv.symm_apply_apply i) ▸ result (FinEnum.equiv i)
 
 def valueFromJson (type : DataType) (json : Json) : Except String ⟦type⟧ :=
   match type with
@@ -40,6 +59,11 @@ def valueFromJson (type : DataType) (json : Json) : Except String ⟦type⟧ :=
     let index ← json.getNat?
     if h : index < FinEnum.card domain then return FinEnum.equiv.symm ⟨index, h⟩
     else throw "Invalid enum in interpreter result"
+  | .record fieldNames fieldTypes => do
+    let object ← json.getObj?
+    if object.size != FinEnum.card fieldNames then
+      throw "Wrong number of record fields in interpreter result"
+    sequence (fun i => do valueFromJson (fieldTypes i) (← json.getObjVal? (fieldNames.label i)))
 
 theorem valueFromJson_date_sound {json : Json} {date : Date}
     (h : valueFromJson .date json = .ok date) :
@@ -52,9 +76,10 @@ theorem valueFromJson_date_sound {json : Json} {date : Date}
 
 end Runtime.JsonProtocol
 
-def Path.toList {source target : DataType} (path : Path source target) : List Nat :=
+def Path.toList {source target : DataType} (path : Path source target) : List String :=
   match path with
   | .self => []
+  | .field (fieldNames := fieldNames) fieldName rest => fieldNames.label fieldName :: Path.toList rest
 
 def Expr.toJson {input type : DataType} (expression : Expr input type) : Json :=
   match expression with
@@ -75,16 +100,20 @@ def Widget.name {type : DataType} (widget : Widget type) : String :=
   | .naturalInput => "naturalInput"
   | .select => "select"
 
-def Form.toJson {type : DataType} (form : Form type) : Json :=
-  match form with
-  | .field label widget => Json.mkObj [("kind", Lean.toJson "field"), ("label", Lean.toJson label),
-      ("widget", Lean.toJson (Widget.name widget))]
+def Component.toJson {state : DataType} (component : Component state) : Json :=
+  match component with
+  | .field (value := value) path label widget => Json.mkObj [
+      ("kind", Lean.toJson "field"), ("path", Lean.toJson (Path.toList path)),
+      ("schema", DataType.toJson value), ("label", Lean.toJson label), ("widget", Lean.toJson (Widget.name widget))]
+  | .stack (items := items) label children => Json.mkObj [
+      ("kind", Lean.toJson "stack"), ("label", Lean.toJson label),
+      ("children", Lean.toJson ((FinEnum.toList items).map fun index => Component.toJson (children index)))]
 
 namespace Runtime.JsonProtocol
 
-def encode {context : DataType} (form : Form context) (value : ⟦context⟧) : String :=
-  (Json.mkObj [("version", Lean.toJson (1 : Nat)), ("schema", DataType.toJson context),
-    ("form", Form.toJson form), ("value", valueToJson value)]).compress
+def encode {context : DataType} (form : Component context) (value : ⟦context⟧) : String :=
+  (Json.mkObj [("version", Lean.toJson (4 : Nat)), ("schema", DataType.toJson context),
+    ("form", Component.toJson form), ("value", valueToJson value)]).compress
 
 end Runtime.JsonProtocol
 
