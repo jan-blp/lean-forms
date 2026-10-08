@@ -1,7 +1,6 @@
 import Mathlib.Data.Nat.Basic
 import Forms.ExampleForms.Person
-import Forms.Runtime.Input
-import Forms.Runtime.Terminal
+import Forms.Runtime.Tui
 
 open Forms Forms.Runtime
 
@@ -21,61 +20,19 @@ private def testPredicates : IO Unit := do
   check "EvaluatesTypedPredicate" (Expr.eval eligible 12)
   check "PredicateUsesEditedValue" (!(Expr.eval eligible 9))
 
-private def testInput : IO Unit := do
-  check "RejectsInvalidBooleans" (match parse .checkbox "yes" with
-    | .error .expectedBoolean => true
-    | _ => false)
-  for input in ["-1", "1.5", "", "abc"] do
-    check ("RejectsInvalidNatural " ++ reprStr input) (match parse .naturalInput input with
-      | .error .expectedNatural => true
-      | _ => false)
-  check "PreservesTextWhitespace" (match parse .textInput " Ada " with
-    | .ok value => value == " Ada "
-    | .error _ => false)
-  check "AcceptsZero" (match parse .naturalInput "0" with
-    | .ok value => value == 0
-    | .error _ => false)
-
-private structure Script where
-  input : List String
-  output : List String := []
-
-private instance : MonadTerminal (StateM Script) where
-  putStr text := modify fun script =>
-    { script with
-      output := script.output ++ [text] }
-  readLine := do
-    let script ← get
-    match script.input with
-    | [] => return none
-    | line :: rest =>
-      set { script with
-        input := rest }
-      return some line
-
-private def testTerminal : IO Unit := do
-  let initial := ExampleForms.Person.initial
-  let form := ExampleForms.Person.form
-  let (edited, script) := StateT.run (Terminal.run (m := StateM Script) form initial)
-    { input := ["0", "1", "Grace", "q"] }
-  check "TerminalEditsThroughCapabilities" (edited == "Grace" && script.input == [])
-  check "TerminalReportsInvalidSelection"
-    (List.contains script.output "Choose one of the displayed field numbers.\n")
-  let (unchanged, _) := StateT.run (Terminal.run (m := StateM Script) form initial)
-    { input := ["1"] }
-  check "TerminalPreservesValueAtEndOfInput" (unchanged == initial)
-  let (blankName, _) := StateT.run (Terminal.run (m := StateM Script) form initial)
-    { input := ["1", ""] }
-  check "TerminalDistinguishesBlankLineFromEndOfInput" (blankName == "")
-  let (number, errors) := StateT.run
-    (Terminal.run (m := StateM Script) (Form.field "Number" Widget.naturalInput) 12)
-    { input := ["1", "-1", "1", "42", "q"] }
-  check "TerminalValidatesNaturalInput" (number == 42)
-  check "TerminalReportsInvalidInput"
-    (List.contains errors.output "Enter a non-negative whole number.\n")
-
 def main : IO Unit := do
   testFields
-  testInput
   testPredicates
-  testTerminal
+  let encoded := JsonProtocol.encode ExampleForms.Person.form ExampleForms.Person.initial
+  let json ← IO.ofExcept (Lean.Json.parse encoded)
+  let value ← IO.ofExcept (json.getObjVal? "value" >>= JsonProtocol.valueFromJson ExampleForms.Person.person)
+  check "SpecificationValueRoundTrip" (value == ExampleForms.Person.initial)
+  let fixture ← IO.FS.readFile "native/tui/tests/person.json"
+  check "RustFixtureMatchesLeanSpecification" (fixture.trimAscii.toString == encoded)
+  let huge := 12345678901234567890123456789012345678901234567890
+  check "UnboundedNaturalRoundTrip"
+    (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (type := .natural) huge) == .ok huge)
+  check "RejectsMalformedInterpreterResult"
+    (match JsonProtocol.valueFromJson ExampleForms.Person.person (Lean.toJson (42 : Nat)) with
+      | .error _ => true
+      | .ok _ => false)
