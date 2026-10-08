@@ -14,7 +14,7 @@ require mathlib from git "https://github.com/leanprover-community/mathlib4" @ "v
 
 target terminal.o pkg : FilePath := do
   let source ← inputTextFile (pkg.dir / "native" / "terminal.c")
-  let header ← inputTextFile (pkg.dir / "native" / "screen.h")
+  let header ← inputTextFile (pkg.dir / "native" / "interpreter.h")
   let inputs := Job.zipWith (fun path _ => path) source header
   buildO (pkg.buildDir / "native" / "terminal.o") inputs
     #["-I", (← getLeanIncludeDir).toString] #["-std=c11", "-D_POSIX_C_SOURCE=200809L", "-fPIC"] "cc"
@@ -27,7 +27,8 @@ extern_lib ratatui pkg := do
   let files := #[
     pkg.dir / "native/ratatui/Cargo.toml",
     pkg.dir / "native/ratatui/Cargo.lock",
-    pkg.dir / "native/ratatui/src/lib.rs"]
+    pkg.dir / "native/ratatui/src/lib.rs",
+    pkg.dir / "native/ratatui/src/interpreter.rs"]
   let jobs ← Array.mapM (fun path => do inputTextFile path) files
   let inputs := Job.collectArray jobs
   let targetDir := pkg.dir / ".lake" / "ratatui"

@@ -10,6 +10,7 @@ open ExampleForms Technology
 def run
   {m : Type → Type}
   [Monad m]
+  [MonadExceptOf IO.Error m]
   [MonadTerminal m]
   [MonadTui m]
   (args : List String)

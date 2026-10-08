@@ -37,113 +37,129 @@ struct Screen<'a> {
     selected: usize,
     editor: Option<Editor<'a>>,
 }
-struct App {
-    terminal: Terminal<CrosstermBackend<io::Stdout>>,
-    table: TableState,
-}
-
+mod interpreter;
+use interpreter::{Engine, Key};
 thread_local! {
-    static APP: RefCell<Option<App>> = const { RefCell::new(None) };
     static ERROR: RefCell<CString> = RefCell::new(CString::new("").unwrap());
+    static OUTPUT: RefCell<CString> = RefCell::new(CString::new("").unwrap());
 }
-
-fn boundary(action: impl FnOnce() -> Result<i32>) -> i32 {
-    let outcome = catch_unwind(AssertUnwindSafe(action));
-    let message = match outcome {
-        Ok(Ok(value)) => return value,
-        Ok(Err(error)) => error.to_string(),
-        Err(_) => "Ratatui adapter panicked".to_owned(),
-    };
-    ERROR.with(|error| *error.borrow_mut() = CString::new(message.replace('\0', " ")).unwrap());
-    -1
-}
-
-fn restore() {
-    let _ = terminal::disable_raw_mode();
-    let _ = execute!(io::stdout(), Show, LeaveAlternateScreen);
-}
-
 #[no_mangle]
 pub extern "C" fn forms_ratatui_error() -> *const c_char {
-    ERROR.with(|error| error.borrow().as_ptr())
+    ERROR.with(|v| v.borrow().as_ptr())
 }
-
 #[no_mangle]
-pub extern "C" fn forms_ratatui_start() -> i32 {
-    boundary(|| {
-        if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
-            return Ok(0);
+pub extern "C" fn forms_ratatui_result() -> *const c_char {
+    OUTPUT.with(|v| v.borrow().as_ptr())
+}
+struct Session;
+impl Drop for Session {
+    fn drop(&mut self) {
+        let _ = terminal::disable_raw_mode();
+        let _ = execute!(io::stdout(), Show, LeaveAlternateScreen);
+    }
+}
+fn run(engine: &mut Engine, interrupted: extern "C" fn() -> i32) -> Result<()> {
+    if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
+        return Err("The TUI needs an interactive terminal. Use --plain for line input.".into());
+    }
+    terminal::enable_raw_mode()?;
+    let _session = Session;
+    execute!(io::stdout(), EnterAlternateScreen, Hide)?;
+    let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
+    terminal.clear()?;
+    let mut table = TableState::default();
+    let mut dirty = true;
+    loop {
+        if dirty {
+            let fields = engine.fields();
+            let values: Vec<_> = fields.iter().map(|f| engine.shown(f)).collect();
+            let screen = Screen {
+                fields: fields
+                    .iter()
+                    .zip(&values)
+                    .map(|(f, value)| Field {
+                        label: &f.label,
+                        value,
+                    })
+                    .collect(),
+                selected: engine.selected,
+                editor: engine.editor.as_ref().and_then(|e| {
+                    fields.get(engine.selected).map(|f| Editor {
+                        label: &f.label,
+                        text: &e.text,
+                        error: e.error.as_deref(),
+                    })
+                }),
+            };
+            terminal.draw(|frame| render(frame, &screen, &mut table))?;
+            dirty = false;
         }
-        terminal::enable_raw_mode()?;
-        let setup = (|| -> Result<App> {
-            execute!(io::stdout(), EnterAlternateScreen, Hide)?;
-            let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
-            terminal.clear()?;
-            Ok(App {
-                terminal,
-                table: TableState::default(),
-            })
-        })();
-        match setup {
-            Ok(app) => APP.with(|state| *state.borrow_mut() = Some(app)),
-            Err(error) => {
-                restore();
-                return Err(error);
-            }
+        if interrupted() != 0 {
+            break;
         }
-        Ok(1)
-    })
-}
-
-#[no_mangle]
-pub extern "C" fn forms_ratatui_stop() -> i32 {
-    boundary(|| {
-        APP.with(|app| {
-            app.borrow_mut().take();
-        });
-        restore();
-        Ok(0)
-    })
-}
-
-#[no_mangle]
-pub extern "C" fn forms_ratatui_key() -> i32 {
-    boundary(|| {
         if !event::poll(Duration::from_millis(100))? {
-            return Ok(0);
+            continue;
         }
-        let Event::Key(key) = event::read()? else {
-            return Ok(0);
+        let key = match event::read()? {
+            Event::Resize(_, _) => {
+                dirty = true;
+                continue;
+            }
+            Event::Key(key) if key.kind != KeyEventKind::Release => key,
+            _ => continue,
         };
-        if key.kind == KeyEventKind::Release {
-            return Ok(0);
-        }
-        Ok(match key.code {
-            KeyCode::Up => 1,
-            KeyCode::Down => 2,
-            KeyCode::Enter => 3,
-            KeyCode::Esc => 4,
-            KeyCode::Backspace => 5,
-            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => 6,
-            KeyCode::Char('c' | 'd' | 'z') if key.modifiers.contains(KeyModifiers::CONTROL) => 7,
-            KeyCode::Char(char)
+        let key = match key.code {
+            KeyCode::Up => Key::Up,
+            KeyCode::Down => Key::Down,
+            KeyCode::Enter => Key::Enter,
+            KeyCode::Esc => Key::Escape,
+            KeyCode::Backspace => Key::Backspace,
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => Key::Clear,
+            KeyCode::Char('c' | 'd' | 'z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                Key::Quit
+            }
+            KeyCode::Char(c)
                 if !key
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                char as i32 + 256
+                Key::Character(c)
             }
-            _ => 0,
-        })
-    })
+            _ => continue,
+        };
+        if !engine.step(key) {
+            break;
+        }
+        dirty = true;
+    }
+    Ok(())
 }
-
+/// # Safety
+/// `data` must reference `len` readable bytes for this call; `interrupted` must
+/// remain callable throughout the session. Input is copied; no pointers are retained.
 #[no_mangle]
-pub extern "C" fn forms_ratatui_size() -> i32 {
-    boundary(|| {
-        let (columns, rows) = terminal::size()?;
-        Ok(((rows as i32) << 16) | columns as i32)
-    })
+pub unsafe extern "C" fn forms_ratatui_run(
+    data: *const u8,
+    len: usize,
+    interrupted: extern "C" fn() -> i32,
+) -> i32 {
+    let outcome = catch_unwind(AssertUnwindSafe(|| -> Result<()> {
+        if data.is_null() {
+            return Err("Null specification".into());
+        }
+        let json = std::str::from_utf8(unsafe { std::slice::from_raw_parts(data, len) })?;
+        let mut engine = Engine::parse(json)?;
+        run(&mut engine, interrupted)?;
+        OUTPUT.with(|v| *v.borrow_mut() = CString::new(engine.result()).unwrap());
+        Ok(())
+    }));
+    let message = match outcome {
+        Ok(Ok(())) => return 0,
+        Ok(Err(e)) => e.to_string(),
+        Err(_) => "Form interpreter panicked".into(),
+    };
+    ERROR.with(|v| *v.borrow_mut() = CString::new(message.replace('\0', " ")).unwrap());
+    -1
 }
 
 fn clean(text: &str) -> String {
@@ -268,106 +284,6 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState) {
     }
 }
 
-// These layouts mirror native/screen.h. The C shim owns the temporary array
-// and borrows Lean strings; Rust never stores their pointers after draw returns.
-#[repr(C)]
-pub struct FormsString {
-    data: *const u8,
-    len: usize,
-}
-#[repr(C)]
-pub struct FormsField {
-    label: FormsString,
-    value: FormsString,
-}
-#[repr(C)]
-pub struct FormsEditor {
-    label: FormsString,
-    text: FormsString,
-    error: *const FormsString,
-}
-#[repr(C)]
-pub struct FormsScreen {
-    fields: *const FormsField,
-    field_count: usize,
-    selected: usize,
-    editor: *const FormsEditor,
-}
-
-impl FormsString {
-    // The caller guarantees that the byte span lives as long as this borrow.
-    unsafe fn view(&self) -> Result<&str> {
-        if self.len == 0 {
-            return Ok("");
-        }
-        if self.data.is_null() {
-            return Err("Null string data".into());
-        }
-        Ok(std::str::from_utf8(unsafe {
-            std::slice::from_raw_parts(self.data, self.len)
-        })?)
-    }
-}
-
-impl FormsScreen {
-    unsafe fn view(&self) -> Result<Screen<'_>> {
-        let fields = if self.field_count == 0 {
-            &[][..]
-        } else {
-            if self.fields.is_null() {
-                return Err("Null field array".into());
-            }
-            unsafe { std::slice::from_raw_parts(self.fields, self.field_count) }
-        };
-        let fields = fields
-            .iter()
-            .map(|field| -> Result<Field<'_>> {
-                Ok(Field {
-                    label: unsafe { field.label.view() }?,
-                    value: unsafe { field.value.view() }?,
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-        if !fields.is_empty() && self.selected >= fields.len() {
-            return Err("Selected field is out of bounds".into());
-        }
-        let editor = unsafe { self.editor.as_ref() }
-            .map(|editor| -> Result<Editor<'_>> {
-                Ok(Editor {
-                    label: unsafe { editor.label.view() }?,
-                    text: unsafe { editor.text.view() }?,
-                    error: unsafe { editor.error.as_ref() }
-                        .map(|error| unsafe { error.view() })
-                        .transpose()?,
-                })
-            })
-            .transpose()?;
-        Ok(Screen {
-            fields,
-            selected: self.selected,
-            editor,
-        })
-    }
-}
-
-/// # Safety
-/// `screen` and all nested pointers must match screen.h and remain valid,
-/// aligned, and immutable until this function returns. No pointers are retained.
-#[no_mangle]
-pub unsafe extern "C" fn forms_ratatui_draw(screen: *const FormsScreen) -> i32 {
-    boundary(|| {
-        let screen = unsafe { screen.as_ref() }.ok_or("Null screen")?;
-        let screen = unsafe { screen.view() }?;
-        APP.with(|state| -> Result<i32> {
-            let mut state = state.borrow_mut();
-            let app = state.as_mut().ok_or("Terminal is not initialized")?;
-            app.terminal
-                .draw(|frame| render(frame, &screen, &mut app.table))?;
-            Ok(0)
-        })
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -413,69 +329,6 @@ mod tests {
             .content()
             .iter()
             .any(|cell| cell.bg == Color::Blue));
-    }
-
-    fn span(text: &str) -> FormsString {
-        FormsString {
-            data: text.as_ptr(),
-            len: text.len(),
-        }
-    }
-
-    #[test]
-    fn ffi_borrows_utf8_spans_and_preserves_optional_empty_strings() {
-        let text = "Zoé\0界";
-        let fields = [FormsField {
-            label: span("Person.Name"),
-            value: span(text),
-        }];
-        let error = span("");
-        let editor = FormsEditor {
-            label: span("Person.Name"),
-            text: span(text),
-            error: &error,
-        };
-        let raw = FormsScreen {
-            fields: fields.as_ptr(),
-            field_count: 1,
-            selected: 0,
-            editor: &editor,
-        };
-        let screen = unsafe { raw.view() }.unwrap();
-        assert_eq!(screen.fields[0].value, text);
-        assert_eq!(screen.fields[0].value.as_ptr(), text.as_ptr());
-        assert_eq!(screen.editor.as_ref().unwrap().error, Some(""));
-        assert_eq!(screen.editor.as_ref().unwrap().text, text);
-        let empty = FormsScreen {
-            fields: std::ptr::null(),
-            field_count: 0,
-            selected: 0,
-            editor: std::ptr::null(),
-        };
-        let screen = unsafe { empty.view() }.unwrap();
-        assert!(screen.fields.is_empty());
-        assert!(screen.editor.is_none());
-    }
-
-    #[test]
-    fn ffi_rejects_invalid_utf8_and_selection() {
-        let invalid = [255u8];
-        let text = FormsString {
-            data: invalid.as_ptr(),
-            len: invalid.len(),
-        };
-        assert!(unsafe { text.view() }.is_err());
-        let fields = [FormsField {
-            label: span("Name"),
-            value: span("Ada"),
-        }];
-        let raw = FormsScreen {
-            fields: fields.as_ptr(),
-            field_count: 1,
-            selected: 1,
-            editor: std::ptr::null(),
-        };
-        assert!(unsafe { raw.view() }.is_err());
     }
 
     #[test]

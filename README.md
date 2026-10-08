@@ -1,12 +1,26 @@
 # lean-forms
 
-With [elan](https://lean-lang.org/install/), Rust/Cargo (1.88 or newer), and a C compiler (`cc`) installed, run from the repository:
+Typed forms in Lean with a Rust terminal UI.
+
+Requires Linux or macOS, [elan](https://lean-lang.org/install/), Rust/Cargo 1.88+, and `cc`.
 
 ```sh
 lake exe cache get
-lake exe forms
+lake -q exe forms
 ```
 
-Run in a Linux or macOS terminal. Use `j`/`k` or ↑/↓ to select, `i` or Enter to edit, Space to toggle a checkbox, and `q` to quit. While editing: Enter saves, Esc cancels, Ctrl-U clears.
+Use ↑/↓ to select, Enter to edit/save, Space to toggle, Esc to cancel editing, and `q` to quit.
+Add `--plain` for the line interface.
 
-For the original line interface, run `lake exe forms --plain`.
+Run checks:
+
+```sh
+lake test
+CARGO_HOME="$PWD/.lake/cargo-home" cargo test --locked --manifest-path native/ratatui/Cargo.toml --target-dir .lake/ratatui
+python3 tools/test_terminal.py
+```
+
+## Future reading
+
+- [The Essence of Form Abstraction](https://homepages.inf.ed.ac.uk/slindley/papers/formlets-essence.pdf).
+- [Yesod forms](https://www.yesodweb.com/book/forms).
