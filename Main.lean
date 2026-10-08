@@ -13,7 +13,9 @@ private def valueToJson {type : DataType} (value : DataType.denote type) : Lean.
   | .boolean => Lean.toJson value
   | .natural => Lean.toJson value
   | .date => Lean.toJson (Date.toString value)
-
+  | .record fields children =>
+    .mkObj ((FinEnum.toList fields).map fun i =>
+      (fields.label i, valueToJson (type := children i) (value i)))
 private def runPerson (theme : NativeTerminal.Theme) : IO Unit := do
   let _ : MonadTui IO := NativeTerminal.interpreter theme
   let value ← Tui.run Person.form Person.initial

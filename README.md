@@ -52,6 +52,11 @@ The scripts do not change your shell startup files.
 Run `python3 tools/test_cli.py` after building to check parsing and completion
 against both Bash and Fish (both shells must be installed for this check).
 
+Records use an `Enum` of typed field identities with unique string names.
+`DataType.record fields children` denotes `(field : fields.type) → DataType.denote (children field)`.
+Groups follow enumeration order; their display labels are independent of schema names.
+Record values serialize as JSON objects and paths use field names.
+
 Dates use `YYYY-MM-DD` (years 0001–9999). In the calendar, h/l moves a day,
 k/j a week, and Page Up/Down a month. `i` or Enter focuses the input; Enter saves.
 Esc returns to the calendar, then cancels.

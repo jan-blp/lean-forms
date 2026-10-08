@@ -2,18 +2,23 @@ import Forms.Core.Expr
 
 namespace Forms
 
-inductive Widget : (type : DataType) → Type where
+inductive Widget : (type : DataType) → Type 1 where
   | textInput : Widget .text
   | checkbox : Widget .boolean
   | naturalInput : Widget .natural
   | dateInput : Widget .date
 
-inductive Form (root : DataType) : (type : DataType) → Type where
+inductive Form (root : DataType) : (type : DataType) → Type 1 where
   | field
       {t : DataType}
       (label : String)
       (widget : Widget t)
       : Form root t
+  | group
+      {fields : Enum} {children : fields → DataType}
+      (label : String)
+      (forms : (i : fields) → Form root (children i))
+      : Form root (.record fields children)
 
 structure FieldRef (root : DataType) where
   type : DataType
@@ -24,7 +29,7 @@ structure FieldRef (root : DataType) where
 def Form.fieldRefs
     {root type : DataType}
     (form : Form root type)
-    (_value : DataType.denote root)
+    (value : DataType.denote root)
     : List (FieldRef type) :=
   match form with
   | .field label widget =>
@@ -32,5 +37,11 @@ def Form.fieldRefs
        path := .self
        labels := label
        widget := widget }]
+  | .group label children =>
+    (FinEnum.toList _).flatMap fun index =>
+      (Form.fieldRefs (children index) value).map fun field =>
+        { field with
+          path := .child index field.path
+          labels := (label, field.labels) }
 
 end Forms

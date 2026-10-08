@@ -4,21 +4,53 @@ import Forms.Runtime.Tui
 
 open Forms Forms.Runtime
 
+private def personValues (value : DataType.denote ExampleForms.Person.schema) : String × Bool × String × Nat :=
+  (ExampleForms.Person.name.get value, ExampleForms.Person.subscribed.get value,
+    ExampleForms.Person.street.get value, ExampleForms.Person.number.get value)
+
 private def check (name : String) (passed : Bool) : IO Unit := do
   if passed then IO.println ("PASS " ++ name)
   else throw (IO.userError ("FAIL " ++ name))
 
-private def testFields : IO Unit := do
-  let fields := Form.fieldRefs ExampleForms.Person.form ExampleForms.Person.initial
-  check "SingleField" (fields.length == 1)
-  check "FieldLabel" (fields.map (fun field => Path.Labels.toList field.labels) == [["Name"]])
-  check "RootPathReadsValue" (Path.get ExampleForms.Person.name ExampleForms.Person.initial == "Ada")
-  check "RootPathReplacesValue" (Path.set ExampleForms.Person.name "Grace" ExampleForms.Person.initial == "Grace")
+private def testEdits : IO Unit := do
+  let initial := ExampleForms.Person.initial
+  let form := ExampleForms.Person.form
+  check "InitiallyShowsAllFields" ((Form.fieldRefs form initial).length == 4)
+  let subscribed := Path.set ExampleForms.Person.subscribed true initial
+  check "SubscriptionPreservesFields" ((Form.fieldRefs form subscribed).length == 4)
+  let changed := Path.set ExampleForms.Person.number 42 subscribed
+  check "NestedEditPreservesOtherFields" (personValues changed == ("Ada", (true, ("Lambda Lane", 42))))
+  let unsubscribed := Path.set ExampleForms.Person.subscribed false changed
+  check "SubscriptionPreservesNestedValue"
+    ((Form.fieldRefs form unsubscribed).length == 4 && Path.get ExampleForms.Person.number unsubscribed == 42)
+  check "SubscriptionRoundTripPreservesAddress"
+    (personValues (Path.set ExampleForms.Person.subscribed true unsubscribed) == personValues changed)
+
+private def testLabeledFields : IO Unit := do
+  let value := Path.set ExampleForms.Person.subscribed true ExampleForms.Person.initial
+  let fields := Form.fieldRefs ExampleForms.Person.form value
+  check "GeneratedLabelsFollowGroups"
+    (List.map (fun field => Path.Labels.toList field.labels) fields ==
+      [["Person", "Name"], ["Person", "Subscribed"],
+       ["Person", "Address", "Street"],
+       ["Person", "Address", "Number"]])
+  check "GeneratedPathsReadMatchingValues"
+    (fields.map (fun field => JsonProtocol.valueToJson (Path.get field.path value)) == [Lean.toJson "Ada", Lean.toJson true, Lean.toJson "Lambda Lane", Lean.toJson "12"])
+  match fields[3]? with
+  | none => throw (IO.userError "Missing generated number field")
+  | some field =>
+    match field with
+    | ⟨.natural, path, _, _⟩ =>
+      check "GeneratedPathEditsCorrectField" (personValues (Path.set path 42 value) == ("Ada", (true, ("Lambda Lane", 42))))
+    | _ => throw (IO.userError "Expected a natural field")
 
 private def testPredicates : IO Unit := do
-  let eligible : Expr .natural .boolean := .and (.value true) (.natLe (.value 10) (.project .self))
-  check "EvaluatesTypedPredicate" (Expr.eval eligible 12)
-  check "PredicateUsesEditedValue" (!(Expr.eval eligible 9))
+  let eligible : Expr ExampleForms.Person.schema .boolean :=
+    .and (.value true)
+      (.natLe (.value 10) (.project ExampleForms.Person.number))
+  check "EvaluatesTypedPredicate" (Expr.eval eligible ExampleForms.Person.initial)
+  check "PredicateUsesEditedValue"
+    (!(Expr.eval eligible (Path.set ExampleForms.Person.number 9 ExampleForms.Person.initial)))
 
 private def testDates : IO Unit := do
   let cases ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "native/tui/tests/dates.json"))
@@ -36,18 +68,19 @@ private def testDates : IO Unit := do
 
 def main : IO Unit := do
   testDates
-  testFields
+  testEdits
+  testLabeledFields
   testPredicates
   let encoded := JsonProtocol.encode ExampleForms.Person.form ExampleForms.Person.initial
   let json ← IO.ofExcept (Lean.Json.parse encoded)
   let value ← IO.ofExcept (json.getObjVal? "value" >>= JsonProtocol.valueFromJson ExampleForms.Person.schema)
-  check "SpecificationValueRoundTrip" (value == ExampleForms.Person.initial)
+  check "SpecificationValueRoundTrip" (personValues value == personValues ExampleForms.Person.initial)
   let fixture ← IO.FS.readFile "native/tui/tests/person.json"
   check "RustFixtureMatchesLeanSpecification" (fixture.trimAscii.toString == encoded)
   let huge := 12345678901234567890123456789012345678901234567890
   check "UnboundedNaturalRoundTrip"
     (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (type := .natural) huge) == .ok huge)
   check "RejectsMalformedInterpreterResult"
-    (match JsonProtocol.valueFromJson ExampleForms.Person.schema (Lean.toJson (42 : Nat)) with
+    (match JsonProtocol.valueFromJson ExampleForms.Person.schema (Lean.toJson "bad") with
       | .error _ => true
       | .ok _ => false)

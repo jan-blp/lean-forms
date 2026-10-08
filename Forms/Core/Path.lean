@@ -2,8 +2,13 @@ import Forms.Core.DataType
 
 namespace Forms
 
-inductive Path : (root : DataType) → (target : DataType) → Type where
+inductive Path : (root : DataType) → (target : DataType) → Type 1 where
   | self {type : DataType} : Path type type
+  | child
+      {fields : Enum} {children : fields → DataType} {target : DataType}
+      (index : fields)
+      (rest : Path (children index) target)
+      : Path (.record fields children) target
 
 def Path.get
     {root target : DataType}
@@ -12,15 +17,17 @@ def Path.get
     : DataType.denote target :=
   match path with
   | .self => value
+  | .child index rest => Path.get rest (value index)
 
 def Path.set
     {root target : DataType}
     (path : Path root target)
     (replacement : DataType.denote target)
-    (_value : DataType.denote root)
+    (value : DataType.denote root)
     : DataType.denote root :=
   match path with
   | .self => replacement
+  | .child index rest => Function.update value index (Path.set rest replacement (value index))
 
 def Path.trans
     {a b c : DataType}
@@ -29,10 +36,12 @@ def Path.trans
     : Path a c :=
   match p1 with
   | .self => p2
+  | .child index rest => .child index (Path.trans rest p2)
 
 def Path.Labels {root target : DataType} (path : Path root target) : Type :=
   match path with
   | .self => String
+  | .child _ rest => String × Path.Labels rest
 
 def Path.Labels.toList
     {root target : DataType}
@@ -41,5 +50,6 @@ def Path.Labels.toList
     : List String :=
   match path with
   | .self => [labels]
+  | .child _ rest => labels.1 :: Path.Labels.toList (path := rest) labels.2
 
 end Forms
