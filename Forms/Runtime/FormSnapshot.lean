@@ -45,6 +45,8 @@ def FormSnapshot.render {state : DataType} (component : Component state)
   match component with
   | .field path label widget =>
       .fields [{ content := .input widget, labels := [label], indices := pathIndices path }]
+  | .visibleWhen condition body =>
+      if condition.eval value then render body value else .stack []
   | .stack (items := items) label children =>
       let snapshot := .stack ((FinEnum.toList items).map fun i => render (children i) value)
       match label with

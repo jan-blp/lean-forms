@@ -81,9 +81,9 @@ def form : Component person :=
     group "Person" fun
       | .name => field "Name" textInput
       | .subscribed => field "Send me postal mail" checkbox
-      | .address => group "Address" fun
+      | .address => visibleWhen (project subscribed) (group "Address" fun
         | .street => field "Street" textInput
         | .number => field "Number" naturalInput
-        | .kind => field "Kind" select) .self
+        | .kind => field "Kind" select)) .self
 
 end Forms.ExampleForms.Person

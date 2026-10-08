@@ -14,9 +14,9 @@ fn text(engine: &mut Engine, text: &str) {
     }
 }
 #[test]
-fn edits_validate_and_preserve_other_values() {
+fn edits_validate_and_hidden_values_survive() {
     let mut e = person();
-    assert_eq!(e.fields().len(), 5);
+    assert_eq!(e.fields().len(), 2);
     keys(
         &mut e,
         &[
@@ -44,7 +44,7 @@ fn edits_validate_and_preserve_other_values() {
     keys(&mut e, &[Key::Clear]);
     text(&mut e, " 0042 ");
     keys(&mut e, &[Key::Enter, Key::Up, Key::Up, Key::Character(' ')]);
-    assert_eq!(e.fields().len(), 5);
+    assert_eq!(e.fields().len(), 2);
     assert_eq!(e.spec.value["address"]["number"], "42");
     keys(&mut e, &[Key::Character(' ')]);
     assert_eq!(e.fields().len(), 5);
@@ -120,7 +120,14 @@ fn choice_selection_cancellation_and_boundaries() {
     let mut e = person();
     keys(
         &mut e,
-        &[Key::Down, Key::Down, Key::Down, Key::Down, Key::Enter],
+        &[
+            Key::Down,
+            Key::Character(' '),
+            Key::Down,
+            Key::Down,
+            Key::Down,
+            Key::Enter,
+        ],
     );
     assert_eq!(
         e.editor.as_ref().unwrap().options,
@@ -163,7 +170,7 @@ fn invalid_choices_are_rejected() {
         assert!(Engine::parse(&v.to_string()).is_err());
     }
     let mut v = source;
-    v["form"]["children"][2]["children"][2]["widget"] = json!("text");
+    v["form"]["children"][2]["body"]["children"][2]["widget"] = json!("text");
     assert!(Engine::parse(&v.to_string()).is_err());
 }
 
@@ -175,6 +182,8 @@ fn invalid_specifications_are_rejected_before_rendering() {
         ("/value/address/number", json!(-1)),
         ("/value/address", json!(["street"])),
         ("/form/children/0/widget", json!("checkbox")),
+        ("/form/children/2/condition/path", json!(["address"])),
+        ("/form/children/2/condition/path", json!(["name"])),
     ] {
         let mut v = source.clone();
         *v.pointer_mut(path).unwrap() = replacement;
@@ -206,6 +215,20 @@ fn stacks_allow_zero_and_one_child_and_validate_paths() {
         bad["form"]["children"].as_array_mut().unwrap().push(json!({"kind":"field","path":["missing"],"schema":{"kind":"text"},"label":"Extra","widget":"textInput"}));
         assert!(Engine::parse(&bad.to_string()).is_err());
     }
+}
+
+#[test]
+fn hidden_root_and_visibility_changed_by_edit() {
+    let spec = json!({"version":4,"schema":{"kind":"boolean"},"value":true,"form":{"kind":"visibleWhen","condition":{"kind":"project","path":[]},"body":{"kind":"field","path":[],"schema":{"kind":"boolean"},"label":"Visible","widget":"checkbox"}}});
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    keys(&mut e, &[Key::Enter]);
+    assert!(e.fields().is_empty());
+    assert_eq!(e.selected, 0);
+    keys(
+        &mut e,
+        &[Key::Up, Key::Down, Key::Enter, Key::Character(' ')],
+    );
+    assert_eq!(e.result(), "false");
 }
 
 #[test]
