@@ -15,6 +15,11 @@ inductive Form (root : DataType) : (type : DataType) → Type 1 where
       (label : String)
       (widget : Widget t)
       : Form root t
+  | group
+      {fieldNames : Enum} {fieldTypes : fieldNames → DataType}
+      (label : String)
+      (forms : (i : fieldNames) → Form root (fieldTypes i))
+      : Form root (.record fieldNames fieldTypes)
 
 structure FieldRef (root : DataType) where
   type : DataType
@@ -25,7 +30,7 @@ structure FieldRef (root : DataType) where
 def Form.fieldRefs
     {root type : DataType}
     (form : Form root type)
-    (_value : DataType.denote root)
+    (value : DataType.denote root)
     : List (FieldRef type) :=
   match form with
   | .field label widget =>
@@ -33,5 +38,11 @@ def Form.fieldRefs
        path := .self
        labels := label
        widget := widget }]
+  | .group label children =>
+    (FinEnum.toList _).flatMap fun fieldName =>
+      (Form.fieldRefs (children fieldName) value).map fun field =>
+        { field with
+          path := .field fieldName field.path
+          labels := (label, field.labels) }
 
 end Forms

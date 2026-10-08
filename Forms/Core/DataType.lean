@@ -23,6 +23,7 @@ inductive DataType where
   | natural
   | date
   | enum (domain : Enum)
+  | record (fieldNames : Enum) (fieldTypes : fieldNames → DataType)
 
 abbrev DataType.denote (type : DataType) : Type :=
   match type with
@@ -31,5 +32,6 @@ abbrev DataType.denote (type : DataType) : Type :=
   | .natural => Nat
   | .date => Date
   | .enum domain => domain
+  | .record fieldNames fieldTypes => (i : fieldNames) → DataType.denote (fieldTypes i)
 
 end Forms

@@ -10,7 +10,6 @@ lake -q exe forms
 ```
 
 Use ↑/↓ to select, Enter to edit/save, Space to toggle, Esc to cancel editing, and `q` to quit.
-
 Choice fields use ↑/↓ then Enter to save.
 
 Run checks:
@@ -53,6 +52,11 @@ The scripts do not change your shell startup files.
 
 Run `python3 tools/test_cli.py` after building to check parsing and completion
 against both Bash and Fish (both shells must be installed for this check).
+
+Records use an `Enum` of typed field identities with unique string names.
+`DataType.record fieldNames fieldTypes` denotes `(field : fieldNames.type) → DataType.denote (fieldTypes field)`.
+Groups follow enumeration order; their display labels are independent of record field names.
+Record values serialize as JSON objects and paths use field names.
 
 Dates use `YYYY-MM-DD` (years 0001–9999). In the calendar, h/l moves a day,
 k/j a week, and Page Up/Down a month. `i` or Enter focuses the input; Enter saves.

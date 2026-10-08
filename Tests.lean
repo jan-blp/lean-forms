@@ -8,17 +8,48 @@ private def check (name : String) (passed : Bool) : IO Unit := do
   if passed then IO.println ("PASS " ++ name)
   else throw (IO.userError ("FAIL " ++ name))
 
-private def testFields : IO Unit := do
-  let fields := Form.fieldRefs ExampleForms.Person.form ExampleForms.Person.initial
-  check "SingleField" (fields.length == 1)
-  check "FieldLabel" (fields.map (fun field => Path.Labels.toList field.labels) == [["Kind"]])
-  check "RootPathReadsValue" (Path.get ExampleForms.Person.kind ExampleForms.Person.initial == .home)
-  check "RootPathReplacesValue" (Path.set ExampleForms.Person.kind .work ExampleForms.Person.initial == .work)
+private def testEdits : IO Unit := do
+  let initial := ExampleForms.Person.initial
+  let form := ExampleForms.Person.form
+  check "InitiallyShowsAllFields" ((Form.fieldRefs form initial).length == 5)
+  let subscribed := Path.set ExampleForms.Person.subscribed true initial
+  check "SubscriptionPreservesFields" ((Form.fieldRefs form subscribed).length == 5)
+  let changed := Path.set ExampleForms.Person.number 42 subscribed
+  check "NestedEditPreservesOtherFields" (JsonProtocol.valueToJson changed == Lean.Json.mkObj [("name", Lean.toJson "Ada"), ("subscribed", Lean.toJson true),
+      ("address", Lean.Json.mkObj [("street", Lean.toJson "Lambda Lane"), ("number", Lean.toJson "42"), ("kind", Lean.toJson (0 : Nat))])])
+  let unsubscribed := Path.set ExampleForms.Person.subscribed false changed
+  check "SubscriptionPreservesNestedValue"
+    ((Form.fieldRefs form unsubscribed).length == 5 && Path.get ExampleForms.Person.number unsubscribed == 42)
+  check "SubscriptionRoundTripPreservesAddress"
+    (JsonProtocol.valueToJson (Path.set ExampleForms.Person.subscribed true unsubscribed) == JsonProtocol.valueToJson changed)
+
+private def testLabeledFields : IO Unit := do
+  let value := Path.set ExampleForms.Person.subscribed true ExampleForms.Person.initial
+  let fields := Form.fieldRefs ExampleForms.Person.form value
+  check "GeneratedLabelsFollowGroups"
+    (List.map (fun field => Path.Labels.toList field.labels) fields ==
+      [["Person", "Name"], ["Person", "Subscribed"],
+       ["Person", "Address", "Street"],
+       ["Person", "Address", "Number"],
+       ["Person", "Address", "Kind"]])
+  check "GeneratedPathsReadMatchingValues"
+    (fields.map (fun field => JsonProtocol.valueToJson (Path.get field.path value)) == [Lean.toJson "Ada", Lean.toJson true, Lean.toJson "Lambda Lane", Lean.toJson "12", Lean.toJson (0 : Nat)])
+  match fields[3]? with
+  | none => throw (IO.userError "Missing generated number field")
+  | some field =>
+    match field with
+    | ⟨.natural, path, _, _⟩ =>
+      check "GeneratedPathEditsCorrectField" (JsonProtocol.valueToJson (Path.set path 42 value) ==
+        JsonProtocol.valueToJson (Path.set ExampleForms.Person.number 42 value))
+    | _ => throw (IO.userError "Expected a natural field")
 
 private def testPredicates : IO Unit := do
-  let eligible : Expr .natural .boolean := .and (.value true) (.natLe (.value 10) (.project .self))
-  check "EvaluatesTypedPredicate" (Expr.eval eligible 12)
-  check "PredicateUsesEditedValue" (!(Expr.eval eligible 9))
+  let eligible : Expr ExampleForms.Person.person .boolean :=
+    .and (.value true)
+      (.natLe (.value 10) (.project ExampleForms.Person.number))
+  check "EvaluatesTypedPredicate" (Expr.eval eligible ExampleForms.Person.initial)
+  check "PredicateUsesEditedValue"
+    (!(Expr.eval eligible (Path.set ExampleForms.Person.number 9 ExampleForms.Person.initial)))
 
 private def testChoice : IO Unit := do
   let domain := ExampleForms.Person.addressEnum
@@ -32,6 +63,25 @@ private def testChoice : IO Unit := do
       (match JsonProtocol.valueFromJson (.enum domain) json with
         | .error _ => true
         | .ok _ => false)
+
+private def testGroups : IO Unit := do
+  let empty : DataType := .record ⟨Empty, Empty.elim, by intro i; exact Empty.elim i⟩ (fun i => nomatch i)
+  let emptyValue ← IO.ofExcept (JsonProtocol.valueFromJson empty (.mkObj []))
+  check "EmptyGroupRoundTrip" (JsonProtocol.valueToJson emptyValue == .mkObj [])
+  let singleton : DataType := .record ⟨Unit, fun _ => "only", by intro a b _; cases a; cases b; rfl⟩ (fun _ => .text)
+  let singleValue ← IO.ofExcept (JsonProtocol.valueFromJson singleton (.mkObj [("only", Lean.toJson "only")]))
+  check "SingleChildGroupRoundTrip" (JsonProtocol.valueToJson singleValue == .mkObj [("only", Lean.toJson "only")])
+  for json in [Lean.Json.arr #[], .arr #[Lean.toJson "one", Lean.toJson "two"],
+      .arr #[Lean.toJson true]] do
+    check "RejectsWrongGroupLengthOrChildType"
+      (match JsonProtocol.valueFromJson singleton json with
+      | .error _ => true
+      | .ok _ => false)
+  let addressPath : Path ExampleForms.Person.person ExampleForms.Person.address := .field .address .self
+  let numberPath : Path ExampleForms.Person.address .natural := .field .number .self
+  check "ComposedGroupPath"
+    ((addressPath.trans numberPath).toList == ["address", "number"] &&
+      (addressPath.trans numberPath).get ExampleForms.Person.initial == 12)
 
 private def testDates : IO Unit := do
   let cases ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "native/tui/tests/dates.json"))
@@ -49,19 +99,21 @@ private def testDates : IO Unit := do
 
 def main : IO Unit := do
   testDates
-  testFields
+  testEdits
+  testLabeledFields
   testPredicates
   testChoice
+  testGroups
   let encoded := JsonProtocol.encode ExampleForms.Person.form ExampleForms.Person.initial
   let json ← IO.ofExcept (Lean.Json.parse encoded)
   let value ← IO.ofExcept (json.getObjVal? "value" >>= JsonProtocol.valueFromJson ExampleForms.Person.person)
-  check "SpecificationValueRoundTrip" (value == ExampleForms.Person.initial)
+  check "SpecificationValueRoundTrip" (JsonProtocol.valueToJson value == JsonProtocol.valueToJson ExampleForms.Person.initial)
   let fixture ← IO.FS.readFile "native/tui/tests/person.json"
   check "RustFixtureMatchesLeanSpecification" (fixture.trimAscii.toString == encoded)
   let huge := 12345678901234567890123456789012345678901234567890
   check "UnboundedNaturalRoundTrip"
     (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (type := .natural) huge) == .ok huge)
   check "RejectsMalformedInterpreterResult"
-    (match JsonProtocol.valueFromJson ExampleForms.Person.person (Lean.toJson (42 : Nat)) with
+    (match JsonProtocol.valueFromJson ExampleForms.Person.person (Lean.toJson "bad") with
       | .error _ => true
       | .ok _ => false)
