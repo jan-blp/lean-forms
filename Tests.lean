@@ -1,7 +1,6 @@
 import Mathlib.Data.Nat.Basic
 import Forms.ExampleForms.Person
-import Forms.Runtime.Input
-import Forms.Runtime.Terminal
+import Forms.Runtime.Tui
 
 open Forms Forms.Runtime
 
@@ -16,34 +15,16 @@ private def check (name : String) (passed : Bool) : IO Unit := do
 private def testEditsAndVisibility : IO Unit := do
   let initial := ExampleForms.Person.initial
   let form := ExampleForms.Person.form
-  check "InitiallyShowsNameAndSubscription" (List.length (Form.fieldRefs form initial) == 2)
-  let subscription : FieldRef ExampleForms.Person.schema :=
-    { type := .boolean
-      path := ExampleForms.Person.subscribed
-      labels := ("Person", "Subscribed")
-      widget := .checkbox }
-  match edit subscription "true" initial with
-  | .error error => throw (IO.userError (InputError.message error))
-  | .ok visible =>
-    check "SubscriptionShowsNestedAddress" (List.length (Form.fieldRefs form visible) == 4)
-    let houseNumber : FieldRef ExampleForms.Person.schema :=
-      { type := .natural
-        path := ExampleForms.Person.number
-        labels := ("Person", "Address", "Number")
-        widget := .naturalInput }
-    match edit houseNumber "42" visible with
-    | .error error => throw (IO.userError (InputError.message error))
-    | .ok changed =>
-      check "NestedEditPreservesOtherFields"
-        (personTuple changed == ("Ada", (true, ("Lambda Lane", 42))))
-      match edit subscription "false" changed with
-      | .error error => throw (IO.userError (InputError.message error))
-      | .ok hidden =>
-        check "HidingPreservesNestedValue"
-          (List.length (Form.fieldRefs form hidden) == 2 && Path.get ExampleForms.Person.number hidden == 42)
-        match edit subscription "true" hidden with
-        | .error error => throw (IO.userError (InputError.message error))
-        | .ok shown => check "ShowingRestoresEditedAddress" (personTuple shown == personTuple changed)
+  check "InitiallyVisibleFields" ((Form.fieldRefs form initial).length == 2)
+  let visible := Path.set ExampleForms.Person.subscribed true initial
+  check "SubscriptionShowsNestedAddress" ((Form.fieldRefs form visible).length == 4)
+  let changed := Path.set ExampleForms.Person.number 42 visible
+  check "NestedEditPreservesOtherFields" (personTuple changed == ("Ada", (true, ("Lambda Lane", 42))))
+  let hidden := Path.set ExampleForms.Person.subscribed false changed
+  check "HidingPreservesNestedValue"
+    ((Form.fieldRefs form hidden).length == 2 && Path.get ExampleForms.Person.number hidden == 42)
+  check "ShowingRestoresEditedAddress"
+    (personTuple (Path.set ExampleForms.Person.subscribed true hidden) == personTuple changed)
 
 private def testLabeledFields : IO Unit := do
   let value := Path.set ExampleForms.Person.subscribed true ExampleForms.Person.initial
@@ -54,31 +35,14 @@ private def testLabeledFields : IO Unit := do
        ["Person", "Address", "Street"],
        ["Person", "Address", "Number"]])
   check "GeneratedPathsReadMatchingValues"
-    (List.map (fun field => display field.widget (Path.get field.path value)) fields ==
-      ["Ada", "true", "Lambda Lane", "12"])
+    (fields.map (fun field => JsonProtocol.valueToJson (Path.get field.path value)) == [Lean.toJson "Ada", Lean.toJson true, Lean.toJson "Lambda Lane", Lean.toJson "12"])
   match fields[3]? with
   | none => throw (IO.userError "Missing generated number field")
   | some field =>
-    match edit field "42" value with
-    | .error error => throw (IO.userError (InputError.message error))
-    | .ok changed =>
-      check "GeneratedPathEditsCorrectField"
-        (personTuple changed == ("Ada", (true, ("Lambda Lane", 42))))
-
-private def testInput : IO Unit := do
-  check "RejectsInvalidBooleans" (match parse .checkbox "yes" with
-    | .error .expectedBoolean => true
-    | _ => false)
-  for input in ["-1", "1.5", "", "abc"] do
-    check ("RejectsInvalidNatural " ++ reprStr input) (match parse .naturalInput input with
-      | .error .expectedNatural => true
-      | _ => false)
-  check "PreservesTextWhitespace" (match parse .textInput " Ada " with
-    | .ok value => value == " Ada "
-    | .error _ => false)
-  check "AcceptsZero" (match parse .naturalInput "0" with
-    | .ok value => value == 0
-    | .error _ => false)
+    match field with
+    | ⟨.natural, path, _, _⟩ =>
+      check "GeneratedPathEditsCorrectField" (personTuple (Path.set path 42 value) == ("Ada", (true, ("Lambda Lane", 42))))
+    | _ => throw (IO.userError "Expected a natural field")
 
 private def testPredicates : IO Unit := do
   let eligible : Expr ExampleForms.Person.schema .boolean :=
@@ -88,45 +52,20 @@ private def testPredicates : IO Unit := do
   check "PredicateUsesEditedValue"
     (!(Expr.eval eligible (Path.set ExampleForms.Person.number 9 ExampleForms.Person.initial)))
 
-private structure Script where
-  input : List String
-  output : List String := []
-
-private instance : MonadTerminal (StateM Script) where
-  putStr text := modify fun script =>
-    { script with
-      output := script.output ++ [text] }
-  readLine := do
-    let script ← get
-    match script.input with
-    | [] => return none
-    | line :: rest =>
-      set { script with
-        input := rest }
-      return some line
-
-private def testTerminal : IO Unit := do
-  let initial := ExampleForms.Person.initial
-  let form := ExampleForms.Person.form
-  let (edited, script) := StateT.run (Terminal.run (m := StateM Script) form initial)
-    { input := ["0", "2", "yes", "2", "true", "4", "42", "q"] }
-  check "TerminalEditsThroughCapabilities"
-    (personTuple edited == ("Ada", (true, ("Lambda Lane", 42))) && script.input == [])
-  check "TerminalReportsInvalidSelection"
-    (List.contains script.output "Choose one of the displayed field numbers.\n")
-  check "TerminalReportsInvalidInput"
-    (List.contains script.output "Enter true or false.\n")
-  let (unchanged, _) := StateT.run (Terminal.run (m := StateM Script) form initial)
-    { input := ["1"] }
-  check "TerminalPreservesValueAtEndOfInput" (personTuple unchanged == personTuple initial)
-  let (blankName, _) := StateT.run (Terminal.run (m := StateM Script) form initial)
-    { input := ["1", ""] }
-  check "TerminalDistinguishesBlankLineFromEndOfInput"
-    (personTuple blankName == ("", (false, ("Lambda Lane", 12))))
-
 def main : IO Unit := do
   testEditsAndVisibility
   testLabeledFields
-  testInput
   testPredicates
-  testTerminal
+  let encoded := JsonProtocol.encode ExampleForms.Person.form ExampleForms.Person.initial
+  let json ← IO.ofExcept (Lean.Json.parse encoded)
+  let value ← IO.ofExcept (json.getObjVal? "value" >>= JsonProtocol.valueFromJson ExampleForms.Person.schema)
+  check "SpecificationValueRoundTrip" (personTuple value == personTuple ExampleForms.Person.initial)
+  let fixture ← IO.FS.readFile "native/tui/tests/person.json"
+  check "RustFixtureMatchesLeanSpecification" (fixture.trimAscii.toString == encoded)
+  let huge := 12345678901234567890123456789012345678901234567890
+  check "UnboundedNaturalRoundTrip"
+    (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (type := .natural) huge) == .ok huge)
+  check "RejectsMalformedInterpreterResult"
+    (match JsonProtocol.valueFromJson ExampleForms.Person.schema (Lean.toJson "bad") with
+      | .error _ => true
+      | .ok _ => false)

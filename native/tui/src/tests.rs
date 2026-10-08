@@ -1,0 +1,66 @@
+use super::*;
+use ratatui::backend::TestBackend;
+
+fn contents(terminal: &Terminal<TestBackend>) -> String {
+    terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect()
+}
+
+#[test]
+fn table_scrolls_to_selection_and_shows_validation() {
+    for code in 0..=6 {
+        let theme = Theme::from_code(code).unwrap();
+        let labels: Vec<_> = (0..30).map(|i| format!("Person.Field{i}")).collect();
+        let screen = Screen {
+            fields: labels
+                .iter()
+                .map(|label| Field { label, value: "12" })
+                .collect(),
+            selected: 29,
+            editor: Some(Editor {
+                label: "Person.Field29".into(),
+                text: "-1".into(),
+                error: Some("Enter a non-negative whole number.".into()),
+            }),
+        };
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        let mut state = TableState::default();
+        terminal
+            .draw(|frame| render(frame, &screen, &mut state, theme))
+            .unwrap();
+        let text = contents(&terminal);
+        assert!(text.contains("Person.Field29"));
+        assert!(text.contains("Enter a non-negative whole number."));
+        assert!(state.offset() > 0);
+        assert!(terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .any(|cell| cell.bg == theme.selection));
+    }
+}
+
+#[test]
+fn narrow_terminal_and_wide_text_are_handled() {
+    for code in 0..=6 {
+        let theme = Theme::from_code(code).unwrap();
+        let screen = Screen {
+            fields: vec![],
+            selected: 0,
+            editor: None,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(31, 10)).unwrap();
+        terminal
+            .draw(|frame| render(frame, &screen, &mut TableState::default(), theme))
+            .unwrap();
+        assert!(contents(&terminal).contains("Enlarge terminal"));
+        assert_eq!(editor_tail("Ada界", 3), "a界");
+        assert_eq!(clean("Ada\n\u{1b}"), "Ada  ");
+    }
+}
