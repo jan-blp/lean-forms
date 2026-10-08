@@ -20,6 +20,11 @@ inductive Form (root : DataType) : (type : DataType) → Type 1 where
       (label : String)
       (forms : (i : fieldNames) → Form root (fieldTypes i))
       : Form root (.record fieldNames fieldTypes)
+  | visibleWhen
+      {t : DataType}
+      (condition : Expr root .boolean)
+      (body : Form root t)
+      : Form root t
 
 structure FieldRef (root : DataType) where
   type : DataType
@@ -44,5 +49,7 @@ def Form.fieldRefs
         { field with
           path := .field fieldName field.path
           labels := (label, field.labels) }
+  | .visibleWhen condition body =>
+    if Expr.eval condition value then Form.fieldRefs body value else []
 
 end Forms

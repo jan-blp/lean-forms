@@ -80,8 +80,8 @@ def form : Form person person :=
     | .name => field "Name" textInput
     | .subscribed => field "Subscribed" checkbox
     | .address => group "Address" fun
-      | .street => field "Street" textInput
-      | .number => field "Number" naturalInput
+      | .street => visibleWhen (project subscribed) (field "Street" textInput)
+      | .number => visibleWhen (project subscribed) (field "Number" naturalInput)
       | .kind => field "Kind" select
 
 end Forms.ExampleForms.Person

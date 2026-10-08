@@ -9,14 +9,32 @@
             "widget": "select"
           },
           "number": {
-            "kind": "field",
-            "label": "Number",
-            "widget": "naturalInput"
+            "body": {
+              "kind": "field",
+              "label": "Number",
+              "widget": "naturalInput"
+            },
+            "condition": {
+              "kind": "project",
+              "path": [
+                "subscribed"
+              ]
+            },
+            "kind": "visibleWhen"
           },
           "street": {
-            "kind": "field",
-            "label": "Street",
-            "widget": "textInput"
+            "body": {
+              "kind": "field",
+              "label": "Street",
+              "widget": "textInput"
+            },
+            "condition": {
+              "kind": "project",
+              "path": [
+                "subscribed"
+              ]
+            },
+            "kind": "visibleWhen"
           }
         },
         "kind": "group",

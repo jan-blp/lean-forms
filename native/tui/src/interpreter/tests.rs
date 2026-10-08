@@ -14,9 +14,9 @@ fn text(engine: &mut Engine, text: &str) {
     }
 }
 #[test]
-fn edits_validate_and_preserve_other_values() {
+fn edits_validate_and_hidden_values_survive() {
     let mut e = person();
-    assert_eq!(e.fields().len(), 5);
+    assert_eq!(e.fields().len(), 3);
     keys(
         &mut e,
         &[
@@ -44,7 +44,7 @@ fn edits_validate_and_preserve_other_values() {
     keys(&mut e, &[Key::Clear]);
     text(&mut e, " 0042 ");
     keys(&mut e, &[Key::Enter, Key::Up, Key::Up, Key::Character(' ')]);
-    assert_eq!(e.fields().len(), 5);
+    assert_eq!(e.fields().len(), 3);
     assert_eq!(e.spec.value["address"]["number"], "42");
     keys(&mut e, &[Key::Character(' ')]);
     assert_eq!(e.fields().len(), 5);
@@ -118,7 +118,7 @@ fn all_predicates_and_unbounded_naturals() {
 #[test]
 fn choice_selection_cancellation_and_boundaries() {
     let mut e = person();
-    keys(&mut e, &[Key::Down, Key::Down, Key::Down, Key::Down, Key::Enter]);
+    keys(&mut e, &[Key::Down, Key::Down, Key::Enter]);
     assert_eq!(
         e.editor.as_ref().unwrap().options,
         ["Home", "Work", "Other"]
@@ -127,7 +127,7 @@ fn choice_selection_cancellation_and_boundaries() {
     assert_eq!(e.spec.value["address"]["kind"], 0);
     keys(&mut e, &[Key::Enter, Key::Down, Key::Enter]);
     assert_eq!(e.spec.value["address"]["kind"], 1);
-    assert_eq!(e.shown(&e.fields()[4]), "Work");
+    assert_eq!(e.shown(&e.fields()[2]), "Work");
     keys(
         &mut e,
         &[
@@ -172,6 +172,14 @@ fn invalid_specifications_are_rejected_before_rendering() {
         ("/value/address/number", json!(-1)),
         ("/value/address", json!(["street"])),
         ("/form/children/name/widget", json!("checkbox")),
+        (
+            "/form/children/address/children/street/condition/path",
+            json!(["address"]),
+        ),
+        (
+            "/form/children/address/children/street/condition/path",
+            json!(["name"]),
+        ),
     ] {
         let mut v = source.clone();
         *v.pointer_mut(path).unwrap() = replacement;
@@ -205,6 +213,20 @@ fn groups_allow_zero_and_one_child_and_reject_shape_mismatches() {
             json!({"kind":"field","label":"Extra","widget":"textInput"});
         assert!(Engine::parse(&bad.to_string()).is_err());
     }
+}
+
+#[test]
+fn hidden_root_and_visibility_changed_by_edit() {
+    let spec = json!({"version":1,"schema":{"kind":"boolean"},"value":true,"form":{"kind":"visibleWhen","condition":{"kind":"project","path":[]},"body":{"kind":"field","label":"Visible","widget":"checkbox"}}});
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    keys(&mut e, &[Key::Enter]);
+    assert!(e.fields().is_empty());
+    assert_eq!(e.selected, 0);
+    keys(
+        &mut e,
+        &[Key::Up, Key::Down, Key::Enter, Key::Character(' ')],
+    );
+    assert_eq!(e.result(), "false");
 }
 
 #[test]

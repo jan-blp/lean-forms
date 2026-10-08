@@ -74,8 +74,8 @@ session('i\x15Ω'.encode(), initial, interrupt=True)
 session(b'q', initial)
 for theme in ['frappe', 'macchiato', 'mocha', 'latte', 'ayu-light', 'ayu-dark', 'nord']:
     session(b'q', initial, theme=theme)
-session(b'jjjj\rj\rq', {'name': 'Ada', 'subscribed': False, 'address': {'street': 'Lambda Lane', 'number': 12, 'kind': 'Work'}})
-session(b'jjjj\rj', initial, cancel=True)
+session(b'jj\rj\rq', {'name': 'Ada', 'subscribed': False, 'address': {'street': 'Lambda Lane', 'number': 12, 'kind': 'Work'}})
+session(b'jj\rj', initial, cancel=True)
 result = subprocess.run([str(BINARY)], capture_output=True, text=True)
 assert result.returncode != 0 and 'interactive terminal' in result.stderr + result.stdout
-print('PASS: FFI editing, validation, typed result, interruption, and terminal restoration')
+print('PASS: FFI editing, validation, visibility, typed result, interruption, and terminal restoration')

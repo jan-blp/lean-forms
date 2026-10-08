@@ -8,20 +8,20 @@ private def check (name : String) (passed : Bool) : IO Unit := do
   if passed then IO.println ("PASS " ++ name)
   else throw (IO.userError ("FAIL " ++ name))
 
-private def testEdits : IO Unit := do
+private def testEditsAndVisibility : IO Unit := do
   let initial := ExampleForms.Person.initial
   let form := ExampleForms.Person.form
-  check "InitiallyShowsAllFields" ((Form.fieldRefs form initial).length == 5)
-  let subscribed := Path.set ExampleForms.Person.subscribed true initial
-  check "SubscriptionPreservesFields" ((Form.fieldRefs form subscribed).length == 5)
-  let changed := Path.set ExampleForms.Person.number 42 subscribed
+  check "InitiallyVisibleFields" ((Form.fieldRefs form initial).length == 3)
+  let visible := Path.set ExampleForms.Person.subscribed true initial
+  check "SubscriptionShowsNestedAddress" ((Form.fieldRefs form visible).length == 5)
+  let changed := Path.set ExampleForms.Person.number 42 visible
   check "NestedEditPreservesOtherFields" (JsonProtocol.valueToJson changed == Lean.Json.mkObj [("name", Lean.toJson "Ada"), ("subscribed", Lean.toJson true),
       ("address", Lean.Json.mkObj [("street", Lean.toJson "Lambda Lane"), ("number", Lean.toJson "42"), ("kind", Lean.toJson (0 : Nat))])])
-  let unsubscribed := Path.set ExampleForms.Person.subscribed false changed
-  check "SubscriptionPreservesNestedValue"
-    ((Form.fieldRefs form unsubscribed).length == 5 && Path.get ExampleForms.Person.number unsubscribed == 42)
-  check "SubscriptionRoundTripPreservesAddress"
-    (JsonProtocol.valueToJson (Path.set ExampleForms.Person.subscribed true unsubscribed) == JsonProtocol.valueToJson changed)
+  let hidden := Path.set ExampleForms.Person.subscribed false changed
+  check "HidingPreservesNestedValue"
+    ((Form.fieldRefs form hidden).length == 3 && Path.get ExampleForms.Person.number hidden == 42)
+  check "ShowingRestoresEditedAddress"
+    (JsonProtocol.valueToJson (Path.set ExampleForms.Person.subscribed true hidden) == JsonProtocol.valueToJson changed)
 
 private def testLabeledFields : IO Unit := do
   let value := Path.set ExampleForms.Person.subscribed true ExampleForms.Person.initial
@@ -99,7 +99,7 @@ private def testDates : IO Unit := do
 
 def main : IO Unit := do
   testDates
-  testEdits
+  testEditsAndVisibility
   testLabeledFields
   testPredicates
   testChoice
