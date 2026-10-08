@@ -37,13 +37,13 @@ def session(keys, expected, interrupt=False, cancel=False, theme=None):
                     break
 
     try:
-        read_until(lambda: b'Kind' in output)
+        read_until(lambda: b'Person.Name' in output)
         os.write(master, keys)
         if cancel:
             read_until(lambda: b'Other' in output)
             start = len(output)
             os.write(master, b'\x1b')
-            read_until(lambda: len(output) > start)
+            read_until(lambda: b'Enter edit' in output[start:])
             os.write(master, b'q')
         if interrupt:
             read_until(lambda: 'Ω▏'.encode() in output)
@@ -56,7 +56,7 @@ def session(keys, expected, interrupt=False, cancel=False, theme=None):
         assert termios.tcgetattr(slave) == before, 'Terminal mode was not restored'
         assert b'\x1b[?1049l' in output, 'Alternate screen was not restored'
         tail = output.split(b'Final values', 1)[1]
-        result = json.loads(tail.split(b'------------', 1)[1].decode().strip())
+        result = json.loads(tail[tail.index(b'{'):].decode())
         assert result == expected, result
         return bytes(output)
     finally:
@@ -67,12 +67,15 @@ def session(keys, expected, interrupt=False, cancel=False, theme=None):
         os.close(slave)
 
 
-initial = 'Home'
-session(b'\rj\rq', 'Work')
-session(b'\rj', initial, cancel=True)
+initial = {'name': 'Ada', 'subscribed': False, 'address': {'street': 'Lambda Lane', 'number': 12, 'kind': 'Home'}}
+output = session(b'j jj\r\x15-1\r\x1542\rkk  q', {'name': 'Ada', 'subscribed': True, 'address': {'street': 'Lambda Lane', 'number': 42, 'kind': 'Home'}})
+assert b'non-negative whole number' in output
+session('i\x15Ω'.encode(), initial, interrupt=True)
 session(b'q', initial)
 for theme in ['frappe', 'macchiato', 'mocha', 'latte', 'ayu-light', 'ayu-dark', 'nord']:
     session(b'q', initial, theme=theme)
+session(b'jjjj\rj\rq', {'name': 'Ada', 'subscribed': False, 'address': {'street': 'Lambda Lane', 'number': 12, 'kind': 'Work'}})
+session(b'jjjj\rj', initial, cancel=True)
 result = subprocess.run([str(BINARY)], capture_output=True, text=True)
 assert result.returncode != 0 and 'interactive terminal' in result.stderr + result.stdout
-print('PASS: FFI choice editing, cancellation, typed result, and terminal restoration')
+print('PASS: FFI editing, validation, typed result, interruption, and terminal restoration')

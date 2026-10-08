@@ -1,6 +1,7 @@
 use chrono::{Datelike, Days, Months, NaiveDate};
 use serde::Deserialize;
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
@@ -10,6 +11,40 @@ pub enum Ty {
     Natural,
     Date,
     Enum { options: Vec<String> },
+    Record { fields: Vec<NamedType> },
+}
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NamedType {
+    name: String,
+    #[serde(rename = "type")]
+    ty: Ty,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
+#[serde(untagged)]
+pub enum Step {
+    Field(String),
+}
+fn matches_names<T>(values: &BTreeMap<String, T>, types: &[NamedType]) -> bool {
+    values.len() == types.len() && types.iter().all(|ty| values.contains_key(&ty.name))
+}
+impl Ty {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            Self::Record { fields } => {
+                let unique: std::collections::HashSet<_> =
+                    fields.iter().map(|field| &field.name).collect();
+                if unique.len() != fields.len() {
+                    return Err("Schema names must be unique".into());
+                }
+                for field in fields {
+                    field.ty.validate()?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
 }
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
@@ -20,7 +55,7 @@ pub enum Expr {
         value: Value,
     },
     Project {
-        path: Vec<usize>,
+        path: Vec<Step>,
     },
     And {
         left: Box<Expr>,
@@ -57,15 +92,24 @@ impl Widget {
 }
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
-pub enum Form {
-    Field { label: String, widget: Widget },
+pub enum Component {
+    Field {
+        path: Vec<Step>,
+        schema: Ty,
+        label: String,
+        widget: Widget,
+    },
+    Stack {
+        label: Option<String>,
+        children: Vec<Component>,
+    },
 }
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Specification {
     version: u32,
     schema: Ty,
-    form: Form,
+    form: Component,
     value: Value,
 }
 fn natural(text: &str) -> Option<String> {
@@ -105,6 +149,13 @@ fn validate_value(ty: &Ty, value: &Value) -> Result<(), String> {
             unique.len() == options.len()
                 && value.as_u64().is_some_and(|i| i < options.len() as u64)
         }
+        Ty::Record { fields } => value.as_object().is_some_and(|v| {
+            v.len() == fields.len()
+                && fields.iter().all(|field| {
+                    v.get(&field.name)
+                        .is_some_and(|value| validate_value(&field.ty, value).is_ok())
+                })
+        }),
     };
     if valid {
         Ok(())
@@ -116,14 +167,25 @@ impl Expr {
     fn ty(&self, input: &Ty) -> Result<Ty, String> {
         match self {
             Self::Value { ty, value } => {
+                ty.validate()?;
                 validate_value(ty, value)?;
                 Ok(ty.clone())
             }
             Self::Project { path } => {
-                if !path.is_empty() {
-                    return Err("Invalid expression path".into());
+                let mut ty = input;
+                for step in path {
+                    ty = match (ty, step) {
+                        (Ty::Record { fields }, Step::Field(name)) => {
+                            &fields
+                                .iter()
+                                .find(|field| &field.name == name)
+                                .ok_or("Invalid expression path")?
+                                .ty
+                        }
+                        _ => return Err("Invalid expression path".into()),
+                    };
                 }
-                Ok(input.clone())
+                Ok(ty.clone())
             }
             Self::And { left, right }
             | Self::NatLe { left, right }
@@ -159,24 +221,65 @@ impl Expr {
         }
     }
 }
-fn get<'a>(value: &'a Value, path: &[usize]) -> &'a Value {
-    assert!(path.is_empty());
+fn get<'a>(mut value: &'a Value, path: &[Step]) -> &'a Value {
+    for step in path {
+        value = match step {
+            Step::Field(name) => &value[name],
+        };
+    }
     value
 }
-fn set(value: &mut Value, path: &[usize], replacement: Value) {
-    assert!(path.is_empty());
-    *value = replacement;
+fn set(value: &mut Value, path: &[Step], replacement: Value) {
+    if let Some((first, rest)) = path.split_first() {
+        let child = match first {
+            Step::Field(name) => &mut value[name],
+        };
+        set(child, rest, replacement);
+    } else {
+        *value = replacement;
+    }
 }
-impl Form {
-    fn validate(&self, _root: &Ty, ty: &Ty) -> Result<(), String> {
+impl Component {
+    fn validate(&self, context: &Ty, _ty: &Ty) -> Result<(), String> {
         match self {
-            Self::Field { widget, .. } if widget.matches(ty) => Ok(()),
-            _ => Err("Widget does not match field type".into()),
+            Self::Field {
+                path,
+                schema,
+                widget,
+                ..
+            } => {
+                schema.validate()?;
+                if (Expr::Project { path: path.clone() }).ty(context)? != *schema
+                    || !widget.matches(schema)
+                {
+                    return Err("Field path, schema, and widget must agree".into());
+                }
+                Ok(())
+            }
+            Self::Stack { children, .. } => {
+                for child in children {
+                    child.validate(context, context)?;
+                }
+                Ok(())
+            }
         }
     }
-    fn fields(&self, ty: &Ty, _value: &Value, path: Vec<usize>, labels: Vec<String>, out: &mut Vec<Field>) {
+    fn fields(
+        &self,
+        ty: &Ty,
+        value: &Value,
+        path: Vec<Step>,
+        labels: Vec<String>,
+        out: &mut Vec<Field>,
+    ) {
         match self {
-            Self::Field { label, widget } => {
+            Self::Field {
+                path: target,
+                schema: ty,
+                label,
+                widget,
+            } => {
+                let path: Vec<Step> = path.iter().cloned().chain(target.iter().cloned()).collect();
                 let mut labels = labels;
                 labels.push(label.clone());
                 out.push(Field {
@@ -189,12 +292,27 @@ impl Form {
                     },
                 });
             }
+            Self::Stack { label, children } => {
+                let mut labels = labels;
+                if let Some(label) = label {
+                    if !(label == "Item"
+                        && labels
+                            .last()
+                            .is_some_and(|parent| parent.starts_with("Item ")))
+                    {
+                        labels.push(label.clone());
+                    }
+                }
+                for child in children {
+                    child.fields(ty, value, path.clone(), labels.clone(), out);
+                }
+            }
         }
     }
 }
 pub struct Field {
     pub label: String,
-    path: Vec<usize>,
+    path: Vec<Step>,
     widget: Widget,
     options: Vec<String>,
 }
@@ -229,9 +347,10 @@ pub enum Key {
 impl Engine {
     pub fn parse(json: &str) -> Result<Self, String> {
         let spec: Specification = serde_json::from_str(json).map_err(|e| e.to_string())?;
-        if spec.version != 1 {
+        if spec.version != 4 {
             return Err("Unsupported form specification version".into());
         }
+        spec.schema.validate()?;
         validate_value(&spec.schema, &spec.value)?;
         spec.form.validate(&spec.schema, &spec.schema)?;
         Ok(Self {
@@ -245,9 +364,13 @@ impl Engine {
     }
     pub fn fields(&self) -> Vec<Field> {
         let mut out = Vec::new();
-        self.spec
-            .form
-            .fields(&self.spec.schema, &self.spec.value, vec![], vec![], &mut out);
+        self.spec.form.fields(
+            &self.spec.schema,
+            &self.spec.value,
+            vec![],
+            vec![],
+            &mut out,
+        );
         out
     }
     pub fn shown(&self, field: &Field) -> String {

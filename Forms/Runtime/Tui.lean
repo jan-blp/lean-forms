@@ -1,6 +1,7 @@
 import Forms.Runtime.JsonProtocol
 
 namespace Forms.Runtime
+open Composition
 
 /-- The native interpreter owns interaction and returns the committed values. -/
 class MonadTui (m : Type → Type) where
@@ -9,7 +10,7 @@ class MonadTui (m : Type → Type) where
 namespace Tui
 
 def run {m : Type → Type} [Monad m] [MonadExceptOf IO.Error m] [MonadTui m]
-    {context : DataType} (form : Form context) (value : ⟦context⟧) : m ⟦context⟧ := do
+    {context : DataType} (form : Component context) (value : ⟦context⟧) : m ⟦context⟧ := do
   let result ← MonadTui.runSpecification (JsonProtocol.encode form value)
   match Lean.Json.parse result >>= JsonProtocol.valueFromJson context with
   | .ok value => pure value

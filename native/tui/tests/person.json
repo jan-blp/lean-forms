@@ -1,17 +1,135 @@
 {
   "form": {
-    "kind": "field",
-    "label": "Kind",
-    "widget": "select"
-  },
-  "schema": {
-    "kind": "enum",
-    "options": [
-      "Home",
-      "Work",
-      "Other"
+    "kind": "stack",
+    "label": "Person",
+    "children": [
+      {
+        "kind": "field",
+        "label": "Name",
+        "widget": "textInput",
+        "path": [
+          "name"
+        ],
+        "schema": {
+          "kind": "text"
+        }
+      },
+      {
+        "kind": "field",
+        "label": "Send me postal mail",
+        "widget": "checkbox",
+        "path": [
+          "subscribed"
+        ],
+        "schema": {
+          "kind": "boolean"
+        }
+      },
+      {
+        "kind": "stack",
+        "label": "Address",
+        "children": [
+          {
+            "kind": "field",
+            "label": "Street",
+            "widget": "textInput",
+            "path": [
+              "address",
+              "street"
+            ],
+            "schema": {
+              "kind": "text"
+            }
+          },
+          {
+            "kind": "field",
+            "label": "Number",
+            "widget": "naturalInput",
+            "path": [
+              "address",
+              "number"
+            ],
+            "schema": {
+              "kind": "natural"
+            }
+          },
+          {
+            "kind": "field",
+            "label": "Kind",
+            "widget": "select",
+            "path": [
+              "address",
+              "kind"
+            ],
+            "schema": {
+              "kind": "enum",
+              "options": [
+                "Home",
+                "Work",
+                "Other"
+              ]
+            }
+          }
+        ]
+      }
     ]
   },
-  "value": 0,
-  "version": 1
+  "schema": {
+    "fields": [
+      {
+        "name": "name",
+        "type": {
+          "kind": "text"
+        }
+      },
+      {
+        "name": "subscribed",
+        "type": {
+          "kind": "boolean"
+        }
+      },
+      {
+        "name": "address",
+        "type": {
+          "fields": [
+            {
+              "name": "street",
+              "type": {
+                "kind": "text"
+              }
+            },
+            {
+              "name": "number",
+              "type": {
+                "kind": "natural"
+              }
+            },
+            {
+              "name": "kind",
+              "type": {
+                "kind": "enum",
+                "options": [
+                  "Home",
+                  "Work",
+                  "Other"
+                ]
+              }
+            }
+          ],
+          "kind": "record"
+        }
+      }
+    ],
+    "kind": "record"
+  },
+  "value": {
+    "address": {
+      "kind": 0,
+      "number": "12",
+      "street": "Lambda Lane"
+    },
+    "name": "Ada",
+    "subscribed": false
+  },
+  "version": 4
 }
