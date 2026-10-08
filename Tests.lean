@@ -124,8 +124,16 @@ private def testTerminal : IO Unit := do
 private structure TuiScript where
   keys : List Key
   frames : List Screen := []
+  events : List String := []
 
 private instance : MonadTui (StateM TuiScript) where
+  withSession action := do
+    modify fun script => { script with
+      events := script.events ++ ["open"] }
+    let result ← action
+    modify fun script => { script with
+      events := script.events ++ ["close"] }
+    return result
   readKey := do
     let script ← get
     match script.keys with
@@ -151,6 +159,7 @@ private def testTui : IO Unit := do
       .clear, .character '4', .character '2', .enter,
       .up, .up, .character ' ', .character ' ', .quit]
   }
+  check "TuiClosesSession" (script.events == ["open", "close"])
   check "TuiEditsAndPreservesHiddenValues"
     (value == ("Ada", (true, ("Lambda Lane", 42))) && List.isEmpty script.keys)
   check "TuiShowsValidationErrors"

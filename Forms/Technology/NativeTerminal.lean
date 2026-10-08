@@ -1,4 +1,5 @@
 import Forms.Technology.Tui
+import Forms.Technology.Terminal
 
 namespace Forms.Technology.NativeTerminal
 
@@ -40,18 +41,30 @@ private def readKey : IO Key := do
 private def draw (screen : Screen) : IO Unit :=
   drawScreen (List.toArray screen.fields) (USize.ofNat screen.selected) screen.editor
 
+instance : MonadTerminal IO where
+  putStr text := do
+    let stdout ← IO.getStdout
+    stdout.putStr text
+    stdout.flush
+  readLine := do
+    let stdin ← IO.getStdin
+    let line ← stdin.getLine
+    if line.isEmpty then
+      return none
+    return some (line.dropEndWhile (fun char => char == '\n' || char == '\r')).toString
+
+private def withSession {α : Type} (action : IO α) : IO α := do
+  if !(← start) then
+    throw (IO.userError "The TUI needs an interactive terminal. Use --plain for line input.")
+  try
+    action
+  finally
+    stop
+
 instance : MonadTui IO where
   readKey := readKey
   screenSize := screenSize
   draw := draw
-
-def run {root : Ty} (form : Form root root) (value : Ty.denote root)
-    : IO (Ty.denote root) := do
-  if !(← start) then
-    throw (IO.userError "The TUI needs an interactive terminal. Use --plain for line input.")
-  try
-    Tui.run form value
-  finally
-    stop
+  withSession := withSession
 
 end Forms.Technology.NativeTerminal

@@ -1,4 +1,5 @@
 import Forms.Technology.Input
+import Lean.Data.Json
 
 namespace Forms.Technology
 
@@ -11,6 +12,16 @@ def MonadTerminal.println {m : Type → Type} [MonadTerminal m] (text : String) 
   MonadTerminal.putStr (text ++ "\n")
 
 namespace Terminal
+
+def valueToJson {type : Ty} (value : Ty.denote type) : Lean.Json :=
+  match type with
+  | .text => Lean.toJson value
+  | .boolean => Lean.toJson value
+  | .natural => Lean.toJson value
+  | .pair left right =>
+    let first := valueToJson (type := left) value.1
+    let second := valueToJson (type := right) value.2
+    .arr #[first, second]
 
 variable {m : Type → Type} [Monad m] [MonadTerminal m]
 

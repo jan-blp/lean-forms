@@ -1,28 +1,30 @@
 import Forms.ExampleForms.Person
-import Forms.Technology.Terminal
 import Forms.Technology.NativeTerminal
+import Forms.Technology.Terminal
+import Forms.Technology.Tui
 
-open Forms.Technology
+namespace Forms.Application
 
-instance : MonadTerminal IO where
-  putStr text := do
-    let stdout ← IO.getStdout
-    stdout.putStr text
-    stdout.flush
-  readLine := do
-    let stdin ← IO.getStdin
-    let line ← stdin.getLine
-    if line.isEmpty then
-      return none
-    return some (line.dropEndWhile (fun char => char == '\n' || char == '\r')).toString
+open ExampleForms Technology
 
-def main (args : List String) : IO Unit := do
-  let value ← if List.contains args "--plain" then
-      Forms.Technology.Terminal.run Forms.ExampleForms.Person.form Forms.ExampleForms.Person.initial
+def run
+  {m : Type → Type}
+  [Monad m]
+  [MonadTerminal m]
+  [MonadTui m]
+  (args : List String)
+  : m Unit := do
+  let value ←
+    if List.contains args "--plain" then
+      Terminal.run Person.form Person.initial
     else
-      NativeTerminal.run Forms.ExampleForms.Person.form Forms.ExampleForms.Person.initial
+      Tui.run Person.form Person.initial
+
   MonadTerminal.println "\n  Final values\n  ------------"
-  MonadTerminal.println ("  Name        " ++ Forms.Path.get Forms.ExampleForms.Person.name value)
-  MonadTerminal.println ("  Subscribed  " ++ toString (Forms.Path.get Forms.ExampleForms.Person.subscribed value))
-  MonadTerminal.println ("  Street      " ++ Forms.Path.get Forms.ExampleForms.Person.street value)
-  MonadTerminal.println ("  Number      " ++ toString (Forms.Path.get Forms.ExampleForms.Person.number value))
+  let json := Terminal.valueToJson (type := Person.schema) value
+  MonadTerminal.println (Lean.Json.pretty json)
+
+end Forms.Application
+
+def main (args : List String) : IO Unit :=
+  Forms.Application.run args

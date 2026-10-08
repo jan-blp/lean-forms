@@ -37,6 +37,8 @@ class MonadTui (m : Type → Type) where
   readKey : m Key
   screenSize : m ScreenSize
   draw : Screen → m Unit
+  /-- Acquire the terminal for the action and restore it on success or failure. -/
+  withSession : {α : Type} → m α → m α
 
 namespace Tui
 
@@ -155,7 +157,7 @@ private partial def loop {root : Ty} [Inhabited (Ty.denote root)] (form : Form r
 
 def run {root : Ty} (form : Form root root) (value : Ty.denote root) : m (Ty.denote root) :=
   letI : Inhabited (Ty.denote root) := { default := value }
-  loop form { value := value } none
+  MonadTui.withSession (loop form { value := value } none)
 
 end Tui
 end Forms.Technology
