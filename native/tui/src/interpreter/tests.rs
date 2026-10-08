@@ -14,15 +14,16 @@ fn text(engine: &mut Engine, text: &str) {
     }
 }
 #[test]
-fn edits_validate_and_preserve_other_values() {
+fn edits_validate_and_hidden_values_survive() {
     let mut e = person();
-    assert_eq!(e.fields().len(), 4);
+    assert_eq!(e.fields().len(), 2);
     keys(
         &mut e,
         &[
             Key::Up,
             Key::Down,
             Key::Character(' '),
+            Key::Down,
             Key::Down,
             Key::Down,
             Key::Enter,
@@ -44,7 +45,7 @@ fn edits_validate_and_preserve_other_values() {
     keys(&mut e, &[Key::Clear]);
     text(&mut e, " 0042 ");
     keys(&mut e, &[Key::Enter, Key::Up, Key::Up, Key::Character(' ')]);
-    assert_eq!(e.fields().len(), 4);
+    assert_eq!(e.fields().len(), 2);
     assert_eq!(e.spec.value["address"]["number"], "42");
     keys(&mut e, &[Key::Character(' ')]);
     assert_eq!(e.fields().len(), 4);
@@ -123,6 +124,8 @@ fn invalid_specifications_are_rejected_before_rendering() {
         ("/value/address/number", json!(-1)),
         ("/value/address", json!(["street"])),
         ("/form/children/name/widget", json!("checkbox")),
+        ("/form/children/address/condition/path", json!(["address"])),
+        ("/form/children/address/condition/path", json!(["name"])),
     ] {
         let mut v = source.clone();
         *v.pointer_mut(path).unwrap() = replacement;
@@ -132,6 +135,19 @@ fn invalid_specifications_are_rejected_before_rendering() {
     let mut v = source;
     v["extra"] = json!(true);
     assert!(Engine::parse(&v.to_string()).is_err());
+}
+#[test]
+fn hidden_root_and_visibility_changed_by_edit() {
+    let spec = json!({"version":1,"schema":{"kind":"boolean"},"value":true,"form":{"kind":"visibleWhen","condition":{"kind":"project","path":[]},"body":{"kind":"field","label":"Visible","widget":"checkbox"}}});
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    keys(&mut e, &[Key::Enter]);
+    assert!(e.fields().is_empty());
+    assert_eq!(e.selected, 0);
+    keys(
+        &mut e,
+        &[Key::Up, Key::Down, Key::Enter, Key::Character(' ')],
+    );
+    assert_eq!(e.result(), "false");
 }
 
 #[test]
