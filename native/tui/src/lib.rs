@@ -292,11 +292,8 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         return;
     }
     let footer_height = if screen.editor.is_some() { 6 } else { 3 };
-    let sections = Layout::vertical([
-        Constraint::Min(4),
-        Constraint::Length(footer_height),
-    ])
-    .split(area);
+    let sections =
+        Layout::vertical([Constraint::Min(4), Constraint::Length(footer_height)]).split(area);
     let rows = screen.fields.iter().map(|field| {
         Row::new([
             Cell::from(clean(&field.label)),

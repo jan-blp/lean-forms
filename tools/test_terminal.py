@@ -37,7 +37,7 @@ def session(keys, expected, interrupt=False, theme=None):
                     break
 
     try:
-        read_until(lambda: b'Name' in output)
+        read_until(lambda: b'Person.Name' in output)
         os.write(master, keys)
         if interrupt:
             read_until(lambda: 'Ω▏'.encode() in output)
@@ -50,7 +50,7 @@ def session(keys, expected, interrupt=False, theme=None):
         assert termios.tcgetattr(slave) == before, 'Terminal mode was not restored'
         assert b'\x1b[?1049l' in output, 'Alternate screen was not restored'
         tail = output.split(b'Final values', 1)[1]
-        result = json.loads(tail.split(b'------------', 1)[1].decode().strip())
+        result = json.loads(tail[tail.index(b'{'):].decode())
         assert result == expected, result
         return bytes(output)
     finally:
@@ -61,13 +61,13 @@ def session(keys, expected, interrupt=False, theme=None):
         os.close(slave)
 
 
-initial = 'Ada'
-session(b'\r\x15Grace\rq', 'Grace')
-session(b'\r\x15\rq', '')
+initial = {'name': 'Ada', 'subscribed': False, 'address': {'street': 'Lambda Lane', 'number': 12}}
+output = session(b'j jj\r\x15-1\r\x1542\rkk  q', {'name': 'Ada', 'subscribed': True, 'address': {'street': 'Lambda Lane', 'number': 42}})
+assert b'non-negative whole number' in output
 session('i\x15Ω'.encode(), initial, interrupt=True)
 session(b'q', initial)
 for theme in ['frappe', 'macchiato', 'mocha', 'latte', 'ayu-light', 'ayu-dark', 'nord']:
     session(b'q', initial, theme=theme)
 result = subprocess.run([str(BINARY)], capture_output=True, text=True)
 assert result.returncode != 0 and 'interactive terminal' in result.stderr + result.stdout
-print('PASS: FFI editing, typed result, interruption, and terminal restoration')
+print('PASS: FFI editing, validation, typed result, interruption, and terminal restoration')
