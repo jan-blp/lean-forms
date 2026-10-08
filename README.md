@@ -1,6 +1,6 @@
 # lean-forms
 
-With [elan](https://lean-lang.org/install/), Rust/Cargo (1.90 or newer), and a C compiler (`cc`) installed, run from the repository:
+With [elan](https://lean-lang.org/install/), Rust/Cargo (1.88 or newer), and a C compiler (`cc`) installed, run from the repository:
 
 ```sh
 lake exe cache get
