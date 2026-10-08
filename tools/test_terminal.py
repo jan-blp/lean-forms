@@ -70,4 +70,4 @@ for theme in ['frappe', 'macchiato', 'mocha', 'latte', 'ayu-light', 'ayu-dark', 
     session(b'q', initial, theme=theme)
 result = subprocess.run([str(BINARY)], capture_output=True, text=True)
 assert result.returncode != 0 and 'interactive terminal' in result.stderr + result.stdout
-print('PASS: FFI editing, validation, typed result, interruption, and terminal restoration')
+print('PASS: FFI editing, validation, visibility, typed result, interruption, and terminal restoration')

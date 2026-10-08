@@ -90,6 +90,10 @@ pub enum Form {
         label: String,
         children: BTreeMap<String, Form>,
     },
+    VisibleWhen {
+        condition: Expr,
+        body: Box<Form>,
+    },
 }
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -207,6 +211,12 @@ impl Form {
                 }
                 _ => Err("Group children must match schema".into()),
             },
+            Self::VisibleWhen { condition, body } => {
+                if condition.ty(root)? != Ty::Boolean {
+                    return Err("Visibility requires boolean".into());
+                }
+                body.validate(root, ty)
+            }
             _ => Err("Widget does not match field type".into()),
         }
     }
@@ -238,6 +248,11 @@ impl Form {
                     let mut child_path = path.clone();
                     child_path.push(Step::Field(field.name.clone()));
                     children[&field.name].fields(&field.ty, value, child_path, labels.clone(), out);
+                }
+            }
+            Self::VisibleWhen { condition, body } => {
+                if condition.eval(value).as_bool().unwrap() {
+                    body.fields(ty, value, path, labels, out);
                 }
             }
         }

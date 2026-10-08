@@ -81,6 +81,8 @@ def Form.toJson {root type : DataType} (form : Form root type) : Json :=
       ("widget", Lean.toJson (Widget.name widget))]
   | .group (fields := fields) label children => Json.mkObj [("kind", Lean.toJson "group"), ("label", Lean.toJson label),
       ("children", Json.mkObj ((FinEnum.toList fields.type).map fun i => (fields.label i, Form.toJson (children i))))]
+  | .visibleWhen condition body => Json.mkObj [("kind", Lean.toJson "visibleWhen"),
+      ("condition", Expr.toJson condition), ("body", Form.toJson body)]
 
 namespace Runtime.JsonProtocol
 

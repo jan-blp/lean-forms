@@ -12,19 +12,19 @@ private def check (name : String) (passed : Bool) : IO Unit := do
   if passed then IO.println ("PASS " ++ name)
   else throw (IO.userError ("FAIL " ++ name))
 
-private def testEdits : IO Unit := do
+private def testEditsAndVisibility : IO Unit := do
   let initial := ExampleForms.Person.initial
   let form := ExampleForms.Person.form
-  check "InitiallyShowsAllFields" ((Form.fieldRefs form initial).length == 4)
-  let subscribed := Path.set ExampleForms.Person.subscribed true initial
-  check "SubscriptionPreservesFields" ((Form.fieldRefs form subscribed).length == 4)
-  let changed := Path.set ExampleForms.Person.number 42 subscribed
+  check "InitiallyVisibleFields" ((Form.fieldRefs form initial).length == 2)
+  let visible := Path.set ExampleForms.Person.subscribed true initial
+  check "SubscriptionShowsNestedAddress" ((Form.fieldRefs form visible).length == 4)
+  let changed := Path.set ExampleForms.Person.number 42 visible
   check "NestedEditPreservesOtherFields" (personValues changed == ("Ada", (true, ("Lambda Lane", 42))))
-  let unsubscribed := Path.set ExampleForms.Person.subscribed false changed
-  check "SubscriptionPreservesNestedValue"
-    ((Form.fieldRefs form unsubscribed).length == 4 && Path.get ExampleForms.Person.number unsubscribed == 42)
-  check "SubscriptionRoundTripPreservesAddress"
-    (personValues (Path.set ExampleForms.Person.subscribed true unsubscribed) == personValues changed)
+  let hidden := Path.set ExampleForms.Person.subscribed false changed
+  check "HidingPreservesNestedValue"
+    ((Form.fieldRefs form hidden).length == 2 && Path.get ExampleForms.Person.number hidden == 42)
+  check "ShowingRestoresEditedAddress"
+    (personValues (Path.set ExampleForms.Person.subscribed true hidden) == personValues changed)
 
 private def testLabeledFields : IO Unit := do
   let value := Path.set ExampleForms.Person.subscribed true ExampleForms.Person.initial
@@ -53,7 +53,7 @@ private def testPredicates : IO Unit := do
     (!(Expr.eval eligible (Path.set ExampleForms.Person.number 9 ExampleForms.Person.initial)))
 
 def main : IO Unit := do
-  testEdits
+  testEditsAndVisibility
   testLabeledFields
   testPredicates
   let encoded := JsonProtocol.encode ExampleForms.Person.form ExampleForms.Person.initial

@@ -55,8 +55,8 @@ def form : Form schema schema :=
   group "Person" fun
     | .name => field "Name" textInput
     | .subscribed => field "Subscribed" checkbox
-    | .address => group "Address" fun
+    | .address => visibleWhen (project subscribed) (group "Address" fun
       | .street => field "Street" textInput
-      | .number => field "Number" naturalInput
+      | .number => field "Number" naturalInput)
 
 end Forms.ExampleForms.Person
