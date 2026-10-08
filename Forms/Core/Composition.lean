@@ -15,5 +15,10 @@ inductive Component : (state : DataType) → Type 1 where
       (label : Option String := none)
       (children : items → Component state)
       : Component state
+  | visibleWhen
+      {state : DataType}
+      (condition : Expr state .boolean)
+      (body : Component state)
+      : Component state
 
 end Forms.Composition

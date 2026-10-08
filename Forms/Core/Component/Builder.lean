@@ -17,5 +17,9 @@ def group {state : DataType} {fields : Enum} {types : fields → DataType}
     : Component.Builder state (.record fields types) :=
   fun path => .stack (some label) (fun i => children i (path.trans (.field i .self)))
 
+def visibleWhen {state value : DataType} (condition : Expr state .boolean)
+    (body : Component.Builder state value) : Component.Builder state value :=
+  fun path => .visibleWhen condition (body path)
+
 end Component.Builder
 end Forms.Composition

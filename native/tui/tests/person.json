@@ -26,51 +26,60 @@
         }
       },
       {
-        "kind": "stack",
-        "label": "Address",
-        "children": [
-          {
-            "kind": "field",
-            "label": "Street",
-            "widget": "textInput",
-            "path": [
-              "address",
-              "street"
-            ],
-            "schema": {
-              "kind": "text"
+        "body": {
+          "kind": "stack",
+          "label": "Address",
+          "children": [
+            {
+              "kind": "field",
+              "label": "Street",
+              "widget": "textInput",
+              "path": [
+                "address",
+                "street"
+              ],
+              "schema": {
+                "kind": "text"
+              }
+            },
+            {
+              "kind": "field",
+              "label": "Number",
+              "widget": "naturalInput",
+              "path": [
+                "address",
+                "number"
+              ],
+              "schema": {
+                "kind": "natural"
+              }
+            },
+            {
+              "kind": "field",
+              "label": "Kind",
+              "widget": "select",
+              "path": [
+                "address",
+                "kind"
+              ],
+              "schema": {
+                "kind": "enum",
+                "options": [
+                  "Home",
+                  "Work",
+                  "Other"
+                ]
+              }
             }
-          },
-          {
-            "kind": "field",
-            "label": "Number",
-            "widget": "naturalInput",
-            "path": [
-              "address",
-              "number"
-            ],
-            "schema": {
-              "kind": "natural"
-            }
-          },
-          {
-            "kind": "field",
-            "label": "Kind",
-            "widget": "select",
-            "path": [
-              "address",
-              "kind"
-            ],
-            "schema": {
-              "kind": "enum",
-              "options": [
-                "Home",
-                "Work",
-                "Other"
-              ]
-            }
-          }
-        ]
+          ]
+        },
+        "condition": {
+          "kind": "project",
+          "path": [
+            "subscribed"
+          ]
+        },
+        "kind": "visibleWhen"
       }
     ]
   },

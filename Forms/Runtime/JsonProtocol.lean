@@ -105,6 +105,8 @@ def Component.toJson {state : DataType} (component : Component state) : Json :=
   | .field (value := value) path label widget => Json.mkObj [
       ("kind", Lean.toJson "field"), ("path", Lean.toJson (Path.toList path)),
       ("schema", DataType.toJson value), ("label", Lean.toJson label), ("widget", Lean.toJson (Widget.name widget))]
+  | .visibleWhen condition body => Json.mkObj [
+      ("kind", Lean.toJson "visibleWhen"), ("condition", Expr.toJson condition), ("body", Component.toJson body)]
   | .stack (items := items) label children => Json.mkObj [
       ("kind", Lean.toJson "stack"), ("label", Lean.toJson label),
       ("children", Lean.toJson ((FinEnum.toList items).map fun index => Component.toJson (children index)))]

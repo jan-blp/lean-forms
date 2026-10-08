@@ -103,6 +103,10 @@ pub enum Component {
         label: Option<String>,
         children: Vec<Component>,
     },
+    VisibleWhen {
+        condition: Expr,
+        body: Box<Component>,
+    },
 }
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -262,6 +266,12 @@ impl Component {
                 }
                 Ok(())
             }
+            Self::VisibleWhen { condition, body } => {
+                if condition.ty(context)? != Ty::Boolean {
+                    return Err("Condition requires boolean".into());
+                }
+                body.validate(context, context)
+            }
         }
     }
     fn fields(
@@ -305,6 +315,11 @@ impl Component {
                 }
                 for child in children {
                     child.fields(ty, value, path.clone(), labels.clone(), out);
+                }
+            }
+            Self::VisibleWhen { condition, body } => {
+                if condition.eval(value).as_bool().unwrap() {
+                    body.fields(ty, value, path, labels, out);
                 }
             }
         }
