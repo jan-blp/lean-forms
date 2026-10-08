@@ -26,8 +26,8 @@ def form : Form schema schema :=
   group "Person" fun
     | 0 => field "Name" text
     | 1 => field "Subscribed" checkbox
-    | 2 => group "Address" fun
-      | 0 => visibleWhen (project subscribed) (field "Street" text)
-      | 1 => visibleWhen (project subscribed) (field "Number" natural)
+    | 2 => visibleWhen (project subscribed) (group "Address" fun
+      | 0 => field "Street" text
+      | 1 => field "Number" natural)
 
 end Forms.ExampleForms.Person

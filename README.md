@@ -1,10 +1,28 @@
 # lean-forms
 
-With [elan](https://lean-lang.org/install/) installed, run from the repository:
+Typed forms in Lean with a Rust terminal UI.
+
+Requires Linux or macOS, [elan](https://lean-lang.org/install/), Rust/Cargo 1.88+, and `cc`.
 
 ```sh
 lake exe cache get
-lake exe forms
+lake -q exe forms
 ```
 
-Select a field number, then enter its new value. Set `Subscribed` to `true` to show the address. Enter `q` to quit.
+Use ↑/↓ to select, Enter to edit/save, Space to toggle, Esc to cancel editing, and `q` to quit.
+
+Run checks:
+
+```sh
+lake test
+CARGO_HOME="$PWD/.lake/cargo-home" cargo test --locked --manifest-path native/tui/Cargo.toml --target-dir .lake/tui
+python3 tools/test_terminal.py
+```
+
+## Future reading
+
+- [The Essence of Form Abstraction](https://homepages.inf.ed.ac.uk/slindley/papers/formlets-essence.pdf).
+- [Yesod forms](https://www.yesodweb.com/book/forms).
+
+Select a palette with `lake exe forms --theme latte`. Available themes: `frappe`
+(default), `macchiato`, `mocha`, `latte`, `ayu-light`, `ayu-dark`, and `nord`.

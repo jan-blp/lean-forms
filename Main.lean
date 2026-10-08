@@ -1,26 +1,39 @@
 import Forms.ExampleForms.Person
-import Forms.Runtime.Terminal
+import Forms.Runtime.NativeTerminal
+import Forms.Runtime.Tui
 
-open Forms.Runtime
+private structure ThemeOptions where
+  theme : Forms.Runtime.NativeTerminal.Theme := .frappe
 
-instance : MonadTerminal IO where
-  putStr text := do
-    let stdout ← IO.getStdout
-    stdout.putStr text
-    stdout.flush
-  readLine := do
-    let stdin ← IO.getStdin
-    let line ← stdin.getLine
-    if line.isEmpty then
-      return none
-    return some (line.dropEndWhile (fun char => char == '\n' || char == '\r')).toString
+private def parseThemeArgs : List String → ThemeOptions → Except String ThemeOptions
+  | [], options => .ok options
+  | "--theme" :: name :: rest, options => do
+    let some theme := Forms.Runtime.NativeTerminal.Theme.ofString? name
+      | throw s!"Unknown theme: {name}. Choose frappe, macchiato, mocha, latte, ayu-light, ayu-dark, or nord"
+    parseThemeArgs rest { options with theme := theme }
+  | ["--theme"], _ => .error "Expected a theme name after --theme"
+  | arg :: _, _ => .error s!"Unknown option: {arg}"
 
-def main : IO Unit := do
-  MonadTerminal.println "\n  LEAN FORMS\n  ----------"
-  MonadTerminal.println "  Set Subscribed to true to show the address."
-  let value ← Forms.Runtime.Terminal.run Forms.ExampleForms.Person.form Forms.ExampleForms.Person.initial
-  MonadTerminal.println "\n  Final values\n  ------------"
-  MonadTerminal.println ("  Name        " ++ Forms.Path.get Forms.ExampleForms.Person.name value)
-  MonadTerminal.println ("  Subscribed  " ++ toString (Forms.Path.get Forms.ExampleForms.Person.subscribed value))
-  MonadTerminal.println ("  Street      " ++ Forms.Path.get Forms.ExampleForms.Person.street value)
-  MonadTerminal.println ("  Number      " ++ toString (Forms.Path.get Forms.ExampleForms.Person.number value))
+namespace Forms.Application
+
+open ExampleForms Forms.Runtime
+
+private def valueToJson {type : DataType} (value : DataType.denote type) : Lean.Json :=
+  match type with
+  | .text => Lean.toJson value
+  | .boolean => Lean.toJson value
+  | .natural => Lean.toJson value
+  | .group children =>
+    .arr (Array.ofFn fun i => valueToJson (type := children i) (value i))
+
+def run (theme : NativeTerminal.Theme) : IO Unit := do
+  let _ : MonadTui IO := NativeTerminal.interpreter theme
+  let value ← Tui.run Person.form Person.initial
+  IO.println "\n  Final values\n  ------------"
+  IO.println (Lean.Json.pretty (valueToJson (type := Person.schema) value))
+
+end Forms.Application
+
+def main (args : List String) : IO Unit := do
+  let options ← IO.ofExcept (parseThemeArgs args {})
+  Forms.Application.run options.theme
