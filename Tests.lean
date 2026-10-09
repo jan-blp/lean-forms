@@ -11,14 +11,27 @@ private def check (name : String) (passed : Bool) : IO Unit := do
 private def testFields : IO Unit := do
   let fields := Form.fieldRefs ExampleForms.Person.form
   check "SingleField" (fields.length == 1)
-  check "FieldLabel" (fields.map (fun field => Path.Labels.toList field.labels) == [["Name"]])
-  check "RootPathReadsValue" (Path.get ExampleForms.Person.name ExampleForms.Person.initial == "Ada")
-  check "RootPathReplacesValue" (Path.set ExampleForms.Person.name "Grace" ExampleForms.Person.initial == "Grace")
+  check "FieldLabel" (fields.map (fun field => Path.Labels.toList field.labels) == [["Kind"]])
+  check "RootPathReadsValue" (Path.get ExampleForms.Person.kind ExampleForms.Person.initial == .home)
+  check "RootPathReplacesValue" (Path.set ExampleForms.Person.kind .work ExampleForms.Person.initial == .work)
 
 private def testPredicates : IO Unit := do
   let eligible : Expr .natural .boolean := .and (.value true) (.natLe (.value 10) (.project .self))
   check "EvaluatesTypedPredicate" (Expr.eval eligible 12)
   check "PredicateUsesEditedValue" (!(Expr.eval eligible 9))
+
+private def testChoice : IO Unit := do
+  let domain := ExampleForms.Person.addressEnum
+  for value in FinEnum.toList domain do
+    check "ChoiceRoundTripPreservesEnumValue"
+      (JsonProtocol.valueFromJson (.enum domain)
+        (JsonProtocol.valueToJson (type := .enum domain) value) == .ok value)
+  check "ChoiceDisplaysEnumLabel" (domain.label .work == "Work")
+  for json in [Lean.toJson (3 : Nat), Lean.toJson (-1 : Int), Lean.toJson "1", Lean.Json.null] do
+    check "RejectsInvalidChoiceResult"
+      (match JsonProtocol.valueFromJson (.enum domain) json with
+        | .error _ => true
+        | .ok _ => false)
 
 private def testDates : IO Unit := do
   let cases ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "native/tui/tests/dates.json"))
@@ -38,6 +51,7 @@ def main : IO Unit := do
   testDates
   testFields
   testPredicates
+  testChoice
   let encoded := JsonProtocol.encode ExampleForms.Person.form ExampleForms.Person.initial
   let json ← IO.ofExcept (Lean.Json.parse encoded)
   let value ← IO.ofExcept (json.getObjVal? "value" >>= JsonProtocol.valueFromJson ExampleForms.Person.person)

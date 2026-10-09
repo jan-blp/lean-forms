@@ -13,6 +13,7 @@ private def valueToJson {type : DataType} (value : ⟦type⟧) : Lean.Json :=
   | .boolean => Lean.toJson value
   | .natural => Lean.toJson value
   | .date => Lean.toJson (Date.toString value)
+  | .enum domain => Lean.toJson (domain.label value)
 
 private def runPerson (theme : NativeTerminal.Theme) : IO Unit := do
   let _ : MonadTui IO := NativeTerminal.interpreter theme

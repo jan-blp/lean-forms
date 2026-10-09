@@ -46,7 +46,7 @@ fn checkbox_toggles_without_opening_editor() {
 }
 #[test]
 fn cancellation_unicode_empty_text_and_quit() {
-    let mut e = person();
+    let mut e = scalar("text", "textInput", json!("Ada"));
     keys(&mut e, &[Key::Enter, Key::Clear]);
     text(&mut e, "changed");
     keys(&mut e, &[Key::Escape]);
@@ -63,7 +63,7 @@ fn cancellation_unicode_empty_text_and_quit() {
     text(&mut e, "discarded");
     assert!(!e.step(Key::Quit));
     assert_eq!(e.spec.value, "");
-    let mut e = person();
+    let mut e = scalar("text", "textInput", json!("Ada"));
     assert!(!e.step(Key::Character('q')));
 }
 #[test]
@@ -121,4 +121,53 @@ fn date_calendar_rules_and_picker_modes() {
     e.step(Key::Enter);
     assert!(e.editor.is_none());
     assert_eq!(e.spec.value, "2028-02-29");
+}
+
+#[test]
+fn choice_selection_cancellation_and_boundaries() {
+    let mut e = person();
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(
+        e.editor.as_ref().unwrap().options,
+        ["Home", "Work", "Other"]
+    );
+    keys(&mut e, &[Key::Up, Key::Character('j'), Key::Escape]);
+    assert_eq!(e.spec.value, 0);
+    keys(&mut e, &[Key::Enter, Key::Down, Key::Enter]);
+    assert_eq!(e.spec.value, 1);
+    assert_eq!(e.shown(&e.fields()[0]), "Work");
+    keys(
+        &mut e,
+        &[
+            Key::Enter,
+            Key::Down,
+            Key::Down,
+            Key::Clear,
+            Key::Backspace,
+            Key::Character('x'),
+        ],
+    );
+    assert_eq!(e.editor.as_ref().unwrap().choice, Some(2));
+    assert!(!e.step(Key::Quit));
+    assert_eq!(e.spec.value, 1);
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(e.spec.value, 2);
+}
+
+#[test]
+fn invalid_choices_are_rejected() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
+    for replacement in [json!(-1), json!(3), json!(1.5), json!("1"), json!(null)] {
+        let mut v = source.clone();
+        v["value"] = replacement;
+        assert!(Engine::parse(&v.to_string()).is_err());
+    }
+    for options in [json!([]), json!(["Home", "Home", "Other"])] {
+        let mut v = source.clone();
+        v["schema"]["options"] = options;
+        assert!(Engine::parse(&v.to_string()).is_err());
+    }
+    let mut v = source;
+    v["form"]["widget"] = json!("text");
+    assert!(Engine::parse(&v.to_string()).is_err());
 }
