@@ -2,7 +2,7 @@ import Forms.Core.DataType
 
 namespace Forms
 
-inductive Path : (root : DataType) → (target : DataType) → Type where
+inductive Path : (root : DataType) → (target : DataType) → Type 1 where
   | here {type : DataType} : Path type type
   | child
       {n : Nat} {children : Fin n → DataType} {target : DataType}

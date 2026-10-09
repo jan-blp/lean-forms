@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms'
 
 
-def session(keys, expected, interrupt=False, theme=None):
+def session(keys, expected, interrupt=False, cancel=False, theme=None):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 100, 0, 0))
     before = termios.tcgetattr(slave)
@@ -39,6 +39,12 @@ def session(keys, expected, interrupt=False, theme=None):
     try:
         read_until(lambda: b'Person.Name' in output)
         os.write(master, keys)
+        if cancel:
+            read_until(lambda: b'Other' in output)
+            start = len(output)
+            os.write(master, b'\x1b')
+            read_until(lambda: len(output) > start)
+            os.write(master, b'q')
         if interrupt:
             read_until(lambda: 'Ω▏'.encode() in output)
             process.send_signal(signal.SIGTERM)
@@ -61,13 +67,15 @@ def session(keys, expected, interrupt=False, theme=None):
         os.close(slave)
 
 
-initial = ['Ada', False, ['Lambda Lane', 12]]
-output = session(b'j jj\r\x15-1\r\x1542\rkk  q', ['Ada', True, ['Lambda Lane', 42]])
+initial = ['Ada', False, ['Lambda Lane', 12, 'Home']]
+output = session(b'j jj\r\x15-1\r\x1542\rkk  q', ['Ada', True, ['Lambda Lane', 42, 'Home']])
 assert b'non-negative whole number' in output
 session('i\x15Ω'.encode(), initial, interrupt=True)
 session(b'q', initial)
 for theme in ['frappe', 'macchiato', 'mocha', 'latte', 'ayu-light', 'ayu-dark', 'nord']:
     session(b'q', initial, theme=theme)
+session(b'jj\rj\rq', ['Ada', False, ['Lambda Lane', 12, 'Work']])
+session(b'jj\rj', initial, cancel=True)
 result = subprocess.run([str(BINARY)], capture_output=True, text=True)
 assert result.returncode != 0 and 'interactive terminal' in result.stderr + result.stdout
 print('PASS: FFI editing, validation, visibility, typed result, interruption, and terminal restoration')

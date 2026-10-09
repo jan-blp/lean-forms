@@ -9,7 +9,7 @@ use ratatui::{
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
     text::Line,
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState},
+    widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table, TableState},
     Frame, Terminal,
 };
 use std::{
@@ -130,6 +130,8 @@ struct Editor<'a> {
     label: &'a str,
     text: &'a str,
     error: Option<&'a str>,
+    choice: Option<usize>,
+    options: &'a [String],
 }
 struct Screen<'a> {
     fields: Vec<Field<'a>>,
@@ -187,6 +189,8 @@ fn run(engine: &mut Engine, theme: Theme, interrupted: extern "C" fn() -> i32) -
                         label: &f.label,
                         text: &e.text,
                         error: e.error.as_deref(),
+                        choice: e.choice,
+                        options: &e.options,
                     })
                 }),
             };
@@ -291,7 +295,16 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         frame.render_widget(Paragraph::new("Enlarge terminal to at least 32 x 12"), area);
         return;
     }
-    let footer_height = if screen.editor.is_some() { 6 } else { 3 };
+    let footer_height = match &screen.editor {
+        Some(editor) if editor.choice.is_some() => (editor
+            .options
+            .len()
+            .saturating_add(4)
+            .min(u16::MAX as usize) as u16)
+            .min(area.height.saturating_sub(7)),
+        Some(_) => 6,
+        None => 3,
+    };
     let sections = Layout::vertical([
         Constraint::Length(3),
         Constraint::Min(4),
@@ -352,20 +365,57 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
     });
     frame.render_stateful_widget(table, sections[1], table_state);
     if let Some(editor) = &screen.editor {
+        if let Some(index) = editor.choice {
+            let parts =
+                Layout::vertical([Constraint::Min(3), Constraint::Length(2)]).split(sections[2]);
+            let options = List::new(
+                editor
+                    .options
+                    .iter()
+                    .map(|label| ListItem::new(clean(label))),
+            )
+            .block(
+                Block::bordered()
+                    .title(format!(" {} ", clean(editor.label)))
+                    .title_bottom(
+                        Line::from(format!(" {} / {} ", index + 1, editor.options.len()))
+                            .right_aligned(),
+                    )
+                    .border_style(Style::default().fg(theme.accent)),
+            )
+            .highlight_style(
+                Style::default()
+                    .bg(theme.selection)
+                    .fg(theme.text)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .highlight_symbol("› ");
+            let mut state = ListState::default().with_selected(Some(index));
+            frame.render_stateful_widget(options, parts[0], &mut state);
+            frame.render_widget(
+                Paragraph::new("↑/↓ or j/k choose · Enter save · Esc cancel")
+                    .style(Style::default().fg(theme.subtext)),
+                parts[1],
+            );
+            return;
+        }
         let parts = Layout::vertical([
             Constraint::Length(3),
             Constraint::Length(1),
             Constraint::Length(2),
         ])
         .split(sections[2]);
-        let text = editor_tail(&clean(&editor.text), parts[0].width.saturating_sub(3));
+        let text = format!(
+            "{}▏",
+            editor_tail(&clean(&editor.text), parts[0].width.saturating_sub(3))
+        );
         let border = if editor.error.is_some() {
             theme.error
         } else {
             theme.accent
         };
         frame.render_widget(
-            Paragraph::new(format!("{text}▏")).block(
+            Paragraph::new(text).block(
                 Block::bordered()
                     .title(format!(" {} ", clean(&editor.label)))
                     .border_style(Style::default().fg(border)),
