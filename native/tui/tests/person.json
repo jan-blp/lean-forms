@@ -1,12 +1,17 @@
 {
   "form": {
     "kind": "field",
-    "label": "Name",
-    "widget": "textInput"
+    "label": "Kind",
+    "widget": "select"
   },
   "schema": {
-    "kind": "text"
+    "kind": "enum",
+    "options": [
+      "Home",
+      "Work",
+      "Other"
+    ]
   },
-  "value": "Ada",
+  "value": 0,
   "version": 1
 }

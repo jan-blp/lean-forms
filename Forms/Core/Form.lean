@@ -2,13 +2,14 @@ import Forms.Core.Expr
 
 namespace Forms
 
-inductive Widget : (type : DataType) → Type where
+inductive Widget : (type : DataType) → Type 1 where
   | textInput : Widget .text
   | checkbox : Widget .boolean
   | naturalInput : Widget .natural
   | dateInput : Widget .date
+  | select {domain : Enum} : Widget (.enum domain)
 
-inductive Form (root : DataType) : (type : DataType) → Type where
+inductive Form (root : DataType) : (type : DataType) → Type 1 where
   | field
       {t : DataType}
       (label : String)

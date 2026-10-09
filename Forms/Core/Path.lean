@@ -2,7 +2,7 @@ import Forms.Core.DataType
 
 namespace Forms
 
-inductive Path : (root : DataType) → (target : DataType) → Type where
+inductive Path : (root : DataType) → (target : DataType) → Type 1 where
   | self {type : DataType} : Path type type
 
 def Path.get

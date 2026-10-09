@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms'
 
 
-def session(keys, expected, interrupt=False, theme=None):
+def session(keys, expected, interrupt=False, cancel=False, theme=None):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 100, 0, 0))
     before = termios.tcgetattr(slave)
@@ -37,8 +37,14 @@ def session(keys, expected, interrupt=False, theme=None):
                     break
 
     try:
-        read_until(lambda: b'Name' in output)
+        read_until(lambda: b'Kind' in output)
         os.write(master, keys)
+        if cancel:
+            read_until(lambda: b'Other' in output)
+            start = len(output)
+            os.write(master, b'\x1b')
+            read_until(lambda: len(output) > start)
+            os.write(master, b'q')
         if interrupt:
             read_until(lambda: 'Ω▏'.encode() in output)
             process.send_signal(signal.SIGTERM)
@@ -61,13 +67,12 @@ def session(keys, expected, interrupt=False, theme=None):
         os.close(slave)
 
 
-initial = 'Ada'
-session(b'\r\x15Grace\rq', 'Grace')
-session(b'\r\x15\rq', '')
-session('i\x15Ω'.encode(), initial, interrupt=True)
+initial = 'Home'
+session(b'\rj\rq', 'Work')
+session(b'\rj', initial, cancel=True)
 session(b'q', initial)
 for theme in ['frappe', 'macchiato', 'mocha', 'latte', 'ayu-light', 'ayu-dark', 'nord']:
     session(b'q', initial, theme=theme)
 result = subprocess.run([str(BINARY)], capture_output=True, text=True)
 assert result.returncode != 0 and 'interactive terminal' in result.stderr + result.stdout
-print('PASS: FFI editing, typed result, interruption, and terminal restoration')
+print('PASS: FFI choice editing, cancellation, typed result, and terminal restoration')
