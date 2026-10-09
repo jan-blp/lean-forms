@@ -17,6 +17,7 @@ inductive DataType where
   | text
   | boolean
   | natural
+  | enum (domain : Enum)
   | record (fields : Enum) (children : fields.type → DataType)
 
 abbrev DataType.denote (type : DataType) : Type :=
@@ -24,6 +25,7 @@ abbrev DataType.denote (type : DataType) : Type :=
   | .text => String
   | .boolean => Bool
   | .natural => Nat
+  | .enum domain => domain.type
   | .record fields children => (i : fields.type) → DataType.denote (children i)
 
 end Forms

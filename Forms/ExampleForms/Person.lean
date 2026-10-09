@@ -2,18 +2,40 @@ import Forms.Core.Form
 
 namespace Forms.ExampleForms.Person
 
+inductive AddressKind where
+  | home
+  | work
+  | other
+  deriving DecidableEq, BEq, Repr
+
+instance : FinEnum AddressKind :=
+  FinEnum.ofList [.home, .work, .other] (by grind [AddressKind])
+
+def addressEnum : Enum where
+  type := AddressKind
+  label kind :=
+    match kind with
+    | .home => "Home"
+    | .work => "Work"
+    | .other => "Other"
+  label_injective := by
+    grind [Function.Injective, AddressKind]
+
+abbrev addressKind : DataType := .enum addressEnum
+
 inductive AddressField where
-  | street | number
+  | street | number | kind
   deriving DecidableEq, Repr
 
 instance : FinEnum AddressField :=
-  FinEnum.ofList [.street, .number] (by grind [AddressField])
+  FinEnum.ofList [.street, .number, .kind] (by grind [AddressField])
 
 def addressFields : Enum where
   type := AddressField
   label
     | .street => "street"
     | .number => "number"
+    | .kind => "kind"
 
 inductive PersonField where
   | name | subscribed | address
@@ -32,6 +54,7 @@ def personFields : Enum where
 abbrev address : DataType := .record addressFields fun
   | .street => .text
   | .number => .natural
+  | .kind => addressKind
 
 abbrev schema : DataType := .record personFields fun
   | .name => .text
@@ -49,14 +72,16 @@ def initial : DataType.denote schema
   | .address => fun
     | .street => "Lambda Lane"
     | .number => 12
+    | .kind => .home
 
 open Form Widget Expr in
 def form : Form schema schema :=
   group "Person" fun
     | .name => field "Name" textInput
     | .subscribed => field "Subscribed" checkbox
-    | .address => visibleWhen (project subscribed) (group "Address" fun
-      | .street => field "Street" textInput
-      | .number => field "Number" naturalInput)
+    | .address => group "Address" fun
+      | .street => visibleWhen (project subscribed) (field "Street" textInput)
+      | .number => visibleWhen (project subscribed) (field "Number" naturalInput)
+      | .kind => field "Kind" select
 
 end Forms.ExampleForms.Person

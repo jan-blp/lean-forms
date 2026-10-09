@@ -12,6 +12,7 @@ private def valueToJson {type : DataType} (value : DataType.denote type) : Lean.
   | .text => Lean.toJson value
   | .boolean => Lean.toJson value
   | .natural => Lean.toJson value
+  | .enum domain => Lean.toJson (domain.label value)
   | .record fields children =>
     .mkObj ((FinEnum.toList fields.type).map fun i =>
       (fields.label i, valueToJson (type := children i) (value i)))
