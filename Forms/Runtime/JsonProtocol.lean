@@ -10,6 +10,7 @@ def DataType.toJson (t : DataType) : Json :=
   | .boolean => Json.mkObj [("kind", Lean.toJson "boolean")]
   | .date => Json.mkObj [("kind", Lean.toJson "date")]
   | .natural => Json.mkObj [("kind", Lean.toJson "natural")]
+  | .enum domain => Json.mkObj [("kind", Lean.toJson "enum"), ("options", Lean.toJson domain.options)]
 
 namespace Runtime.JsonProtocol
 
@@ -19,6 +20,7 @@ def valueToJson {type : DataType} (value : DataType.denote type) : Json :=
   | .boolean => Lean.toJson value
   | .date => Lean.toJson (Date.toString value)
   | .natural => Lean.toJson (toString value)
+  | .enum domain => Lean.toJson (FinEnum.equiv (α := domain) value).val
 
 def valueFromJson (type : DataType) (json : Json) : Except String (DataType.denote type) :=
   match type with
@@ -34,6 +36,10 @@ def valueFromJson (type : DataType) (json : Json) : Except String (DataType.deno
     match text.toNat? with
     | some n => pure n
     | none => throw "Invalid natural in interpreter result"
+  | .enum domain => do
+    let index ← json.getNat?
+    if h : index < FinEnum.card domain then return FinEnum.equiv.symm ⟨index, h⟩
+    else throw "Invalid enum in interpreter result"
 
 theorem valueFromJson_date_sound {json : Json} {date : Date}
     (h : valueFromJson .date json = .ok date) :
@@ -67,6 +73,7 @@ def Widget.name {type : DataType} (widget : Widget type) : String :=
   | .checkbox => "checkbox"
   | .dateInput => "dateInput"
   | .naturalInput => "naturalInput"
+  | .select => "select"
 
 def Form.toJson {root type : DataType} (form : Form root type) : Json :=
   match form with
