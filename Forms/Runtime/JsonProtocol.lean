@@ -8,6 +8,7 @@ def DataType.toJson : DataType → Json
   | .text => Json.mkObj [("kind", Lean.toJson "text")]
   | .boolean => Json.mkObj [("kind", Lean.toJson "boolean")]
   | .natural => Json.mkObj [("kind", Lean.toJson "natural")]
+  | .choice domain => Json.mkObj [("kind", Lean.toJson "choice"), ("options", Lean.toJson domain.options)]
   | .group children => Json.mkObj [("kind", Lean.toJson "group"),
       ("children", Json.arr (Array.ofFn fun i => (children i).toJson))]
 
@@ -18,6 +19,7 @@ def valueToJson {type : DataType} (value : DataType.denote type) : Json :=
   | .text => Lean.toJson value
   | .boolean => Lean.toJson value
   | .natural => Lean.toJson (toString value)
+  | .choice domain => Lean.toJson (FinEnum.equiv (α := domain.type) value).val
   | .group children => Json.arr (Array.ofFn fun i => valueToJson (type := children i) (value i))
 
 private def sequence {n : Nat} {α : Fin n → Type}
@@ -38,6 +40,10 @@ def valueFromJson (type : DataType) (json : Json) : Except String (DataType.deno
     match text.toNat? with
     | some n => pure n
     | none => throw "Invalid natural in interpreter result"
+  | .choice domain => do
+    let index ← json.getNat?
+    if h : index < FinEnum.card domain.type then return FinEnum.equiv.symm ⟨index, h⟩
+    else throw "Invalid choice in interpreter result"
   | @DataType.group n children => do
     let items ← json.getArr?
     if h : items.size = n then
@@ -63,6 +69,7 @@ def Widget.name {type : DataType} : Widget type → String
   | .textInput => "textInput"
   | .checkbox => "checkbox"
   | .naturalInput => "naturalInput"
+  | .select => "select"
 
 def Form.toJson {root type : DataType} : Form root type → Json
   | .field label widget => Json.mkObj [("kind", Lean.toJson "field"), ("label", Lean.toJson label),

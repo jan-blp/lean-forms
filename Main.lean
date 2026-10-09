@@ -23,6 +23,7 @@ private def valueToJson {type : DataType} (value : DataType.denote type) : Lean.
   | .text => Lean.toJson value
   | .boolean => Lean.toJson value
   | .natural => Lean.toJson value
+  | .choice domain => Lean.toJson (domain.label value)
   | .group children =>
     .arr (Array.ofFn fun i => valueToJson (type := children i) (value i))
 

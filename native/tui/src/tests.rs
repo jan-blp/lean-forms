@@ -26,6 +26,8 @@ fn table_scrolls_to_selection_and_shows_validation() {
                 label: "Person.Field29".into(),
                 text: "-1".into(),
                 error: Some("Enter a non-negative whole number.".into()),
+                choice: None,
+                options: &[],
             }),
         };
         let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
@@ -43,6 +45,40 @@ fn table_scrolls_to_selection_and_shows_validation() {
             .content()
             .iter()
             .any(|cell| cell.bg == theme.selection));
+    }
+}
+
+#[test]
+fn choice_editor_shows_selection_and_navigation() {
+    for code in 0..=6 {
+        let theme = Theme::from_code(code).unwrap();
+        let options = vec!["Home".into(), "Work".into(), "Other".into()];
+        let screen = Screen {
+            fields: vec![Field {
+                label: "Address kind",
+                value: "Home",
+            }],
+            selected: 0,
+            editor: Some(Editor {
+                label: "Address kind",
+                text: "Home",
+                error: None,
+                choice: Some(1),
+                options: &options,
+            }),
+        };
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal
+            .draw(|frame| render(frame, &screen, &mut TableState::default(), theme))
+            .unwrap();
+        let text = contents(&terminal);
+        for label in ["Home", "Work", "Other"] {
+            assert!(text.contains(label));
+        }
+        assert!(text.contains("› Work"));
+        assert!(text.contains("2 / 3"));
+        assert!(text.contains("↑/↓ or j/k choose"));
+        assert!(!text.contains("Backspace delete"));
     }
 }
 
