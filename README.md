@@ -10,6 +10,7 @@ lake -q exe forms
 ```
 
 Use ↑/↓ to select, Enter to edit/save, Space to toggle, Esc to cancel editing, and `q` to quit.
+Choice fields use ↑/↓ then Enter to save.
 
 Run checks:
 

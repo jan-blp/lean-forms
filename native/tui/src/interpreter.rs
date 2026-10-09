@@ -10,6 +10,7 @@ pub enum Ty {
     Boolean,
     Natural,
     Date,
+    Enum { options: Vec<String> },
     Record { fields: Vec<NamedType> },
 }
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -76,14 +77,16 @@ pub enum Widget {
     Checkbox,
     NaturalInput,
     DateInput,
+    Select,
 }
 impl Widget {
-    fn ty(self) -> Ty {
+    fn matches(self, ty: &Ty) -> bool {
         match self {
-            Self::TextInput => Ty::Text,
-            Self::Checkbox => Ty::Boolean,
-            Self::DateInput => Ty::Date,
-            Self::NaturalInput => Ty::Natural,
+            Self::TextInput => *ty == Ty::Text,
+            Self::Checkbox => *ty == Ty::Boolean,
+            Self::DateInput => *ty == Ty::Date,
+            Self::NaturalInput => *ty == Ty::Natural,
+            Self::Select => matches!(ty, Ty::Enum { .. }),
         }
     }
 }
@@ -143,6 +146,11 @@ fn validate_value(ty: &Ty, value: &Value) -> Result<(), String> {
         Ty::Boolean => value.is_boolean(),
         Ty::Date => value.as_str().and_then(date).is_some(),
         Ty::Natural => value.as_str().and_then(natural).is_some(),
+        Ty::Enum { options } => {
+            let unique: std::collections::HashSet<_> = options.iter().collect();
+            unique.len() == options.len()
+                && value.as_u64().is_some_and(|i| i < options.len() as u64)
+        }
         Ty::Record { fields } => value.as_object().is_some_and(|v| {
             v.len() == fields.len()
                 && fields.iter().all(|field| {
@@ -236,7 +244,7 @@ fn set(value: &mut Value, path: &[Step], replacement: Value) {
 impl Form {
     fn validate(&self, root: &Ty, ty: &Ty) -> Result<(), String> {
         match self {
-            Self::Field { widget, .. } if widget.ty() == *ty => Ok(()),
+            Self::Field { widget, .. } if widget.matches(ty) => Ok(()),
             Self::Group { children, .. } => match ty {
                 Ty::Record { fields } if matches_names(children, fields) => {
                     for field in fields {
@@ -271,6 +279,10 @@ impl Form {
                     label: labels.join("."),
                     path,
                     widget: *widget,
+                    options: match ty {
+                        Ty::Enum { options } => options.clone(),
+                        _ => vec![],
+                    },
                 });
             }
             Self::Group { label, children } => {
@@ -297,12 +309,15 @@ pub struct Field {
     pub label: String,
     path: Vec<Step>,
     widget: Widget,
+    options: Vec<String>,
 }
 pub struct Editor {
     pub calendar: Option<NaiveDate>,
     pub date_input: bool,
     pub text: String,
     pub error: Option<String>,
+    pub choice: Option<usize>,
+    pub options: Vec<String>,
 }
 pub struct Engine {
     spec: Specification,
@@ -362,6 +377,7 @@ impl Engine {
                 "[ ]"
             }
             .into(),
+            Widget::Select => field.options[value.as_u64().unwrap() as usize].clone(),
             _ => value.as_str().unwrap().to_owned(),
         }
     }
@@ -414,50 +430,67 @@ impl Engine {
                 }
             }
 
-            match key {
-                Key::Escape => self.editor = None,
-                Key::Clear => {
-                    editor.text.clear();
-                    editor.error = None;
+            if let Some(index) = &mut editor.choice {
+                match key {
+                    Key::Up | Key::Character('k') => *index = index.saturating_sub(1),
+                    Key::Down | Key::Character('j') => {
+                        *index = (*index + 1).min(editor.options.len() - 1)
+                    }
+                    Key::Enter => {
+                        if let Some(field) = fields.get(self.selected) {
+                            set(&mut self.spec.value, &field.path, Value::from(*index));
+                        }
+                        self.editor = None;
+                    }
+                    Key::Escape => self.editor = None,
+                    _ => {}
                 }
-                Key::Backspace => {
-                    editor.text.pop();
-                    editor.error = None;
-                }
-                Key::Character(c) => {
-                    editor.text.push(c);
-                    editor.error = None;
-                }
-                Key::Enter => {
-                    if let Some(field) = fields.get(self.selected) {
-                        let parsed = match field.widget {
-                            Widget::TextInput => Some(Value::String(editor.text.clone())),
-                            Widget::DateInput => {
-                                date(editor.text.trim_matches(|c: char| c.is_ascii_whitespace()))
-                                    .map(|value| Value::String(value.to_string()))
+            } else {
+                match key {
+                    Key::Escape => self.editor = None,
+                    Key::Clear => {
+                        editor.text.clear();
+                        editor.error = None;
+                    }
+                    Key::Backspace => {
+                        editor.text.pop();
+                        editor.error = None;
+                    }
+                    Key::Character(c) => {
+                        editor.text.push(c);
+                        editor.error = None;
+                    }
+                    Key::Enter => {
+                        if let Some(field) = fields.get(self.selected) {
+                            let parsed = match field.widget {
+                                Widget::TextInput => Some(Value::String(editor.text.clone())),
+                                Widget::DateInput => date(
+                                    editor.text.trim_matches(|c: char| c.is_ascii_whitespace()),
+                                )
+                                .map(|value| Value::String(value.to_string())),
+                                Widget::NaturalInput => natural(
+                                    editor.text.trim_matches(|c: char| c.is_ascii_whitespace()),
+                                )
+                                .map(Value::String),
+                                Widget::Checkbox | Widget::Select => unreachable!(),
+                            };
+                            if let Some(value) = parsed {
+                                set(&mut self.spec.value, &field.path, value);
+                                self.editor = None;
+                            } else {
+                                editor.error = Some(
+                                    if matches!(field.widget, Widget::DateInput) {
+                                        "Enter a valid date: YYYY-MM-DD (0001–9999)."
+                                    } else {
+                                        "Enter a non-negative whole number."
+                                    }
+                                    .into(),
+                                );
                             }
-                            Widget::NaturalInput => {
-                                natural(editor.text.trim_matches(|c: char| c.is_ascii_whitespace()))
-                                    .map(Value::String)
-                            }
-                            Widget::Checkbox => unreachable!(),
-                        };
-                        if let Some(value) = parsed {
-                            set(&mut self.spec.value, &field.path, value);
-                            self.editor = None;
-                        } else {
-                            editor.error = Some(
-                                if matches!(field.widget, Widget::DateInput) {
-                                    "Enter a valid date: YYYY-MM-DD (0001–9999)."
-                                } else {
-                                    "Enter a non-negative whole number."
-                                }
-                                .into(),
-                            );
                         }
                     }
+                    _ => {}
                 }
-                _ => {}
             }
         } else {
             match key {
@@ -483,6 +516,13 @@ impl Engine {
                                     },
                                     text: self.shown(field),
                                     error: None,
+                                    choice: if matches!(field.widget, Widget::Select) {
+                                        Some(get(&self.spec.value, &field.path).as_u64().unwrap()
+                                            as usize)
+                                    } else {
+                                        None
+                                    },
+                                    options: field.options.clone(),
                                 })
                             }
                             _ => {}

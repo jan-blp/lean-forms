@@ -7,6 +7,7 @@ inductive Widget : (type : DataType) → Type 1 where
   | checkbox : Widget .boolean
   | naturalInput : Widget .natural
   | dateInput : Widget .date
+  | select {domain : Enum} : Widget (.enum domain)
 
 inductive Form (root : DataType) : (type : DataType) → Type 1 where
   | field
