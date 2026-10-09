@@ -2,12 +2,13 @@ import Forms.Core.Expr
 
 namespace Forms
 
-inductive Control : (type : DataType) → Type where
+inductive Control : (type : DataType) → Type 1 where
   | text : Control .text
   | checkbox : Control .boolean
   | natural : Control .natural
+  | choice {domain : Choice} : Control (.choice domain)
 
-inductive Form (root : DataType) : (type : DataType) → Type where
+inductive Form (root : DataType) : (type : DataType) → Type 1 where
   | field
       {t : DataType}
       (label : String)

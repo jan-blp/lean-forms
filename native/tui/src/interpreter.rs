@@ -7,6 +7,7 @@ pub enum Ty {
     Text,
     Boolean,
     Natural,
+    Choice { options: Vec<String> },
     Group { children: Vec<Ty> },
 }
 #[derive(Debug, Deserialize)]
@@ -35,13 +36,15 @@ pub enum Control {
     Text,
     Checkbox,
     Natural,
+    Choice,
 }
 impl Control {
-    fn ty(self) -> Ty {
+    fn matches(self, ty: &Ty) -> bool {
         match self {
-            Self::Text => Ty::Text,
-            Self::Checkbox => Ty::Boolean,
-            Self::Natural => Ty::Natural,
+            Self::Text => *ty == Ty::Text,
+            Self::Checkbox => *ty == Ty::Boolean,
+            Self::Natural => *ty == Ty::Natural,
+            Self::Choice => matches!(ty, Ty::Choice { .. }),
         }
     }
 }
@@ -72,6 +75,11 @@ fn validate_value(ty: &Ty, value: &Value) -> Result<(), String> {
         Ty::Text => value.is_string(),
         Ty::Boolean => value.is_boolean(),
         Ty::Natural => value.as_str().and_then(natural).is_some(),
+        Ty::Choice { options } => {
+            let unique: std::collections::HashSet<_> = options.iter().collect();
+            unique.len() == options.len()
+                && value.as_u64().is_some_and(|i| i < options.len() as u64)
+        }
         Ty::Group { children } => value.as_array().is_some_and(|v| {
             v.len() == children.len()
                 && children
@@ -148,7 +156,7 @@ fn set(value: &mut Value, path: &[usize], replacement: Value) {
 impl Form {
     fn validate(&self, root: &Ty, ty: &Ty) -> Result<(), String> {
         match self {
-            Self::Field { control, .. } if control.ty() == *ty => Ok(()),
+            Self::Field { control, .. } if control.matches(ty) => Ok(()),
             Self::Group { children, .. } => match ty {
                 Ty::Group { children: types } if children.len() == types.len() => {
                     for (child, ty) in children.iter().zip(types) {
@@ -167,7 +175,14 @@ impl Form {
             _ => Err("Control does not match field type".into()),
         }
     }
-    fn fields(&self, value: &Value, path: Vec<usize>, labels: Vec<String>, out: &mut Vec<Field>) {
+    fn fields(
+        &self,
+        ty: &Ty,
+        value: &Value,
+        path: Vec<usize>,
+        labels: Vec<String>,
+        out: &mut Vec<Field>,
+    ) {
         match self {
             Self::Field { label, control } => {
                 let mut labels = labels;
@@ -176,20 +191,27 @@ impl Form {
                     label: labels.join("."),
                     path,
                     control: *control,
+                    options: match ty {
+                        Ty::Choice { options } => options.clone(),
+                        _ => vec![],
+                    },
                 });
             }
             Self::Group { label, children } => {
                 let mut labels = labels;
                 labels.push(label.clone());
-                for (index, child) in children.iter().enumerate() {
+                let Ty::Group { children: types } = ty else {
+                    unreachable!()
+                };
+                for (index, (child, ty)) in children.iter().zip(types).enumerate() {
                     let mut child_path = path.clone();
                     child_path.push(index);
-                    child.fields(value, child_path, labels.clone(), out);
+                    child.fields(ty, value, child_path, labels.clone(), out);
                 }
             }
             Self::VisibleWhen { condition, body } => {
                 if condition.eval(value).as_bool().unwrap() {
-                    body.fields(value, path, labels, out);
+                    body.fields(ty, value, path, labels, out);
                 }
             }
         }
@@ -199,10 +221,13 @@ pub struct Field {
     pub label: String,
     path: Vec<usize>,
     control: Control,
+    options: Vec<String>,
 }
 pub struct Editor {
     pub text: String,
     pub error: Option<String>,
+    pub choice: Option<usize>,
+    pub options: Vec<String>,
 }
 pub struct Engine {
     spec: Specification,
@@ -239,9 +264,13 @@ impl Engine {
     }
     pub fn fields(&self) -> Vec<Field> {
         let mut out = Vec::new();
-        self.spec
-            .form
-            .fields(&self.spec.value, vec![], vec![], &mut out);
+        self.spec.form.fields(
+            &self.spec.schema,
+            &self.spec.value,
+            vec![],
+            vec![],
+            &mut out,
+        );
         out
     }
     pub fn shown(&self, field: &Field) -> String {
@@ -253,6 +282,7 @@ impl Engine {
                 "[ ]"
             }
             .into(),
+            Control::Choice => field.options[value.as_u64().unwrap() as usize].clone(),
             _ => value.as_str().unwrap().to_owned(),
         }
     }
@@ -262,39 +292,56 @@ impl Engine {
         }
         let fields = self.fields();
         if let Some(editor) = &mut self.editor {
-            match key {
-                Key::Escape => self.editor = None,
-                Key::Clear => {
-                    editor.text.clear();
-                    editor.error = None;
+            if let Some(index) = &mut editor.choice {
+                match key {
+                    Key::Up | Key::Character('k') => *index = index.saturating_sub(1),
+                    Key::Down | Key::Character('j') => {
+                        *index = (*index + 1).min(editor.options.len() - 1)
+                    }
+                    Key::Enter => {
+                        if let Some(field) = fields.get(self.selected) {
+                            set(&mut self.spec.value, &field.path, Value::from(*index));
+                        }
+                        self.editor = None;
+                    }
+                    Key::Escape => self.editor = None,
+                    _ => {}
                 }
-                Key::Backspace => {
-                    editor.text.pop();
-                    editor.error = None;
-                }
-                Key::Character(c) => {
-                    editor.text.push(c);
-                    editor.error = None;
-                }
-                Key::Enter => {
-                    if let Some(field) = fields.get(self.selected) {
-                        let parsed = match field.control {
-                            Control::Text => Some(Value::String(editor.text.clone())),
-                            Control::Natural => {
-                                natural(editor.text.trim_matches(|c: char| c.is_ascii_whitespace()))
-                                    .map(Value::String)
+            } else {
+                match key {
+                    Key::Escape => self.editor = None,
+                    Key::Clear => {
+                        editor.text.clear();
+                        editor.error = None;
+                    }
+                    Key::Backspace => {
+                        editor.text.pop();
+                        editor.error = None;
+                    }
+                    Key::Character(c) => {
+                        editor.text.push(c);
+                        editor.error = None;
+                    }
+                    Key::Enter => {
+                        if let Some(field) = fields.get(self.selected) {
+                            let parsed = match field.control {
+                                Control::Text => Some(Value::String(editor.text.clone())),
+                                Control::Natural => natural(
+                                    editor.text.trim_matches(|c: char| c.is_ascii_whitespace()),
+                                )
+                                .map(Value::String),
+                                Control::Checkbox | Control::Choice => unreachable!(),
+                            };
+                            if let Some(value) = parsed {
+                                set(&mut self.spec.value, &field.path, value);
+                                self.editor = None;
+                            } else {
+                                editor.error = Some("Enter a non-negative whole number.".into());
                             }
-                            Control::Checkbox => unreachable!(),
-                        };
-                        if let Some(value) = parsed {
-                            set(&mut self.spec.value, &field.path, value);
-                            self.editor = None;
-                        } else {
-                            editor.error = Some("Enter a non-negative whole number.".into());
                         }
                     }
+                    _ => {}
                 }
-                _ => {}
             }
         } else {
             match key {
@@ -314,6 +361,13 @@ impl Engine {
                                 self.editor = Some(Editor {
                                     text: self.shown(field),
                                     error: None,
+                                    choice: if matches!(field.control, Control::Choice) {
+                                        Some(get(&self.spec.value, &field.path).as_u64().unwrap()
+                                            as usize)
+                                    } else {
+                                        None
+                                    },
+                                    options: field.options.clone(),
                                 })
                             }
                             _ => {}

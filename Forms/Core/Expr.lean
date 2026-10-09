@@ -2,7 +2,7 @@ import Forms.Core.Path
 
 namespace Forms
 
-inductive Expr (root : DataType) : (result : DataType) → Type where
+inductive Expr (root : DataType) : (result : DataType) → Type 1 where
   | value {t : DataType} (v : DataType.denote t) : Expr root t
   | project {t : DataType} (p : Path root t) : Expr root t
   | and (l r : Expr root .boolean) : Expr root .boolean

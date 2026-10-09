@@ -2,7 +2,27 @@ import Forms.Core.Form
 
 namespace Forms.ExampleForms.Person
 
-abbrev address : DataType := .group ![.text, .natural]
+inductive AddressKind where
+  | home
+  | work
+  | other
+  deriving DecidableEq, BEq, Repr
+
+instance : FinEnum AddressKind :=
+  FinEnum.ofList [.home, .work, .other] (by grind [AddressKind])
+
+def addressChoices : Choice where
+  type := AddressKind
+  label
+    | .home => "Home"
+    | .work => "Work"
+    | .other => "Other"
+  label_injective := by
+    grind [Function.Injective, AddressKind]
+
+abbrev addressKind : DataType := .choice addressChoices
+
+abbrev address : DataType := .group ![.text, .natural, addressKind]
 
 abbrev schema : DataType := .group ![.text, .boolean, address]
 
@@ -20,14 +40,16 @@ def initial : DataType.denote schema
   | 2 => fun
     | 0 => "Lambda Lane"
     | 1 => (12 : Nat)
+    | 2 => .home
 
 open Form Control Expr in
 def form : Form schema schema :=
   group "Person" fun
     | 0 => field "Name" text
     | 1 => field "Subscribed" checkbox
-    | 2 => visibleWhen (project subscribed) (group "Address" fun
-      | 0 => field "Street" text
-      | 1 => field "Number" natural)
+    | 2 => group "Address" fun
+      | 0 => visibleWhen (project subscribed) (field "Street" text)
+      | 1 => visibleWhen (project subscribed) (field "Number" natural)
+      | 2 => field "Kind" choice
 
 end Forms.ExampleForms.Person
