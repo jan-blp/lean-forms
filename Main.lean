@@ -1,3 +1,4 @@
+import Forms.ExampleForms.Invoice
 import Forms.ExampleForms.Person
 import Forms.ExampleForms.Thermostat
 import Forms.Runtime.NativeTerminal
@@ -9,6 +10,7 @@ open ExampleForms Forms.Runtime
 
 private def valueToJson {t : DataType} (value : DataType.denote t) : Lean.Json :=
   match t with
+  | .list element => .arr ((value.map (valueToJson (t := element))).toArray)
   | .text => Lean.toJson value
   | .boolean => Lean.toJson value
   | .natural => Lean.toJson value
@@ -30,9 +32,11 @@ def runForm (theme : NativeTerminal.Theme)
 private structure Options where
   theme : NativeTerminal.Theme := .frappe
   thermostat : Bool := false
+  invoice : Bool := false
 
 private def parseArgs : List String → Options → Except String Options
   | [], options => .ok options
+  | "--invoice" :: rest, options => parseArgs rest { options with invoice := true }
   | "--thermostat" :: rest, options => parseArgs rest { options with thermostat := true }
   | "--theme" :: name :: rest, options => do
     let some theme := NativeTerminal.Theme.ofString? name
@@ -43,7 +47,9 @@ private def parseArgs : List String → Options → Except String Options
 
 def run (args : List String) : IO Unit := do
   let options ← IO.ofExcept (parseArgs args {})
-  if options.thermostat then
+  if options.invoice then
+    runForm options.theme Invoice.invoiceType Invoice.form Invoice.initial
+  else if options.thermostat then
     runForm options.theme Thermostat.thermostatType Thermostat.form Thermostat.initial
   else runForm options.theme Person.personType Person.form Person.initial
 

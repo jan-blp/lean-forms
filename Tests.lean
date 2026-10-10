@@ -1,3 +1,4 @@
+import Forms.ExampleForms.Invoice
 import Mathlib.Data.Nat.Basic
 import Forms.ExampleForms.Person
 import Forms.ExampleForms.Thermostat
@@ -64,17 +65,17 @@ private def testHiddenValidation : IO Unit := do
     .visibleWhen (.value false) ExampleForms.Thermostat.form
   let draft := ![16, 18]
   check "HiddenFieldsStillValidate"
-    ((Form.fieldRefs hidden draft).isEmpty &&
+    ((Form.fieldRefs hidden draft draft).isEmpty &&
       (ExampleForms.Thermostat.thermostatType.errors draft).length == 1 &&
       (ExampleForms.Thermostat.thermostatType.validate draft).isNone)
 
 private def testPathsAndChoices : IO Unit := do
   let shown := Path.set ExampleForms.Person.subscribed true ExampleForms.Person.draft
-  let fields := Form.fieldRefs ExampleForms.Person.form shown
-  check "VisibilityStillWorks" ((Form.fieldRefs ExampleForms.Person.form ExampleForms.Person.draft).length == 4 && fields.length == 5)
+  let fields := Form.fieldRefs ExampleForms.Person.form shown shown
+  check "VisibilityStillWorks" ((Form.fieldRefs ExampleForms.Person.form ExampleForms.Person.draft ExampleForms.Person.draft).length == 4 && fields.length == 5)
   check "PathUpdatePreservesOtherValues" (JsonProtocol.valueToJson (Path.set ExampleForms.Person.age 42 shown) == Lean.Json.arr #[Lean.toJson "Ada", Lean.toJson "42", Lean.toJson true, Lean.Json.arr #[Lean.toJson "Lambda Lane", Lean.toJson (0 : Nat)]])
   check "LabelsFollowGroups"
-    ((fields.map fun field => Path.Labels.toList field.labels)[1]? == some ["Registration", "Age (18-120)"])
+    ((fields.map fun field => field.labels)[1]? == some ["Registration", "Age (18-120)"])
   for value in FinEnum.toList ExampleForms.Person.addressChoices.type do
     check "ChoiceRoundTrip"
       (JsonProtocol.valueFromJson (.choice ExampleForms.Person.addressChoices) (JsonProtocol.valueToJson (t := .choice ExampleForms.Person.addressChoices) value) == .ok value)
@@ -102,8 +103,32 @@ private def testNativeBoundary : IO Unit := do
     | .error _ => true
     | _ => false)
 
+private def testLists : IO Unit := do
+  let refined := ExampleForms.Invoice.invoiceType
+  let draft := ExampleForms.Invoice.draft
+  let encoded := JsonProtocol.valueToJson draft
+  check "ListRoundTrip" (match JsonProtocol.valueFromJson ExampleForms.Invoice.shape encoded with
+    | .ok value => JsonProtocol.valueToJson value == encoded
+    | _ => false)
+  check "ListRefinementsRejectForgedResult" (match JsonProtocol.decodeResult refined
+      (← IO.ofExcept (Lean.Json.parse "[[\"Bad\",\"0\",\"100\"]]")) with
+    | .error _ => true
+    | _ => false)
+  check "EmptyListValidates" (match JsonProtocol.decodeResult refined (.arr #[]) with
+    | .ok (some []) => true
+    | _ => false)
+  check "EveryItemValidated" (match JsonProtocol.decodeResult refined
+      (← IO.ofExcept (Lean.Json.parse "[[\"Good\",\"1\",\"100\"],[\"Bad\",\"1\",\"0\"]]")) with
+    | .error _ => true
+    | _ => false)
+  check "ListFieldIndices" ((ExampleForms.Invoice.form.fieldRefs draft draft).map (·.indices) == [[0,0], [0,1], [0,2]])
+  check "ListRequiresArray" (match JsonProtocol.valueFromJson (.list .natural) (Lean.toJson "1") with
+    | .error _ => true
+    | _ => false)
+
 private def testProtocol : IO Unit := do
   for (fixture, encoded) in [
+      ("native/tui/tests/invoice.json", JsonProtocol.encode ExampleForms.Invoice.invoiceType ExampleForms.Invoice.form ExampleForms.Invoice.draft),
       ("native/tui/tests/person.json", JsonProtocol.encode ExampleForms.Person.personType ExampleForms.Person.form ExampleForms.Person.draft),
       ("native/tui/tests/thermostat.json", JsonProtocol.encode ExampleForms.Thermostat.thermostatType ExampleForms.Thermostat.form ExampleForms.Thermostat.draft)] do
     check "RustFixtureMatchesLean" ((← IO.FS.readFile fixture).trimAscii.toString == encoded)
@@ -117,8 +142,11 @@ def main : IO Unit := do
   testHiddenValidation
   testNativeBoundary
   testProtocol
+  testLists
 
 section Theorems
+
+example : ExampleForms.Invoice.invoiceType.denote = List ExampleForms.Invoice.itemType.denote := rfl
 
 -- These equalities check the actual carriers, including nested local proofs.
 example : ExampleForms.Person.ageType.denote = { n : Nat // (decide (18 ≤ n) && decide (n ≤ 120)) = true } := rfl

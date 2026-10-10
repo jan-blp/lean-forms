@@ -23,6 +23,7 @@ def Constraint.weaken (path : Path outer root) (constraint : Constraint root) : 
 end
 
 inductive RefinedDataType : DataType → Type 1 where
+  | list {element : DataType} (item : RefinedDataType element) : RefinedDataType (.list element)
   | base (t : DataType) : RefinedDataType t
   | group {n : Nat} {children : Fin n → DataType}
       (fields : (i : Fin n) → RefinedDataType (children i))
@@ -36,6 +37,7 @@ structure RefinedDataType.Denotation (t : DataType) where
 variable {t : DataType}
 
 @[reducible] def RefinedDataType.denotation {t} : RefinedDataType t → RefinedDataType.Denotation t
+  | .list item => ⟨List item.denotation.Value, List.map item.denotation.erase⟩
   | .base t => ⟨DataType.denote t, id⟩
   | .group fields =>
     ⟨(i : Fin _) → (fields i).denotation.Value,
@@ -61,6 +63,7 @@ private def sequence {n : Nat} {α : Fin n → Type}
 
 def RefinedDataType.validate {t} (refined : RefinedDataType t) (draft : DataType.denote t) : Option refined.denote :=
   match refined with
+  | .list item => draft.mapM item.validate
   | .base _ => some draft
   | .group fields => sequence (fun i => (fields i).validate (draft i))
   | .refine refined constraint => do
@@ -70,6 +73,10 @@ def RefinedDataType.validate {t} (refined : RefinedDataType t) (draft : DataType
     else none
 
 def RefinedDataType.constraints {t} : RefinedDataType t → List (Constraint t)
+  | .list item => item.constraints.map fun constraint =>
+      { condition := .all (.project .here) constraint.condition
+        errorMessage := constraint.errorMessage
+        errorLocation := some ⟨.here⟩ }
   | .base _ => []
   | .group fields =>
     (List.finRange _).flatMap fun i =>
@@ -87,8 +94,16 @@ private theorem sequence_some {n : Nat} {α : Fin n → Type} (values : (i : Fin
 
 theorem RefinedDataType.validate_erase (refined : RefinedDataType t) (value : refined.denote) :
     refined.validate (refined.erase value) = some value := by
-  induction refined <;> simp_all [validate, erase, sequence_some]
-  exact value.property
+  induction refined with
+  | base => rfl
+  | group fields ih => simp_all [validate, erase, sequence_some]
+  | refine refined constraint ih =>
+    simp_all [validate, erase]
+    exact value.property
+  | list item ih =>
+    induction value with
+    | nil => rfl
+    | cons head tail h => simp_all [validate, erase]
 
 end Theorems
 

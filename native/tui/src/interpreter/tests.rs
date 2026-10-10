@@ -22,6 +22,73 @@ fn edit(engine: &mut Engine, input: &str) {
     keys(engine, &[Key::Enter]);
 }
 #[test]
+fn repeated_items_add_remove_edit_and_validate() {
+    let mut e = Engine::parse(include_str!("../../tests/invoice.json")).unwrap();
+    assert_eq!(e.fields().len(), 5);
+    e.selected = 4;
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(e.fields().len(), 9);
+    edit(&mut e, "Second");
+    e.selected = 5;
+    edit(&mut e, "0");
+    assert_eq!(e.errors().len(), 1);
+    assert!(e.step(Key::Character('q')));
+    e.selected = 3;
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(e.spec.value, json!([["Second", "0", "100"]]));
+    e.selected = 1;
+    edit(&mut e, "2");
+    assert!(e.errors().is_empty());
+    e.selected = 3;
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(e.fields().len(), 1);
+    assert_eq!(e.spec.value, json!([]));
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(e.spec.value, json!([["New item", "1", "100"]]));
+    assert!(!e.step(Key::Character('q')));
+}
+
+#[test]
+fn nested_lists_and_item_visibility_use_local_scope() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
+    let item = spec["form"]["item"].clone();
+    spec["form"]["item"] = json!({"kind":"visibleWhen", "condition":{
+        "kind":"natLe", "left":{"kind":"value", "type":{"kind":"natural"}, "value":"1"},
+        "right":{"kind":"project", "path":[1]}}, "body":item});
+    let inner_schema = spec["schema"].clone();
+    let inner_form = spec["form"].clone();
+    let inner_value = spec["value"].clone();
+    spec["schema"] = json!({"kind":"list", "element":inner_schema});
+    spec["form"] = json!({"kind":"list", "label":"Invoices", "item":inner_form, "defaultItem":[]});
+    spec["value"] = json!([inner_value]);
+    spec["constraints"] = json!([]);
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(e.fields().len(), 7);
+    e.selected = 1;
+    edit(&mut e, "0");
+    assert_eq!(e.fields().len(), 4);
+    assert_eq!(e.fields()[0].path, vec![0, 0]);
+    e.selected = 3;
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(e.spec.value[1], json!([]));
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(e.spec.value[1], json!([["New item", "1", "100"]]));
+}
+
+#[test]
+fn malformed_lists_and_defaults_are_rejected() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
+    for invalid in [json!(null), json!([1]), json!([["Name", "1"]])] {
+        let mut spec = source.clone();
+        spec["value"] = invalid;
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
+    let mut spec = source;
+    spec["form"]["defaultItem"] = json!(false);
+    assert!(Engine::parse(&spec.to_string()).is_err());
+}
+
+#[test]
 fn invalid_drafts_are_editable_but_not_submittable() {
     let mut e = thermostat();
     edit(&mut e, "16");

@@ -19,6 +19,7 @@ inductive DataType where
   | boolean
   | natural
   | choice (domain : Choice)
+  | list (element : DataType)
   | group {n : Nat} (children : Fin n → DataType)
 
 abbrev DataType.denote (t : DataType) : Type :=
@@ -27,6 +28,7 @@ abbrev DataType.denote (t : DataType) : Type :=
   | .boolean => Bool
   | .natural => Nat
   | .choice domain => domain.type
+  | .list element => List element.denote
   | .group children => (i : Fin _) → DataType.denote (children i)
 
 section Theorems

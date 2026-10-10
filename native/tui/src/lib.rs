@@ -125,6 +125,8 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 struct Field<'a> {
     label: &'a str,
     value: &'a str,
+    section: &'a str,
+    action: bool,
 }
 struct Editor<'a> {
     label: &'a str,
@@ -181,14 +183,16 @@ fn run(engine: &mut Engine, theme: Theme, interrupted: extern "C" fn() -> i32) -
                     .iter()
                     .zip(&values)
                     .map(|(f, value)| Field {
-                        label: &f.label,
+                        label: &f.title,
+                        section: &f.section,
+                        action: f.action,
                         value,
                     })
                     .collect(),
                 selected: engine.selected,
                 editor: engine.editor.as_ref().and_then(|e| {
                     fields.get(engine.selected).map(|f| Editor {
-                        label: &f.label,
+                        label: &f.title,
                         text: &e.text,
                         error: e.error.as_deref(),
                         choice: e.choice,
@@ -319,33 +323,135 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         Constraint::Length(footer_height),
     ])
     .split(area);
+    let title = screen
+        .fields
+        .first()
+        .map(|field| field.section.split(" › ").next().unwrap_or("Form"))
+        .filter(|title| !title.is_empty())
+        .unwrap_or("Form");
+    let status = if screen.errors.is_empty() {
+        "Ready to submit".to_owned()
+    } else {
+        format!(
+            "{} validation issue{}",
+            screen.errors.len(),
+            if screen.errors.len() == 1 { "" } else { "s" }
+        )
+    };
     frame.render_widget(
-        Paragraph::new("Typed forms · live validation").block(
-            Block::bordered()
-                .title(" Lean Forms ")
-                .border_style(Style::default().fg(theme.accent)),
+        Paragraph::new(Line::from(vec![
+            ratatui::text::Span::styled(
+                format!("  {}", clean(title)),
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            ratatui::text::Span::styled(
+                format!("   {status}"),
+                Style::default().fg(if screen.errors.is_empty() {
+                    theme.subtext
+                } else {
+                    theme.error
+                }),
+            ),
+        ]))
+        .block(
+            Block::default()
+                .borders(Borders::BOTTOM)
+                .border_style(Style::default().fg(theme.border)),
         ),
         sections[0],
     );
-    let rows = screen.fields.iter().map(|field| {
-        Row::new([
-            Cell::from(clean(&field.label)),
-            Cell::from(clean(&field.value)),
-        ])
+    let rows = screen.fields.iter().enumerate().map(|(index, field)| {
+        let heading = !field.section.is_empty()
+            && (index == 0 || screen.fields[index - 1].section != field.section);
+        let selected = index == screen.selected;
+        let selection = Style::default()
+            .bg(theme.selection)
+            .fg(theme.text)
+            .add_modifier(Modifier::BOLD);
+        let label_style = if selected {
+            selection
+        } else {
+            Style::default().fg(if field.action {
+                theme.accent
+            } else {
+                theme.text
+            })
+        };
+        let label = Line::from(vec![
+            ratatui::text::Span::styled(
+                if selected { "› " } else { "  " },
+                Style::default().fg(theme.accent),
+            ),
+            ratatui::text::Span::styled(format!(" {} ", clean(field.label)), label_style),
+        ]);
+        let value = if field.action {
+            "Enter ↵".into()
+        } else if field.value.is_empty() {
+            "—".into()
+        } else {
+            clean(field.value)
+        };
+        let value_style = if selected {
+            selection
+        } else {
+            Style::default().fg(if field.action || field.value.is_empty() {
+                theme.subtext
+            } else {
+                theme.text
+            })
+        };
+        let value = Line::from(ratatui::text::Span::styled(
+            format!(" {value} "),
+            value_style,
+        ));
+        if heading {
+            Row::new([
+                Cell::from(ratatui::text::Text::from(vec![
+                    Line::styled(clean(field.section), Style::default().fg(theme.accent)),
+                    label,
+                ])),
+                Cell::from(ratatui::text::Text::from(vec![Line::default(), value])),
+            ])
+            .height(2)
+            .top_margin(1)
+        } else {
+            Row::new([Cell::from(label), Cell::from(value)])
+        }
     });
+    let label_width = screen
+        .fields
+        .iter()
+        .map(|field| {
+            field
+                .label
+                .chars()
+                .map(|c| c.width().unwrap_or(0))
+                .sum::<usize>()
+                .max(
+                    field
+                        .section
+                        .chars()
+                        .map(|c| c.width().unwrap_or(0))
+                        .sum::<usize>(),
+                )
+                + 5
+        })
+        .max()
+        .unwrap_or(20)
+        .min(38) as u16;
     let table = Table::new(
         rows,
-        [Constraint::Percentage(65), Constraint::Percentage(35)],
+        [
+            Constraint::Length(label_width.min(area.width / 2)),
+            Constraint::Min(10),
+        ],
     )
-    .header(
-        Row::new(["Field", "Value"])
-            .style(Style::default().fg(theme.accent))
-            .bottom_margin(1),
-    )
+    .column_spacing(2)
     .block(
         Block::bordered()
             .border_style(Style::default().fg(theme.border))
-            .title(" Form ")
             .title_bottom(
                 Line::from(format!(
                     " {} / {} ",
@@ -358,14 +464,7 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
                 ))
                 .right_aligned(),
             ),
-    )
-    .row_highlight_style(
-        Style::default()
-            .bg(theme.selection)
-            .fg(theme.text)
-            .add_modifier(Modifier::BOLD),
-    )
-    .highlight_symbol("› ");
+    );
     table_state.select(if screen.fields.is_empty() {
         None
     } else {
@@ -456,13 +555,20 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         );
     } else {
         frame.render_widget(
-            Paragraph::new("↑/↓ select · Enter edit · Space toggle · q submit · x cancel")
-                .style(Style::default().fg(theme.subtext))
-                .block(
-                    Block::default()
-                        .borders(Borders::TOP)
-                        .border_style(Style::default().fg(theme.border)),
-                ),
+            Paragraph::new(
+                if screen.fields.get(screen.selected).is_some_and(|f| f.action) {
+                    "↑/↓ select · Enter activate · q submit · x cancel"
+                } else {
+                    "↑/↓ select · Enter edit · Space toggle · q submit · x cancel"
+                },
+            )
+            .style(Style::default().fg(theme.subtext))
+            .wrap(ratatui::widgets::Wrap { trim: true })
+            .block(
+                Block::default()
+                    .borders(Borders::TOP)
+                    .border_style(Style::default().fg(theme.border)),
+            ),
             sections[3],
         );
     }

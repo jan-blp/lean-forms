@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms'
 
 
-def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None):
+def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None, invoice=False):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 100, 0, 0))
     before = termios.tcgetattr(slave)
@@ -24,7 +24,7 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
     if theme:
         env.update(TERM='xterm-256color', COLORTERM='truecolor')
         env.pop('NO_COLOR', None)
-    process = subprocess.Popen([str(BINARY)] + (["--thermostat"] if thermostat else []) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
+    process = subprocess.Popen([str(BINARY)] + (["--invoice"] if invoice else ["--thermostat"] if thermostat else []) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
     output = bytearray()
 
     def read_until(predicate):
@@ -41,13 +41,13 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
                     break
 
     try:
-        read_until(lambda: (b'Thermostat.Home temperature (C)' if thermostat else b'Registration.Name') in output)
+        read_until(lambda: (b'Description' if invoice else b'Home temperature (C)' if thermostat else b'Name') in output)
         os.write(master, keys)
         if cancel:
             read_until(lambda: b'Other' in output)
             start = len(output)
             os.write(master, b'\x1b')
-            read_until(lambda: len(output) > start)
+            read_until(lambda: b'q submit' in output[start:])
             os.write(master, b'q')
         if interrupt:
             read_until(lambda: 'Ω▏'.encode() in output)
@@ -105,3 +105,6 @@ print('PASS: FFI editing, validation, visibility, typed result, interruption, an
 for args in [["--theme"], ["--theme", "unknown"], ["--theme", "dark"], ["--theme", "light"]]:
     result = subprocess.run([str(BINARY), *args], capture_output=True, text=True)
     assert result.returncode != 0 and "theme" in result.stderr
+
+# Add a second item, remove the first, and submit through Lean validation.
+session(b"jjjj\rk\rq", [["New item", 1, 100]], invoice=True)
