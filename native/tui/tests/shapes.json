@@ -1,4 +1,101 @@
 {
+  "constraints": [
+    {
+      "condition": {
+        "kind": "natLe",
+        "left": {
+          "kind": "value",
+          "type": {
+            "kind": "natural"
+          },
+          "value": "1"
+        },
+        "right": {
+          "kind": "project",
+          "path": []
+        }
+      },
+      "errorMessage": "Size must be at least 1.",
+      "errorTargets": {
+        "kind": "fields",
+        "locations": [
+          []
+        ]
+      },
+      "focus": [
+        {
+          "kind": "constructor",
+          "tag": "circle"
+        }
+      ]
+    },
+    {
+      "condition": {
+        "kind": "natLe",
+        "left": {
+          "kind": "value",
+          "type": {
+            "kind": "natural"
+          },
+          "value": "1"
+        },
+        "right": {
+          "kind": "project",
+          "path": []
+        }
+      },
+      "errorMessage": "Size must be at least 1.",
+      "errorTargets": {
+        "kind": "fields",
+        "locations": [
+          []
+        ]
+      },
+      "focus": [
+        {
+          "kind": "constructor",
+          "tag": "rectangle"
+        },
+        {
+          "kind": "field",
+          "name": "width"
+        }
+      ]
+    },
+    {
+      "condition": {
+        "kind": "natLe",
+        "left": {
+          "kind": "value",
+          "type": {
+            "kind": "natural"
+          },
+          "value": "1"
+        },
+        "right": {
+          "kind": "project",
+          "path": []
+        }
+      },
+      "errorMessage": "Size must be at least 1.",
+      "errorTargets": {
+        "kind": "fields",
+        "locations": [
+          []
+        ]
+      },
+      "focus": [
+        {
+          "kind": "constructor",
+          "tag": "rectangle"
+        },
+        {
+          "kind": "field",
+          "name": "height"
+        }
+      ]
+    }
+  ],
   "form": {
     "branches": {
       "circle": {
@@ -136,5 +233,5 @@
     "tag": "circle",
     "value": "3"
   },
-  "version": 4
+  "version": 6
 }

@@ -1,4 +1,70 @@
 {
+  "constraints": [
+    {
+      "condition": {
+        "kind": "natLe",
+        "left": {
+          "kind": "value",
+          "type": {
+            "kind": "natural"
+          },
+          "value": "1"
+        },
+        "right": {
+          "kind": "project",
+          "path": []
+        }
+      },
+      "errorMessage": "Quantity and unit price must be at least 1.",
+      "errorTargets": {
+        "kind": "fields",
+        "locations": [
+          []
+        ]
+      },
+      "focus": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "field",
+          "name": "quantity"
+        }
+      ]
+    },
+    {
+      "condition": {
+        "kind": "natLe",
+        "left": {
+          "kind": "value",
+          "type": {
+            "kind": "natural"
+          },
+          "value": "1"
+        },
+        "right": {
+          "kind": "project",
+          "path": []
+        }
+      },
+      "errorMessage": "Quantity and unit price must be at least 1.",
+      "errorTargets": {
+        "kind": "fields",
+        "locations": [
+          []
+        ]
+      },
+      "focus": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "field",
+          "name": "unitPrice"
+        }
+      ]
+    }
+  ],
   "form": {
     "defaultItem": {
       "description": "New item",
@@ -107,5 +173,5 @@
       "unitPrice": "100"
     }
   ],
-  "version": 4
+  "version": 6
 }

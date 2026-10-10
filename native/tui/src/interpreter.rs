@@ -163,9 +163,113 @@ pub enum Component {
     },
 }
 #[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+enum ErrorTargets {
+    Global {},
+    Fields { locations: Vec<Vec<Step>> },
+}
+
+impl ErrorTargets {
+    fn locations(&self) -> &[Vec<Step>] {
+        match self {
+            Self::Global {} => &[],
+            Self::Fields { locations } => locations,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+enum TraversalStep {
+    Field { name: String },
+    Each {},
+    Constructor { tag: String },
+}
+
+fn traversal_type<'a>(mut ty: &'a Ty, traversal: &[TraversalStep]) -> Result<&'a Ty, String> {
+    for step in traversal {
+        ty = match (ty, step) {
+            (Ty::Record { fields }, TraversalStep::Field { name })
+            | (
+                Ty::Sum {
+                    constructors: fields,
+                },
+                TraversalStep::Constructor { tag: name },
+            ) => {
+                &fields
+                    .iter()
+                    .find(|field| &field.name == name)
+                    .ok_or("Invalid constraint focus")?
+                    .ty
+            }
+            (Ty::List { element }, TraversalStep::Each {}) => element,
+            _ => return Err("Invalid constraint focus".into()),
+        };
+    }
+    Ok(ty)
+}
+
+fn traversal_targets<'a>(
+    traversal: &[TraversalStep],
+    value: &'a Value,
+    location: Vec<Step>,
+    out: &mut Vec<(Vec<Step>, &'a Value)>,
+) {
+    let Some((first, rest)) = traversal.split_first() else {
+        out.push((location, value));
+        return;
+    };
+    let mut within = |step: Step, value: &'a Value| {
+        let mut location = location.clone();
+        location.push(step);
+        traversal_targets(rest, value, location, out);
+    };
+    match first {
+        TraversalStep::Field { name } => within(Step::Field(name.clone()), &value[name]),
+        TraversalStep::Each {} => {
+            for (index, item) in value.as_array().unwrap().iter().enumerate() {
+                within(Step::Item(index), item);
+            }
+        }
+        TraversalStep::Constructor { tag } => {
+            if value["tag"] == *tag {
+                within(Step::Payload(tag.clone()), &value["value"]);
+            }
+        }
+    }
+}
+
+fn markable(field: &Field) -> bool {
+    !matches!(field.widget, Widget::Remove)
+}
+
+/// The longest prefix of an error location that a shown field edits, so hidden targets fall back to their container.
+fn anchor<'a>(fields: &[Field], path: &'a [Step]) -> Option<&'a [Step]> {
+    (0..=path.len())
+        .rev()
+        .map(|length| &path[..length])
+        .find(|prefix| {
+            fields
+                .iter()
+                .any(|field| markable(field) && field.path == *prefix)
+        })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Constraint {
+    focus: Vec<TraversalStep>,
+    condition: Expr,
+    #[serde(rename = "errorMessage")]
+    error_message: String,
+    #[serde(rename = "errorTargets")]
+    error_targets: ErrorTargets,
+}
+#[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Specification {
     version: u32,
+    constraints: Vec<Constraint>,
     schema: Ty,
     form: Component,
     value: Value,
@@ -684,6 +788,7 @@ pub struct Editor {
 }
 pub struct Engine {
     spec: Specification,
+    submitted: bool,
     constructor_drafts: std::collections::HashMap<(Vec<Step>, String), Value>,
     pub selected: usize,
     pub editor: Option<Editor>,
@@ -706,21 +811,87 @@ pub enum Key {
 impl Engine {
     pub fn parse(json: &str) -> Result<Self, String> {
         let spec: Specification = serde_json::from_str(json).map_err(|e| e.to_string())?;
-        if spec.version != 4 {
+        if spec.version != 6 {
             return Err("Unsupported form specification version".into());
         }
         spec.schema.validate()?;
         validate_value(&spec.schema, &spec.value)?;
         spec.form.validate(&spec.schema, &spec.schema)?;
+        for constraint in &spec.constraints {
+            let focused = traversal_type(&spec.schema, &constraint.focus)?;
+            if constraint.condition.ty(focused)? != Ty::Boolean {
+                return Err("Validation constraint requires a boolean".into());
+            }
+            if matches!(&constraint.error_targets, ErrorTargets::Fields { locations } if locations.is_empty()) {
+                return Err("Field error targets must be nonempty".into());
+            }
+            for path in constraint.error_targets.locations() {
+                Expr::Project { path: path.clone() }.ty(focused)?;
+            }
+        }
         Ok(Self {
             spec,
+            submitted: false,
             constructor_drafts: std::collections::HashMap::new(),
             selected: 0,
             editor: None,
         })
     }
     pub fn result(&self) -> String {
-        self.spec.value.to_string()
+        if self.submitted {
+            self.spec.value.to_string()
+        } else {
+            "null".into()
+        }
+    }
+    /// Every failing constraint instance with its message and concrete target locations.
+    fn failures(&self) -> Vec<(&str, Vec<Vec<Step>>)> {
+        let mut out = Vec::new();
+        for constraint in &self.spec.constraints {
+            let mut found = Vec::new();
+            traversal_targets(&constraint.focus, &self.spec.value, vec![], &mut found);
+            for (location, value) in found {
+                if !constraint.condition.eval(value).as_bool().unwrap() {
+                    let targets = constraint
+                        .error_targets
+                        .locations()
+                        .iter()
+                        .map(|path| location.iter().chain(path).cloned().collect())
+                        .collect();
+                    out.push((constraint.error_message.as_str(), targets));
+                }
+            }
+        }
+        out
+    }
+    pub fn errors(&self) -> Vec<String> {
+        let fields = self.fields();
+        self.failures()
+            .into_iter()
+            .map(|(message, targets)| {
+                let labels: Vec<_> = targets
+                    .iter()
+                    .filter_map(|path| {
+                        let path = anchor(&fields, path)?;
+                        fields
+                            .iter()
+                            .find(|field| markable(field) && field.path == path)
+                            .map(|field| {
+                                if matches!(field.widget, Widget::Add) {
+                                    field.label.trim_end_matches(".Add item")
+                                } else {
+                                    field.label.rsplit('.').next().unwrap()
+                                }
+                            })
+                    })
+                    .collect();
+                if labels.is_empty() {
+                    message.to_owned()
+                } else {
+                    format!("{}: {}", labels.join(", "), message)
+                }
+            })
+            .collect()
     }
     pub fn fields(&self) -> Vec<Field> {
         let mut out = Vec::new();
@@ -732,6 +903,15 @@ impl Engine {
             vec![],
             &mut out,
         );
+        let invalid: Vec<_> = self
+            .failures()
+            .into_iter()
+            .flat_map(|(_, targets)| targets)
+            .filter_map(|path| anchor(&out, &path).map(<[Step]>::to_vec))
+            .collect();
+        for field in &mut out {
+            field.presentation.invalid = markable(field) && invalid.contains(&field.path);
+        }
         out
     }
     pub fn shown(&self, field: &Field) -> String {
@@ -890,7 +1070,13 @@ impl Engine {
             }
         } else {
             match key {
-                Key::Escape | Key::Character('q') => return false,
+                Key::Escape | Key::Character('x') => return false,
+                Key::Character('q') => {
+                    if self.errors().is_empty() {
+                        self.submitted = true;
+                        return false;
+                    }
+                }
                 Key::Up | Key::Character('k') => self.selected = self.selected.saturating_sub(1),
                 Key::Down | Key::Character('j') => {
                     self.selected = (self.selected + 1).min(fields.len().saturating_sub(1))
