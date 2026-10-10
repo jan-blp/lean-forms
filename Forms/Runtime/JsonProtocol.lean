@@ -1,4 +1,5 @@
 import Forms.Core.Form
+import Forms.Core.RefinedDataType
 import Lean.Data.Json
 
 namespace Forms
@@ -8,11 +9,11 @@ variable {root t target : DataType}
 
 def DataType.toJson (t : DataType) : Json :=
   match t with
-  | .list element => Json.mkObj [("kind", Lean.toJson "list"), ("element", element.toJson)]
+  | .list element => Json.mkObj [("kind", Lean.toJson "list"), ("element", DataType.toJson element)]
   | .text => Json.mkObj [("kind", Lean.toJson "text")]
   | .boolean => Json.mkObj [("kind", Lean.toJson "boolean")]
   | .natural => Json.mkObj [("kind", Lean.toJson "natural")]
-  | .enum domain => Json.mkObj [("kind", Lean.toJson "enum"), ("options", Lean.toJson domain.options)]
+  | .enum domain => Json.mkObj [("kind", Lean.toJson "enum"), ("options", Lean.toJson (Enum.options domain))]
   | .record fields children => Json.mkObj [("kind", Lean.toJson "record"),
       ("fields", Json.arr ((FinEnum.toList fields.type).map fun i =>
         Json.mkObj [("name", Lean.toJson (fields.label i)), ("type", DataType.toJson (children i))]).toArray)]
@@ -77,7 +78,7 @@ def Expr.toJson {root t} (expression : Expr root t) : Json :=
   | .value v => Json.mkObj [("kind", Lean.toJson "value"), ("type", DataType.toJson t), ("value", Runtime.JsonProtocol.valueToJson v)]
   | .project p => Json.mkObj [("kind", Lean.toJson "project"), ("path", Lean.toJson (Path.toList p))]
   | .all items predicate => Json.mkObj [("kind", Lean.toJson "all"),
-      ("items", items.toJson), ("predicate", predicate.toJson)]
+      ("items", Expr.toJson items), ("predicate", Expr.toJson predicate)]
   | .and l r => binary "and" (Expr.toJson l) (Expr.toJson r)
   | .natLe l r => binary "natLe" (Expr.toJson l) (Expr.toJson r)
 where
@@ -94,7 +95,7 @@ def Widget.name (widget : Widget t) : String :=
 def Form.toJson {root t} (form : Form root t) : Json :=
   match form with
   | .list label item defaultItem => Json.mkObj [("kind", Lean.toJson "list"),
-      ("label", Lean.toJson label), ("item", item.toJson),
+      ("label", Lean.toJson label), ("item", Form.toJson item),
       ("defaultItem", Runtime.JsonProtocol.valueToJson defaultItem)]
   | .field label widget => Json.mkObj [("kind", Lean.toJson "field"), ("label", Lean.toJson label),
       ("widget", Lean.toJson (Widget.name widget))]
@@ -103,11 +104,26 @@ def Form.toJson {root t} (form : Form root t) : Json :=
   | .visibleWhen condition body => Json.mkObj [("kind", Lean.toJson "visibleWhen"),
       ("condition", Expr.toJson condition), ("body", Form.toJson body)]
 
+def Constraint.toJson (constraint : Constraint root) : Json :=
+  Json.mkObj [("condition", Expr.toJson constraint.condition), ("errorMessage", Lean.toJson constraint.errorMessage),
+    ("errorLocation", match constraint.errorLocation with
+      | none => Json.null
+      | some target => Lean.toJson (Path.toList target.path))]
+
 namespace Runtime.JsonProtocol
 
-def encode {root : DataType} (form : Form root root) (value : DataType.denote root) : String :=
-  (Json.mkObj [("version", Lean.toJson (1 : Nat)), ("schema", DataType.toJson root),
-    ("form", Form.toJson form), ("value", valueToJson value)]).compress
+def encode (refined : RefinedDataType root) (form : Form root root) (draft : DataType.denote root) : String :=
+  (Json.mkObj [("version", Lean.toJson (2 : Nat)), ("schema", DataType.toJson root),
+    ("constraints", Lean.toJson ((RefinedDataType.constraints refined).map Constraint.toJson)),
+    ("form", Form.toJson form), ("value", valueToJson draft)]).compress
+
+def decodeResult (refined : RefinedDataType root) (json : Json) : Except String (Option (RefinedDataType.ValidatedValue refined)) := do
+  if json == Json.null then return none
+  let draft ← valueFromJson root json
+  match RefinedDataType.validate refined draft with
+  | some value => return some value
+  | none => throw ("Invalid submitted value: " ++ String.intercalate "; "
+      ((RefinedDataType.errors refined draft).map (·.errorMessage)))
 
 end Runtime.JsonProtocol
 

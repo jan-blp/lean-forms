@@ -16,11 +16,15 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms'
 
 
-def session(keys, expected, interrupt=False, cancel=False, theme=None, invoice=False):
+def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None, invoice=False):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 100, 0, 0))
     before = termios.tcgetattr(slave)
-    process = subprocess.Popen([str(BINARY)] + (["--theme", theme] if theme else []) + (["invoice"] if invoice else []), stdin=slave, stdout=slave, stderr=slave)
+    env = os.environ.copy()
+    if theme:
+        env.update(TERM='xterm-256color', COLORTERM='truecolor')
+        env.pop('NO_COLOR', None)
+    process = subprocess.Popen([str(BINARY)] + (["invoice"] if invoice else ["thermostat"] if thermostat else ["person"]) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
     output = bytearray()
 
     def read_until(predicate):
@@ -37,27 +41,38 @@ def session(keys, expected, interrupt=False, cancel=False, theme=None, invoice=F
                     break
 
     try:
-        read_until(lambda: (b'Description' if invoice else b'Name') in output)
+        read_until(lambda: (b'Description' if invoice else b'Home temperature (C)' if thermostat else b'Name') in output)
         os.write(master, keys)
         if cancel:
             read_until(lambda: b'Other' in output)
             start = len(output)
             os.write(master, b'\x1b')
-            read_until(lambda: b'q quit' in output[start:])
+            read_until(lambda: b'q submit' in output[start:])
             os.write(master, b'q')
         if interrupt:
             read_until(lambda: 'Ω▏'.encode() in output)
             process.send_signal(signal.SIGTERM)
-        read_until(lambda: b'Final values' in output)
+        read_until(lambda: (b'Cancelled.' if expected is None else b'Final values') in output)
         process.wait(timeout=10)
         while select.select([master], [], [], 0)[0]:
             output.extend(os.read(master, 65536))
         assert process.returncode == 0, bytes(output)
         assert termios.tcgetattr(slave) == before, 'Terminal mode was not restored'
         assert b'\x1b[?1049l' in output, 'Alternate screen was not restored'
-        tail = output.split(b'Final values', 1)[1]
-        result = json.loads(tail[tail.index(b'[' if invoice else b'{'):].decode())
-        assert result == expected, result
+        if expected is None:
+            assert b'Final values' not in output
+        else:
+            tail = output.split(b'Final values', 1)[1]
+            result = json.loads(tail[tail.index(b'[' if invoice else b'{'):].decode())
+            assert result == expected, result
+        if theme:
+            backgrounds = {
+                'frappe': '48;2;48;52;70', 'macchiato': '48;2;36;39;58',
+                'mocha': '48;2;30;30;46', 'latte': '48;2;239;241;245',
+                'ayu-light': '48;2;248;249;250', 'ayu-dark': '48;2;13;16;23',
+                'nord': '48;2;46;52;64',
+            }
+            assert backgrounds[theme].encode() in output, f'Wrong palette for {theme}'
         return bytes(output)
     finally:
         if process.poll() is None:
@@ -67,18 +82,29 @@ def session(keys, expected, interrupt=False, cancel=False, theme=None, invoice=F
         os.close(slave)
 
 
-initial = {'name': 'Ada', 'subscribed': False, 'address': {'street': 'Lambda Lane', 'number': 12, 'kind': 'Home'}}
-output = session(b'j jj\r\x15-1\r\x1542\rkk  q', {'name': 'Ada', 'subscribed': True, 'address': {'street': 'Lambda Lane', 'number': 42, 'kind': 'Home'}})
+initial = {'name': 'Ada', 'age': 28, 'subscribed': False, 'address': {'street': 'Lambda Lane', 'kind': 'Home'}}
+output = session(b'j\r\x15-1\r\x1542\rj j\r\x15Elm Street\rk  q', {'name': 'Ada', 'age': 42, 'subscribed': True, 'address': {'street': 'Elm Street', 'kind': 'Home'}})
 assert b'non-negative whole number' in output
-session('i\x15Ω'.encode(), initial, interrupt=True)
+session('i\x15Ω'.encode(), None, interrupt=True)
 session(b'q', initial)
 for theme in ['frappe', 'macchiato', 'mocha', 'latte', 'ayu-light', 'ayu-dark', 'nord']:
     session(b'q', initial, theme=theme)
-session(b'jj\rj\rq', {'name': 'Ada', 'subscribed': False, 'address': {'street': 'Lambda Lane', 'number': 12, 'kind': 'Work'}})
-session(b'jj\rj', initial, cancel=True)
+    session(b'q', {'home': 22, 'away': 18}, thermostat=True, theme=theme)
+output = session(b'j\r\x1517\rq\r\x15121\rq\r\x1518\rq', {'name': 'Ada', 'age': 18, 'subscribed': False, 'address': {'street': 'Lambda Lane', 'kind': 'Home'}})
+assert b'Attendees must be between 18 and 120' in output
+session(b'jjj\rj\rq', {'name': 'Ada', 'age': 28, 'subscribed': False, 'address': {'street': 'Lambda Lane', 'kind': 'Work'}})
+session(b'jjj\rj', initial, cancel=True)
+output = session(b'\r\x1516\rqj\r\x1516\rq', {'home': 16, 'away': 16}, thermostat=True)
+assert b'Away temperature must not exceed home temperature' in output
+session(b'\r\x1516\rx', None, thermostat=True)
+session(b'x', None)
 result = subprocess.run([str(BINARY)], capture_output=True, text=True)
 assert result.returncode != 0 and 'interactive terminal' in result.stderr + result.stdout
-session(b'jjjj\r\r\x15Second\rq', [{'description': 'New item', 'quantity': 1, 'unitPrice': 100}, {'description': 'Second', 'quantity': 1, 'unitPrice': 100}], invoice=True)
-session(b'jjj\rq', [], invoice=True)
-session(b'j\r\x150\rq', [{'description': 'New item', 'quantity': 0, 'unitPrice': 100}], invoice=True)
 print('PASS: FFI editing, validation, visibility, typed result, interruption, and terminal restoration')
+
+for args in [["--theme"], ["--theme", "unknown"], ["--theme", "dark"], ["--theme", "light"]]:
+    result = subprocess.run([str(BINARY), *args], capture_output=True, text=True)
+    assert result.returncode != 0 and "theme" in result.stderr
+
+# Add a second item, remove the first, and submit through Lean validation.
+session(b"jjjj\rk\rq", [{"description": "New item", "quantity": 1, "unitPrice": 100}], invoice=True)

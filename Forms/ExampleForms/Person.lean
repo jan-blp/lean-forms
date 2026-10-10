@@ -1,4 +1,5 @@
 import Forms.Core.Form
+import Forms.Core.RefinedDataType
 
 namespace Forms.ExampleForms.Person
 
@@ -18,70 +19,84 @@ def addressEnum : Enum where
     | .home => "Home"
     | .work => "Work"
     | .other => "Other"
-  label_injective := by
-    grind [Function.Injective, AddressKind]
 
 abbrev addressKind : DataType := .enum addressEnum
 
 inductive AddressField where
-  | street | number | kind
+  | street | kind
   deriving DecidableEq, Repr
 
 instance : FinEnum AddressField :=
-  FinEnum.ofList [.street, .number, .kind] (by grind [AddressField])
+  FinEnum.ofList [.street, .kind] (by grind [AddressField])
 
 def addressFields : Enum where
   type := AddressField
   label
     | .street => "street"
-    | .number => "number"
     | .kind => "kind"
 
 inductive PersonField where
-  | name | subscribed | address
+  | name | age | subscribed | address
   deriving DecidableEq, Repr
 
 instance : FinEnum PersonField :=
-  FinEnum.ofList [.name, .subscribed, .address] (by grind [PersonField])
+  FinEnum.ofList [.name, .age, .subscribed, .address] (by grind [PersonField])
 
 def personFields : Enum where
   type := PersonField
   label
     | .name => "name"
+    | .age => "age"
     | .subscribed => "subscribed"
     | .address => "address"
 
 abbrev address : DataType := .record addressFields fun
   | .street => .text
-  | .number => .natural
   | .kind => addressKind
 
-abbrev schema : DataType := .record personFields fun
+abbrev shape : DataType := .record personFields fun
   | .name => .text
+  | .age => .natural
   | .subscribed => .boolean
   | .address => address
 
-def name : Path schema .text := .child .name .self
-def subscribed : Path schema .boolean := .child .subscribed .self
-def street : Path schema .text := .child .address (.child .street .self)
-def number : Path schema .natural := .child .address (.child .number .self)
+def name : Path shape .text := .child .name .self
+def age : Path shape .natural := .child .age .self
+def subscribed : Path shape .boolean := .child .subscribed .self
+def street : Path shape .text := .child .address (.child .street .self)
 
-def initial : DataType.denote schema
+def ageType : RefinedDataType .natural :=
+  .refine (.base .natural)
+    { condition := .and (.natLe (.value 18) (.project .self))
+        (.natLe (.project .self) (.value 120))
+      errorMessage := "Attendees must be between 18 and 120 years old."
+      errorLocation := some ⟨.self⟩ }
+
+def personType : RefinedDataType shape :=
+  .record fun
+    | .name => .base .text
+    | .age => ageType
+    | .subscribed => .base .boolean
+    | .address => .base address
+
+def initial : RefinedDataType.ValidatedValue personType
   | .name => "Ada"
+  | .age => ⟨(28 : Nat), by decide⟩
   | .subscribed => false
   | .address => fun
     | .street => "Lambda Lane"
-    | .number => 12
     | .kind => .home
 
+def draft : DataType.denote shape := RefinedDataType.erase personType initial
+
 open Form Widget Expr in
-def form : Form schema schema :=
-  group "Person" fun
+def form : Form shape shape :=
+  group "Registration" fun
     | .name => field "Name" textInput
+    | .age => field "Age (18-120)" naturalInput
     | .subscribed => field "Subscribed" checkbox
     | .address => group "Address" fun
       | .street => visibleWhen (project subscribed) (field "Street" textInput)
-      | .number => visibleWhen (project subscribed) (field "Number" naturalInput)
       | .kind => field "Kind" select
 
 end Forms.ExampleForms.Person

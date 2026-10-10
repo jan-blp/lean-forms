@@ -1,4 +1,5 @@
 import Forms.Core.Form
+import Forms.Core.RefinedDataType
 
 namespace Forms.ExampleForms.Invoice
 
@@ -21,12 +22,26 @@ abbrev itemShape : DataType := .record itemFields fun
   | .quantity | .unitPrice => .natural
 abbrev shape : DataType := .list itemShape
 
-def newItem : DataType.denote itemShape
-  | .description => "New item"
-  | .quantity => 1
-  | .unitPrice => 100
+def positive : RefinedDataType .natural :=
+  .refine (.base .natural)
+    { condition := .natLe (.value 1) (.project .self)
+      errorMessage := "Quantity and unit price must be at least 1."
+      errorLocation := some ⟨.self⟩ }
 
-def initial : DataType.denote shape := [newItem]
+def itemType : RefinedDataType itemShape :=
+  .record fun
+    | .description => .base .text
+    | .quantity | .unitPrice => positive
+
+def invoiceType : RefinedDataType shape := .list itemType
+
+def newItem : RefinedDataType.ValidatedValue itemType
+  | .description => "New item"
+  | .quantity => ⟨(1 : Nat), by decide⟩
+  | .unitPrice => ⟨(100 : Nat), by decide⟩
+
+def initial : RefinedDataType.ValidatedValue invoiceType := [newItem]
+def draft : DataType.denote shape := RefinedDataType.erase invoiceType initial
 
 def itemForm : Form itemShape itemShape :=
   .group "Item" fun
@@ -34,6 +49,6 @@ def itemForm : Form itemShape itemShape :=
     | .quantity => .field "Quantity" .naturalInput
     | .unitPrice => .field "Unit price (cents)" .naturalInput
 
-def form : Form shape shape := .list "Invoice" itemForm newItem
+def form : Form shape shape := .list "Invoice" itemForm (RefinedDataType.erase itemType newItem)
 
 end Forms.ExampleForms.Invoice

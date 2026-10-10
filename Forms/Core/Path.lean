@@ -3,15 +3,18 @@ import Forms.Core.DataType
 namespace Forms
 
 inductive Path : (root : DataType) → (target : DataType) → Type 1 where
-  | self {type : DataType} : Path type type
+  | self {t : DataType} : Path t t
   | child
       {fields : Enum} {children : fields.type → DataType} {target : DataType}
       (index : fields.type)
       (rest : Path (children index) target)
       : Path (.record fields children) target
 
-def Path.get
-    {root target : DataType}
+section
+
+variable {root target a b c : DataType}
+
+def Path.get {root target}
     (path : Path root target)
     (value : DataType.denote root)
     : DataType.denote target :=
@@ -19,8 +22,7 @@ def Path.get
   | .self => value
   | .child index rest => Path.get rest (value index)
 
-def Path.set
-    {root target : DataType}
+def Path.set {root target}
     (path : Path root target)
     (replacement : DataType.denote target)
     (value : DataType.denote root)
@@ -29,8 +31,7 @@ def Path.set
   | .self => replacement
   | .child index rest => Function.update value index (Path.set rest replacement (value index))
 
-def Path.trans
-    {a b c : DataType}
+def Path.trans {a b c}
     (p1 : Path a b)
     (p2 : Path b c)
     : Path a c :=
@@ -38,18 +39,19 @@ def Path.trans
   | .self => p2
   | .child index rest => .child index (Path.trans rest p2)
 
-def Path.Labels {root target : DataType} (path : Path root target) : Type :=
+def Path.Labels {root target} (path : Path root target) : Type :=
   match path with
   | .self => String
   | .child _ rest => String × Path.Labels rest
 
-def Path.Labels.toList
-    {root target : DataType}
+def Path.Labels.toList {root target}
     {path : Path root target}
     (labels : Path.Labels path)
     : List String :=
   match path with
   | .self => [labels]
   | .child _ rest => labels.1 :: Path.Labels.toList (path := rest) labels.2
+
+end
 
 end Forms
