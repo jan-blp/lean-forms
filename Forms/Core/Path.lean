@@ -3,15 +3,18 @@ import Forms.Core.DataType
 namespace Forms
 
 inductive Path : (root : DataType) → (target : DataType) → Type 1 where
-  | here {type : DataType} : Path type type
+  | here {t : DataType} : Path t t
   | child
       {n : Nat} {children : Fin n → DataType} {target : DataType}
       (index : Fin n)
       (rest : Path (children index) target)
       : Path (.group children) target
 
-def Path.get
-    {root target : DataType}
+section
+
+variable {root target a b c : DataType}
+
+def Path.get {root target}
     (path : Path root target)
     (value : DataType.denote root)
     : DataType.denote target :=
@@ -19,8 +22,7 @@ def Path.get
   | .here => value
   | .child index rest => Path.get rest (value index)
 
-def Path.set
-    {root target : DataType}
+def Path.set {root target}
     (path : Path root target)
     (replacement : DataType.denote target)
     (value : DataType.denote root)
@@ -29,8 +31,7 @@ def Path.set
   | .here => replacement
   | .child index rest => Function.update value index (Path.set rest replacement (value index))
 
-def Path.trans
-    {a b c : DataType}
+def Path.trans {a b c}
     (p1 : Path a b)
     (p2 : Path b c)
     : Path a c :=
@@ -38,18 +39,19 @@ def Path.trans
   | .here => p2
   | .child index rest => .child index (Path.trans rest p2)
 
-def Path.Labels {root target : DataType} (path : Path root target) : Type :=
+def Path.Labels {root target} (path : Path root target) : Type :=
   match path with
   | .here => String
   | .child _ rest => String × Path.Labels rest
 
-def Path.Labels.toList
-    {root target : DataType}
+def Path.Labels.toList {root target}
     {path : Path root target}
     (labels : Path.Labels path)
     : List String :=
   match path with
   | .here => [labels]
   | .child _ rest => labels.1 :: Path.Labels.toList (path := rest) labels.2
+
+end
 
 end Forms

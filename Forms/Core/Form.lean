@@ -2,13 +2,13 @@ import Forms.Core.Expr
 
 namespace Forms
 
-inductive Control : (type : DataType) → Type 1 where
+inductive Control : (t : DataType) → Type 1 where
   | text : Control .text
   | checkbox : Control .boolean
   | natural : Control .natural
   | choice {domain : Choice} : Control (.choice domain)
 
-inductive Form (root : DataType) : (type : DataType) → Type 1 where
+inductive Form (root : DataType) : (t : DataType) → Type 1 where
   | field
       {t : DataType}
       (label : String)
@@ -32,13 +32,13 @@ structure FieldRef (root : DataType) where
   control : Control type
 
 def Form.fieldRefs
-    {root type : DataType}
-    (form : Form root type)
+    {root t : DataType}
+    (form : Form root t)
     (value : DataType.denote root)
-    : List (FieldRef type) :=
+    : List (FieldRef t) :=
   match form with
   | .field label control =>
-    [{ type := type
+    [{ type := t
        path := .here
        labels := label
        control := control }]

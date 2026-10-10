@@ -16,11 +16,15 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms'
 
 
-def session(keys, expected, interrupt=False, cancel=False, theme=None):
+def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 100, 0, 0))
     before = termios.tcgetattr(slave)
-    process = subprocess.Popen([str(BINARY)] + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave)
+    env = os.environ.copy()
+    if theme:
+        env.update(TERM='xterm-256color', COLORTERM='truecolor')
+        env.pop('NO_COLOR', None)
+    process = subprocess.Popen([str(BINARY)] + (["--thermostat"] if thermostat else []) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
     output = bytearray()
 
     def read_until(predicate):
@@ -37,7 +41,7 @@ def session(keys, expected, interrupt=False, cancel=False, theme=None):
                     break
 
     try:
-        read_until(lambda: b'Person.Name' in output)
+        read_until(lambda: (b'Thermostat.Home temperature (C)' if thermostat else b'Registration.Name') in output)
         os.write(master, keys)
         if cancel:
             read_until(lambda: b'Other' in output)
@@ -48,16 +52,27 @@ def session(keys, expected, interrupt=False, cancel=False, theme=None):
         if interrupt:
             read_until(lambda: 'Ω▏'.encode() in output)
             process.send_signal(signal.SIGTERM)
-        read_until(lambda: b'Final values' in output)
+        read_until(lambda: (b'Cancelled.' if expected is None else b'Final values') in output)
         process.wait(timeout=10)
         while select.select([master], [], [], 0)[0]:
             output.extend(os.read(master, 65536))
         assert process.returncode == 0, bytes(output)
         assert termios.tcgetattr(slave) == before, 'Terminal mode was not restored'
         assert b'\x1b[?1049l' in output, 'Alternate screen was not restored'
-        tail = output.split(b'Final values', 1)[1]
-        result = json.loads(tail[tail.index(b'['):].decode())
-        assert result == expected, result
+        if expected is None:
+            assert b'Final values' not in output
+        else:
+            tail = output.split(b'Final values', 1)[1]
+            result = json.loads(tail[tail.index(b'['):].decode())
+            assert result == expected, result
+        if theme:
+            backgrounds = {
+                'frappe': '48;2;48;52;70', 'macchiato': '48;2;36;39;58',
+                'mocha': '48;2;30;30;46', 'latte': '48;2;239;241;245',
+                'ayu-light': '48;2;248;249;250', 'ayu-dark': '48;2;13;16;23',
+                'nord': '48;2;46;52;64',
+            }
+            assert backgrounds[theme].encode() in output, f'Wrong palette for {theme}'
         return bytes(output)
     finally:
         if process.poll() is None:
@@ -67,15 +82,26 @@ def session(keys, expected, interrupt=False, cancel=False, theme=None):
         os.close(slave)
 
 
-initial = ['Ada', False, ['Lambda Lane', 12, 'Home']]
-output = session(b'j jj\r\x15-1\r\x1542\rkk  q', ['Ada', True, ['Lambda Lane', 42, 'Home']])
+initial = ['Ada', 28, False, ['Lambda Lane', 'Home']]
+output = session(b'j\r\x15-1\r\x1542\rj j\r\x15Elm Street\rk  q', ['Ada', 42, True, ['Elm Street', 'Home']])
 assert b'non-negative whole number' in output
-session('i\x15Ω'.encode(), initial, interrupt=True)
+session('i\x15Ω'.encode(), None, interrupt=True)
 session(b'q', initial)
 for theme in ['frappe', 'macchiato', 'mocha', 'latte', 'ayu-light', 'ayu-dark', 'nord']:
     session(b'q', initial, theme=theme)
-session(b'jj\rj\rq', ['Ada', False, ['Lambda Lane', 12, 'Work']])
-session(b'jj\rj', initial, cancel=True)
+    session(b'q', [22, 18], thermostat=True, theme=theme)
+output = session(b'j\r\x1517\rq\r\x15121\rq\r\x1518\rq', ['Ada', 18, False, ['Lambda Lane', 'Home']])
+assert b'Attendees must be between 18 and 120' in output
+session(b'jjj\rj\rq', ['Ada', 28, False, ['Lambda Lane', 'Work']])
+session(b'jjj\rj', initial, cancel=True)
+output = session(b'\r\x1516\rqj\r\x1516\rq', [16, 16], thermostat=True)
+assert b'Away temperature must not exceed home temperature' in output
+session(b'\r\x1516\rx', None, thermostat=True)
+session(b'x', None)
 result = subprocess.run([str(BINARY)], capture_output=True, text=True)
 assert result.returncode != 0 and 'interactive terminal' in result.stderr + result.stdout
 print('PASS: FFI editing, validation, visibility, typed result, interruption, and terminal restoration')
+
+for args in [["--theme"], ["--theme", "unknown"], ["--theme", "dark"], ["--theme", "light"]]:
+    result = subprocess.run([str(BINARY), *args], capture_output=True, text=True)
+    assert result.returncode != 0 and "theme" in result.stderr

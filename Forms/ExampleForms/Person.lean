@@ -1,4 +1,5 @@
 import Forms.Core.Form
+import Forms.Core.RefinedDataType
 
 namespace Forms.ExampleForms.Person
 
@@ -22,34 +23,50 @@ def addressChoices : Choice where
 
 abbrev addressKind : DataType := .choice addressChoices
 
-abbrev address : DataType := .group ![.text, .natural, addressKind]
+abbrev address : DataType := .group ![.text, addressKind]
 
-abbrev schema : DataType := .group ![.text, .boolean, address]
+abbrev shape : DataType := .group ![.text, .natural, .boolean, address]
 
-def name : Path schema .text := .child 0 .here
+def name : Path shape .text := .child 0 .here
 
-def subscribed : Path schema .boolean := .child 1 .here
+def age : Path shape .natural := .child 1 .here
 
-def street : Path schema .text := .child 2 (.child 0 .here)
+def subscribed : Path shape .boolean := .child 2 .here
 
-def number : Path schema .natural := .child 2 (.child 1 .here)
+def street : Path shape .text := .child 3 (.child 0 .here)
 
-def initial : DataType.denote schema
+def ageType : RefinedDataType .natural :=
+  .refine (.base .natural)
+    { condition := .and (.natLe (.value 18) (.project .here))
+        (.natLe (.project .here) (.value 120))
+      errorMessage := "Attendees must be between 18 and 120 years old."
+      errorLocation := some ⟨.here⟩ }
+
+def personType : RefinedDataType shape :=
+  .group fun
+    | 0 => .base .text
+    | 1 => ageType
+    | 2 => .base .boolean
+    | 3 => .base address
+
+def initial : personType.denote
   | 0 => "Ada"
-  | 1 => false
-  | 2 => fun
+  | 1 => ⟨(28 : Nat), by decide⟩
+  | 2 => false
+  | 3 => fun
     | 0 => "Lambda Lane"
-    | 1 => (12 : Nat)
-    | 2 => .home
+    | 1 => .home
+
+def draft : DataType.denote shape := personType.erase initial
 
 open Form Control Expr in
-def form : Form schema schema :=
-  group "Person" fun
+def form : Form shape shape :=
+  group "Registration" fun
     | 0 => field "Name" text
-    | 1 => field "Subscribed" checkbox
-    | 2 => group "Address" fun
+    | 1 => field "Age (18-120)" natural
+    | 2 => field "Subscribed" checkbox
+    | 3 => group "Address" fun
       | 0 => visibleWhen (project subscribed) (field "Street" text)
-      | 1 => visibleWhen (project subscribed) (field "Number" natural)
-      | 2 => field "Kind" choice
+      | 1 => field "Kind" choice
 
 end Forms.ExampleForms.Person

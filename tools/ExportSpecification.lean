@@ -1,6 +1,9 @@
 import Forms.ExampleForms.Person
+import Forms.ExampleForms.Thermostat
 import Forms.Runtime.JsonProtocol
 
-def main : IO Unit :=
-  IO.println (Forms.Runtime.JsonProtocol.encode
-    Forms.ExampleForms.Person.form Forms.ExampleForms.Person.initial)
+open Forms ExampleForms Forms.Runtime
+
+def main (args : List String) : IO Unit :=
+  IO.println (if args.contains "--thermostat" then JsonProtocol.encode Thermostat.thermostatType Thermostat.form Thermostat.draft
+    else JsonProtocol.encode Person.personType Person.form Person.draft)

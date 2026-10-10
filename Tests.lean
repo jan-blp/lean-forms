@@ -1,5 +1,6 @@
 import Mathlib.Data.Nat.Basic
 import Forms.ExampleForms.Person
+import Forms.ExampleForms.Thermostat
 import Forms.Runtime.Tui
 
 open Forms Forms.Runtime
@@ -8,97 +9,121 @@ private def check (name : String) (passed : Bool) : IO Unit := do
   if passed then IO.println ("PASS " ++ name)
   else throw (IO.userError ("FAIL " ++ name))
 
-private def testEditsAndVisibility : IO Unit := do
-  let initial := ExampleForms.Person.initial
-  let form := ExampleForms.Person.form
-  check "InitiallyVisibleFields" ((Form.fieldRefs form initial).length == 3)
-  let visible := Path.set ExampleForms.Person.subscribed true initial
-  check "SubscriptionShowsNestedAddress" ((Form.fieldRefs form visible).length == 5)
-  let changed := Path.set ExampleForms.Person.number 42 visible
-  check "NestedEditPreservesOtherFields" (JsonProtocol.valueToJson changed == Lean.Json.arr #[Lean.toJson "Ada", Lean.toJson true,
-      Lean.Json.arr #[Lean.toJson "Lambda Lane", Lean.toJson "42", Lean.toJson (0 : Nat)]])
-  let hidden := Path.set ExampleForms.Person.subscribed false changed
-  check "HidingPreservesNestedValue"
-    ((Form.fieldRefs form hidden).length == 3 && Path.get ExampleForms.Person.number hidden == 42)
-  check "ShowingRestoresEditedAddress"
-    (JsonProtocol.valueToJson (Path.set ExampleForms.Person.subscribed true hidden) == JsonProtocol.valueToJson changed)
-
-private def testLabeledFields : IO Unit := do
-  let value := Path.set ExampleForms.Person.subscribed true ExampleForms.Person.initial
-  let fields := Form.fieldRefs ExampleForms.Person.form value
-  check "GeneratedLabelsFollowGroups"
-    (List.map (fun field => Path.Labels.toList field.labels) fields ==
-      [["Person", "Name"], ["Person", "Subscribed"],
-       ["Person", "Address", "Street"],
-       ["Person", "Address", "Number"],
-       ["Person", "Address", "Kind"]])
-  check "GeneratedPathsReadMatchingValues"
-    (fields.map (fun field => JsonProtocol.valueToJson (Path.get field.path value)) == [Lean.toJson "Ada", Lean.toJson true, Lean.toJson "Lambda Lane", Lean.toJson "12", Lean.toJson (0 : Nat)])
-  match fields[3]? with
-  | none => throw (IO.userError "Missing generated number field")
-  | some field =>
-    match field with
-    | ⟨.natural, path, _, _⟩ =>
-      check "GeneratedPathEditsCorrectField" (JsonProtocol.valueToJson (Path.set path 42 value) ==
-        JsonProtocol.valueToJson (Path.set ExampleForms.Person.number 42 value))
-    | _ => throw (IO.userError "Expected a natural field")
-
-private def testPredicates : IO Unit := do
-  let eligible : Expr ExampleForms.Person.schema .boolean :=
-    .and (.value true)
-      (.natLe (.value 10) (.project ExampleForms.Person.number))
-  check "EvaluatesTypedPredicate" (Expr.eval eligible ExampleForms.Person.initial)
-  check "PredicateUsesEditedValue"
-    (!(Expr.eval eligible (Path.set ExampleForms.Person.number 9 ExampleForms.Person.initial)))
-
-private def testChoice : IO Unit := do
-  let domain := ExampleForms.Person.addressChoices
-  for value in FinEnum.toList domain.type do
-    check "ChoiceRoundTripPreservesEnumValue"
-      (JsonProtocol.valueFromJson (.choice domain)
-        (JsonProtocol.valueToJson (type := .choice domain) value) == .ok value)
-  check "ChoiceDisplaysEnumLabel" (domain.label .work == "Work")
-  for json in [Lean.toJson (3 : Nat), Lean.toJson (-1 : Int), Lean.toJson "1", Lean.Json.null] do
-    check "RejectsInvalidChoiceResult"
-      (match JsonProtocol.valueFromJson (.choice domain) json with
-        | .error _ => true
-        | .ok _ => false)
-
-private def testGroups : IO Unit := do
-  let empty : DataType := .group (n := 0) Fin.elim0
-  let emptyValue ← IO.ofExcept (JsonProtocol.valueFromJson empty (.arr #[]))
-  check "EmptyGroupRoundTrip" (JsonProtocol.valueToJson emptyValue == .arr #[])
-  let singleton : DataType := .group ![.text]
-  let singleValue ← IO.ofExcept (JsonProtocol.valueFromJson singleton (.arr #[Lean.toJson "only"]))
-  check "SingleChildGroupRoundTrip" (JsonProtocol.valueToJson singleValue == .arr #[Lean.toJson "only"])
-  for json in [Lean.Json.arr #[], .arr #[Lean.toJson "one", Lean.toJson "two"],
-      .arr #[Lean.toJson true]] do
-    check "RejectsWrongGroupLengthOrChildType"
-      (match JsonProtocol.valueFromJson singleton json with
+private def testRefinedTypes : IO Unit := do
+  for temperature in [5, 22, 30] do
+    check s!"TemperatureEndpoint {temperature}"
+      ((ExampleForms.Thermostat.temperatureType.validate temperature).isSome)
+  for draft in [![4, 18], ![31, 18], ![22, 4], ![30, 31]] do
+    check "SharedTemperatureRuleAppliesToBothFields"
+      ((ExampleForms.Thermostat.thermostatType.validate draft).isNone)
+  check "BothLocalErrorsAndCrossFieldErrorAccumulate"
+    ((ExampleForms.Thermostat.thermostatType.errors ![4, 31]).length == 3)
+  for age in [18, 28, 120] do
+    check s!"ValidAge {age}" ((ExampleForms.Person.ageType.validate age).map ExampleForms.Person.ageType.erase == some age)
+  for age in [0, 17, 121, 999999999999999999999999] do
+    check s!"InvalidAge {age}" ((ExampleForms.Person.ageType.validate age).isNone)
+  check "TypedInitialErases" (JsonProtocol.valueToJson (ExampleForms.Thermostat.thermostatType.erase ExampleForms.Thermostat.initial) == Lean.Json.arr #[Lean.toJson "22", Lean.toJson "18"])
+  check "CrossFieldRejectsInvalidDraft" ((ExampleForms.Thermostat.thermostatType.validate ![16, 18]).isNone)
+  check "CrossFieldAllowsCorrection" ((ExampleForms.Thermostat.thermostatType.validate ![16, 16]).map (fun value => JsonProtocol.valueToJson (ExampleForms.Thermostat.thermostatType.erase value)) == some (Lean.Json.arr #[Lean.toJson "16", Lean.toJson "16"]))
+  check "LocalAndParentErrorsAccumulate" ((ExampleForms.Thermostat.thermostatType.errors ![0, 18]).length == 2)
+  let nested : RefinedDataType (.group ![.boolean, ExampleForms.Thermostat.shape]) :=
+    .group fun
+      | 0 => .base .boolean
+      | 1 => ExampleForms.Thermostat.thermostatType
+  let invalid : DataType.denote (.group ![.boolean, ExampleForms.Thermostat.shape])
+    | 0 => true
+    | 1 => ![16, 18]
+  let valid : DataType.denote (.group ![.boolean, ExampleForms.Thermostat.shape])
+    | 0 => true
+    | 1 => ![16, 16]
+  check "NestedRulesLiftBothPaths" ((nested.errors invalid).length == 1)
+  check "NestedRulesPreserveValidation" ((nested.validate valid).map (fun value => JsonProtocol.valueToJson (nested.erase value)) == some (JsonProtocol.valueToJson valid))
+  let some constraint := (nested.errors invalid)[0]?
+    | throw (IO.userError "Expected away temperature error")
+  check "ErrorLocationIsLifted" (match constraint.errorLocation with
+    | some target => Path.toList target.path == [1, 1]
+    | none => false)
+  let atLeastTen : Constraint .natural :=
+    { condition := .natLe (.value 10) (.project .here), errorMessage := "At least ten" }
+  let atMostTwenty : Constraint .natural :=
+    { condition := .natLe (.project .here) (.value 20), errorMessage := "At most twenty" }
+  let stacked := RefinedDataType.refine (.refine (.base .natural) atLeastTen) atMostTwenty
+  check "StackedRefinementsAccumulate"
+    ((stacked.validate 9).isNone && (stacked.validate 21).isNone && (stacked.validate 15).isSome)
+  let huge := 12345678901234567890123456789012345678901234567890
+  check "UnboundedBaseStillWorks" ((RefinedDataType.validate (.base .natural) huge).isSome)
+  let invalidInitial := Path.set ExampleForms.Person.age 17 ExampleForms.Person.draft
+  check "InitialDraftIsValidated" ((ExampleForms.Person.personType.errors invalidInitial).length == 1)
+  check "RootDecodeCannotBypassAgeRule"
+    (match JsonProtocol.decodeResult ExampleForms.Person.personType (JsonProtocol.valueToJson invalidInitial) with
       | .error _ => true
-      | .ok _ => false)
-  let addressPath : Path ExampleForms.Person.schema ExampleForms.Person.address := .child 2 .here
-  let numberPath : Path ExampleForms.Person.address .natural := .child 1 .here
-  check "ComposedGroupPath"
-    ((addressPath.trans numberPath).toList == [2, 1] &&
-      (addressPath.trans numberPath).get ExampleForms.Person.initial == 12)
+      | _ => false)
+
+private def testHiddenValidation : IO Unit := do
+  let hidden : Form ExampleForms.Thermostat.shape ExampleForms.Thermostat.shape :=
+    .visibleWhen (.value false) ExampleForms.Thermostat.form
+  let draft := ![16, 18]
+  check "HiddenFieldsStillValidate"
+    ((Form.fieldRefs hidden draft).isEmpty &&
+      (ExampleForms.Thermostat.thermostatType.errors draft).length == 1 &&
+      (ExampleForms.Thermostat.thermostatType.validate draft).isNone)
+
+private def testPathsAndChoices : IO Unit := do
+  let shown := Path.set ExampleForms.Person.subscribed true ExampleForms.Person.draft
+  let fields := Form.fieldRefs ExampleForms.Person.form shown
+  check "VisibilityStillWorks" ((Form.fieldRefs ExampleForms.Person.form ExampleForms.Person.draft).length == 4 && fields.length == 5)
+  check "PathUpdatePreservesOtherValues" (JsonProtocol.valueToJson (Path.set ExampleForms.Person.age 42 shown) == Lean.Json.arr #[Lean.toJson "Ada", Lean.toJson "42", Lean.toJson true, Lean.Json.arr #[Lean.toJson "Lambda Lane", Lean.toJson (0 : Nat)]])
+  check "LabelsFollowGroups"
+    ((fields.map fun field => Path.Labels.toList field.labels)[1]? == some ["Registration", "Age (18-120)"])
+  for value in FinEnum.toList ExampleForms.Person.addressChoices.type do
+    check "ChoiceRoundTrip"
+      (JsonProtocol.valueFromJson (.choice ExampleForms.Person.addressChoices) (JsonProtocol.valueToJson (t := .choice ExampleForms.Person.addressChoices) value) == .ok value)
+  check "ChoiceUsesLabels" (ExampleForms.Person.addressChoices.label .work == "Work")
+  check "OutOfRangeJsonChoiceRejected"
+    (match JsonProtocol.valueFromJson (.choice ExampleForms.Person.addressChoices) (Lean.toJson (3 : Nat)) with
+      | .error _ => true
+      | _ => false)
+
+private instance : MonadTui (ReaderT String (Except IO.Error)) where
+  runSpecification _ := read
+
+private def testNativeBoundary : IO Unit := do
+  let run := Tui.run (m := ReaderT String (Except IO.Error)) ExampleForms.Thermostat.thermostatType ExampleForms.Thermostat.form ExampleForms.Thermostat.draft
+  check "LeanRejectsForgedNativeSuccess" (match run.run "[\"16\",\"18\"]" with
+    | .error _ => true
+    | _ => false)
+  check "LeanConstructsProofForNativeResult" (match run.run "[\"16\",\"16\"]" with
+    | .ok (some value) => JsonProtocol.valueToJson (ExampleForms.Thermostat.thermostatType.erase value) == Lean.Json.arr #[Lean.toJson "16", Lean.toJson "16"]
+    | _ => false)
+  check "NativeCancellationIsSeparate" (match run.run "null" with
+    | .ok none => true
+    | _ => false)
+  check "MalformedNativeResultRejected" (match run.run "[\"16\"]" with
+    | .error _ => true
+    | _ => false)
+
+private def testProtocol : IO Unit := do
+  for (fixture, encoded) in [
+      ("native/tui/tests/person.json", JsonProtocol.encode ExampleForms.Person.personType ExampleForms.Person.form ExampleForms.Person.draft),
+      ("native/tui/tests/thermostat.json", JsonProtocol.encode ExampleForms.Thermostat.thermostatType ExampleForms.Thermostat.form ExampleForms.Thermostat.draft)] do
+    check "RustFixtureMatchesLean" ((← IO.FS.readFile fixture).trimAscii.toString == encoded)
+  let huge := 12345678901234567890123456789012345678901234567890
+  check "UnboundedJsonRoundTrip"
+    (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (t := .natural) huge) == .ok huge)
 
 def main : IO Unit := do
-  testEditsAndVisibility
-  testLabeledFields
-  testPredicates
-  testChoice
-  testGroups
-  let encoded := JsonProtocol.encode ExampleForms.Person.form ExampleForms.Person.initial
-  let json ← IO.ofExcept (Lean.Json.parse encoded)
-  let value ← IO.ofExcept (json.getObjVal? "value" >>= JsonProtocol.valueFromJson ExampleForms.Person.schema)
-  check "SpecificationValueRoundTrip" (JsonProtocol.valueToJson value == JsonProtocol.valueToJson ExampleForms.Person.initial)
-  let fixture ← IO.FS.readFile "native/tui/tests/person.json"
-  check "RustFixtureMatchesLeanSpecification" (fixture.trimAscii.toString == encoded)
-  let huge := 12345678901234567890123456789012345678901234567890
-  check "UnboundedNaturalRoundTrip"
-    (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (type := .natural) huge) == .ok huge)
-  check "RejectsMalformedInterpreterResult"
-    (match JsonProtocol.valueFromJson ExampleForms.Person.schema (Lean.toJson "bad") with
-      | .error _ => true
-      | .ok _ => false)
+  testRefinedTypes
+  testPathsAndChoices
+  testHiddenValidation
+  testNativeBoundary
+  testProtocol
+
+section Theorems
+
+-- These equalities check the actual carriers, including nested local proofs.
+example : ExampleForms.Person.ageType.denote = { n : Nat // (decide (18 ≤ n) && decide (n ≤ 120)) = true } := rfl
+example : ExampleForms.Thermostat.thermostatType.denote =
+    { p : (i : Fin 2) → { n : Nat // (decide (5 ≤ n) && decide (n ≤ 30)) = true } //
+      decide ((p 1).val ≤ (p 0).val) = true } := rfl
+
+end Theorems
