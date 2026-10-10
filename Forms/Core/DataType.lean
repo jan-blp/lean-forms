@@ -33,12 +33,12 @@ abbrev DataType.denote (t : DataType) : Type :=
   | .natural => Nat
   | .date => Date
   | .enum domain => domain
-  | .list element => List element.denote
+  | .list element => List (DataType.denote element)
   | .record fields children => (i : fields) → DataType.denote (children i)
 
 section Theorems
 
-theorem Enum.options_nodup (domain : Enum) : domain.options.Nodup :=
+theorem Enum.options_nodup (domain : Enum) : (Enum.options domain).Nodup :=
   List.Nodup.map domain.label_injective (FinEnum.nodup_toList (α := domain))
 
 end Theorems

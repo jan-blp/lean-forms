@@ -15,6 +15,7 @@ fn contents(terminal: &Terminal<TestBackend>) -> String {
 fn table_scrolls_to_selection_and_shows_validation() {
     let labels: Vec<_> = (0..30).map(|i| format!("Person.Field{i}")).collect();
     let screen = Screen {
+        errors: vec![],
         fields: labels
             .iter()
             .map(|label| Field {
@@ -56,6 +57,7 @@ fn table_scrolls_to_selection_and_shows_validation() {
 fn choice_editor_shows_selection_and_navigation() {
     let options = vec!["Home".into(), "Work".into(), "Other".into()];
     let screen = Screen {
+        errors: vec![],
         fields: vec![Field {
             label: "Address kind",
             value: "Home",
@@ -100,6 +102,32 @@ fn choice_editor_shows_selection_and_navigation() {
 }
 
 #[test]
+fn draft_validation_errors_are_visible_outside_the_editor() {
+    let screen = Screen {
+        fields: vec![Field {
+            label: "Thermostat.Away temperature (C)",
+            value: "100",
+            section: "",
+            action: false,
+        }],
+        errors: vec![
+            "Away temperature (C): Away temperature must not exceed home temperature.".into(),
+        ],
+        selected: 0,
+        editor: None,
+    };
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    terminal
+        .draw(|frame| render(frame, &screen, &mut TableState::default(), Theme::FRAPPE))
+        .unwrap();
+    let text = contents(&terminal);
+    assert!(text.contains("Resolve before submitting"));
+    assert!(text.contains("Away temperature must not exceed home temperature."));
+    assert!(text.contains("q submit"));
+    assert!(text.contains("x cancel"));
+}
+
+#[test]
 fn invoice_sections_actions_and_scrolling() {
     let mut engine = Engine::parse(include_str!("../tests/invoice.json")).unwrap();
     engine.selected = 4;
@@ -118,6 +146,7 @@ fn invoice_sections_actions_and_scrolling() {
             })
             .collect(),
         selected: 0,
+        errors: vec![],
         editor: None,
     };
     let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
@@ -133,6 +162,7 @@ fn invoice_sections_actions_and_scrolling() {
         "Quantity",
         "+ Add item",
         "− Remove item",
+        "Ready to submit",
     ] {
         assert!(text.contains(label), "Missing {label}");
     }
@@ -150,6 +180,7 @@ fn invoice_sections_actions_and_scrolling() {
 #[test]
 fn narrow_terminal_and_wide_text_are_handled() {
     let screen = Screen {
+        errors: vec![],
         fields: vec![],
         selected: 0,
         editor: None,
@@ -172,6 +203,7 @@ fn field_selection_leaves_heading_and_unused_width_unshaded() {
             section: "Invoice › Item 1",
             action: false,
         }],
+        errors: vec![],
         selected: 0,
         editor: None,
     };

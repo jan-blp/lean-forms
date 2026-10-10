@@ -26,4 +26,19 @@ def Expr.eval
   | .dateLe left right => Date.le (Expr.eval left value) (Expr.eval right value)
   | .natLe left right => decide (Expr.eval left value ≤ Expr.eval right value)
 
+section
+
+variable {outer root result : DataType}
+
+def Expr.weaken {outer root result} (path : Path outer root) (expression : Expr root result) : Expr outer result :=
+  match expression with
+  | .value v => .value v
+  | .project field => .project (Path.trans path field)
+  | .all items predicate => .all (Expr.weaken path items) predicate
+  | .and l r => .and (Expr.weaken path l) (Expr.weaken path r)
+  | .dateLe l r => .dateLe (Expr.weaken path l) (Expr.weaken path r)
+  | .natLe l r => .natLe (Expr.weaken path l) (Expr.weaken path r)
+
+end
+
 end Forms
