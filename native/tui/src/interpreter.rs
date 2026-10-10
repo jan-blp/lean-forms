@@ -57,8 +57,18 @@ pub enum Form {
 }
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct Constraint {
+    condition: Expr,
+    #[serde(rename = "errorMessage")]
+    error_message: String,
+    #[serde(rename = "errorLocation")]
+    error_location: Option<Vec<usize>>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Specification {
     version: u32,
+    constraints: Vec<Constraint>,
     schema: Ty,
     form: Form,
     value: Value,
@@ -231,6 +241,7 @@ pub struct Editor {
 }
 pub struct Engine {
     spec: Specification,
+    submitted: bool,
     pub selected: usize,
     pub editor: Option<Editor>,
 }
@@ -248,19 +259,60 @@ pub enum Key {
 impl Engine {
     pub fn parse(json: &str) -> Result<Self, String> {
         let spec: Specification = serde_json::from_str(json).map_err(|e| e.to_string())?;
-        if spec.version != 1 {
+        if spec.version != 2 {
             return Err("Unsupported form specification version".into());
         }
         validate_value(&spec.schema, &spec.value)?;
         spec.form.validate(&spec.schema, &spec.schema)?;
+        for constraint in &spec.constraints {
+            if constraint.condition.ty(&spec.schema)? != Ty::Boolean {
+                return Err("Validation constraint requires a boolean".into());
+            }
+            if let Some(path) = &constraint.error_location {
+                Expr::Project { path: path.clone() }.ty(&spec.schema)?;
+            }
+        }
         Ok(Self {
             spec,
+            submitted: false,
             selected: 0,
             editor: None,
         })
     }
     pub fn result(&self) -> String {
-        self.spec.value.to_string()
+        if self.submitted {
+            self.spec.value.to_string()
+        } else {
+            "null".into()
+        }
+    }
+    pub fn errors(&self) -> Vec<String> {
+        let fields = self.fields();
+        self.spec
+            .constraints
+            .iter()
+            .filter(|constraint| {
+                !constraint
+                    .condition
+                    .eval(&self.spec.value)
+                    .as_bool()
+                    .unwrap()
+            })
+            .map(|constraint| {
+                match constraint
+                    .error_location
+                    .as_ref()
+                    .and_then(|path| fields.iter().find(|field| &field.path == path))
+                {
+                    Some(field) => format!(
+                        "{}: {}",
+                        field.label.rsplit('.').next().unwrap(),
+                        constraint.error_message
+                    ),
+                    None => constraint.error_message.clone(),
+                }
+            })
+            .collect()
     }
     pub fn fields(&self) -> Vec<Field> {
         let mut out = Vec::new();
@@ -345,7 +397,13 @@ impl Engine {
             }
         } else {
             match key {
-                Key::Escape | Key::Character('q') => return false,
+                Key::Escape | Key::Character('x') => return false,
+                Key::Character('q') => {
+                    if self.errors().is_empty() {
+                        self.submitted = true;
+                        return false;
+                    }
+                }
                 Key::Up | Key::Character('k') => self.selected = self.selected.saturating_sub(1),
                 Key::Down | Key::Character('j') => {
                     self.selected = (self.selected + 1).min(fields.len().saturating_sub(1))

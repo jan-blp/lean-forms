@@ -2,13 +2,13 @@ import Forms.Core.Expr
 
 namespace Forms
 
-inductive Widget : (type : DataType) → Type 1 where
+inductive Widget : (t : DataType) → Type 1 where
   | textInput : Widget .text
   | checkbox : Widget .boolean
   | naturalInput : Widget .natural
   | select {domain : Choice} : Widget (.choice domain)
 
-inductive Form (root : DataType) : (type : DataType) → Type 1 where
+inductive Form (root : DataType) : (t : DataType) → Type 1 where
   | field
       {t : DataType}
       (label : String)
@@ -32,13 +32,13 @@ structure FieldRef (root : DataType) where
   widget : Widget type
 
 def Form.fieldRefs
-    {root type : DataType}
-    (form : Form root type)
+    {root t : DataType}
+    (form : Form root t)
     (value : DataType.denote root)
-    : List (FieldRef type) :=
+    : List (FieldRef t) :=
   match form with
   | .field label widget =>
-    [{ type := type
+    [{ type := t
        path := .here
        labels := label
        widget := widget }]

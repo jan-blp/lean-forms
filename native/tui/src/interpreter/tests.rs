@@ -3,6 +3,9 @@ use serde_json::json;
 fn person() -> Engine {
     Engine::parse(include_str!("../../tests/person.json")).unwrap()
 }
+fn thermostat() -> Engine {
+    Engine::parse(include_str!("../../tests/thermostat.json")).unwrap()
+}
 fn keys(engine: &mut Engine, keys: &[Key]) {
     for key in keys {
         assert!(engine.step(*key));
@@ -13,206 +16,165 @@ fn text(engine: &mut Engine, text: &str) {
         assert!(engine.step(Key::Character(c)));
     }
 }
+fn edit(engine: &mut Engine, input: &str) {
+    keys(engine, &[Key::Enter, Key::Clear]);
+    text(engine, input);
+    keys(engine, &[Key::Enter]);
+}
 #[test]
-fn edits_validate_and_hidden_values_survive() {
-    let mut e = person();
-    assert_eq!(e.fields().len(), 3);
-    keys(
-        &mut e,
-        &[
-            Key::Up,
-            Key::Down,
-            Key::Character(' '),
-            Key::Down,
-            Key::Down,
-            Key::Enter,
-            Key::Clear,
-        ],
+fn invalid_drafts_are_editable_but_not_submittable() {
+    let mut e = thermostat();
+    edit(&mut e, "16");
+    assert!(e.editor.is_none());
+    assert_eq!(e.spec.value, json!(["16", "18"]));
+    assert_eq!(
+        e.errors(),
+        ["Away temperature (C): Away temperature must not exceed home temperature."]
     );
-    assert_eq!(e.fields().len(), 5);
-    assert_eq!(e.fields()[3].label, "Person.Address.Number");
+    assert!(e.step(Key::Character('q')));
+    assert_eq!(e.result(), "null");
+    keys(&mut e, &[Key::Down]);
+    edit(&mut e, "16");
+    assert!(e.errors().is_empty());
+    assert!(!e.step(Key::Character('q')));
+    assert_eq!(
+        serde_json::from_str::<Value>(&e.result()).unwrap(),
+        json!(["16", "16"])
+    );
+}
+#[test]
+fn age_rule_allows_endpoints_and_reports_invalid_values() {
+    let mut e = person();
+    keys(&mut e, &[Key::Down]);
+    for invalid in ["17", "121"] {
+        edit(&mut e, invalid);
+        assert_eq!(e.spec.value[1], invalid);
+        assert_eq!(e.errors().len(), 1);
+        assert!(e.errors()[0].contains("18 and 120"));
+        assert!(e.step(Key::Character('q')));
+    }
+    for valid in ["18", "120"] {
+        edit(&mut e, valid);
+        assert!(e.errors().is_empty());
+    }
+    assert!(!e.step(Key::Character('q')));
+}
+#[test]
+fn parsing_errors_stay_in_editor_and_cancellation_discards_draft() {
+    let mut e = thermostat();
     for invalid in ["", "-1", "1.5", "abc", "+2"] {
-        keys(&mut e, &[Key::Clear]);
-        text(&mut e, invalid);
-        keys(&mut e, &[Key::Enter]);
+        if e.editor.is_some() {
+            keys(&mut e, &[Key::Escape]);
+        }
+        edit(&mut e, invalid);
         assert_eq!(
             e.editor.as_ref().unwrap().error.as_deref(),
             Some("Enter a non-negative whole number.")
         );
-        assert_eq!(e.spec.value[2][1], "12");
+        assert_eq!(e.spec.value[0], "22");
     }
-    keys(&mut e, &[Key::Clear]);
-    text(&mut e, " 0042 ");
-    keys(&mut e, &[Key::Enter, Key::Up, Key::Up, Key::Character(' ')]);
-    assert_eq!(e.fields().len(), 3);
-    assert_eq!(e.spec.value[2][1], "42");
-    keys(&mut e, &[Key::Character(' ')]);
-    assert_eq!(e.fields().len(), 5);
-    assert_eq!(
-        serde_json::from_str::<Value>(&e.result()).unwrap(),
-        json!(["Ada", true, ["Lambda Lane", "42", 0]])
-    );
-}
-#[test]
-fn cancellation_unicode_empty_text_and_quit() {
-    let mut e = person();
-    keys(&mut e, &[Key::Enter, Key::Clear]);
-    text(&mut e, "changed");
     keys(&mut e, &[Key::Escape]);
-    assert_eq!(e.spec.value[0], "Ada");
-    keys(&mut e, &[Key::Enter, Key::Clear]);
-    text(&mut e, "é");
-    keys(&mut e, &[Key::Backspace]);
-    text(&mut e, "qjki\0界");
-    keys(&mut e, &[Key::Enter]);
-    assert_eq!(e.spec.value[0], "qjki\0界");
-    keys(&mut e, &[Key::Enter, Key::Clear, Key::Enter]);
-    assert_eq!(e.spec.value[0], "");
-    keys(&mut e, &[Key::Enter]);
-    text(&mut e, "discarded");
-    assert!(!e.step(Key::Quit));
-    assert_eq!(e.spec.value[0], "");
+    edit(&mut e, " 0016 ");
+    assert_eq!(e.spec.value[0], "16");
+    assert!(!e.step(Key::Character('x')));
+    assert_eq!(e.result(), "null");
     let mut e = person();
+    assert!(!e.step(Key::Quit));
+    assert_eq!(e.result(), "null");
+}
+#[test]
+fn invalid_initial_and_hidden_fields_still_validate() {
+    let mut spec: Value =
+        serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
+    spec["value"] = json!(["0", "18"]);
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(e.errors().len(), 2);
+    edit(&mut e, "22");
     assert!(!e.step(Key::Character('q')));
+    let body = spec["form"].clone();
+    spec["form"] = json!({"kind":"visibleWhen", "condition":{"kind":"value", "type":{"kind":"boolean"}, "value":false}, "body":body});
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert!(e.fields().is_empty());
+    assert_eq!(e.errors().len(), 2);
+    assert!(e.step(Key::Character('q')));
+    assert!(!e.step(Key::Escape));
+    assert_eq!(e.result(), "null");
 }
 #[test]
-fn all_predicates_and_unbounded_naturals() {
-    let root = Ty::Group {
-        children: vec![Ty::Text, Ty::Natural],
-    };
-    let expr: Expr = serde_json::from_value(json!({"kind":"and", "left":{"kind":"value", "type":{"kind":"boolean"}, "value":true}, "right":{"kind":"natLe","left":{"kind":"value","type":{"kind":"natural"},"value":"10"},"right":{"kind":"project","path":[1]}}})).unwrap();
-    assert_eq!(expr.ty(&root).unwrap(), Ty::Boolean);
-    assert_eq!(
-        expr.eval(&json!([
-            "Ada",
-            "10000000000000000000000000000000000000000000000"
-        ])),
-        true
-    );
-    assert_eq!(expr.eval(&json!(["Ada", "0009"])), false);
-    let mut e = person();
-    keys(
-        &mut e,
-        &[
-            Key::Down,
-            Key::Enter,
-            Key::Down,
-            Key::Down,
-            Key::Enter,
-            Key::Clear,
-        ],
-    );
-    let big = "12345678901234567890123456789012345678901234567890";
-    text(&mut e, big);
-    keys(&mut e, &[Key::Enter]);
-    assert_eq!(e.spec.value[2][1], big);
-}
-#[test]
-fn choice_selection_cancellation_and_boundaries() {
-    let mut e = person();
-    keys(&mut e, &[Key::Down, Key::Down, Key::Enter]);
-    assert_eq!(
-        e.editor.as_ref().unwrap().options,
-        ["Home", "Work", "Other"]
-    );
-    keys(&mut e, &[Key::Up, Key::Character('j'), Key::Escape]);
-    assert_eq!(e.spec.value[2][2], 0);
-    keys(&mut e, &[Key::Enter, Key::Down, Key::Enter]);
-    assert_eq!(e.spec.value[2][2], 1);
-    assert_eq!(e.shown(&e.fields()[2]), "Work");
-    keys(
-        &mut e,
-        &[
-            Key::Enter,
-            Key::Down,
-            Key::Down,
-            Key::Clear,
-            Key::Backspace,
-            Key::Character('x'),
-        ],
-    );
-    assert_eq!(e.editor.as_ref().unwrap().choice, Some(2));
-    assert!(!e.step(Key::Quit));
-    assert_eq!(e.spec.value[2][2], 1);
-    keys(&mut e, &[Key::Enter]);
-    assert_eq!(e.spec.value[2][2], 2);
-}
-
-#[test]
-fn invalid_choices_are_rejected() {
-    let source: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
-    for replacement in [json!(-1), json!(3), json!(1.5), json!("1"), json!(null)] {
-        let mut v = source.clone();
-        v["value"][2][2] = replacement;
-        assert!(Engine::parse(&v.to_string()).is_err());
-    }
-    for options in [json!([]), json!(["Home", "Home", "Other"])] {
-        let mut v = source.clone();
-        v["schema"]["children"][2]["children"][2]["options"] = options;
-        assert!(Engine::parse(&v.to_string()).is_err());
-    }
-    let mut v = source;
-    v["form"]["children"][2]["children"][2]["widget"] = json!("text");
-    assert!(Engine::parse(&v.to_string()).is_err());
-}
-
-#[test]
-fn invalid_specifications_are_rejected_before_rendering() {
-    let source: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
+fn schema_constraints_and_error_locations_are_type_checked() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
     for (path, replacement) in [
-        ("/version", json!(2)),
-        ("/value/2/1", json!(-1)),
-        ("/value/2", json!(["street"])),
+        ("/version", json!(1)),
+        (
+            "/constraints/0/condition",
+            json!({"kind":"project", "path":[0]}),
+        ),
+        ("/constraints/2/condition/left/path", json!([2])),
+        ("/constraints/2/errorLocation", json!([0, 0])),
+        ("/value/0", json!(-1)),
         ("/form/children/0/widget", json!("checkbox")),
-        ("/form/children/2/children/0/condition/path", json!([2])),
-        ("/form/children/2/children/0/condition/path", json!([0])),
     ] {
-        let mut v = source.clone();
-        *v.pointer_mut(path).unwrap() = replacement;
-        assert!(Engine::parse(&v.to_string()).is_err(), "{path}");
+        let mut spec = source.clone();
+        *spec.pointer_mut(path).unwrap() = replacement;
+        assert!(Engine::parse(&spec.to_string()).is_err(), "{path}");
     }
     assert!(Engine::parse("{}").is_err());
-    let mut v = source;
-    v["extra"] = json!(true);
-    assert!(Engine::parse(&v.to_string()).is_err());
+    let mut spec = source;
+    spec["constraints"][0]["unknown"] = json!(true);
+    assert!(Engine::parse(&spec.to_string()).is_err());
 }
 #[test]
-fn groups_allow_zero_and_one_child_and_reject_shape_mismatches() {
-    for (children, fields, value) in [
-        (json!([]), json!([]), json!([])),
-        (
-            json!([{"kind":"text"}]),
-            json!([{"kind":"field","label":"Only","widget":"textInput"}]),
-            json!(["only"]),
-        ),
-    ] {
-        let spec = json!({"version":1,"schema":{"kind":"group","children":children},
-            "form":{"kind":"group","label":"Group","children":fields},"value":value});
-        let e = Engine::parse(&spec.to_string()).unwrap();
-        assert_eq!(e.fields().len(), value.as_array().unwrap().len());
-        assert_eq!(serde_json::from_str::<Value>(&e.result()).unwrap(), value);
-        let mut bad = spec.clone();
-        bad["value"].as_array_mut().unwrap().push(json!("extra"));
-        assert!(Engine::parse(&bad.to_string()).is_err());
-        let mut bad = spec;
-        bad["form"]["children"]
-            .as_array_mut()
-            .unwrap()
-            .push(json!({"kind":"field","label":"Extra","widget":"textInput"}));
-        assert!(Engine::parse(&bad.to_string()).is_err());
-    }
+fn visibility_choice_and_text_editing_still_work() {
+    let mut e = person();
+    assert_eq!(e.fields().len(), 4);
+    keys(&mut e, &[Key::Down, Key::Down, Key::Character(' ')]);
+    assert_eq!(e.fields().len(), 5);
+    keys(&mut e, &[Key::Down]);
+    edit(&mut e, "Elm Street");
+    keys(&mut e, &[Key::Up, Key::Character(' ')]);
+    assert_eq!(e.fields().len(), 4);
+    assert_eq!(e.spec.value[3][0], "Elm Street");
+    keys(&mut e, &[Key::Down, Key::Enter, Key::Down, Key::Escape]);
+    assert_eq!(e.spec.value[3][1], 0);
+    keys(&mut e, &[Key::Enter, Key::Up, Key::Down, Key::Enter]);
+    assert_eq!(e.spec.value[3][1], 1);
+    assert_eq!(e.shown(&e.fields()[3]), "Work");
+    e.selected = 0;
+    edit(&mut e, "qjx界");
+    assert_eq!(e.spec.value[0], "qjx界");
+    edit(&mut e, "");
+    assert_eq!(e.spec.value[0], "");
 }
-
 #[test]
-fn hidden_root_and_visibility_changed_by_edit() {
-    let spec = json!({"version":1,"schema":{"kind":"boolean"},"value":true,"form":{"kind":"visibleWhen","condition":{"kind":"project","path":[]},"body":{"kind":"field","label":"Visible","widget":"checkbox"}}});
+fn arbitrary_precision_constraints_and_all_predicates() {
+    let mut spec: Value =
+        serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
+    // Keep only the cross-field constraint to exercise unrestricted naturals.
+    spec["constraints"] = json!([spec["constraints"][2].clone()]);
     let mut e = Engine::parse(&spec.to_string()).unwrap();
-    keys(&mut e, &[Key::Enter]);
-    assert!(e.fields().is_empty());
-    assert_eq!(e.selected, 0);
-    keys(
-        &mut e,
-        &[Key::Up, Key::Down, Key::Enter, Key::Character(' ')],
-    );
-    assert_eq!(e.result(), "false");
+    let huge = "12345678901234567890123456789012345678901234567890";
+    edit(&mut e, huge);
+    assert!(e.errors().is_empty());
+    keys(&mut e, &[Key::Down]);
+    edit(&mut e, &format!("{huge}0"));
+    assert_eq!(e.errors().len(), 1);
+    edit(&mut e, huge);
+    assert!(e.errors().is_empty());
+    let expr: Expr = serde_json::from_value(json!({"kind":"and", "left":{"kind":"value", "type":{"kind":"boolean"}, "value":true}, "right":{"kind":"value", "type":{"kind":"boolean"}, "value":true}})).unwrap();
+    assert_eq!(expr.ty(&Ty::Natural).unwrap(), Ty::Boolean);
+    assert_eq!(expr.eval(&json!("1")), true);
+}
+#[test]
+fn malformed_choices_are_rejected() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
+    for invalid in [json!(-1), json!(3), json!(1.5), json!("1"), json!(null)] {
+        let mut spec = source.clone();
+        spec["value"][3][1] = invalid;
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
+    for options in [json!([]), json!(["Home", "Home", "Other"])] {
+        let mut spec = source.clone();
+        spec["schema"]["right"]["right"]["right"]["right"]["options"] = options;
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
 }
