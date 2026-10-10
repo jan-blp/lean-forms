@@ -14,9 +14,6 @@ attribute [instance] Enum.enum
 def Enum.options (domain : Enum) : List String :=
   (FinEnum.toList domain.type).map domain.label
 
-theorem Enum.options_nodup (domain : Enum) : domain.options.Nodup :=
-  List.Nodup.map domain.label_injective (FinEnum.nodup_toList (α := domain.type))
-
 inductive DataType where
   | text
   | boolean
@@ -24,12 +21,19 @@ inductive DataType where
   | enum (domain : Enum)
   | tuple {n : Nat} (children : Fin n → DataType)
 
-abbrev DataType.denote (type : DataType) : Type :=
-  match type with
+abbrev DataType.denote (t : DataType) : Type :=
+  match t with
   | .text => String
   | .boolean => Bool
   | .natural => Nat
   | .enum domain => domain.type
   | .tuple children => (i : Fin _) → DataType.denote (children i)
+
+section Theorems
+
+theorem Enum.options_nodup (domain : Enum) : domain.options.Nodup :=
+  List.Nodup.map domain.label_injective (FinEnum.nodup_toList (α := domain.type))
+
+end Theorems
 
 end Forms
