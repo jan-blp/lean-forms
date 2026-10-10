@@ -1,6 +1,8 @@
+import Forms.ExampleForms.Booking
 import Forms.Runtime.Cli
 import Forms.ExampleForms.Invoice
 import Forms.ExampleForms.Person
+import Forms.ExampleForms.Thermostat
 import Forms.Runtime.NativeTerminal
 import Forms.Runtime.Tui
 
@@ -21,16 +23,22 @@ private def valueToJson {t : DataType} (value : DataType.denote t) : Lean.Json :
       (fieldNames.label i, valueToJson (t := fieldTypes i) (value i)))
 
 def runForm (theme : NativeTerminal.Theme)
-    {root : DataType} (form : Form root root) (initial : root.denote) : IO Unit := do
+  {root : DataType} (refined : RefinedDataType root) (form : Form root root) (initial : RefinedDataType.ValidatedValue refined)
+  : IO Unit := do
   let _ : MonadTui IO := NativeTerminal.interpreter theme
-  let value ← Tui.run form initial
-  IO.println "\n  Final values\n  ------------"
-  IO.println (Lean.Json.pretty (valueToJson value))
+  let result ← Tui.run refined form (RefinedDataType.erase refined initial)
+  match result with
+  | none => IO.println "\nCancelled."
+  | some value =>
+    IO.println "\n  Final values\n  ------------"
+    IO.println (Lean.Json.pretty (valueToJson (RefinedDataType.erase refined value)))
 
 private def cli : Cli NativeTerminal.Theme where
   examples := [
-    ("person", fun theme => runForm theme Person.form Person.initial),
-    ("invoice", fun theme => runForm theme Invoice.form Invoice.initial)]
+    ("person", fun theme => runForm theme Person.personType Person.form Person.initial),
+    ("booking", fun theme => runForm theme Booking.bookingType Booking.form Booking.initial),
+    ("invoice", fun theme => runForm theme Invoice.invoiceType Invoice.form Invoice.initial),
+    ("thermostat", fun theme => runForm theme Thermostat.thermostatType Thermostat.form Thermostat.initial)]
   options := [("--theme", NativeTerminal.Theme.choices)]
   initial := .frappe
 

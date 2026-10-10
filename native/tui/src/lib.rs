@@ -142,6 +142,7 @@ struct Editor<'a> {
 }
 struct Screen<'a> {
     fields: Vec<Field<'a>>,
+    errors: Vec<String>,
     selected: usize,
     editor: Option<Editor<'a>>,
 }
@@ -182,6 +183,7 @@ fn run(engine: &mut Engine, theme: Theme, interrupted: extern "C" fn() -> i32) -
             let fields = engine.fields();
             let values: Vec<_> = fields.iter().map(|f| engine.shown(f)).collect();
             let screen = Screen {
+                errors: engine.errors(),
                 fields: fields
                     .iter()
                     .zip(&values)
@@ -321,9 +323,15 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         Some(_) => 6,
         None => 3,
     };
+    let error_height = if screen.errors.is_empty() {
+        0
+    } else {
+        (screen.errors.len() as u16 + 2).min(area.height.saturating_sub(footer_height + 7))
+    };
     let sections = Layout::vertical([
         Constraint::Length(3),
         Constraint::Min(4),
+        Constraint::Length(error_height),
         Constraint::Length(footer_height),
     ])
     .split(area);
@@ -333,13 +341,32 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         .map(|field| field.section.split(" › ").next().unwrap_or("Form"))
         .filter(|title| !title.is_empty())
         .unwrap_or("Form");
+    let status = if screen.errors.is_empty() {
+        "Ready to submit".to_owned()
+    } else {
+        format!(
+            "{} validation issue{}",
+            screen.errors.len(),
+            if screen.errors.len() == 1 { "" } else { "s" }
+        )
+    };
     frame.render_widget(
-        Paragraph::new(Line::from(vec![ratatui::text::Span::styled(
-            format!("  {}", clean(title)),
-            Style::default()
-                .fg(theme.accent)
-                .add_modifier(Modifier::BOLD),
-        )]))
+        Paragraph::new(Line::from(vec![
+            ratatui::text::Span::styled(
+                format!("  {}", clean(title)),
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            ratatui::text::Span::styled(
+                format!("   {status}"),
+                Style::default().fg(if screen.errors.is_empty() {
+                    theme.subtext
+                } else {
+                    theme.error
+                }),
+            ),
+        ]))
         .block(
             Block::default()
                 .borders(Borders::BOTTOM)
@@ -456,6 +483,19 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         Some(screen.selected)
     });
     frame.render_stateful_widget(table, sections[1], table_state);
+    if !screen.errors.is_empty() {
+        let lines: Vec<Line> = screen
+            .errors
+            .iter()
+            .map(|error| Line::from(clean(error)))
+            .collect();
+        frame.render_widget(
+            Paragraph::new(lines)
+                .style(Style::default().fg(theme.error))
+                .block(Block::bordered().title(" Resolve before submitting ")),
+            sections[2],
+        );
+    }
     if let Some(editor) = &screen.editor {
         if let Some(date) = editor.calendar {
             render_date_editor(frame, editor, date, theme);
@@ -463,7 +503,7 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         }
         if let Some(index) = editor.choice {
             let parts =
-                Layout::vertical([Constraint::Min(3), Constraint::Length(2)]).split(sections[2]);
+                Layout::vertical([Constraint::Min(3), Constraint::Length(2)]).split(sections[3]);
             let options = List::new(
                 editor
                     .options
@@ -500,7 +540,7 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
             Constraint::Length(1),
             Constraint::Length(2),
         ])
-        .split(sections[2]);
+        .split(sections[3]);
         let text = format!(
             "{}▏",
             editor_tail(&clean(&editor.text), parts[0].width.saturating_sub(3))
@@ -533,9 +573,9 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         frame.render_widget(
             Paragraph::new(
                 if screen.fields.get(screen.selected).is_some_and(|f| f.action) {
-                    "↑/↓ select · Enter activate · q quit"
+                    "↑/↓ select · Enter activate · q submit · x cancel"
                 } else {
-                    "↑/↓ select · Enter edit · Space toggle · q quit"
+                    "↑/↓ select · Enter edit · Space toggle · q submit · x cancel"
                 },
             )
             .style(Style::default().fg(theme.subtext))
@@ -545,7 +585,7 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
                     .borders(Borders::TOP)
                     .border_style(Style::default().fg(theme.border)),
             ),
-            sections[2],
+            sections[3],
         );
     }
 }
