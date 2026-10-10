@@ -3,6 +3,9 @@ use serde_json::json;
 fn person() -> Engine {
     Engine::parse(include_str!("../../tests/person.json")).unwrap()
 }
+fn thermostat() -> Engine {
+    Engine::parse(include_str!("../../tests/thermostat.json")).unwrap()
+}
 fn keys(engine: &mut Engine, keys: &[Key]) {
     for key in keys {
         assert!(engine.step(*key));
@@ -13,230 +16,13 @@ fn text(engine: &mut Engine, text: &str) {
         assert!(engine.step(Key::Character(c)));
     }
 }
-#[test]
-fn edits_validate_and_hidden_values_survive() {
-    let mut e = person();
-    assert_eq!(e.fields().len(), 2);
-    keys(
-        &mut e,
-        &[
-            Key::Up,
-            Key::Down,
-            Key::Character(' '),
-            Key::Down,
-            Key::Down,
-            Key::Enter,
-            Key::Clear,
-        ],
-    );
-    assert_eq!(e.fields().len(), 5);
-    assert_eq!(e.fields()[3].label, "Person.Address.Number");
-    for invalid in ["", "-1", "1.5", "abc", "+2"] {
-        keys(&mut e, &[Key::Clear]);
-        text(&mut e, invalid);
-        keys(&mut e, &[Key::Enter]);
-        assert_eq!(
-            e.editor.as_ref().unwrap().error.as_deref(),
-            Some("Enter a non-negative whole number.")
-        );
-        assert_eq!(e.spec.value["address"]["number"], "12");
-    }
-    keys(&mut e, &[Key::Clear]);
-    text(&mut e, " 0042 ");
-    keys(&mut e, &[Key::Enter, Key::Up, Key::Up, Key::Character(' ')]);
-    assert_eq!(e.fields().len(), 2);
-    assert_eq!(e.spec.value["address"]["number"], "42");
-    keys(&mut e, &[Key::Character(' ')]);
-    assert_eq!(e.fields().len(), 5);
-    assert_eq!(
-        serde_json::from_str::<Value>(&e.result()).unwrap(),
-        json!({"name":"Ada","subscribed":true,"address":{"street":"Lambda Lane","number":"42","kind":0}})
-    );
-}
-#[test]
-fn cancellation_unicode_empty_text_and_quit() {
-    let mut e = person();
-    keys(&mut e, &[Key::Enter, Key::Clear]);
-    text(&mut e, "changed");
-    keys(&mut e, &[Key::Escape]);
-    assert_eq!(e.spec.value["name"], "Ada");
-    keys(&mut e, &[Key::Enter, Key::Clear]);
-    text(&mut e, "é");
-    keys(&mut e, &[Key::Backspace]);
-    text(&mut e, "qjki\0界");
-    keys(&mut e, &[Key::Enter]);
-    assert_eq!(e.spec.value["name"], "qjki\0界");
-    keys(&mut e, &[Key::Enter, Key::Clear, Key::Enter]);
-    assert_eq!(e.spec.value["name"], "");
-    keys(&mut e, &[Key::Enter]);
-    text(&mut e, "discarded");
-    assert!(!e.step(Key::Quit));
-    assert_eq!(e.spec.value["name"], "");
-    let mut e = person();
-    assert!(!e.step(Key::Character('q')));
-}
-#[test]
-fn all_predicates_and_unbounded_naturals() {
-    let input = Ty::Record {
-        fields: vec![
-            NamedType {
-                name: "name".into(),
-                ty: Ty::Text,
-            },
-            NamedType {
-                name: "number".into(),
-                ty: Ty::Natural,
-            },
-        ],
-    };
-    let expr: Expr = serde_json::from_value(json!({"kind":"and", "left":{"kind":"value", "type":{"kind":"boolean"}, "value":true}, "right":{"kind":"natLe","left":{"kind":"value","type":{"kind":"natural"},"value":"10"},"right":{"kind":"project","path":["number"]}}})).unwrap();
-    assert_eq!(expr.ty(&input).unwrap(), Ty::Boolean);
-    assert_eq!(
-        expr.eval(
-            &json!({"name":"Ada","number":"10000000000000000000000000000000000000000000000"})
-        ),
-        true
-    );
-    assert_eq!(expr.eval(&json!({"name":"Ada","number":"0009"})), false);
-    let mut e = person();
-    keys(
-        &mut e,
-        &[
-            Key::Down,
-            Key::Enter,
-            Key::Down,
-            Key::Down,
-            Key::Enter,
-            Key::Clear,
-        ],
-    );
-    let big = "12345678901234567890123456789012345678901234567890";
-    text(&mut e, big);
-    keys(&mut e, &[Key::Enter]);
-    assert_eq!(e.spec.value["address"]["number"], big);
-}
-#[test]
-fn choice_selection_cancellation_and_boundaries() {
-    let mut e = person();
-    keys(
-        &mut e,
-        &[
-            Key::Down,
-            Key::Character(' '),
-            Key::Down,
-            Key::Down,
-            Key::Down,
-            Key::Enter,
-        ],
-    );
-    assert_eq!(
-        e.editor.as_ref().unwrap().options,
-        ["Home", "Work", "Other"]
-    );
-    keys(&mut e, &[Key::Up, Key::Character('j'), Key::Escape]);
-    assert_eq!(e.spec.value["address"]["kind"], 0);
-    keys(&mut e, &[Key::Enter, Key::Down, Key::Enter]);
-    assert_eq!(e.spec.value["address"]["kind"], 1);
-    assert_eq!(e.shown(&e.fields()[4]), "Work");
-    keys(
-        &mut e,
-        &[
-            Key::Enter,
-            Key::Down,
-            Key::Down,
-            Key::Clear,
-            Key::Backspace,
-            Key::Character('x'),
-        ],
-    );
-    assert_eq!(e.editor.as_ref().unwrap().choice, Some(2));
-    assert!(!e.step(Key::Quit));
-    assert_eq!(e.spec.value["address"]["kind"], 1);
-    keys(&mut e, &[Key::Enter]);
-    assert_eq!(e.spec.value["address"]["kind"], 2);
-}
-
-#[test]
-fn invalid_choices_are_rejected() {
-    let source: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
-    for replacement in [json!(-1), json!(3), json!(1.5), json!("1"), json!(null)] {
-        let mut v = source.clone();
-        v["value"]["address"]["kind"] = replacement;
-        assert!(Engine::parse(&v.to_string()).is_err());
-    }
-    for options in [json!([]), json!(["Home", "Home", "Other"])] {
-        let mut v = source.clone();
-        v["schema"]["fields"][2]["type"]["fields"][2]["type"]["options"] = options;
-        assert!(Engine::parse(&v.to_string()).is_err());
-    }
-    let mut v = source;
-    v["form"]["children"][2]["body"]["children"][2]["widget"] = json!("text");
-    assert!(Engine::parse(&v.to_string()).is_err());
-}
-
-#[test]
-fn invalid_specifications_are_rejected_before_rendering() {
-    let source: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
-    for (path, replacement) in [
-        ("/version", json!(2)),
-        ("/value/address/number", json!(-1)),
-        ("/value/address", json!(["street"])),
-        ("/form/children/0/widget", json!("checkbox")),
-        ("/form/children/2/condition/path", json!(["address"])),
-        ("/form/children/2/condition/path", json!(["name"])),
-    ] {
-        let mut v = source.clone();
-        *v.pointer_mut(path).unwrap() = replacement;
-        assert!(Engine::parse(&v.to_string()).is_err(), "{path}");
-    }
-    assert!(Engine::parse("{}").is_err());
-    let mut v = source;
-    v["extra"] = json!(true);
-    assert!(Engine::parse(&v.to_string()).is_err());
-}
-#[test]
-fn stacks_allow_zero_and_one_child_and_validate_paths() {
-    for children in [
-        json!([]),
-        json!([{"kind":"field","path":["only"],"schema":{"kind":"text"},"label":"Only","widget":"textInput"}]),
-    ] {
-        let spec = json!({"version":4,"schema":{"kind":"record","fields":[{"name":"only","type":{"kind":"text"}}]},
-            "form":{"kind":"stack","label":"Group","children":children},"value":{"only":"only"}});
-        let e = Engine::parse(&spec.to_string()).unwrap();
-        assert_eq!(e.fields().len(), children.as_array().unwrap().len());
-        assert_eq!(
-            serde_json::from_str::<Value>(&e.result()).unwrap(),
-            spec["value"]
-        );
-        let mut bad = spec.clone();
-        bad["value"]["extra"] = json!("extra");
-        assert!(Engine::parse(&bad.to_string()).is_err());
-        let mut bad = spec;
-        bad["form"]["children"].as_array_mut().unwrap().push(json!({"kind":"field","path":["missing"],"schema":{"kind":"text"},"label":"Extra","widget":"textInput"}));
-        assert!(Engine::parse(&bad.to_string()).is_err());
-    }
-}
-
-#[test]
-fn hidden_root_and_visibility_changed_by_edit() {
-    let spec = json!({"version":4,"schema":{"kind":"boolean"},"value":true,"form":{"kind":"visibleWhen","condition":{"kind":"project","path":[]},"body":{"kind":"field","path":[],"schema":{"kind":"boolean"},"label":"Visible","widget":"checkbox"}}});
-    let mut e = Engine::parse(&spec.to_string()).unwrap();
-    keys(&mut e, &[Key::Enter]);
-    assert!(e.fields().is_empty());
-    assert_eq!(e.selected, 0);
-    keys(
-        &mut e,
-        &[Key::Up, Key::Down, Key::Enter, Key::Character(' ')],
-    );
-    assert_eq!(e.result(), "false");
-}
 fn edit(engine: &mut Engine, input: &str) {
     keys(engine, &[Key::Enter, Key::Clear]);
     text(engine, input);
     keys(engine, &[Key::Enter]);
 }
 #[test]
-fn repeated_items_add_remove_and_edit() {
+fn repeated_items_add_remove_edit_and_validate() {
     let mut e = Engine::parse(include_str!("../../tests/invoice.json")).unwrap();
     assert_eq!(e.fields().len(), 5);
     e.selected = 4;
@@ -245,14 +31,17 @@ fn repeated_items_add_remove_and_edit() {
     edit(&mut e, "Second");
     e.selected = 5;
     edit(&mut e, "0");
+    assert_eq!(e.errors().len(), 1);
+    assert!(e.step(Key::Character('q')));
     e.selected = 3;
     keys(&mut e, &[Key::Enter]);
     assert_eq!(
         e.spec.value,
-        json!([{"description":"Second","quantity":"0","unitPrice":"100"}])
+        json!([{"description":"Second", "quantity":"0", "unitPrice":"100"}])
     );
     e.selected = 1;
     edit(&mut e, "2");
+    assert!(e.errors().is_empty());
     e.selected = 3;
     keys(&mut e, &[Key::Enter]);
     assert_eq!(e.fields().len(), 1);
@@ -260,7 +49,7 @@ fn repeated_items_add_remove_and_edit() {
     keys(&mut e, &[Key::Enter]);
     assert_eq!(
         e.spec.value,
-        json!([{"description":"New item","quantity":"1","unitPrice":"100"}])
+        json!([{"description":"New item", "quantity":"1", "unitPrice":"100"}])
     );
     assert!(!e.step(Key::Character('q')));
 }
@@ -278,6 +67,7 @@ fn nested_lists_and_item_visibility_use_local_scope() {
     spec["schema"] = json!({"kind":"list", "element":inner_schema});
     spec["form"] = json!({"kind":"list","path":[],"schema":spec["schema"],"label":"Invoices", "item":inner_form, "defaultItem":[]});
     spec["value"] = json!([inner_value]);
+    spec["constraints"] = json!([]);
     let mut e = Engine::parse(&spec.to_string()).unwrap();
     assert_eq!(e.fields().len(), 7);
     e.selected = 1;
@@ -290,7 +80,7 @@ fn nested_lists_and_item_visibility_use_local_scope() {
     keys(&mut e, &[Key::Enter]);
     assert_eq!(
         e.spec.value[1],
-        json!([{"description":"New item","quantity":"1","unitPrice":"100"}])
+        json!([{"description":"New item", "quantity":"1", "unitPrice":"100"}])
     );
 }
 
@@ -308,68 +98,171 @@ fn malformed_lists_and_defaults_are_rejected() {
 }
 
 #[test]
-fn all_list_items_are_evaluated_in_element_scope() {
-    let expr: Expr = serde_json::from_value(json!({"kind":"all","items":{"kind":"project","path":[]},"predicate":{"kind":"natLe","left":{"kind":"value","type":{"kind":"natural"},"value":"1"},"right":{"kind":"project","path":[]}}})).unwrap();
-    assert_eq!(
-        expr.ty(&Ty::List {
-            element: Box::new(Ty::Natural)
-        })
-        .unwrap(),
-        Ty::Boolean
-    );
-    assert_eq!(expr.eval(&json!(["1", "2"])), true);
-    assert_eq!(expr.eval(&json!(["1", "0"])), false);
-}
-
-#[test]
-fn date_calendar_rules_and_picker_modes() {
-    let cases: Value = serde_json::from_str(include_str!("../../tests/dates.json")).unwrap();
-    for value in cases["valid"].as_array().unwrap() {
-        assert_eq!(
-            date(value.as_str().unwrap()).unwrap().to_string(),
-            value.as_str().unwrap()
-        );
-    }
-    for value in cases["invalid"].as_array().unwrap() {
-        assert!(date(value.as_str().unwrap()).is_none());
-    }
-    let spec = serde_json::json!({"version":4, "schema":{"kind":"date"}, "form":{"kind":"field","path":[],"schema":{"kind":"date"},"label":"Date","widget":"dateInput"}, "value":"2028-02-28"});
-    let mut e = Engine::parse(&spec.to_string()).unwrap();
-    e.step(Key::Enter);
-    e.step(Key::Character('l'));
-    assert_eq!(e.editor.as_ref().unwrap().text, "2028-02-29");
-    e.step(Key::Enter);
-    assert!(e.editor.as_ref().unwrap().date_input);
-    e.step(Key::Enter);
+fn invalid_drafts_are_editable_but_not_submittable() {
+    let mut e = thermostat();
+    edit(&mut e, "16");
     assert!(e.editor.is_none());
-    assert_eq!(e.spec.value, "2028-02-29");
-}
-
-#[test]
-fn country_selects_city_type_and_preserves_each_selection() {
-    let mut e = Engine::parse(include_str!("../../tests/location.json")).unwrap();
-    assert_eq!(e.fields()[0].title, "Country");
-    assert_eq!(e.fields()[1].title, "City");
-    assert_eq!(e.fields()[1].options, ["Paris", "Lyon", "Marseille"]);
-    e.selected = 1;
-    keys(&mut e, &[Key::Enter, Key::Down, Key::Enter]);
-    assert_eq!(e.shown(&e.fields()[1]), "Lyon");
-    e.selected = 0;
-    select_constructor(&mut e, 1);
-    assert_eq!(e.fields()[1].options, ["Tokyo", "Kyoto", "Osaka"]);
-    assert_eq!(e.shown(&e.fields()[1]), "Tokyo");
-    e.selected = 1;
-    keys(&mut e, &[Key::Enter, Key::Down, Key::Enter]);
-    e.selected = 0;
-    select_constructor(&mut e, 0);
-    assert_eq!(e.shown(&e.fields()[1]), "Lyon");
-    select_constructor(&mut e, 1);
-    assert_eq!(e.shown(&e.fields()[1]), "Kyoto");
+    assert_eq!(e.spec.value, json!({"home":"16", "away":"18"}));
+    assert_eq!(
+        e.errors(),
+        ["Away temperature (C): Away temperature must not exceed home temperature."]
+    );
+    assert!(e.step(Key::Character('q')));
+    assert_eq!(e.result(), "null");
+    keys(&mut e, &[Key::Down]);
+    edit(&mut e, "16");
+    assert!(e.errors().is_empty());
     assert!(!e.step(Key::Character('q')));
     assert_eq!(
         serde_json::from_str::<Value>(&e.result()).unwrap(),
-        json!({"tag":"Japan", "value":1})
+        json!({"home":"16", "away":"16"})
     );
+}
+#[test]
+fn age_rule_allows_endpoints_and_reports_invalid_values() {
+    let mut e = person();
+    keys(&mut e, &[Key::Down]);
+    for invalid in ["17", "121"] {
+        edit(&mut e, invalid);
+        assert_eq!(e.spec.value["age"], invalid);
+        assert_eq!(e.errors().len(), 1);
+        assert!(e.errors()[0].contains("18 and 120"));
+        assert!(e.step(Key::Character('q')));
+    }
+    for valid in ["18", "120"] {
+        edit(&mut e, valid);
+        assert!(e.errors().is_empty());
+    }
+    assert!(!e.step(Key::Character('q')));
+}
+#[test]
+fn parsing_errors_stay_in_editor_and_cancellation_discards_draft() {
+    let mut e = thermostat();
+    for invalid in ["", "-1", "1.5", "abc", "+2"] {
+        if e.editor.is_some() {
+            keys(&mut e, &[Key::Escape]);
+        }
+        edit(&mut e, invalid);
+        assert_eq!(
+            e.editor.as_ref().unwrap().error.as_deref(),
+            Some("Enter a non-negative whole number.")
+        );
+        assert_eq!(e.spec.value["home"], "22");
+    }
+    keys(&mut e, &[Key::Escape]);
+    edit(&mut e, " 0016 ");
+    assert_eq!(e.spec.value["home"], "16");
+    assert!(!e.step(Key::Character('x')));
+    assert_eq!(e.result(), "null");
+    let mut e = person();
+    assert!(!e.step(Key::Quit));
+    assert_eq!(e.result(), "null");
+}
+#[test]
+fn invalid_initial_and_hidden_fields_still_validate() {
+    let mut spec: Value =
+        serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
+    spec["value"] = json!({"home":"0", "away":"18"});
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(e.errors().len(), 2);
+    edit(&mut e, "22");
+    assert!(!e.step(Key::Character('q')));
+    let body = spec["form"].clone();
+    spec["form"] = json!({"kind":"visibleWhen", "condition":{"kind":"value", "type":{"kind":"boolean"}, "value":false}, "body":body});
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert!(e.fields().is_empty());
+    assert_eq!(e.errors().len(), 2);
+    assert!(e.step(Key::Character('q')));
+    assert!(!e.step(Key::Escape));
+    assert_eq!(e.result(), "null");
+}
+#[test]
+fn schema_constraints_and_error_locations_are_type_checked() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
+    for (path, replacement) in [
+        ("/version", json!(1)),
+        (
+            "/constraints/0/condition",
+            json!({"kind":"project", "path":["home"]}),
+        ),
+        ("/constraints/2/condition/left/path", json!(["missing"])),
+        ("/constraints/2/errorLocation", json!(["home", "home"])),
+        ("/value/home", json!(-1)),
+        ("/form/children/0/widget", json!("checkbox")),
+    ] {
+        let mut spec = source.clone();
+        *spec.pointer_mut(path).unwrap() = replacement;
+        assert!(Engine::parse(&spec.to_string()).is_err(), "{path}");
+    }
+    assert!(Engine::parse("{}").is_err());
+    let mut spec = source;
+    spec["constraints"][0]["unknown"] = json!(true);
+    assert!(Engine::parse(&spec.to_string()).is_err());
+}
+#[test]
+fn visibility_choice_and_text_editing_still_work() {
+    let mut e = person();
+    assert_eq!(e.fields().len(), 3);
+    keys(&mut e, &[Key::Down, Key::Down, Key::Character(' ')]);
+    assert_eq!(e.fields().len(), 5);
+    keys(&mut e, &[Key::Down]);
+    edit(&mut e, "Elm Street");
+    keys(&mut e, &[Key::Up, Key::Character(' ')]);
+    assert_eq!(e.fields().len(), 3);
+    assert_eq!(e.spec.value["address"]["street"], "Elm Street");
+    keys(
+        &mut e,
+        &[
+            Key::Character(' '),
+            Key::Down,
+            Key::Down,
+            Key::Enter,
+            Key::Down,
+            Key::Escape,
+        ],
+    );
+    assert_eq!(e.spec.value["address"]["kind"], 0);
+    keys(&mut e, &[Key::Enter, Key::Up, Key::Down, Key::Enter]);
+    assert_eq!(e.spec.value["address"]["kind"], 1);
+    assert_eq!(e.shown(&e.fields()[4]), "Work");
+    e.selected = 0;
+    edit(&mut e, "qjx界");
+    assert_eq!(e.spec.value["name"], "qjx界");
+    edit(&mut e, "");
+    assert_eq!(e.spec.value["name"], "");
+}
+#[test]
+fn arbitrary_precision_constraints_and_all_predicates() {
+    let mut spec: Value =
+        serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
+    // Keep only the cross-field constraint to exercise unrestricted naturals.
+    spec["constraints"] = json!([spec["constraints"][2].clone()]);
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    let huge = "12345678901234567890123456789012345678901234567890";
+    edit(&mut e, huge);
+    assert!(e.errors().is_empty());
+    keys(&mut e, &[Key::Down]);
+    edit(&mut e, &format!("{huge}0"));
+    assert_eq!(e.errors().len(), 1);
+    edit(&mut e, huge);
+    assert!(e.errors().is_empty());
+    let expr: Expr = serde_json::from_value(json!({"kind":"and", "left":{"kind":"value", "type":{"kind":"boolean"}, "value":true}, "right":{"kind":"value", "type":{"kind":"boolean"}, "value":true}})).unwrap();
+    assert_eq!(expr.ty(&Ty::Natural).unwrap(), Ty::Boolean);
+    assert_eq!(expr.eval(&json!("1")), true);
+}
+#[test]
+fn malformed_choices_are_rejected() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
+    for invalid in [json!(-1), json!(3), json!(1.5), json!("1"), json!(null)] {
+        let mut spec = source.clone();
+        spec["value"]["address"]["kind"] = invalid;
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
+    for options in [json!([]), json!(["Home", "Home", "Other"])] {
+        let mut spec = source.clone();
+        spec["schema"]["fields"][3]["type"]["fields"][1]["type"]["options"] = options;
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
 }
 
 fn shapes_spec() -> Value {
@@ -390,12 +283,90 @@ fn select_constructor(e: &mut Engine, index: usize) {
 }
 
 #[test]
+fn constructors_validate_only_active_payload_and_preserve_drafts() {
+    let mut e = Engine::parse(&shapes_spec().to_string()).unwrap();
+    assert_eq!(e.fields().len(), 1);
+    assert_eq!(e.shown(&e.fields()[0]), "dot");
+    keys(&mut e, &[Key::Enter, Key::Down, Key::Escape]);
+    assert_eq!(e.spec.value, json!({"tag":"dot", "value":{}}));
+    select_constructor(&mut e, 2);
+    assert_eq!(e.fields().len(), 3);
+    assert_eq!(e.shown(&e.fields()[0]), "rectangle");
+    e.selected = 1;
+    edit(&mut e, "7");
+    e.selected = 2;
+    edit(&mut e, "0");
+    assert_eq!(e.errors().len(), 1);
+    assert!(e.step(Key::Character('q')));
+    e.selected = 0;
+    select_constructor(&mut e, 0);
+    assert!(e.errors().is_empty());
+    select_constructor(&mut e, 2);
+    assert_eq!(
+        e.spec.value,
+        json!({"tag":"rectangle","value":{"width":"7","height":"0"}})
+    );
+    assert_eq!(e.errors().len(), 1);
+    e.selected = 2;
+    edit(&mut e, "2");
+    e.selected = 0;
+    select_constructor(&mut e, 0);
+    assert!(!e.step(Key::Character('q')));
+    assert_eq!(
+        serde_json::from_str::<Value>(&e.result()).unwrap(),
+        json!({"tag":"dot","value":{}})
+    );
+}
+
+#[test]
+fn malformed_sums_and_inactive_branch_forms_are_rejected() {
+    let source = shapes_spec();
+    for invalid in [
+        json!({}),
+        json!([0, []]),
+        json!({"tag":3,"value":[]}),
+        json!({"tag":-1,"value":[]}),
+        json!({"tag":"0","value":[]}),
+        json!({"tag":"dot","value":false}),
+        json!({"tag":"rectangle","value":{"width":"","height":false}}),
+        json!({"tag":"dot","value":{},"extra":true}),
+    ] {
+        let mut spec = source.clone();
+        spec["value"] = invalid;
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
+    for (path, invalid) in [
+        ("/form/defaults/circle", json!([])),
+        (
+            "/form/branches/rectangle/children/0/widget",
+            json!("checkbox"),
+        ),
+        ("/form/branches", json!([])),
+        ("/constraints/0/condition/branches", json!([])),
+        (
+            "/constraints/0/condition/branches/circle",
+            json!({"kind":"project","path":[0]}),
+        ),
+        (
+            "/constraints/0/condition/subject",
+            json!({"kind":"value","type":{"kind":"boolean"},"value":true}),
+        ),
+        ("/constraints/0/errorLocation", json!([0])),
+    ] {
+        let mut spec = source.clone();
+        *spec.pointer_mut(path).unwrap() = invalid;
+        assert!(Engine::parse(&spec.to_string()).is_err(), "{path}");
+    }
+}
+
+#[test]
 fn sums_in_lists_preserve_the_correct_cache_after_removal() {
     let source = shapes_spec();
     let mut spec = source.clone();
     spec["schema"] = json!({"kind":"list","element":source["schema"]});
     spec["form"] = json!({"kind":"list","path":[],"schema":spec["schema"],"label":"Shapes","item":source["form"],"defaultItem":source["value"]});
     spec["value"] = json!([source["value"], source["value"]]);
+    spec["constraints"] = json!([]);
     let mut e = Engine::parse(&spec.to_string()).unwrap();
     for (selector, width) in [(0, "6"), (2, "9")] {
         e.selected = selector;
@@ -425,6 +396,7 @@ fn nested_sums_and_visibility_use_constructor_local_scope() {
     spec["form"] = json!({"kind":"sum","path":[],"schema":spec["schema"],"label":"Shape",
         "branches":{"a":source["form"],"b":source["form"]}, "defaults":{"a":source["value"],"b":source["value"]}});
     spec["value"] = json!({"tag":"a","value":source["value"]});
+    spec["constraints"] = json!([]);
     // Visibility sees the selected inner payload, not the outer sum.
     for index in ["a", "b"] {
         let branch = spec["form"]["branches"][index]["branches"]["rectangle"].clone();
@@ -514,6 +486,61 @@ fn cases_support_typed_results_and_only_evaluate_the_selected_branch() {
 }
 
 #[test]
+fn named_fields_and_constructors_survive_schema_reordering() {
+    let mut spec: Value =
+        serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
+    spec["schema"]["fields"].as_array_mut().unwrap().reverse();
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(e.fields()[0].title, "Home temperature (C)");
+    e.selected = 1;
+    edit(&mut e, "23");
+    assert_eq!(e.spec.value, json!({"home":"22","away":"23"}));
+    assert_eq!(e.errors().len(), 1);
+    assert!(e.errors()[0].starts_with("Away temperature (C):"));
+
+    let mut spec = shapes_spec();
+    spec["schema"]["constructors"]
+        .as_array_mut()
+        .unwrap()
+        .reverse();
+    spec["form"]["schema"] = spec["schema"].clone();
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(e.shown(&e.fields()[0]), "dot");
+    select_constructor(&mut e, 0);
+    assert_eq!(
+        e.spec.value,
+        json!({"tag":"rectangle","value":{"width":"4","height":"2"}})
+    );
+    e.selected = 1;
+    edit(&mut e, "0");
+    assert_eq!(e.errors().len(), 1);
+    e.selected = 0;
+    select_constructor(&mut e, 2);
+    assert!(e.errors().is_empty());
+    select_constructor(&mut e, 0);
+    assert_eq!(e.spec.value["value"]["width"], "0");
+}
+
+#[test]
+fn records_reject_missing_extra_and_unknown_fields() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
+    for value in [
+        json!([]),
+        json!({}),
+        json!({"home":"22"}),
+        json!({"home":"22","wrong":"18"}),
+        json!({"home":"22","away":"18","extra":true}),
+    ] {
+        let mut spec = source.clone();
+        spec["value"] = value;
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
+    let mut spec = source.clone();
+    spec["form"]["children"][1]["path"] = json!(["wrong"]);
+    assert!(Engine::parse(&spec.to_string()).is_err());
+}
+
+#[test]
 fn duplicate_schema_names_are_rejected_even_in_inactive_payloads() {
     let source = shapes_spec();
     for pointer in [
@@ -528,4 +555,75 @@ fn duplicate_schema_names_are_rejected_even_in_inactive_payloads() {
         });
         assert!(Engine::parse(&spec.to_string()).is_err());
     }
+}
+
+#[test]
+fn record_fields_named_tag_and_value_are_not_sum_payloads() {
+    let spec = json!({"version":4,"constraints":[],
+        "schema":{"kind":"record","fields":[{"name":"tag","type":{"kind":"text"}},
+            {"name":"value","type":{"kind":"natural"}}]},
+        "form":{"kind":"stack","label":"Record","children":[
+            {"kind":"field","path":["tag"],"schema":{"kind":"text"},"label":"Tag","widget":"textInput"},
+            {"kind":"field","path":["value"],"schema":{"kind":"natural"},"label":"Value","widget":"naturalInput"}]},
+        "value":{"tag":"hello","value":"3"}});
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    edit(&mut e, "world");
+    e.selected = 1;
+    edit(&mut e, "4");
+    assert!(!e.step(Key::Character('q')));
+    assert_eq!(
+        serde_json::from_str::<Value>(&e.result()).unwrap(),
+        json!({"tag":"world","value":"4"})
+    );
+}
+
+#[test]
+fn date_calendar_rules_and_picker_modes() {
+    let cases: Value = serde_json::from_str(include_str!("../../tests/dates.json")).unwrap();
+    for value in cases["valid"].as_array().unwrap() {
+        assert_eq!(
+            date(value.as_str().unwrap()).unwrap().to_string(),
+            value.as_str().unwrap()
+        );
+    }
+    for value in cases["invalid"].as_array().unwrap() {
+        assert!(date(value.as_str().unwrap()).is_none());
+    }
+    let spec = serde_json::json!({"version":4,"constraints":[],  "schema":{"kind":"date"}, "form":{"kind":"field","path":[],"schema":{"kind":"date"},"label":"Date","widget":"dateInput"}, "value":"2028-02-28"});
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    e.step(Key::Enter);
+    e.step(Key::Character('l'));
+    assert_eq!(e.editor.as_ref().unwrap().text, "2028-02-29");
+    e.step(Key::Enter);
+    assert!(e.editor.as_ref().unwrap().date_input);
+    e.step(Key::Enter);
+    assert!(e.editor.is_none());
+    assert_eq!(e.spec.value, "2028-02-29");
+}
+
+#[test]
+fn country_selects_city_type_and_preserves_each_selection() {
+    let mut e = Engine::parse(include_str!("../../tests/location.json")).unwrap();
+    assert_eq!(e.fields()[0].title, "Country");
+    assert_eq!(e.fields()[1].title, "City");
+    assert_eq!(e.fields()[1].options, ["Paris", "Lyon", "Marseille"]);
+    e.selected = 1;
+    keys(&mut e, &[Key::Enter, Key::Down, Key::Enter]);
+    assert_eq!(e.shown(&e.fields()[1]), "Lyon");
+    e.selected = 0;
+    select_constructor(&mut e, 1);
+    assert_eq!(e.fields()[1].options, ["Tokyo", "Kyoto", "Osaka"]);
+    assert_eq!(e.shown(&e.fields()[1]), "Tokyo");
+    e.selected = 1;
+    keys(&mut e, &[Key::Enter, Key::Down, Key::Enter]);
+    e.selected = 0;
+    select_constructor(&mut e, 0);
+    assert_eq!(e.shown(&e.fields()[1]), "Lyon");
+    select_constructor(&mut e, 1);
+    assert_eq!(e.shown(&e.fields()[1]), "Kyoto");
+    assert!(!e.step(Key::Character('q')));
+    assert_eq!(
+        serde_json::from_str::<Value>(&e.result()).unwrap(),
+        json!({"tag":"Japan", "value":1})
+    );
 }

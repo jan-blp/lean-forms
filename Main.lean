@@ -1,8 +1,10 @@
-import Forms.ExampleForms.Shapes
 import Forms.ExampleForms.Location
+import Forms.ExampleForms.Booking
+import Forms.ExampleForms.Shapes
 import Forms.Runtime.Cli
 import Forms.ExampleForms.Invoice
 import Forms.ExampleForms.Person
+import Forms.ExampleForms.Thermostat
 import Forms.Runtime.NativeTerminal
 import Forms.Runtime.Tui
 
@@ -25,18 +27,24 @@ private def valueToJson {t : DataType} (value : ⟦t⟧) : Lean.Json :=
       (fieldNames.label i, valueToJson (t := fieldTypes i) (value i)))
 
 def runForm (theme : NativeTerminal.Theme)
-    {context : DataType} (form : Component context) (initial : ⟦context⟧) : IO Unit := do
+  {context : DataType} (refined : RefinedDataType context) (form : Component context) (initial : RefinedDataType.ValidatedValue refined)
+  : IO Unit := do
   let _ : MonadTui IO := NativeTerminal.interpreter theme
-  let value ← Tui.run form initial
-  IO.println "\n  Final values\n  ------------"
-  IO.println (Lean.Json.pretty (valueToJson value))
+  let result ← Tui.run refined form (RefinedDataType.erase refined initial)
+  match result with
+  | none => IO.println "\nCancelled."
+  | some value =>
+    IO.println "\n  Final values\n  ------------"
+    IO.println (Lean.Json.pretty (valueToJson (RefinedDataType.erase refined value)))
 
 private def cli : Cli NativeTerminal.Theme where
   examples := [
-    ("person", fun theme => runForm theme Person.form Person.initial),
-    ("shapes", fun theme => runForm theme Shapes.form Shapes.initial),
-    ("location", fun theme => runForm theme Location.form Location.initial),
-    ("invoice", fun theme => runForm theme Invoice.form Invoice.initial)]
+    ("person", fun theme => runForm theme Person.personType Person.form Person.initial),
+    ("location", fun theme => runForm theme Location.locationType Location.form Location.initial),
+    ("shapes", fun theme => runForm theme Shapes.shapeType Shapes.form Shapes.initial),
+    ("booking", fun theme => runForm theme Booking.bookingType Booking.form Booking.initial),
+    ("invoice", fun theme => runForm theme Invoice.invoiceType Invoice.form Invoice.initial),
+    ("thermostat", fun theme => runForm theme Thermostat.thermostatType Thermostat.form Thermostat.initial)]
   options := [("--theme", NativeTerminal.Theme.choices)]
   initial := .frappe
 

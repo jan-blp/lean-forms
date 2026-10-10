@@ -162,8 +162,18 @@ pub enum Component {
 }
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct Constraint {
+    condition: Expr,
+    #[serde(rename = "errorMessage")]
+    error_message: String,
+    #[serde(rename = "errorLocation")]
+    error_location: Option<Vec<Step>>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Specification {
     version: u32,
+    constraints: Vec<Constraint>,
     schema: Ty,
     form: Component,
     value: Value,
@@ -670,6 +680,7 @@ pub struct Editor {
 }
 pub struct Engine {
     spec: Specification,
+    submitted: bool,
     constructor_drafts: std::collections::HashMap<(Vec<Step>, String), Value>,
     pub selected: usize,
     pub editor: Option<Editor>,
@@ -698,15 +709,61 @@ impl Engine {
         spec.schema.validate()?;
         validate_value(&spec.schema, &spec.value)?;
         spec.form.validate(&spec.schema, &spec.schema)?;
+        for constraint in &spec.constraints {
+            if constraint.condition.ty(&spec.schema)? != Ty::Boolean {
+                return Err("Validation constraint requires a boolean".into());
+            }
+            if let Some(path) = &constraint.error_location {
+                Expr::Project { path: path.clone() }.ty(&spec.schema)?;
+            }
+        }
         Ok(Self {
             spec,
+            submitted: false,
             constructor_drafts: std::collections::HashMap::new(),
             selected: 0,
             editor: None,
         })
     }
     pub fn result(&self) -> String {
-        self.spec.value.to_string()
+        if self.submitted {
+            self.spec.value.to_string()
+        } else {
+            "null".into()
+        }
+    }
+    pub fn errors(&self) -> Vec<String> {
+        let fields = self.fields();
+        self.spec
+            .constraints
+            .iter()
+            .filter(|constraint| {
+                !constraint
+                    .condition
+                    .eval(&self.spec.value)
+                    .as_bool()
+                    .unwrap()
+            })
+            .map(|constraint| {
+                match constraint
+                    .error_location
+                    .as_ref()
+                    .and_then(|path| fields.iter().find(|field| &field.path == path))
+                {
+                    Some(field) if matches!(field.widget, Widget::Add) => format!(
+                        "{}: {}",
+                        field.label.trim_end_matches(".Add item"),
+                        constraint.error_message
+                    ),
+                    Some(field) => format!(
+                        "{}: {}",
+                        field.label.rsplit('.').next().unwrap(),
+                        constraint.error_message
+                    ),
+                    None => constraint.error_message.clone(),
+                }
+            })
+            .collect()
     }
     pub fn fields(&self) -> Vec<Field> {
         let mut out = Vec::new();
@@ -718,6 +775,18 @@ impl Engine {
             vec![],
             &mut out,
         );
+        for field in &mut out {
+            if field.presentation.constructor {
+                field.presentation.invalid = self.spec.constraints.iter().any(|constraint| {
+                    constraint.error_location.as_ref() == Some(&field.path)
+                        && !constraint
+                            .condition
+                            .eval(&self.spec.value)
+                            .as_bool()
+                            .unwrap()
+                });
+            }
+        }
         out
     }
     pub fn shown(&self, field: &Field) -> String {
@@ -876,7 +945,13 @@ impl Engine {
             }
         } else {
             match key {
-                Key::Escape | Key::Character('q') => return false,
+                Key::Escape | Key::Character('x') => return false,
+                Key::Character('q') => {
+                    if self.errors().is_empty() {
+                        self.submitted = true;
+                        return false;
+                    }
+                }
                 Key::Up | Key::Character('k') => self.selected = self.selected.saturating_sub(1),
                 Key::Down | Key::Character('j') => {
                     self.selected = (self.selected + 1).min(fields.len().saturating_sub(1))

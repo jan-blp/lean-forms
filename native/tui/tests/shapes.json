@@ -1,4 +1,142 @@
 {
+  "constraints": [
+    {
+      "condition": {
+        "branches": {
+          "circle": {
+            "kind": "natLe",
+            "left": {
+              "kind": "value",
+              "type": {
+                "kind": "natural"
+              },
+              "value": "1"
+            },
+            "right": {
+              "kind": "project",
+              "path": []
+            }
+          },
+          "dot": {
+            "kind": "value",
+            "type": {
+              "kind": "boolean"
+            },
+            "value": true
+          },
+          "rectangle": {
+            "kind": "value",
+            "type": {
+              "kind": "boolean"
+            },
+            "value": true
+          }
+        },
+        "kind": "cases",
+        "subject": {
+          "kind": "project",
+          "path": []
+        },
+        "type": {
+          "kind": "boolean"
+        }
+      },
+      "errorLocation": [],
+      "errorMessage": "Size must be at least 1."
+    },
+    {
+      "condition": {
+        "branches": {
+          "circle": {
+            "kind": "value",
+            "type": {
+              "kind": "boolean"
+            },
+            "value": true
+          },
+          "dot": {
+            "kind": "value",
+            "type": {
+              "kind": "boolean"
+            },
+            "value": true
+          },
+          "rectangle": {
+            "kind": "natLe",
+            "left": {
+              "kind": "value",
+              "type": {
+                "kind": "natural"
+              },
+              "value": "1"
+            },
+            "right": {
+              "kind": "project",
+              "path": [
+                "width"
+              ]
+            }
+          }
+        },
+        "kind": "cases",
+        "subject": {
+          "kind": "project",
+          "path": []
+        },
+        "type": {
+          "kind": "boolean"
+        }
+      },
+      "errorLocation": [],
+      "errorMessage": "Size must be at least 1."
+    },
+    {
+      "condition": {
+        "branches": {
+          "circle": {
+            "kind": "value",
+            "type": {
+              "kind": "boolean"
+            },
+            "value": true
+          },
+          "dot": {
+            "kind": "value",
+            "type": {
+              "kind": "boolean"
+            },
+            "value": true
+          },
+          "rectangle": {
+            "kind": "natLe",
+            "left": {
+              "kind": "value",
+              "type": {
+                "kind": "natural"
+              },
+              "value": "1"
+            },
+            "right": {
+              "kind": "project",
+              "path": [
+                "height"
+              ]
+            }
+          }
+        },
+        "kind": "cases",
+        "subject": {
+          "kind": "project",
+          "path": []
+        },
+        "type": {
+          "kind": "boolean"
+        }
+      },
+      "errorLocation": [],
+      "errorMessage": "Size must be at least 1."
+    }
+  ],
   "form": {
     "branches": {
       "circle": {

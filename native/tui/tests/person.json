@@ -1,7 +1,50 @@
 {
+  "constraints": [
+    {
+      "condition": {
+        "kind": "and",
+        "left": {
+          "kind": "natLe",
+          "left": {
+            "kind": "value",
+            "type": {
+              "kind": "natural"
+            },
+            "value": "18"
+          },
+          "right": {
+            "kind": "project",
+            "path": [
+              "age"
+            ]
+          }
+        },
+        "right": {
+          "kind": "natLe",
+          "left": {
+            "kind": "project",
+            "path": [
+              "age"
+            ]
+          },
+          "right": {
+            "kind": "value",
+            "type": {
+              "kind": "natural"
+            },
+            "value": "120"
+          }
+        }
+      },
+      "errorLocation": [
+        "age"
+      ],
+      "errorMessage": "Attendees must be between 18 and 120 years old."
+    }
+  ],
   "form": {
     "kind": "stack",
-    "label": "Person",
+    "label": "Registration",
     "children": [
       {
         "kind": "field",
@@ -12,6 +55,17 @@
         ],
         "schema": {
           "kind": "text"
+        }
+      },
+      {
+        "kind": "field",
+        "label": "Age (18-120)",
+        "widget": "naturalInput",
+        "path": [
+          "age"
+        ],
+        "schema": {
+          "kind": "natural"
         }
       },
       {
@@ -40,18 +94,6 @@
               ],
               "schema": {
                 "kind": "text"
-              }
-            },
-            {
-              "kind": "field",
-              "label": "Number",
-              "widget": "naturalInput",
-              "path": [
-                "address",
-                "number"
-              ],
-              "schema": {
-                "kind": "natural"
               }
             },
             {
@@ -92,6 +134,12 @@
         }
       },
       {
+        "name": "age",
+        "type": {
+          "kind": "natural"
+        }
+      },
+      {
         "name": "subscribed",
         "type": {
           "kind": "boolean"
@@ -105,12 +153,6 @@
               "name": "street",
               "type": {
                 "kind": "text"
-              }
-            },
-            {
-              "name": "number",
-              "type": {
-                "kind": "natural"
               }
             },
             {
@@ -134,9 +176,9 @@
   "value": {
     "address": {
       "kind": 0,
-      "number": "12",
       "street": "Lambda Lane"
     },
+    "age": "28",
     "name": "Ada",
     "subscribed": false
   },

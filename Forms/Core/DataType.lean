@@ -38,7 +38,7 @@ abbrev DataType.denote (t : DataType) : Type :=
   | .natural => Nat
   | .date => Date
   | .enum domain => domain
-  | .list element => List element.denote
+  | .list element => List (DataType.denote element)
   | .record fieldNames fieldTypes => (i : fieldNames) → DataType.denote (fieldTypes i)
   | .sum _ constructors => SumValue (fun i => DataType.denote (constructors i))
 
@@ -46,7 +46,7 @@ scoped notation "⟦" t "⟧" => DataType.denote t
 
 section Theorems
 
-theorem Enum.options_nodup (domain : Enum) : domain.options.Nodup :=
+theorem Enum.options_nodup (domain : Enum) : (Enum.options domain).Nodup :=
   List.Nodup.map domain.label_injective (FinEnum.nodup_toList (α := domain))
 
 end Theorems

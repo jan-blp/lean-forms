@@ -1,4 +1,5 @@
 import Forms.Core.Component.Builder
+import Forms.Core.RefinedDataType
 
 namespace Forms.ExampleForms.Location
 open Composition
@@ -66,7 +67,10 @@ abbrev constructors : countries → DataType
 
 abbrev location : DataType := .sum countries constructors
 
-def initial : ⟦location⟧ := ⟨.france, .paris⟩
+def locationType : RefinedDataType location := .sum (fun _ => .base _)
+
+def initial : RefinedDataType.ValidatedValue locationType := ⟨.france, .paris⟩
+def draft : ⟦location⟧ := RefinedDataType.erase locationType initial
 
 def form : Component location :=
   (show Component.Builder location location from

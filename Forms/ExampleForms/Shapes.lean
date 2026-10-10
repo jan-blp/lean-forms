@@ -1,4 +1,5 @@
 import Forms.Core.Component.Builder
+import Forms.Core.RefinedDataType
 
 namespace Forms.ExampleForms.Shapes
 open Composition
@@ -43,7 +44,21 @@ abbrev constructors : shapeTags → DataType
 
 abbrev shape : DataType := .sum shapeTags constructors
 
-def initial : ⟦shape⟧ := ⟨.circle, 3⟩
+def size : RefinedDataType .natural :=
+  let minimum : Nat := 1
+  .refine (.base .natural)
+    { condition := .natLe (.value minimum) (.project .self)
+      errorMessage := s!"Size must be at least {minimum}."
+      errorLocation := some ⟨.self⟩ }
+
+def shapeType : RefinedDataType shape :=
+  .sum fun
+    | .dot => .record (fun i => nomatch i)
+    | .circle => size
+    | .rectangle => .record (fun _ => size)
+
+def initial : RefinedDataType.ValidatedValue shapeType := ⟨.circle, ⟨(3 : Nat), by decide⟩⟩
+def draft : ⟦shape⟧ := RefinedDataType.erase shapeType initial
 
 def form : Component shape :=
   (show Component.Builder shape shape from

@@ -1,4 +1,5 @@
 import Forms.Core.Component.Builder
+import Forms.Core.RefinedDataType
 
 namespace Forms.ExampleForms.Invoice
 open Composition
@@ -22,12 +23,26 @@ abbrev item : DataType := .record itemFields fun
   | .quantity | .unitPrice => .natural
 abbrev invoice : DataType := .list item
 
-def newItem : ⟦item⟧
-  | .description => "New item"
-  | .quantity => 1
-  | .unitPrice => 100
+def positive : RefinedDataType .natural :=
+  .refine (.base .natural)
+    { condition := .natLe (.value 1) (.project .self)
+      errorMessage := "Quantity and unit price must be at least 1."
+      errorLocation := some ⟨.self⟩ }
 
-def initial : ⟦invoice⟧ := [newItem]
+def itemType : RefinedDataType item :=
+  .record fun
+    | .description => .base .text
+    | .quantity | .unitPrice => positive
+
+def invoiceType : RefinedDataType invoice := .list itemType
+
+def newItem : RefinedDataType.ValidatedValue itemType
+  | .description => "New item"
+  | .quantity => ⟨(1 : Nat), by decide⟩
+  | .unitPrice => ⟨(100 : Nat), by decide⟩
+
+def initial : RefinedDataType.ValidatedValue invoiceType := [newItem]
+def draft : ⟦invoice⟧ := RefinedDataType.erase invoiceType initial
 
 def itemForm : Component item :=
   (show Component.Builder item item from
@@ -38,6 +53,6 @@ def itemForm : Component item :=
 
 def form : Component invoice :=
   (show Component.Builder invoice invoice from
-    Component.Builder.list "Invoice" (fun _ => itemForm) newItem) .self
+    Component.Builder.list "Invoice" (fun _ => itemForm) (RefinedDataType.erase itemType newItem)) .self
 
 end Forms.ExampleForms.Invoice
