@@ -1,14 +1,16 @@
 import Forms.Runtime.Cli
+import Forms.ExampleForms.Invoice
 import Forms.ExampleForms.Person
 import Forms.Runtime.NativeTerminal
 import Forms.Runtime.Tui
 
 namespace Forms.Application
 
-open ExampleForms Forms.Runtime
+open ExampleForms Forms.Runtime Composition
 
-private def valueToJson {type : DataType} (value : ⟦type⟧) : Lean.Json :=
-  match type with
+private def valueToJson {t : DataType} (value : ⟦t⟧) : Lean.Json :=
+  match t with
+  | .list element => .arr ((value.map (valueToJson (t := element))).toArray)
   | .text => Lean.toJson value
   | .boolean => Lean.toJson value
   | .natural => Lean.toJson value
@@ -16,15 +18,19 @@ private def valueToJson {type : DataType} (value : ⟦type⟧) : Lean.Json :=
   | .enum domain => Lean.toJson (domain.label value)
   | .record fieldNames fieldTypes =>
     .mkObj ((FinEnum.toList fieldNames).map fun i =>
-      (fieldNames.label i, valueToJson (type := fieldTypes i) (value i)))
-private def runPerson (theme : NativeTerminal.Theme) : IO Unit := do
+      (fieldNames.label i, valueToJson (t := fieldTypes i) (value i)))
+
+def runForm (theme : NativeTerminal.Theme)
+    {context : DataType} (form : Component context) (initial : ⟦context⟧) : IO Unit := do
   let _ : MonadTui IO := NativeTerminal.interpreter theme
-  let value ← Tui.run Person.form Person.initial
+  let value ← Tui.run form initial
   IO.println "\n  Final values\n  ------------"
-  IO.println (Lean.Json.pretty (valueToJson (type := Person.person) value))
+  IO.println (Lean.Json.pretty (valueToJson value))
 
 private def cli : Cli NativeTerminal.Theme where
-  examples := [("person", runPerson)]
+  examples := [
+    ("person", fun theme => runForm theme Person.form Person.initial),
+    ("invoice", fun theme => runForm theme Invoice.form Invoice.initial)]
   options := [("--theme", NativeTerminal.Theme.choices)]
   initial := .frappe
 

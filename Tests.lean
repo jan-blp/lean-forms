@@ -1,5 +1,6 @@
 import Forms.Runtime.FormSnapshot
 import Mathlib.Data.Nat.Basic
+import Forms.ExampleForms.Invoice
 import Forms.ExampleForms.Person
 import Forms.Runtime.Tui
 
@@ -36,8 +37,8 @@ private def testLabeledFields : IO Unit := do
        ["Person", "Address", "Street"],
        ["Person", "Address", "Number"],
        ["Person", "Address", "Kind"]])
-  check "GeneratedPathsSelectMatchingFields"
-    (fields.map (·.indices) == [[0], [1], [2,0], [2,1], [2,2]])
+  check "GeneratedFieldIndices"
+    (fields.map (·.indices) == [[0], [1], [2, 0], [2, 1], [2, 2]])
 
 private def testPredicates : IO Unit := do
   let eligible : Expr ExampleForms.Person.person .boolean :=
@@ -52,7 +53,7 @@ private def testChoice : IO Unit := do
   for value in FinEnum.toList domain do
     check "ChoiceRoundTripPreservesEnumValue"
       (JsonProtocol.valueFromJson (.enum domain)
-        (JsonProtocol.valueToJson (type := .enum domain) value) == .ok value)
+        (JsonProtocol.valueToJson (t := .enum domain) value) == .ok value)
   check "ChoiceDisplaysEnumLabel" (domain.label .work == "Work")
   for json in [Lean.toJson (3 : Nat), Lean.toJson (-1 : Int), Lean.toJson "1", Lean.Json.null] do
     check "RejectsInvalidChoiceResult"
@@ -79,6 +80,27 @@ private def testGroups : IO Unit := do
     ((addressPath.trans numberPath).toList == ["address", "number"] &&
       (addressPath.trans numberPath).get ExampleForms.Person.initial == 12)
 
+private def testLists : IO Unit := do
+  let initial := ExampleForms.Invoice.initial
+  check "ListRoundTrip"
+    (match JsonProtocol.valueFromJson ExampleForms.Invoice.invoice (JsonProtocol.valueToJson initial) with
+    | .ok value => JsonProtocol.valueToJson value == JsonProtocol.valueToJson initial
+    | .error _ => false)
+  check "ListFieldIndices"
+    ((fieldRefs ExampleForms.Invoice.form initial).map (·.indices) == [[0, 0], [0, 1], [0, 2]])
+  check "EmptyListRoundTrip"
+    (JsonProtocol.valueFromJson (.list .natural) (.arr #[]) == .ok [])
+  check "ListRequiresArray"
+    (match JsonProtocol.valueFromJson (.list .natural) (Lean.toJson "bad") with
+    | .error _ => true
+    | .ok _ => false)
+  let allPositive : Expr (.list .natural) .boolean :=
+    .all (.project .self) (.natLe (.value 1) (.project .self))
+  check "AllListItems" (allPositive.eval [1, 2] && !(allPositive.eval [1, 0]))
+  let fixture ← IO.FS.readFile "native/tui/tests/invoice.json"
+  check "InvoiceFixtureMatchesLean"
+    ((Lean.Json.parse fixture).toOption == (Lean.Json.parse (JsonProtocol.encode ExampleForms.Invoice.form initial)).toOption)
+
 private def testDates : IO Unit := do
   let cases ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "native/tui/tests/dates.json"))
   let valid ← IO.ofExcept (cases.getObjValAs? (List String) "valid")
@@ -100,6 +122,7 @@ def main : IO Unit := do
   testPredicates
   testChoice
   testGroups
+  testLists
   let encoded := JsonProtocol.encode ExampleForms.Person.form ExampleForms.Person.initial
   let json ← IO.ofExcept (Lean.Json.parse encoded)
   let value ← IO.ofExcept (json.getObjVal? "value" >>= JsonProtocol.valueFromJson ExampleForms.Person.person)
@@ -108,7 +131,7 @@ def main : IO Unit := do
   check "RustFixtureMatchesLeanSpecification" ((Lean.Json.parse fixture).toOption == (Lean.Json.parse encoded).toOption)
   let huge := 12345678901234567890123456789012345678901234567890
   check "UnboundedNaturalRoundTrip"
-    (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (type := .natural) huge) == .ok huge)
+    (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (t := .natural) huge) == .ok huge)
   check "RejectsMalformedInterpreterResult"
     (match JsonProtocol.valueFromJson ExampleForms.Person.person (Lean.toJson "bad") with
       | .error _ => true

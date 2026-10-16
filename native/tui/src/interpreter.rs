@@ -12,6 +12,7 @@ pub enum Ty {
     Date,
     Enum { options: Vec<String> },
     Record { fields: Vec<NamedType> },
+    List { element: Box<Ty> },
 }
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -24,6 +25,8 @@ pub struct NamedType {
 #[serde(untagged)]
 pub enum Step {
     Field(String),
+    #[serde(skip)]
+    Item(usize),
 }
 fn matches_names<T>(values: &BTreeMap<String, T>, types: &[NamedType]) -> bool {
     values.len() == types.len() && types.iter().all(|ty| values.contains_key(&ty.name))
@@ -41,6 +44,7 @@ impl Ty {
                     field.ty.validate()?;
                 }
             }
+            Self::List { element } => element.validate()?,
             _ => {}
         }
         Ok(())
@@ -56,6 +60,10 @@ pub enum Expr {
     },
     Project {
         path: Vec<Step>,
+    },
+    All {
+        items: Box<Expr>,
+        predicate: Box<Expr>,
     },
     And {
         left: Box<Expr>,
@@ -78,10 +86,15 @@ pub enum Widget {
     NaturalInput,
     DateInput,
     Select,
+    #[serde(skip)]
+    Add,
+    #[serde(skip)]
+    Remove,
 }
 impl Widget {
     fn matches(self, ty: &Ty) -> bool {
         match self {
+            Self::Add | Self::Remove => false,
             Self::TextInput => *ty == Ty::Text,
             Self::Checkbox => *ty == Ty::Boolean,
             Self::DateInput => *ty == Ty::Date,
@@ -102,6 +115,14 @@ pub enum Component {
     Stack {
         label: Option<String>,
         children: Vec<Component>,
+    },
+    List {
+        path: Vec<Step>,
+        schema: Ty,
+        label: String,
+        item: Box<Component>,
+        #[serde(rename = "defaultItem")]
+        default_item: Value,
     },
     VisibleWhen {
         condition: Expr,
@@ -144,6 +165,9 @@ fn date(text: &str) -> Option<NaiveDate> {
 
 fn validate_value(ty: &Ty, value: &Value) -> Result<(), String> {
     let valid = match ty {
+        Ty::List { element } => value
+            .as_array()
+            .is_some_and(|items| items.iter().all(|v| validate_value(element, v).is_ok())),
         Ty::Text => value.is_string(),
         Ty::Boolean => value.is_boolean(),
         Ty::Date => value.as_str().and_then(date).is_some(),
@@ -191,6 +215,15 @@ impl Expr {
                 }
                 Ok(ty.clone())
             }
+            Self::All { items, predicate } => {
+                let Ty::List { element } = items.ty(input)? else {
+                    return Err("all requires a list".into());
+                };
+                if predicate.ty(&element)? != Ty::Boolean {
+                    return Err("all requires a boolean predicate".into());
+                }
+                Ok(Ty::Boolean)
+            }
             Self::And { left, right }
             | Self::NatLe { left, right }
             | Self::DateLe { left, right } => {
@@ -210,6 +243,14 @@ impl Expr {
         match self {
             Self::Value { value, .. } => value.clone(),
             Self::Project { path } => get(input, path).clone(),
+            Self::All { items, predicate } => Value::Bool(
+                items
+                    .eval(input)
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|v| predicate.eval(v).as_bool().unwrap()),
+            ),
             Self::And { left, right } => Value::Bool(
                 left.eval(input).as_bool().unwrap() && right.eval(input).as_bool().unwrap(),
             ),
@@ -229,6 +270,7 @@ fn get<'a>(mut value: &'a Value, path: &[Step]) -> &'a Value {
     for step in path {
         value = match step {
             Step::Field(name) => &value[name],
+            Step::Item(index) => &value[*index],
         };
     }
     value
@@ -237,6 +279,7 @@ fn set(value: &mut Value, path: &[Step], replacement: Value) {
     if let Some((first, rest)) = path.split_first() {
         let child = match first {
             Step::Field(name) => &mut value[name],
+            Step::Item(index) => &mut value[*index],
         };
         set(child, rest, replacement);
     } else {
@@ -266,6 +309,23 @@ impl Component {
                 }
                 Ok(())
             }
+            Self::List {
+                path,
+                schema,
+                item,
+                default_item,
+                ..
+            } => {
+                schema.validate()?;
+                if (Expr::Project { path: path.clone() }).ty(context)? != *schema {
+                    return Err("Component path and schema must agree".into());
+                }
+                let Ty::List { element } = schema else {
+                    return Err("List requires list schema".into());
+                };
+                validate_value(element, default_item)?;
+                item.validate(element, element)
+            }
             Self::VisibleWhen { condition, body } => {
                 if condition.ty(context)? != Ty::Boolean {
                     return Err("Condition requires boolean".into());
@@ -279,23 +339,90 @@ impl Component {
         ty: &Ty,
         value: &Value,
         path: Vec<Step>,
+        scope: &[Step],
         labels: Vec<String>,
         out: &mut Vec<Field>,
     ) {
         match self {
+            Self::List {
+                path: target,
+                schema: ty,
+                label,
+                item,
+                default_item,
+            } => {
+                let path: Vec<Step> = scope
+                    .iter()
+                    .cloned()
+                    .chain(target.iter().cloned())
+                    .collect();
+                let Ty::List { element } = ty else {
+                    unreachable!()
+                };
+                let mut labels = labels;
+                labels.push(label.clone());
+                for (index, _) in get(value, &path).as_array().unwrap().iter().enumerate() {
+                    let mut item_path = path.clone();
+                    item_path.push(Step::Item(index));
+                    let mut item_labels = labels.clone();
+                    item_labels.push(format!("Item {}", index + 1));
+                    item.fields(
+                        element,
+                        value,
+                        item_path.clone(),
+                        &item_path,
+                        item_labels.clone(),
+                        out,
+                    );
+                    let section = out
+                        .last()
+                        .filter(|field| field.path.starts_with(&item_path))
+                        .map(|field| field.section.clone())
+                        .unwrap_or_else(|| item_labels.join(" › "));
+                    out.push(Field {
+                        title: "− Remove item".into(),
+                        section,
+                        action: true,
+                        label: format!("{}.Remove", item_labels.join(".")),
+                        path: item_path,
+                        widget: Widget::Remove,
+                        options: vec![],
+                        default_item: None,
+                    });
+                }
+                out.push(Field {
+                    title: "+ Add item".into(),
+                    section: labels.join(" › "),
+                    action: true,
+                    label: format!("{}.Add item", labels.join(".")),
+                    path,
+                    widget: Widget::Add,
+                    options: vec![],
+                    default_item: Some(default_item.clone()),
+                });
+            }
             Self::Field {
                 path: target,
                 schema: ty,
                 label,
                 widget,
             } => {
-                let path: Vec<Step> = path.iter().cloned().chain(target.iter().cloned()).collect();
+                let path: Vec<Step> = scope
+                    .iter()
+                    .cloned()
+                    .chain(target.iter().cloned())
+                    .collect();
                 let mut labels = labels;
+                let section = labels.join(" › ");
                 labels.push(label.clone());
                 out.push(Field {
+                    title: label.clone(),
+                    section,
+                    action: false,
                     label: labels.join("."),
                     path,
                     widget: *widget,
+                    default_item: None,
                     options: match ty {
                         Ty::Enum { options } => options.clone(),
                         _ => vec![],
@@ -314,12 +441,12 @@ impl Component {
                     }
                 }
                 for child in children {
-                    child.fields(ty, value, path.clone(), labels.clone(), out);
+                    child.fields(ty, value, path.clone(), scope, labels.clone(), out);
                 }
             }
             Self::VisibleWhen { condition, body } => {
-                if condition.eval(value).as_bool().unwrap() {
-                    body.fields(ty, value, path, labels, out);
+                if condition.eval(get(value, scope)).as_bool().unwrap() {
+                    body.fields(ty, value, path, scope, labels, out);
                 }
             }
         }
@@ -327,9 +454,13 @@ impl Component {
 }
 pub struct Field {
     pub label: String,
+    pub title: String,
+    pub section: String,
+    pub action: bool,
     path: Vec<Step>,
     widget: Widget,
     options: Vec<String>,
+    default_item: Option<Value>,
 }
 pub struct Editor {
     pub calendar: Option<NaiveDate>,
@@ -383,6 +514,7 @@ impl Engine {
             &self.spec.schema,
             &self.spec.value,
             vec![],
+            &[],
             vec![],
             &mut out,
         );
@@ -391,6 +523,8 @@ impl Engine {
     pub fn shown(&self, field: &Field) -> String {
         let value = get(&self.spec.value, &field.path);
         match field.widget {
+            Widget::Add => "[+]".into(),
+            Widget::Remove => "[-]".into(),
             Widget::Checkbox => if value.as_bool().unwrap() {
                 "[x]"
             } else {
@@ -492,7 +626,10 @@ impl Engine {
                                     editor.text.trim_matches(|c: char| c.is_ascii_whitespace()),
                                 )
                                 .map(Value::String),
-                                Widget::Checkbox | Widget::Select => unreachable!(),
+                                Widget::Checkbox
+                                | Widget::Select
+                                | Widget::Add
+                                | Widget::Remove => unreachable!(),
                             };
                             if let Some(value) = parsed {
                                 set(&mut self.spec.value, &field.path, value);
@@ -522,6 +659,24 @@ impl Engine {
                 Key::Enter | Key::Character('i' | ' ') => {
                     if let Some(field) = fields.get(self.selected) {
                         match field.widget {
+                            Widget::Add => {
+                                let mut items = get(&self.spec.value, &field.path)
+                                    .as_array()
+                                    .unwrap()
+                                    .clone();
+                                items.push(field.default_item.clone().unwrap());
+                                set(&mut self.spec.value, &field.path, Value::Array(items));
+                            }
+                            Widget::Remove => {
+                                let (Step::Item(index), parent) = field.path.split_last().unwrap()
+                                else {
+                                    unreachable!()
+                                };
+                                let mut items =
+                                    get(&self.spec.value, parent).as_array().unwrap().clone();
+                                items.remove(*index);
+                                set(&mut self.spec.value, parent, Value::Array(items));
+                            }
                             Widget::Checkbox => {
                                 let value = !get(&self.spec.value, &field.path).as_bool().unwrap();
                                 set(&mut self.spec.value, &field.path, Value::Bool(value));

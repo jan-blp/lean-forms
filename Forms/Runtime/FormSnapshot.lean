@@ -45,6 +45,11 @@ def FormSnapshot.render {state : DataType} (component : Component state)
   match component with
   | .field path label widget =>
       .fields [{ content := .input widget, labels := [label], indices := pathIndices path }]
+  | .list path label item _ =>
+      .stack (((path.get value).zipIdx.map fun (entry, index) =>
+        mapFields (fun field => { field with
+          labels := label :: toString (index + 1) :: field.labels
+          indices := pathIndices path ++ (index :: field.indices) }) (render item entry)))
   | .visibleWhen condition body =>
       if condition.eval value then render body value else .stack []
   | .stack (items := items) label children =>

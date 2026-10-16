@@ -2,21 +2,26 @@ import Forms.Core.Path
 
 namespace Forms
 
-inductive Expr (input : DataType) : (result : DataType) → Type 1 where
-  | value {t : DataType} (v : ⟦t⟧) : Expr input t
-  | project {t : DataType} (p : Path input t) : Expr input t
-  | and (l r : Expr input .boolean) : Expr input .boolean
-  | dateLe (l r : Expr input .date) : Expr input .boolean
-  | natLe (l r : Expr input .natural) : Expr input .boolean
+inductive Expr : (input : DataType) → (result : DataType) → Type 1 where
+  | value {input result : DataType} (v : ⟦result⟧) : Expr input result
+  | project {input t : DataType} (p : Path input t) : Expr input t
+  | all {input element : DataType}
+      (items : Expr input (.list element))
+      (predicate : Expr element .boolean)
+      : Expr input .boolean
+  | and {input : DataType} (l r : Expr input .boolean) : Expr input .boolean
+  | dateLe {input : DataType} (l r : Expr input .date) : Expr input .boolean
+  | natLe {input : DataType} (l r : Expr input .natural) : Expr input .boolean
 
 def Expr.eval
-    {input type : DataType}
-    (expression : Expr input type)
+    {input t : DataType}
+    (expression : Expr input t)
     (value : ⟦input⟧)
-    : ⟦type⟧ :=
+    : ⟦t⟧ :=
   match expression with
   | .value constant => constant
   | .project path => Path.get path value
+  | .all items predicate => List.all (Expr.eval items value) (Expr.eval predicate)
   | .and left right => Expr.eval left value && Expr.eval right value
   | .dateLe left right => Expr.eval left value ≤ Expr.eval right value
   | .natLe left right => Expr.eval left value ≤ Expr.eval right value
