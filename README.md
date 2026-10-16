@@ -28,6 +28,16 @@ python3 tools/test_terminal.py
 Select a palette with `lake exe forms --theme latte`. Available themes: `frappe`
 (default), `macchiato`, `mocha`, `latte`, `ayu-light`, `ayu-dark`, and `nord`.
 
+## Lists
+
+Run `lake exe forms invoice` for repeatable invoice items. Use Add item and
+Remove item to change the list, and edit each item's description, quantity,
+and unit price. Quantities and prices are unrefined natural numbers at this stage.
+
+`DataType.list element` denotes `List element.denote`. `Form.list` supplies
+an item form and a default item, and each item's visibility predicates use that
+item as their local root. `Expr.all` evaluates a predicate over every list item.
+
 ## Example selection and completion
 
 Run an example by name: `lake exe forms person`. Omitting the name selects
