@@ -2,54 +2,46 @@ import Forms.Core.Expr
 
 namespace Forms
 
-inductive Widget : (type : DataType) → Type 1 where
+inductive Widget : (t : DataType) → Type 1 where
   | textInput : Widget .text
   | checkbox : Widget .boolean
   | naturalInput : Widget .natural
   | dateInput : Widget .date
   | select {domain : Enum} : Widget (.enum domain)
 
-inductive Form (root : DataType) : (type : DataType) → Type 1 where
-  | field
-      {t : DataType}
-      (label : String)
-      (widget : Widget t)
-      : Form root t
-  | group
-      {fieldNames : Enum} {fieldTypes : fieldNames → DataType}
-      (label : String)
-      (forms : (i : fieldNames) → Form root (fieldTypes i))
+inductive Form : (root : DataType) → (t : DataType) → Type 1 where
+  | field {root t : DataType}
+      (label : String) (widget : Widget t) : Form root t
+  | group {root : DataType} {fieldNames : Enum} {fieldTypes : fieldNames → DataType}
+      (label : String) (forms : (i : fieldNames) → Form root (fieldTypes i))
       : Form root (.record fieldNames fieldTypes)
-  | visibleWhen
-      {t : DataType}
-      (condition : Expr root .boolean)
-      (body : Form root t)
-      : Form root t
+  | list {root element : DataType}
+      (label : String) (item : Form element element) (defaultItem : element.denote)
+      : Form root (.list element)
+  | visibleWhen {root t : DataType}
+      (condition : Expr root .boolean) (body : Form root t) : Form root t
 
-structure FieldRef (root : DataType) where
-  type : DataType
-  path : Path root type
-  labels : Path.Labels path
-  widget : Widget type
+structure FieldRef where
+  {t : DataType}
+  widget : Widget t
+  labels : List String
+  indices : List Nat
 
-def Form.fieldRefs
-    {root type : DataType}
-    (form : Form root type)
-    (value : DataType.denote root)
-    : List (FieldRef type) :=
+def Form.fieldRefs {root t : DataType} (form : Form root t)
+    (value : root.denote) (localValue : t.denote) : List FieldRef :=
   match form with
-  | .field label widget =>
-    [{ type := type
-       path := .self
-       labels := label
-       widget := widget }]
+  | .field label widget => [{ widget, labels := [label], indices := [] }]
   | .group label children =>
     (FinEnum.toList _).flatMap fun fieldName =>
-      (Form.fieldRefs (children fieldName) value).map fun field =>
+      ((children fieldName).fieldRefs value (localValue fieldName)).map fun field =>
+        { field with labels := label :: field.labels, indices := (FinEnum.equiv fieldName).val :: field.indices }
+  | .list label item _ =>
+    (localValue.zipIdx).flatMap fun (entry, index) =>
+      (item.fieldRefs entry entry).map fun field =>
         { field with
-          path := .field fieldName field.path
-          labels := (label, field.labels) }
+          labels := label :: toString (index + 1) :: field.labels
+          indices := index :: field.indices }
   | .visibleWhen condition body =>
-    if Expr.eval condition value then Form.fieldRefs body value else []
+    if condition.eval value then body.fieldRefs value localValue else []
 
 end Forms
