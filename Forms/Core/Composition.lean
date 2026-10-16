@@ -15,6 +15,13 @@ inductive Component : (state : DataType) → Type 1 where
       (label : Option String := none)
       (children : items → Component state)
       : Component state
+  | list
+      {state element : DataType}
+      (path : Path state (.list element))
+      (label : String)
+      (item : Component element)
+      (defaultItem : ⟦element⟧)
+      : Component state
   | visibleWhen
       {state : DataType}
       (condition : Expr state .boolean)

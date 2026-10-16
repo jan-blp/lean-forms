@@ -1,0 +1,111 @@
+{
+  "form": {
+    "defaultItem": {
+      "description": "New item",
+      "quantity": "1",
+      "unitPrice": "100"
+    },
+    "item": {
+      "kind": "stack",
+      "label": "Item",
+      "children": [
+        {
+          "kind": "field",
+          "label": "Description",
+          "widget": "textInput",
+          "path": [
+            "description"
+          ],
+          "schema": {
+            "kind": "text"
+          }
+        },
+        {
+          "kind": "field",
+          "label": "Quantity",
+          "widget": "naturalInput",
+          "path": [
+            "quantity"
+          ],
+          "schema": {
+            "kind": "natural"
+          }
+        },
+        {
+          "kind": "field",
+          "label": "Unit price (cents)",
+          "widget": "naturalInput",
+          "path": [
+            "unitPrice"
+          ],
+          "schema": {
+            "kind": "natural"
+          }
+        }
+      ]
+    },
+    "kind": "list",
+    "label": "Invoice",
+    "path": [],
+    "schema": {
+      "element": {
+        "fields": [
+          {
+            "name": "description",
+            "type": {
+              "kind": "text"
+            }
+          },
+          {
+            "name": "quantity",
+            "type": {
+              "kind": "natural"
+            }
+          },
+          {
+            "name": "unitPrice",
+            "type": {
+              "kind": "natural"
+            }
+          }
+        ],
+        "kind": "record"
+      },
+      "kind": "list"
+    }
+  },
+  "schema": {
+    "element": {
+      "fields": [
+        {
+          "name": "description",
+          "type": {
+            "kind": "text"
+          }
+        },
+        {
+          "name": "quantity",
+          "type": {
+            "kind": "natural"
+          }
+        },
+        {
+          "name": "unitPrice",
+          "type": {
+            "kind": "natural"
+          }
+        }
+      ],
+      "kind": "record"
+    },
+    "kind": "list"
+  },
+  "value": [
+    {
+      "description": "New item",
+      "quantity": "1",
+      "unitPrice": "100"
+    }
+  ],
+  "version": 4
+}

@@ -16,11 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms'
 
 
-def session(keys, expected, interrupt=False, cancel=False, theme=None):
+def session(keys, expected, interrupt=False, cancel=False, theme=None, invoice=False):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 100, 0, 0))
     before = termios.tcgetattr(slave)
-    process = subprocess.Popen([str(BINARY), "person"] + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave)
+    process = subprocess.Popen([str(BINARY)] + (["--theme", theme] if theme else []) + (["invoice"] if invoice else []), stdin=slave, stdout=slave, stderr=slave)
     output = bytearray()
 
     def read_until(predicate):
@@ -37,13 +37,13 @@ def session(keys, expected, interrupt=False, cancel=False, theme=None):
                     break
 
     try:
-        read_until(lambda: b'Person.Name' in output)
+        read_until(lambda: (b'Description' if invoice else b'Name') in output)
         os.write(master, keys)
         if cancel:
             read_until(lambda: b'Other' in output)
             start = len(output)
             os.write(master, b'\x1b')
-            read_until(lambda: b'Enter edit' in output[start:])
+            read_until(lambda: b'q quit' in output[start:])
             os.write(master, b'q')
         if interrupt:
             read_until(lambda: 'Ω▏'.encode() in output)
@@ -56,7 +56,7 @@ def session(keys, expected, interrupt=False, cancel=False, theme=None):
         assert termios.tcgetattr(slave) == before, 'Terminal mode was not restored'
         assert b'\x1b[?1049l' in output, 'Alternate screen was not restored'
         tail = output.split(b'Final values', 1)[1]
-        result = json.loads(tail[tail.index(b'{'):].decode())
+        result = json.loads(tail[tail.index(b'[' if invoice else b'{'):].decode())
         assert result == expected, result
         return bytes(output)
     finally:
@@ -78,4 +78,7 @@ session(b'j jjj\rj\rkkk q', {'name': 'Ada', 'subscribed': False, 'address': {'st
 session(b'j jjj\rj', {**initial, 'subscribed': True}, cancel=True)
 result = subprocess.run([str(BINARY)], capture_output=True, text=True)
 assert result.returncode != 0 and 'interactive terminal' in result.stderr + result.stdout
+session(b'jjjj\r\r\x15Second\rq', [{'description': 'New item', 'quantity': 1, 'unitPrice': 100}, {'description': 'Second', 'quantity': 1, 'unitPrice': 100}], invoice=True)
+session(b'jjj\rq', [], invoice=True)
+session(b'j\r\x150\rq', [{'description': 'New item', 'quantity': 0, 'unitPrice': 100}], invoice=True)
 print('PASS: FFI editing, validation, visibility, typed result, interruption, and terminal restoration')

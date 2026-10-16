@@ -1,6 +1,9 @@
+import Forms.ExampleForms.Invoice
 import Forms.ExampleForms.Person
 import Forms.Runtime.JsonProtocol
 
-def main : IO Unit :=
-  IO.println (Forms.Runtime.JsonProtocol.encode
-    Forms.ExampleForms.Person.form Forms.ExampleForms.Person.initial)
+open Forms ExampleForms Forms.Runtime
+
+def main (args : List String) : IO Unit :=
+  IO.println (if args.contains "invoice" then JsonProtocol.encode Invoice.form Invoice.initial
+    else JsonProtocol.encode Person.form Person.initial)

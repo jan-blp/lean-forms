@@ -230,6 +230,96 @@ fn hidden_root_and_visibility_changed_by_edit() {
     );
     assert_eq!(e.result(), "false");
 }
+fn edit(engine: &mut Engine, input: &str) {
+    keys(engine, &[Key::Enter, Key::Clear]);
+    text(engine, input);
+    keys(engine, &[Key::Enter]);
+}
+#[test]
+fn repeated_items_add_remove_and_edit() {
+    let mut e = Engine::parse(include_str!("../../tests/invoice.json")).unwrap();
+    assert_eq!(e.fields().len(), 5);
+    e.selected = 4;
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(e.fields().len(), 9);
+    edit(&mut e, "Second");
+    e.selected = 5;
+    edit(&mut e, "0");
+    e.selected = 3;
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(
+        e.spec.value,
+        json!([{"description":"Second","quantity":"0","unitPrice":"100"}])
+    );
+    e.selected = 1;
+    edit(&mut e, "2");
+    e.selected = 3;
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(e.fields().len(), 1);
+    assert_eq!(e.spec.value, json!([]));
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(
+        e.spec.value,
+        json!([{"description":"New item","quantity":"1","unitPrice":"100"}])
+    );
+    assert!(!e.step(Key::Character('q')));
+}
+
+#[test]
+fn nested_lists_and_item_visibility_use_local_scope() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
+    let item = spec["form"]["item"].clone();
+    spec["form"]["item"] = json!({"kind":"visibleWhen", "condition":{
+        "kind":"natLe", "left":{"kind":"value", "type":{"kind":"natural"}, "value":"1"},
+        "right":{"kind":"project", "path":["quantity"]}}, "body":item});
+    let inner_schema = spec["schema"].clone();
+    let inner_form = spec["form"].clone();
+    let inner_value = spec["value"].clone();
+    spec["schema"] = json!({"kind":"list", "element":inner_schema});
+    spec["form"] = json!({"kind":"list","path":[],"schema":spec["schema"],"label":"Invoices", "item":inner_form, "defaultItem":[]});
+    spec["value"] = json!([inner_value]);
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(e.fields().len(), 7);
+    e.selected = 1;
+    edit(&mut e, "0");
+    assert_eq!(e.fields().len(), 4);
+    assert_eq!(e.fields()[0].path, vec![Step::Item(0), Step::Item(0)]);
+    e.selected = 3;
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(e.spec.value[1], json!([]));
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(
+        e.spec.value[1],
+        json!([{"description":"New item","quantity":"1","unitPrice":"100"}])
+    );
+}
+
+#[test]
+fn malformed_lists_and_defaults_are_rejected() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
+    for invalid in [json!(null), json!([1]), json!([["Name", "1"]])] {
+        let mut spec = source.clone();
+        spec["value"] = invalid;
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
+    let mut spec = source;
+    spec["form"]["defaultItem"] = json!(false);
+    assert!(Engine::parse(&spec.to_string()).is_err());
+}
+
+#[test]
+fn all_list_items_are_evaluated_in_element_scope() {
+    let expr: Expr = serde_json::from_value(json!({"kind":"all","items":{"kind":"project","path":[]},"predicate":{"kind":"natLe","left":{"kind":"value","type":{"kind":"natural"},"value":"1"},"right":{"kind":"project","path":[]}}})).unwrap();
+    assert_eq!(
+        expr.ty(&Ty::List {
+            element: Box::new(Ty::Natural)
+        })
+        .unwrap(),
+        Ty::Boolean
+    );
+    assert_eq!(expr.eval(&json!(["1", "2"])), true);
+    assert_eq!(expr.eval(&json!(["1", "0"])), false);
+}
 
 #[test]
 fn date_calendar_rules_and_picker_modes() {
@@ -253,4 +343,25 @@ fn date_calendar_rules_and_picker_modes() {
     e.step(Key::Enter);
     assert!(e.editor.is_none());
     assert_eq!(e.spec.value, "2028-02-29");
+}
+
+#[test]
+fn all_predicates_receive_the_outer_value_and_index() {
+    let expression: Expr = serde_json::from_value(json!({
+        "kind": "all", "context": [], "items": {"kind":"project","path":["items"]},
+        "predicate": {"kind":"and",
+            "left": {"kind":"natLe", "left":{"kind":"project","path":["item"]},
+                "right":{"kind":"project","path":["outer","limit"]}},
+            "right": {"kind":"natLe", "left":{"kind":"project","path":["index"]},
+                "right":{"kind":"project","path":["item"]}}}
+    })).unwrap();
+    let schema: Ty = serde_json::from_value(json!({"kind":"record", "fields":[
+        {"name":"limit","type":{"kind":"natural"}},
+        {"name":"items","type":{"kind":"list","element":{"kind":"natural"}}}
+    ]})).unwrap();
+    assert_eq!(expression.ty(&schema).unwrap(), Ty::Boolean);
+    assert_eq!(expression.eval(&json!({"limit":"5","items":["2","5"]})), true);
+    assert_eq!(expression.eval(&json!({"limit":"4","items":["2","5"]})), false);
+    assert_eq!(expression.eval(&json!({"limit":"5","items":["2","0"]})), false);
+    assert_eq!(expression.eval(&json!({"limit":"0","items":[]})), true);
 }

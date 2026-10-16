@@ -2,21 +2,60 @@ import Forms.Core.Path
 
 namespace Forms
 
-inductive Expr (input : DataType) : (result : DataType) → Type 1 where
-  | value {t : DataType} (v : ⟦t⟧) : Expr input t
-  | project {t : DataType} (p : Path input t) : Expr input t
-  | and (l r : Expr input .boolean) : Expr input .boolean
-  | dateLe (l r : Expr input .date) : Expr input .boolean
-  | natLe (l r : Expr input .natural) : Expr input .boolean
+namespace Validation
+
+inductive IterationField where
+  | outer
+  | item
+  | index
+  deriving DecidableEq
+
+instance : FinEnum IterationField :=
+  FinEnum.ofList [.outer, .item, .index] (by grind [IterationField])
+
+def iterationFields : Enum where
+  type := IterationField
+  label
+    | .outer => "outer"
+    | .item => "item"
+    | .index => "index"
+
+abbrev IterationContext (outer element : DataType) : DataType :=
+  .record iterationFields fun
+    | .outer => outer
+    | .item => element
+    | .index => .natural
+
+end Validation
+
+inductive Expr : (input : DataType) → (result : DataType) → Type 1 where
+  | value {input result : DataType} (v : ⟦result⟧) : Expr input result
+  | project {input t : DataType} (p : Path input t) : Expr input t
+  /-- Check every item with access to the enclosing value and its index.
+      `context` preserves the captured outer value when weakening. -/
+  | all {input outer element : DataType}
+      (items : Expr input (.list element))
+      (predicate : Expr (Validation.IterationContext outer element) .boolean)
+      (context : Path input outer := by exact .self)
+      : Expr input .boolean
+  | and {input : DataType} (l r : Expr input .boolean) : Expr input .boolean
+  | dateLe {input : DataType} (l r : Expr input .date) : Expr input .boolean
+  | natLe {input : DataType} (l r : Expr input .natural) : Expr input .boolean
 
 def Expr.eval
-    {input type : DataType}
-    (expression : Expr input type)
+    {input t : DataType}
+    (expression : Expr input t)
     (value : ⟦input⟧)
-    : ⟦type⟧ :=
+    : ⟦t⟧ :=
   match expression with
   | .value constant => constant
   | .project path => Path.get path value
+  | .all items predicate context =>
+    (Expr.eval items value).zipIdx.all fun (item, index) =>
+      Expr.eval predicate fun
+        | .outer => context.get value
+        | .item => item
+        | .index => index
   | .and left right => Expr.eval left value && Expr.eval right value
   | .dateLe left right => Expr.eval left value ≤ Expr.eval right value
   | .natLe left right => Expr.eval left value ≤ Expr.eval right value

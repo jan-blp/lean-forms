@@ -23,17 +23,26 @@ inductive DataType where
   | natural
   | date
   | enum (domain : Enum)
+  | list (element : DataType)
   | record (fieldNames : Enum) (fieldTypes : fieldNames → DataType)
 
-abbrev DataType.denote (type : DataType) : Type :=
-  match type with
+abbrev DataType.denote (t : DataType) : Type :=
+  match t with
   | .text => String
   | .boolean => Bool
   | .natural => Nat
   | .date => Date
   | .enum domain => domain
+  | .list element => List element.denote
   | .record fieldNames fieldTypes => (i : fieldNames) → DataType.denote (fieldTypes i)
 
 scoped notation "⟦" t "⟧" => DataType.denote t
+
+section Theorems
+
+theorem Enum.options_nodup (domain : Enum) : domain.options.Nodup :=
+  List.Nodup.map domain.label_injective (FinEnum.nodup_toList (α := domain))
+
+end Theorems
 
 end Forms
