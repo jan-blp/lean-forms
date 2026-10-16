@@ -18,14 +18,23 @@ inductive DataType where
   | boolean
   | natural
   | enum (domain : Enum)
+  | list (element : DataType)
   | record (fields : Enum) (children : fields.type → DataType)
 
-abbrev DataType.denote (type : DataType) : Type :=
-  match type with
+abbrev DataType.denote (t : DataType) : Type :=
+  match t with
   | .text => String
   | .boolean => Bool
   | .natural => Nat
   | .enum domain => domain.type
+  | .list element => List element.denote
   | .record fields children => (i : fields.type) → DataType.denote (children i)
+
+section Theorems
+
+theorem Enum.options_nodup (domain : Enum) : domain.options.Nodup :=
+  List.Nodup.map domain.label_injective (FinEnum.nodup_toList (α := domain.type))
+
+end Theorems
 
 end Forms
