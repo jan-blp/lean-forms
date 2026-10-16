@@ -7,7 +7,7 @@ structure Enum where
   type : Type
   [enum : FinEnum type]
   label : type → String
-  label_injective : Function.Injective label
+  label_injective : Function.Injective label := by grind [Function.Injective]
 
 attribute [instance] Enum.enum
 

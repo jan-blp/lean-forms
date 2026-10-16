@@ -3,10 +3,12 @@ import Forms.Core.Path
 namespace Forms
 
 inductive Expr : (root : DataType) → (result : DataType) → Type 1 where
-  | value {root t : DataType} (v : DataType.denote t) : Expr root t
+  | value {root result : DataType} (v : DataType.denote result) : Expr root result
   | project {root t : DataType} (p : Path root t) : Expr root t
-  | all {root element : DataType} (items : Expr root (.list element))
-      (predicate : Expr element .boolean) : Expr root .boolean
+  | all {root element : DataType}
+      (items : Expr root (.list element))
+      (predicate : Expr element .boolean)
+      : Expr root .boolean
   | and {root : DataType} (l r : Expr root .boolean) : Expr root .boolean
   | natLe {root : DataType} (l r : Expr root .natural) : Expr root .boolean
 
@@ -18,7 +20,7 @@ def Expr.eval
   match expression with
   | .value constant => constant
   | .project path => Path.get path value
-  | .all items predicate => (items.eval value).all predicate.eval
+  | .all items predicate => List.all (Expr.eval items value) (Expr.eval predicate)
   | .and left right => Expr.eval left value && Expr.eval right value
   | .natLe left right => decide (Expr.eval left value ≤ Expr.eval right value)
 

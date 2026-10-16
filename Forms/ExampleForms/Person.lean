@@ -18,8 +18,6 @@ def addressEnum : Enum where
     | .home => "Home"
     | .work => "Work"
     | .other => "Other"
-  label_injective := by
-    grind [Function.Injective, AddressKind]
 
 abbrev addressKind : DataType := .enum addressEnum
 
@@ -59,14 +57,15 @@ def initial : personType.denote
 
 def draft : DataType.denote shape := personType.erase initial
 
+open scoped Forms.DependentVec in
 open Form Widget Expr in
 def form : Form shape shape :=
-  group "Registration" fun
-    | 0 => field "Name" textInput
-    | 1 => field "Age (18-120)" naturalInput
-    | 2 => field "Subscribed" checkbox
-    | 3 => group "Address" fun
-      | 0 => visibleWhen (project subscribed) (field "Street" textInput)
-      | 1 => field "Kind" select
+  group "Registration" ![
+    field "Name" textInput,
+    field "Age (18-120)" naturalInput,
+    field "Subscribed" checkbox,
+    group "Address" ![
+      visibleWhen (project subscribed) (field "Street" textInput),
+      field "Kind" select]]
 
 end Forms.ExampleForms.Person

@@ -1,4 +1,5 @@
 import Forms.Core.Expr
+import Forms.Core.VecNotation
 
 namespace Forms
 

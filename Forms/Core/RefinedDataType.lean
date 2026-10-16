@@ -22,13 +22,18 @@ def Constraint.weaken (path : Path outer root) (constraint : Constraint root) : 
 
 end
 
-inductive RefinedDataType : DataType → Type 1 where
-  | list {element : DataType} (item : RefinedDataType element) : RefinedDataType (.list element)
+inductive RefinedDataType : (unrefined : DataType) → Type 1 where
   | base (t : DataType) : RefinedDataType t
+  | refine {t : DataType}
+      (refined : RefinedDataType t)
+      (constraint : Constraint t)
+      : RefinedDataType t
+  | list {element : DataType}
+      (item : RefinedDataType element)
+      : RefinedDataType (.list element)
   | tuple {n : Nat} {children : Fin n → DataType}
       (fields : (i : Fin n) → RefinedDataType (children i))
       : RefinedDataType (.tuple children)
-  | refine {t : DataType} (refined : RefinedDataType t) (constraint : Constraint t) : RefinedDataType t
 
 structure RefinedDataType.Denotation (t : DataType) where
   Value : Type
@@ -37,15 +42,19 @@ structure RefinedDataType.Denotation (t : DataType) where
 variable {t : DataType}
 
 @[reducible] def RefinedDataType.denotation {t} : RefinedDataType t → RefinedDataType.Denotation t
-  | .list item => ⟨List item.denotation.Value, List.map item.denotation.erase⟩
-  | .base t => ⟨DataType.denote t, id⟩
-  | .tuple fields =>
-    ⟨(i : Fin _) → (fields i).denotation.Value,
-      fun value i => (fields i).denotation.erase (value i)⟩
+  | .base t =>
+    { Value := DataType.denote t
+      erase := id }
   | .refine refined constraint =>
     let inner := refined.denotation
-    ⟨{ value : inner.Value // Expr.eval constraint.condition (inner.erase value) = true },
-      fun value => inner.erase value.val⟩
+    { Value := { value : inner.Value // Expr.eval constraint.condition (inner.erase value) = true }
+      erase := fun value => inner.erase value.val }
+  | .list item =>
+    { Value := List item.denotation.Value
+      erase := List.map item.denotation.erase }
+  | .tuple fields =>
+    { Value := (i : Fin _) → (fields i).denotation.Value
+      erase := fun value i => (fields i).denotation.erase (value i) }
 
 abbrev RefinedDataType.denote (refined : RefinedDataType t) : Type := refined.denotation.Value
 
