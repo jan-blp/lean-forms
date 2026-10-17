@@ -1,4 +1,5 @@
 use chrono::{Datelike, Days, Months, NaiveDate};
+use num_bigint::BigUint;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -89,6 +90,14 @@ pub enum Expr {
         subject: Box<Expr>,
         branches: BTreeMap<String, Expr>,
     },
+    Sum {
+        items: Box<Expr>,
+        expression: Box<Expr>,
+    },
+    NatMul {
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
     Not {
         operand: Box<Expr>,
     },
@@ -114,6 +123,8 @@ pub enum Widget {
     DateInput,
     Select,
     #[serde(skip)]
+    Computed,
+    #[serde(skip)]
     Add,
     #[serde(skip)]
     Constructor,
@@ -123,7 +134,7 @@ pub enum Widget {
 impl Widget {
     fn matches(self, ty: &Ty) -> bool {
         match self {
-            Self::Add | Self::Remove | Self::Constructor => false,
+            Self::Computed | Self::Add | Self::Remove | Self::Constructor => false,
             Self::TextInput => *ty == Ty::Text,
             Self::Checkbox => *ty == Ty::Boolean,
             Self::DateInput => *ty == Ty::Date,
@@ -163,6 +174,12 @@ pub enum Component {
     DisabledWhen {
         condition: Expr,
         body: Box<Component>,
+    },
+    Computed {
+        label: String,
+        #[serde(rename = "type")]
+        ty: Ty,
+        expression: Expr,
     },
     VisibleWhen {
         condition: Expr,
@@ -447,6 +464,44 @@ fn validate_value(ty: &Ty, value: &Value) -> Result<(), String> {
         Err(format!("Value does not match {ty:?}"))
     }
 }
+fn show_value(ty: &Ty, value: &Value) -> String {
+    match ty {
+        Ty::Text | Ty::Natural | Ty::Date => value.as_str().unwrap().to_owned(),
+        Ty::Boolean => value.as_bool().unwrap().to_string(),
+        Ty::Enum { options } => options[value.as_u64().unwrap() as usize].clone(),
+        Ty::List { element } => format!(
+            "[{}]",
+            value
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|item| show_value(element, item))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Ty::Record { fields } => format!(
+            "{{{}}}",
+            fields
+                .iter()
+                .map(|field| format!(
+                    "{}: {}",
+                    field.name,
+                    show_value(&field.ty, &value[&field.name])
+                ))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Ty::Sum { constructors } => {
+            let tag = value["tag"].as_str().unwrap();
+            let constructor = constructors
+                .iter()
+                .find(|constructor| constructor.name == tag)
+                .unwrap();
+            format!("{}: {}", tag, show_value(&constructor.ty, &value["value"]))
+        }
+    }
+}
+
 impl Expr {
     fn ty(&self, input: &Ty) -> Result<Ty, String> {
         match self {
@@ -507,6 +562,21 @@ impl Expr {
                 }
                 Ok(Ty::Boolean)
             }
+            Self::Sum { items, expression } => {
+                let Ty::List { element } = items.ty(input)? else {
+                    return Err("sum requires a list".into());
+                };
+                if expression.ty(&element)? != Ty::Natural {
+                    return Err("sum requires natural values".into());
+                }
+                Ok(Ty::Natural)
+            }
+            Self::NatMul { left, right } => {
+                if left.ty(input)? != Ty::Natural || right.ty(input)? != Ty::Natural {
+                    return Err("natMul requires natural operands".into());
+                }
+                Ok(Ty::Natural)
+            }
             Self::Not { operand } => {
                 if operand.ty(input)? != Ty::Boolean {
                     return Err("not requires boolean".into());
@@ -528,6 +598,11 @@ impl Expr {
             }
         }
     }
+    // Expression types and values are validated before evaluation.
+    fn eval_natural(&self, input: &Value) -> BigUint {
+        self.eval(input).as_str().unwrap().parse().unwrap()
+    }
+
     fn eval(&self, input: &Value) -> Value {
         match self {
             Self::TextAppend { left, right } => Value::String(format!("{}{}", left.eval(input).as_str().unwrap(), right.eval(input).as_str().unwrap())),
@@ -549,6 +624,19 @@ impl Expr {
                     .iter()
                     .all(|v| predicate.eval(v).as_bool().unwrap()),
             ),
+            Self::Sum { items, expression } => Value::String(
+                items
+                    .eval(input)
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|item| expression.eval_natural(item))
+                    .sum::<BigUint>()
+                    .to_string(),
+            ),
+            Self::NatMul { left, right } => {
+                Value::String((left.eval_natural(input) * right.eval_natural(input)).to_string())
+            }
             Self::Not { operand } => Value::Bool(!operand.eval(input).as_bool().unwrap()),
             Self::And { left, right } => Value::Bool(
                 left.eval(input).as_bool().unwrap() && right.eval(input).as_bool().unwrap(),
@@ -558,9 +646,7 @@ impl Expr {
                     <= date(right.eval(input).as_str().unwrap()).unwrap(),
             ),
             Self::NatLe { left, right } => {
-                let l = natural(left.eval(input).as_str().unwrap()).unwrap();
-                let r = natural(right.eval(input).as_str().unwrap()).unwrap();
-                Value::Bool((l.len(), &l) <= (r.len(), &r))
+                Value::Bool(left.eval_natural(input) <= right.eval_natural(input))
             }
         }
     }
@@ -664,6 +750,13 @@ impl Component {
                 }
                 body.validate(context, context)
             }
+            Self::Computed { ty, expression, .. } => {
+                ty.validate()?;
+                if expression.ty(context)? != *ty {
+                    return Err("Computed expression must match its result type".into());
+                }
+                Ok(())
+            }
         }
     }
     fn fields(
@@ -699,6 +792,7 @@ impl Component {
                 let mut labels = labels;
                 labels.push(label.clone());
                 out.push(Field {
+                    computed_value: None,
                     presentation: Presentation::default(),
                     title: label.clone(),
                     section: labels.join(" › "),
@@ -802,6 +896,7 @@ impl Component {
                         .map(|field| field.section.clone())
                         .unwrap_or_else(|| item_labels.join(" › "));
                     out.push(Field {
+                        computed_value: None,
                         presentation: Presentation::default(),
                         title: "− Remove item".into(),
                         section,
@@ -814,7 +909,11 @@ impl Component {
                     });
                 }
                 out.push(Field {
-                    presentation: Presentation::default(),
+                    computed_value: None,
+                    presentation: Presentation {
+                        add: true,
+                        ..Presentation::default()
+                    },
                     title: "+ Add item".into(),
                     section: labels.join(" › "),
                     action: true,
@@ -823,6 +922,30 @@ impl Component {
                     widget: Widget::Add,
                     options: vec![],
                     default_item: Some(default_item.clone()),
+                });
+            }
+            Self::Computed {
+                label,
+                ty: result,
+                expression,
+            } => {
+                let section = labels.join(" › ");
+                let mut labels = labels;
+                labels.push(label.clone());
+                out.push(Field {
+                    presentation: Presentation {
+                        computed: true,
+                        ..Presentation::default()
+                    },
+                    title: label.clone(),
+                    section,
+                    action: false,
+                    label: labels.join("."),
+                    path,
+                    widget: Widget::Computed,
+                    options: vec![],
+                    default_item: None,
+                    computed_value: Some(show_value(result, &expression.eval(get(value, scope)))),
                 });
             }
             Self::Field {
@@ -840,6 +963,7 @@ impl Component {
                 let section = labels.join(" › ");
                 labels.push(label.clone());
                 out.push(Field {
+                    computed_value: None,
                     presentation: Presentation::default(),
                     title: label.clone(),
                     section,
@@ -888,6 +1012,8 @@ impl Component {
 }
 #[derive(Clone, Copy, Default)]
 pub struct Presentation {
+    pub computed: bool,
+    pub add: bool,
     pub disabled: bool,
     pub constructor: bool,
     pub depth: usize,
@@ -905,6 +1031,7 @@ pub struct Field {
     widget: Widget,
     options: Vec<String>,
     default_item: Option<Value>,
+    computed_value: Option<String>,
 }
 pub struct Editor {
     pub calendar: Option<NaiveDate>,
@@ -967,7 +1094,7 @@ impl Engine {
             .iter()
             .map(|constraint| {
                 let labels: Vec<_> = constraint.locations.iter().filter_map(|path| {
-                    fields.iter().find(|field| &field.path == path)
+                    fields.iter().find(|field| !field.presentation.computed && &field.path == path)
                         .map(|field| if matches!(field.widget, Widget::Add) {
                             field.label.trim_end_matches(".Add item")
                         } else {
@@ -1002,8 +1129,12 @@ impl Engine {
         out
     }
     pub fn shown(&self, field: &Field) -> String {
+        if let Some(value) = &field.computed_value {
+            return value.clone();
+        }
         let value = get(&self.spec.value, &field.path);
         match field.widget {
+            Widget::Computed => unreachable!(),
             Widget::Add => "[+]".into(),
             Widget::Remove => "[-]".into(),
             Widget::Checkbox => if value.as_bool().unwrap() {
@@ -1024,7 +1155,7 @@ impl Engine {
         let fields = self.fields();
         if fields
             .get(self.selected)
-            .is_some_and(|field| field.presentation.disabled)
+            .is_some_and(|field| field.presentation.disabled || field.presentation.computed)
         {
             self.editor = None;
             if matches!(key, Key::Enter | Key::Character('i' | ' ')) {
@@ -1074,7 +1205,6 @@ impl Engine {
                     return true;
                 }
             }
-
             if let Some(index) = &mut editor.choice {
                 match key {
                     Key::Up | Key::Character('k') => *index = index.saturating_sub(1),
@@ -1140,7 +1270,8 @@ impl Engine {
                                     editor.text.trim_matches(|c: char| c.is_ascii_whitespace()),
                                 )
                                 .map(Value::String),
-                                Widget::Checkbox
+                                Widget::Computed
+                                | Widget::Checkbox
                                 | Widget::Select
                                 | Widget::Constructor
                                 | Widget::Add

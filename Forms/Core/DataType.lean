@@ -1,5 +1,5 @@
-import Forms.Core.Date
 import Mathlib.Data.FinEnum
+import Forms.Core.Date
 
 namespace Forms
 
