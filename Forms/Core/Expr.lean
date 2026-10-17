@@ -9,6 +9,9 @@ inductive Expr : (root : DataType) → (result : DataType) → Type 1 where
       (items : Expr root (.list element))
       (predicate : Expr element .boolean)
       : Expr root .boolean
+  | cases {root result : DataType} {tags : Enum} {constructors : tags.type → DataType}
+      (subject : Expr root (.sum tags constructors))
+      (branches : (i : tags.type) → Expr (constructors i) result) : Expr root result
   | and {root : DataType} (l r : Expr root .boolean) : Expr root .boolean
   | natLe {root : DataType} (l r : Expr root .natural) : Expr root .boolean
 
@@ -21,6 +24,9 @@ def Expr.eval
   | .value constant => constant
   | .project path => Path.get path value
   | .all items predicate => List.all (Expr.eval items value) (Expr.eval predicate)
+  | .cases subject branches =>
+    let selected := Expr.eval subject value
+    Expr.eval (branches selected.tag) selected.payload
   | .and left right => Expr.eval left value && Expr.eval right value
   | .natLe left right => decide (Expr.eval left value ≤ Expr.eval right value)
 
@@ -33,6 +39,7 @@ def Expr.weaken {outer root result} (path : Path outer root) (expression : Expr 
   | .value v => .value v
   | .project field => .project (Path.trans path field)
   | .all items predicate => .all (Expr.weaken path items) predicate
+  | .cases subject branches => .cases (Expr.weaken path subject) branches
   | .and l r => .and (Expr.weaken path l) (Expr.weaken path r)
   | .natLe l r => .natLe (Expr.weaken path l) (Expr.weaken path r)
 
