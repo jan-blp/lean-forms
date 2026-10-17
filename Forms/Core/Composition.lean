@@ -37,5 +37,10 @@ inductive Component : (state : DataType) → Type 1 where
       (condition : Expr state .boolean)
       (body : Component state)
       : Component state
+  | disabledWhen
+      {state : DataType}
+      (condition : Expr state .boolean)
+      (body : Component state)
+      : Component state
 
 end Forms.Composition
