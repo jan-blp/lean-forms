@@ -41,10 +41,10 @@ inductive Expr : (input : DataType) → (result : DataType) → Type 1 where
   | cases {input result : DataType} {tags : Enum} {constructors : tags → DataType}
       (subject : Expr input (.sum tags constructors))
       (branches : (i : tags) → Expr (constructors i) result) : Expr input result
+  | not {input : DataType} (operand : Expr input .boolean) : Expr input .boolean
   | and {input : DataType} (l r : Expr input .boolean) : Expr input .boolean
   | dateLe {input : DataType} (l r : Expr input .date) : Expr input .boolean
   | natLe {input : DataType} (l r : Expr input .natural) : Expr input .boolean
-  | not {input : DataType} (operand : Expr input .boolean) : Expr input .boolean
   | textEq {input : DataType} (left right : Expr input .text) : Expr input .boolean
   | textAppend {input : DataType} (left right : Expr input .text) : Expr input .text
 
@@ -56,7 +56,6 @@ def Expr.eval
   match expression with
   | .textAppend left right => left.eval value ++ right.eval value
   | .textEq left right => left.eval value == right.eval value
-  | .not operand => !(operand.eval value)
   | .value constant => constant
   | .project path => Path.get path value
   | .all items predicate context =>
@@ -68,6 +67,7 @@ def Expr.eval
   | .cases subject branches =>
     let selected := Expr.eval subject value
     Expr.eval (branches selected.tag) selected.payload
+  | .not operand => !Expr.eval operand value
   | .and left right => Expr.eval left value && Expr.eval right value
   | .dateLe left right => Expr.eval left value ≤ Expr.eval right value
   | .natLe left right => Expr.eval left value ≤ Expr.eval right value
@@ -80,12 +80,12 @@ def Expr.weaken {outer input result} (path : Path outer input) (expression : Exp
   match expression with
   | .textAppend left right => .textAppend (left.weaken path) (right.weaken path)
   | .textEq left right => .textEq (left.weaken path) (right.weaken path)
-  | .not operand => .not (operand.weaken path)
   | .value v => .value v
   | .project field => .project (Path.trans path field)
   | .all items predicate context =>
     .all (Expr.weaken path items) predicate (path.trans context)
   | .cases subject branches => .cases (Expr.weaken path subject) branches
+  | .not operand => .not (Expr.weaken path operand)
   | .and l r => .and (Expr.weaken path l) (Expr.weaken path r)
   | .dateLe l r => .dateLe (Expr.weaken path l) (Expr.weaken path r)
   | .natLe l r => .natLe (Expr.weaken path l) (Expr.weaken path r)

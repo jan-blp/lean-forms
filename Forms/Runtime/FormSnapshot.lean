@@ -58,6 +58,8 @@ def FormSnapshot.render {state : DataType} (component : Component state)
         (render (branches selected.tag) selected.payload)
   | .visibleWhen condition body =>
       if condition.eval value then render body value else .stack []
+  | .disabledWhen condition body =>
+      if condition.eval value then disable (render body value) else render body value
   | .stack (items := items) label children order =>
       let snapshot := .stack ((FinEnum.toList items).map fun i => render (children (order i)) value)
       match label with
