@@ -1,3 +1,5 @@
+import Forms.ExampleForms.Shapes
+import Forms.ExampleForms.Location
 import Forms.Runtime.Cli
 import Forms.ExampleForms.Invoice
 import Forms.ExampleForms.Person
@@ -10,6 +12,8 @@ open ExampleForms Forms.Runtime Composition
 
 private def valueToJson {t : DataType} (value : ⟦t⟧) : Lean.Json :=
   match t with
+  | .sum tags constructors => .mkObj [("tag", Lean.toJson (tags.label value.tag)),
+      ("value", valueToJson (t := constructors value.tag) value.payload)]
   | .list element => .arr ((value.map (valueToJson (t := element))).toArray)
   | .text => Lean.toJson value
   | .boolean => Lean.toJson value
@@ -30,6 +34,8 @@ def runForm (theme : NativeTerminal.Theme)
 private def cli : Cli NativeTerminal.Theme where
   examples := [
     ("person", fun theme => runForm theme Person.form Person.initial),
+    ("shapes", fun theme => runForm theme Shapes.form Shapes.initial),
+    ("location", fun theme => runForm theme Location.form Location.initial),
     ("invoice", fun theme => runForm theme Invoice.form Invoice.initial)]
   options := [("--theme", NativeTerminal.Theme.choices)]
   initial := .frappe

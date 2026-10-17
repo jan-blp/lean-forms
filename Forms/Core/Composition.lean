@@ -22,6 +22,15 @@ inductive Component : (state : DataType) → Type 1 where
       (item : Component element)
       (defaultItem : ⟦element⟧)
       : Component state
+  | sum
+      {state : DataType}
+      {tags : Enum}
+      {constructors : tags → DataType}
+      (path : Path state (.sum tags constructors))
+      (label : String)
+      (branches : (tag : tags) → Component (constructors tag))
+      (defaults : (tag : tags) → ⟦constructors tag⟧)
+      : Component state
   | visibleWhen
       {state : DataType}
       (condition : Expr state .boolean)

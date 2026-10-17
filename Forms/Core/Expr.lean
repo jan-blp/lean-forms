@@ -38,6 +38,9 @@ inductive Expr : (input : DataType) → (result : DataType) → Type 1 where
       (predicate : Expr (Validation.IterationContext outer element) .boolean)
       (context : Path input outer := by exact .self)
       : Expr input .boolean
+  | cases {input result : DataType} {tags : Enum} {constructors : tags → DataType}
+      (subject : Expr input (.sum tags constructors))
+      (branches : (i : tags) → Expr (constructors i) result) : Expr input result
   | and {input : DataType} (l r : Expr input .boolean) : Expr input .boolean
   | dateLe {input : DataType} (l r : Expr input .date) : Expr input .boolean
   | natLe {input : DataType} (l r : Expr input .natural) : Expr input .boolean
@@ -56,6 +59,9 @@ def Expr.eval
         | .outer => context.get value
         | .item => item
         | .index => index
+  | .cases subject branches =>
+    let selected := Expr.eval subject value
+    Expr.eval (branches selected.tag) selected.payload
   | .and left right => Expr.eval left value && Expr.eval right value
   | .dateLe left right => Expr.eval left value ≤ Expr.eval right value
   | .natLe left right => Expr.eval left value ≤ Expr.eval right value

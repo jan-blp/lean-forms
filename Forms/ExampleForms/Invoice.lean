@@ -36,6 +36,8 @@ def itemForm : Component item :=
       | .quantity => Component.Builder.field "Quantity" .naturalInput
       | .unitPrice => Component.Builder.field "Unit price (cents)" .naturalInput) .self
 
-def form : Component invoice := .list .self "Invoice" itemForm newItem
+def form : Component invoice :=
+  (show Component.Builder invoice invoice from
+    Component.Builder.list "Invoice" (fun _ => itemForm) newItem) .self
 
 end Forms.ExampleForms.Invoice

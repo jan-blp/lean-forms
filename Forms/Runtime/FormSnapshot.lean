@@ -50,6 +50,12 @@ def FormSnapshot.render {state : DataType} (component : Component state)
         mapFields (fun field => { field with
           labels := label :: toString (index + 1) :: field.labels
           indices := pathIndices path ++ (index :: field.indices) }) (render item entry)))
+  | .sum (tags := tags) path label branches _ =>
+      let selected := path.get value
+      mapFields (fun field => { field with
+        labels := label :: tags.label selected.tag :: field.labels
+        indices := pathIndices path ++ ((FinEnum.equiv selected.tag).val :: field.indices) })
+        (render (branches selected.tag) selected.payload)
   | .visibleWhen condition body =>
       if condition.eval value then render body value else .stack []
   | .stack (items := items) label children =>

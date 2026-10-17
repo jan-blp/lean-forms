@@ -16,11 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms'
 
 
-def session(keys, expected, interrupt=False, cancel=False, theme=None, invoice=False):
+def session(keys, expected, interrupt=False, cancel=False, theme=None, invoice=False, shapes=False):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 100, 0, 0))
     before = termios.tcgetattr(slave)
-    process = subprocess.Popen([str(BINARY)] + (["--theme", theme] if theme else []) + (["invoice"] if invoice else []), stdin=slave, stdout=slave, stderr=slave)
+    process = subprocess.Popen([str(BINARY)] + (["--theme", theme] if theme else []) + (["shapes"] if shapes else ["invoice"] if invoice else []), stdin=slave, stdout=slave, stderr=slave)
     output = bytearray()
 
     def read_until(predicate):
@@ -37,7 +37,7 @@ def session(keys, expected, interrupt=False, cancel=False, theme=None, invoice=F
                     break
 
     try:
-        read_until(lambda: (b'Description' if invoice else b'Name') in output)
+        read_until(lambda: (b'Shape' if shapes else b'Description' if invoice else b'Name') in output)
         os.write(master, keys)
         if cancel:
             read_until(lambda: b'Other' in output)
@@ -82,3 +82,9 @@ session(b'jjjj\r\r\x15Second\rq', [{'description': 'New item', 'quantity': 1, 'u
 session(b'jjj\rq', [], invoice=True)
 session(b'j\r\x150\rq', [{'description': 'New item', 'quantity': 0, 'unitPrice': 100}], invoice=True)
 print('PASS: FFI editing, validation, visibility, typed result, interruption, and terminal restoration')
+
+# Sum constructors preserve their independent payload drafts.
+session(b"q", {"tag": "circle", "value": 3}, shapes=True)
+session(b"\rk\rq", {"tag": "dot", "value": {}}, shapes=True)
+session(b"j\r\x155\rk\rj\r\rk\rq", {"tag": "circle", "value": 5}, shapes=True)
+session(b"j\r\x150\rq", {"tag": "circle", "value": 0}, shapes=True)
