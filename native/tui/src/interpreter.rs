@@ -137,6 +137,8 @@ pub enum Form {
     Group {
         label: String,
         children: BTreeMap<String, Form>,
+        #[serde(rename = "displayOrder")]
+        display_order: Vec<String>,
     },
     List {
         label: String,
@@ -392,8 +394,23 @@ impl Form {
                 item.validate(element, element)
             }
             Self::Field { widget, .. } if widget.matches(ty) => Ok(()),
-            Self::Group { children, .. } => match ty {
+            Self::Group {
+                children,
+                display_order,
+                ..
+            } => match ty {
                 Ty::Record { fields } if matches_names(children, fields) => {
+                    let unique: std::collections::HashSet<_> = display_order.iter().collect();
+                    if display_order.len() != fields.len()
+                        || unique.len() != fields.len()
+                        || display_order
+                            .iter()
+                            .any(|name| !children.contains_key(name))
+                    {
+                        return Err(
+                            "Group displayOrder must contain every field exactly once".into()
+                        );
+                    }
                     for field in fields {
                         children[&field.name].validate(root, &field.ty)?;
                     }
@@ -570,7 +587,11 @@ impl Form {
                     },
                 });
             }
-            Self::Group { label, children } => {
+            Self::Group {
+                label,
+                children,
+                display_order,
+            } => {
                 let mut labels = labels;
                 if !(label == "Item"
                     && labels
@@ -582,7 +603,8 @@ impl Form {
                 let Ty::Record { fields } = ty else {
                     unreachable!()
                 };
-                for field in fields {
+                for name in display_order {
+                    let field = fields.iter().find(|field| &field.name == name).unwrap();
                     let mut child_path = path.clone();
                     child_path.push(Step::Field(field.name.clone()));
                     children[&field.name].fields(
