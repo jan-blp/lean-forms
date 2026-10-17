@@ -126,6 +126,7 @@ impl Theme {
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 struct Field<'a> {
+    presentation: interpreter::Presentation,
     label: &'a str,
     value: &'a str,
     section: &'a str,
@@ -134,6 +135,7 @@ struct Field<'a> {
 struct Editor<'a> {
     calendar: Option<NaiveDate>,
     date_input: bool,
+    constructor: bool,
     label: &'a str,
     text: &'a str,
     error: Option<&'a str>,
@@ -188,6 +190,7 @@ fn run(engine: &mut Engine, theme: Theme, interrupted: extern "C" fn() -> i32) -
                     .iter()
                     .zip(&values)
                     .map(|(f, value)| Field {
+                        presentation: f.presentation,
                         label: &f.title,
                         section: &f.section,
                         action: f.action,
@@ -199,6 +202,7 @@ fn run(engine: &mut Engine, theme: Theme, interrupted: extern "C" fn() -> i32) -
                     fields.get(engine.selected).map(|f| Editor {
                         calendar: e.calendar,
                         date_input: e.date_input,
+                        constructor: f.presentation.constructor,
                         label: &f.title,
                         text: &e.text,
                         error: e.error.as_deref(),
@@ -374,8 +378,31 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         ),
         sections[0],
     );
+    let label_width = screen
+        .fields
+        .iter()
+        .map(|field| {
+            field
+                .label
+                .chars()
+                .map(|c| c.width().unwrap_or(0))
+                .sum::<usize>()
+                .max(
+                    field
+                        .section
+                        .chars()
+                        .map(|c| c.width().unwrap_or(0))
+                        .sum::<usize>(),
+                )
+                + 5
+                + field.presentation.depth.min(4) * 2
+        })
+        .max()
+        .unwrap_or(20)
+        .min(38) as u16;
     let rows = screen.fields.iter().enumerate().map(|(index, field)| {
         let heading = !field.section.is_empty()
+            && !(index == 0 && field.presentation.constructor && field.section == title)
             && (index == 0 || screen.fields[index - 1].section != field.section);
         let selected = index == screen.selected;
         let selection = Style::default()
@@ -396,17 +423,38 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
                 if selected { "› " } else { "  " },
                 Style::default().fg(theme.accent),
             ),
+            ratatui::text::Span::styled(
+                "│ ".repeat(field.presentation.depth.min(4)),
+                Style::default().fg(theme.border),
+            ),
             ratatui::text::Span::styled(format!(" {} ", clean(field.label)), label_style),
         ]);
-        let value = if field.action {
+        let value = if field.presentation.constructor {
+            format!(
+                "{} ▾{}",
+                clean(field.value),
+                if field.presentation.invalid { " !" } else { "" }
+            )
+        } else if field.action {
             "Enter ↵".into()
         } else if field.value.is_empty() {
             "—".into()
         } else {
             clean(field.value)
         };
-        let value_style = if selected {
+        let value_style = if field.presentation.invalid {
+            (if selected {
+                selection
+            } else {
+                Style::default()
+            })
+            .fg(theme.error)
+        } else if selected {
             selection
+        } else if field.presentation.constructor {
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(if field.action || field.value.is_empty() {
                 theme.subtext
@@ -418,41 +466,51 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
             format!(" {value} "),
             value_style,
         ));
+        let mut labels = Vec::new();
+        let mut values = Vec::new();
         if heading {
-            Row::new([
-                Cell::from(ratatui::text::Text::from(vec![
-                    Line::styled(clean(field.section), Style::default().fg(theme.accent)),
-                    label,
-                ])),
-                Cell::from(ratatui::text::Text::from(vec![Line::default(), value])),
-            ])
-            .height(2)
-            .top_margin(1)
-        } else {
-            Row::new([Cell::from(label), Cell::from(value)])
+            labels.push(Line::styled(
+                clean(field.section),
+                Style::default().fg(theme.accent),
+            ));
+            values.push(Line::default());
         }
+        labels.push(label);
+        values.push(value);
+        if let Some(note) = field.presentation.note {
+            let available = sections[1]
+                .width
+                .saturating_sub(label_width.min(area.width / 2) + 6)
+                as usize;
+            let mut line = String::new();
+            for word in note.split_whitespace() {
+                if !line.is_empty() && line.len() + 1 + word.len() > available {
+                    labels.push(Line::default());
+                    values.push(Line::styled(
+                        format!(" {line}"),
+                        Style::default().fg(theme.subtext),
+                    ));
+                    line.clear();
+                }
+                if !line.is_empty() {
+                    line.push(' ');
+                }
+                line.push_str(word);
+            }
+            labels.push(Line::default());
+            values.push(Line::styled(
+                format!(" {line}"),
+                Style::default().fg(theme.subtext),
+            ));
+        }
+        let height = labels.len() as u16;
+        Row::new([
+            Cell::from(ratatui::text::Text::from(labels)),
+            Cell::from(ratatui::text::Text::from(values)),
+        ])
+        .height(height)
+        .top_margin(u16::from(heading))
     });
-    let label_width = screen
-        .fields
-        .iter()
-        .map(|field| {
-            field
-                .label
-                .chars()
-                .map(|c| c.width().unwrap_or(0))
-                .sum::<usize>()
-                .max(
-                    field
-                        .section
-                        .chars()
-                        .map(|c| c.width().unwrap_or(0))
-                        .sum::<usize>(),
-                )
-                + 5
-        })
-        .max()
-        .unwrap_or(20)
-        .min(38) as u16;
     let table = Table::new(
         rows,
         [
@@ -529,8 +587,13 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
             let mut state = ListState::default().with_selected(Some(index));
             frame.render_stateful_widget(options, parts[0], &mut state);
             frame.render_widget(
-                Paragraph::new("↑/↓ or j/k choose · Enter save · Esc cancel")
-                    .style(Style::default().fg(theme.subtext)),
+                Paragraph::new(if editor.constructor {
+                    "↑/↓ or j/k choose · Enter switch · Esc cancel · Drafts kept"
+                } else {
+                    "↑/↓ or j/k choose · Enter save · Esc cancel"
+                })
+                .wrap(ratatui::widgets::Wrap { trim: true })
+                .style(Style::default().fg(theme.subtext)),
                 parts[1],
             );
             return;
@@ -572,7 +635,13 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
     } else {
         frame.render_widget(
             Paragraph::new(
-                if screen.fields.get(screen.selected).is_some_and(|f| f.action) {
+                if screen
+                    .fields
+                    .get(screen.selected)
+                    .is_some_and(|f| f.presentation.constructor)
+                {
+                    "↑/↓ select · Enter choose · q submit · x cancel"
+                } else if screen.fields.get(screen.selected).is_some_and(|f| f.action) {
                     "↑/↓ select · Enter activate · q submit · x cancel"
                 } else {
                     "↑/↓ select · Enter edit · Space toggle · q submit · x cancel"

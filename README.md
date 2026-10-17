@@ -50,11 +50,55 @@ description, quantity, and unit price in cents; quantity and price must be posit
 An empty invoice is allowed. Each item has its own form scope, so visibility and
 cross-field constraints inside an item refer to that item's fields.
 
-`DataType.list element` denotes `List element.denote`. Refining its items with
-`RefinedDataType.list item` gives `List item.ValidatedValue`, preserving every item's proofs.
+`DataType.list element` denotes `List (DataType.denote element)`. Refining its items with
+`RefinedDataType.list item` gives `List (RefinedDataType.ValidatedValue item)`, preserving every item's proofs.
 Typed `Path` values can address a whole list; dynamic item indices are UI references
 rebuilt after edits. List validation messages currently identify the collection,
 rather than the particular failing item. Item forms cannot reference outer fields.
+
+For a choice between geometric shapes with different payload types:
+
+```sh
+lake -q exe forms shapes
+```
+
+Choose **Dot** (no details), **Circle** (radius), or **Rectangle** (width and
+height). Sizes must be at least 1. Try a radius of 0, then switch to Dot: a dot
+needs no dimensions. Switch back to Circle to recover your unfinished draft.
+
+The selector shows a ▾ marker, with the selected payload grouped beneath it.
+Empty constructors show “No details required”; a ! marker flags a sum with a
+validation error. Only the active constructor is validated. Esc cancels a selector edit.
+
+`DataType.record fieldNames fieldTypes` indexes its fieldNames by an `Enum`, which bundles a
+finite enumeration and unique string names. Its values are dependent functions:
+`(field : fields.type) → DataType.denote (children field)`. Paths use field identities,
+for example `.child .width .self`. Groups display fields in enumeration order.
+
+Record JSON uses objects such as `{"width": "4", "height": "2"}`. Schemas carry ordered
+arrays of `{ "name": ..., "type": ... }` entries; forms and expression branches are
+keyed by those names. Serialized paths contain field names. Changing enumeration
+order changes presentation order while preserving field and constructor identity.
+Missing or extra record fields and unknown constructor names are rejected.
+
+`DataType.sum tags constructors` denotes `SumValue (fun i => DataType.denote (constructors i))`.
+`SumValue` has named `tag` and `payload` fields; the tag determines the payload's type.
+`RefinedDataType.sum branches` preserves the selected payload's validation proofs.
+`Form.sum` supplies a label, a local form for each payload, and
+initial draft values for each constructor. The `tags` enum gives constructors typed
+identities and unique labels used for both display and serialization. An empty record represents a constructor without
+payload fields, so optional values can be modeled as a two-constructor sum.
+
+Sum JSON uses named tags, such as `{"tag": "circle", "value": "3"}`. Only the
+active payload crosses the submission boundary; cached drafts live in the editor
+for the current session. Sums compose with records, lists, and other sums.
+Constructor forms and predicates use payload-local scopes and cannot reference outer
+fields. `Expr.cases subject branches` evaluates the selected branch in its
+payload's scope. Every constructor has a branch, and all branches share a result type
+(which need not be boolean). Constructor constraints use `true` for inactive branches. Typed `Path` values address a whole
+sum, not a conditional payload; dynamic UI references include the selected tag.
+As with lists, validation messages currently point to the containing sum rather
+than the individual payload field.
 
 Refined types describe validated values independently of the UI:
 
@@ -79,7 +123,7 @@ still validate: visibility is presentation, not a validation condition.
 
 The JSON protocol carries the same expressions to Rust for feedback. Lean checks
 submitted JSON against the complete refined type again before constructing proofs.
-The editor API returns `Option refined.ValidatedValue`: `none` means cancellation.
+The editor API returns `Option (RefinedDataType.ValidatedValue refined)`: `none` means cancellation.
 
 Run checks:
 
@@ -119,13 +163,10 @@ The scripts do not change your shell startup files.
 Run `python3 tools/test_cli.py` after building to check parsing and completion
 against both Bash and Fish (both shells must be installed for this check).
 
-Records use an `Enum` of typed field identities with unique string names.
-`DataType.record fieldNames fieldTypes` denotes `(field : fieldNames.type) → DataType.denote (fieldTypes field)`.
-Groups follow enumeration order; their display labels are independent of record field names.
-Record values serialize as JSON objects and paths use field names.
-
 Dates use `YYYY-MM-DD` (years 0001–9999). In the calendar, h/l moves a day,
 k/j a week, and Page Up/Down a month. `i` or Enter focuses the input; Enter saves.
 Esc returns to the calendar, then cancels.
 
 `booking` demonstrates date ranges and date ordering.
+
+`location` demonstrates dependent Country/City choices using sums.

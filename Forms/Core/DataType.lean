@@ -25,6 +25,11 @@ inductive DataType where
   | enum (domain : Enum)
   | list (element : DataType)
   | record (fieldNames : Enum) (fieldTypes : fieldNames → DataType)
+  | sum (tags : Enum) (constructors : tags → DataType)
+
+structure SumValue {Tag : Type} (Payload : Tag → Type) where
+  tag : Tag
+  payload : Payload tag
 
 abbrev DataType.denote (t : DataType) : Type :=
   match t with
@@ -35,6 +40,7 @@ abbrev DataType.denote (t : DataType) : Type :=
   | .enum domain => domain
   | .list element => List (DataType.denote element)
   | .record fieldNames fieldTypes => (i : fieldNames) → DataType.denote (fieldTypes i)
+  | .sum _ constructors => SumValue (fun i => DataType.denote (constructors i))
 
 section Theorems
 

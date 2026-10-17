@@ -1,4 +1,6 @@
+import Forms.ExampleForms.Location
 import Forms.ExampleForms.Booking
+import Forms.ExampleForms.Shapes
 import Forms.ExampleForms.Invoice
 import Mathlib.Data.Nat.Basic
 import Forms.ExampleForms.Person
@@ -152,6 +154,70 @@ private def testLists : IO Unit := do
     | .error _ => true
     | _ => false)
 
+private def testSums : IO Unit := do
+  let refined := ExampleForms.Shapes.shapeType
+  let dot : DataType.denote ExampleForms.Shapes.shape := ⟨.dot, fun i => nomatch i⟩
+  let valid : DataType.denote ExampleForms.Shapes.shape := ⟨.rectangle, fun | .width => 7 | .height => 2⟩
+  let invalid : DataType.denote ExampleForms.Shapes.shape := ⟨.rectangle, fun | .width => 7 | .height => 0⟩
+  let dimension : Expr ExampleForms.Shapes.shape .natural :=
+    .cases (.project .self) fun
+      | .dot => .value 0
+      | .circle => .project .self
+      | .rectangle => .project (.field .height .self)
+  check "CasesReturnsSelectedPayloadValue" (Expr.eval dimension dot == 0 && Expr.eval dimension valid == 2)
+  let name : Expr ExampleForms.Shapes.shape .text :=
+    .cases (.project .self) fun
+      | .dot => .value "Dot"
+      | .circle => .value "Circle"
+      | .rectangle => .value "Rectangle"
+  check "CasesSupportsTextResult" (Expr.eval name dot == "Dot" && Expr.eval name valid == "Rectangle")
+  let withinLimit : Expr ExampleForms.Shapes.shape .boolean := .natLe dimension (.value 1)
+  check "CasesComposesWithExpressions" (Expr.eval withinLimit dot && !(Expr.eval withinLimit valid))
+  let outer : DataType := wrapper ExampleForms.Shapes.shape
+  let lifted : Expr outer .natural := Expr.weaken (.field .content .self) dimension
+  check "CasesWeakensSubjectOnly" (Expr.eval lifted (wrap false valid) == 2)
+  check "CasesEncodesResultType" (match (Expr.toJson dimension).getObjVal? "type" with
+    | .ok ty => ty == DataType.toJson .natural
+    | _ => false)
+
+  for draft in [dot, valid, invalid] do
+    let encoded := JsonProtocol.valueToJson draft
+    check "SumDraftRoundTrip" (match JsonProtocol.valueFromJson ExampleForms.Shapes.shape encoded with
+      | .ok value => JsonProtocol.valueToJson value == encoded
+      | _ => false)
+  check "InactiveConstructorDoesNotValidate" ((RefinedDataType.validate refined dot).isSome && (RefinedDataType.errors refined dot).isEmpty)
+  check "SelectedConstructorConstructsProof" ((RefinedDataType.validate refined valid).isSome)
+  check "SelectedConstructorRejectsInvalidDraft" ((RefinedDataType.validate refined invalid).isNone && (RefinedDataType.errors refined invalid).length == 1)
+  check "SumProofErasesToOriginal" ((RefinedDataType.validate refined valid).map (fun v => JsonProtocol.valueToJson (RefinedDataType.erase refined v)) == some (JsonProtocol.valueToJson valid))
+  check "SumOnlyShowsActivePayload" ((Form.fieldRefs ExampleForms.Shapes.form dot dot).isEmpty &&
+    (Form.fieldRefs ExampleForms.Shapes.form valid valid).map (·.indices) == [[2,0], [2,1]])
+  check "SumPayloadLabels" ((Form.fieldRefs ExampleForms.Shapes.form valid valid).map (·.labels) ==
+    [["Shape", "rectangle", "Dimensions", "Width"], ["Shape", "rectangle", "Dimensions", "Height"]])
+  let nested : RefinedDataType (wrapper ExampleForms.Shapes.shape) := refineWrapper refined
+  check "SumConstraintsWeakenThroughRecord" ((RefinedDataType.errors nested (wrap false invalid)).length == 1 &&
+    (RefinedDataType.errors nested (wrap false dot)).isEmpty)
+  let repeated := RefinedDataType.list refined
+  check "SumConstraintsComposeWithLists" ((RefinedDataType.errors repeated [dot, valid]).isEmpty &&
+    (RefinedDataType.errors repeated [dot, invalid]).length == 1 && (RefinedDataType.validate repeated [dot, invalid]).isNone)
+  for malformed in ["{}", "[0,[]]", "{\"tag\":3,\"value\":[]}",
+      "{\"tag\":-1,\"value\":[]}", "{\"tag\":\"0\",\"value\":[]}",
+      "{\"tag\":\"dot\",\"value\":false}", "{\"tag\":\"circle\",\"value\":false}",
+      "{\"tag\":\"dot\",\"value\":{},\"extra\":true}"] do
+    check "MalformedSumRejected" (match JsonProtocol.valueFromJson ExampleForms.Shapes.shape
+        (← IO.ofExcept (Lean.Json.parse malformed)) with
+      | .error _ => true
+      | _ => false)
+  let run := Tui.run (m := ReaderT String (Except IO.Error)) refined ExampleForms.Shapes.form dot
+  check "LeanRejectsForgedSumSuccess" (match run.run (JsonProtocol.valueToJson invalid).compress with
+    | .error _ => true
+    | _ => false)
+  check "LeanAcceptsValidSumSubmission" (match run.run (JsonProtocol.valueToJson valid).compress with
+    | .ok (some value) => JsonProtocol.valueToJson (RefinedDataType.erase refined value) == JsonProtocol.valueToJson valid
+    | _ => false)
+  check "SumCancellation" (match run.run "null" with
+    | .ok none => true
+    | _ => false)
+
 private def testRecords : IO Unit := do
   let shape := ExampleForms.Thermostat.thermostat
   for malformed in ["{}", "[]", "{\"home\":\"22\"}",
@@ -170,7 +236,9 @@ private def testRecords : IO Unit := do
 
 private def testProtocol : IO Unit := do
   for (fixture, encoded) in [
+      ("native/tui/tests/location.json", JsonProtocol.encode ExampleForms.Location.locationType ExampleForms.Location.form ExampleForms.Location.draft),
       ("native/tui/tests/booking.json", JsonProtocol.encode ExampleForms.Booking.bookingType ExampleForms.Booking.form ExampleForms.Booking.draft),
+      ("native/tui/tests/shapes.json", JsonProtocol.encode ExampleForms.Shapes.shapeType ExampleForms.Shapes.form ExampleForms.Shapes.draft),
       ("native/tui/tests/invoice.json", JsonProtocol.encode ExampleForms.Invoice.invoiceType ExampleForms.Invoice.form ExampleForms.Invoice.draft),
       ("native/tui/tests/person.json", JsonProtocol.encode ExampleForms.Person.personType ExampleForms.Person.form ExampleForms.Person.draft),
       ("native/tui/tests/thermostat.json", JsonProtocol.encode ExampleForms.Thermostat.thermostatType ExampleForms.Thermostat.form ExampleForms.Thermostat.draft)] do
@@ -201,9 +269,14 @@ def main : IO Unit := do
   testNativeBoundary
   testProtocol
   testLists
+  testSums
   testRecords
 
 section Theorems
+
+example {tags : Enum} {constructors : tags → DataType}
+    (branches : (i : tags) → RefinedDataType (constructors i)) :
+    RefinedDataType.ValidatedValue (RefinedDataType.sum branches) = SumValue (fun i => RefinedDataType.ValidatedValue (branches i)) := rfl
 
 example : RefinedDataType.ValidatedValue ExampleForms.Invoice.invoiceType = List (RefinedDataType.ValidatedValue ExampleForms.Invoice.itemType) := rfl
 
