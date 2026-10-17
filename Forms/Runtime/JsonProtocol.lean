@@ -102,6 +102,7 @@ def Expr.toJson {root t} (expression : Expr root t) : Json :=
   | .cases (tags := tags) subject branches => Json.mkObj [("kind", Lean.toJson "cases"),
       ("type", DataType.toJson t), ("subject", Expr.toJson subject),
       ("branches", Json.mkObj ((FinEnum.toList tags).map fun i => (tags.label i, Expr.toJson (branches i))))]
+  | .not operand => Json.mkObj [("kind", Lean.toJson "not"), ("operand", Expr.toJson operand)]
   | .and l r => binary "and" (Expr.toJson l) (Expr.toJson r)
   | .dateLe l r => binary "dateLe" (Expr.toJson l) (Expr.toJson r)
   | .natLe l r => binary "natLe" (Expr.toJson l) (Expr.toJson r)
@@ -132,6 +133,8 @@ def Form.toJson {root t} (form : Form root t) : Json :=
       ("children", Json.mkObj ((FinEnum.toList fields).map fun i => (fields.label i, Form.toJson (children i)))),
       ("displayOrder", Lean.toJson ((FinEnum.toList fields).map fun i => fields.label (displayOrder i)))]
   | .visibleWhen condition body => Json.mkObj [("kind", Lean.toJson "visibleWhen"),
+      ("condition", Expr.toJson condition), ("body", Form.toJson body)]
+  | .disabledWhen condition body => Json.mkObj [("kind", Lean.toJson "disabledWhen"),
       ("condition", Expr.toJson condition), ("body", Form.toJson body)]
 
 def Constraint.toJson (constraint : Constraint root) : Json :=

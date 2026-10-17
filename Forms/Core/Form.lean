@@ -33,12 +33,17 @@ inductive Form : (root : DataType) → (t : DataType) → Type 1 where
       (condition : Expr root .boolean)
       (body : Form root t)
       : Form root t
+  | disabledWhen {root t : DataType}
+      (condition : Expr root .boolean)
+      (body : Form root t)
+      : Form root t
 
 structure FieldRef where
   {t : DataType}
   widget : Widget t
   labels : List String
   indices : List Nat
+  disabled : Bool := false
 
 def Form.fieldRefs {root t : DataType} (form : Form root t)
     (value : DataType.denote root) (localValue : DataType.denote t) : List FieldRef :=
@@ -61,5 +66,9 @@ def Form.fieldRefs {root t : DataType} (form : Form root t)
           indices := index :: field.indices }
   | .visibleWhen condition body =>
     if Expr.eval condition value then Form.fieldRefs body value localValue else []
+
+  | .disabledWhen condition body =>
+    (Form.fieldRefs body value localValue).map fun field =>
+      { field with disabled := field.disabled || Expr.eval condition value }
 
 end Forms
