@@ -362,3 +362,15 @@ fn hidden_payload_is_distinguished_from_an_empty_constructor() {
     assert!(text.contains("rectangle ▾ !"));
     assert!(text.contains("Size must be at least 1"));
 }
+
+#[test]
+fn disabled_controls_show_values_without_edit_hints() {
+    let mut spec: serde_json::Value =
+        serde_json::from_str(include_str!("../tests/thermostat.json")).unwrap();
+    spec["form"] = serde_json::json!({"kind":"disabledWhen", "condition":{"kind":"value", "type":{"kind":"boolean"}, "value":true}, "body":spec["form"].take()});
+    let engine = interpreter::Engine::parse(&spec.to_string()).unwrap();
+    let text = draw_engine(&engine, 100, 24, Theme::FRAPPE);
+    assert!(text.contains("22 [disabled]"));
+    assert!(text.contains("Disabled ·"));
+    assert!(!text.contains("Enter edit"));
+}

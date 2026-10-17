@@ -105,7 +105,6 @@ def Path.toList {source target : DataType} (path : Path source target) : List St
 def Expr.toJson {input t} (expression : Expr input t) : Json :=
   match expression with
   | .value v => Json.mkObj [("kind", Lean.toJson "value"), ("type", DataType.toJson t), ("value", Runtime.JsonProtocol.valueToJson v)]
-  | .not operand => Json.mkObj [("kind", Lean.toJson "not"), ("operand", operand.toJson)]
   | .textEq left right => Json.mkObj [("kind", Lean.toJson "textEq"), ("left", left.toJson), ("right", right.toJson)]
   | .textAppend left right => Json.mkObj [("kind", Lean.toJson "textAppend"), ("left", left.toJson), ("right", right.toJson)]
   | .project p => Json.mkObj [("kind", Lean.toJson "project"), ("path", Lean.toJson (Path.toList p))]
@@ -114,6 +113,7 @@ def Expr.toJson {input t} (expression : Expr input t) : Json :=
   | .cases (tags := tags) subject branches => Json.mkObj [("kind", Lean.toJson "cases"),
       ("type", DataType.toJson t), ("subject", Expr.toJson subject),
       ("branches", Json.mkObj ((FinEnum.toList tags).map fun i => (tags.label i, Expr.toJson (branches i))))]
+  | .not operand => Json.mkObj [("kind", Lean.toJson "not"), ("operand", Expr.toJson operand)]
   | .and l r => binary "and" (Expr.toJson l) (Expr.toJson r)
   | .dateLe l r => binary "dateLe" (Expr.toJson l) (Expr.toJson r)
   | .natLe l r => binary "natLe" (Expr.toJson l) (Expr.toJson r)
@@ -145,6 +145,8 @@ def Component.toJson {state : DataType} (component : Component state) : Json :=
       ("defaults", Json.mkObj ((FinEnum.toList tags).map fun tag => (tags.label tag, Runtime.JsonProtocol.valueToJson (defaults tag))))]
   | .visibleWhen condition body => Json.mkObj [
       ("kind", Lean.toJson "visibleWhen"), ("condition", Expr.toJson condition), ("body", Component.toJson body)]
+  | .disabledWhen condition body => Json.mkObj [
+      ("kind", Lean.toJson "disabledWhen"), ("condition", Expr.toJson condition), ("body", Component.toJson body)]
   | .stack (items := items) label children order => Json.mkObj [
       ("kind", Lean.toJson "stack"), ("label", Lean.toJson label),
       ("children", Lean.toJson ((FinEnum.toList items).map fun index => Component.toJson (children (order index))))]
