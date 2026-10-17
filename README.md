@@ -1,7 +1,7 @@
 # lean-forms
 
 Typed forms in Lean with a Rust terminal UI. Supports named records, sums, lists,
-conditional visibility, disabling, and refinements. Lean validates submissions and constructs proofs.
+conditional visibility, disabling, computed values, and refinements. Lean validates submissions and constructs proofs.
 
 Requires Linux or macOS, [elan](https://lean-lang.org/install/), Rust/Cargo 1.88+, and `cc`.
 
@@ -23,6 +23,8 @@ lake -q exe forms --help
 
 Groups default to enum order. Override with
 `displayOrder := Equiv.swap .width .height` on `Form.group`.
+
+`Form.computed label expression body` appends a read-only value; see the invoice total.
 
 Shell completion: source `completions/forms.bash` or `completions/forms.fish`.
 

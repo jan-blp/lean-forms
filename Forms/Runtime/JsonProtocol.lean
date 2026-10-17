@@ -95,6 +95,9 @@ def Expr.toJson {root t} (expression : Expr root t) : Json :=
   | .cases (tags := tags) subject branches => Json.mkObj [("kind", Lean.toJson "cases"),
       ("type", DataType.toJson t), ("subject", Expr.toJson subject),
       ("branches", Json.mkObj ((FinEnum.toList tags.type).map fun i => (tags.label i, Expr.toJson (branches i))))]
+  | .sum items expression => Json.mkObj [("kind", Lean.toJson "sum"),
+      ("items", Expr.toJson items), ("expression", Expr.toJson expression)]
+  | .natMul l r => binary "natMul" (Expr.toJson l) (Expr.toJson r)
   | .not operand => Json.mkObj [("kind", Lean.toJson "not"), ("operand", Expr.toJson operand)]
   | .and l r => binary "and" (Expr.toJson l) (Expr.toJson r)
   | .natLe l r => binary "natLe" (Expr.toJson l) (Expr.toJson r)
@@ -123,6 +126,9 @@ def Form.toJson {root t} (form : Form root t) : Json :=
   | .group (fields := fields) label children displayOrder => Json.mkObj [("kind", Lean.toJson "group"), ("label", Lean.toJson label),
       ("children", Json.mkObj ((FinEnum.toList fields.type).map fun i => (fields.label i, Form.toJson (children i)))),
       ("displayOrder", Lean.toJson ((FinEnum.toList fields.type).map fun i => fields.label (displayOrder i)))]
+  | .computed (result := result) label expression body => Json.mkObj [("kind", Lean.toJson "computed"),
+      ("label", Lean.toJson label), ("type", DataType.toJson result),
+      ("expression", Expr.toJson expression), ("body", Form.toJson body)]
   | .visibleWhen condition body => Json.mkObj [("kind", Lean.toJson "visibleWhen"),
       ("condition", Expr.toJson condition), ("body", Form.toJson body)]
   | .disabledWhen condition body => Json.mkObj [("kind", Lean.toJson "disabledWhen"),

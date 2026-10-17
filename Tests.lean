@@ -149,7 +149,7 @@ private def testLists : IO Unit := do
       (← IO.ofExcept (Lean.Json.parse "[{\"description\":\"Good\",\"quantity\":\"1\",\"unitPrice\":\"100\"},{\"description\":\"Bad\",\"quantity\":\"1\",\"unitPrice\":\"0\"}]")) with
     | .error _ => true
     | _ => false)
-  check "ListFieldIndices" ((Form.fieldRefs ExampleForms.Invoice.form draft draft).map (·.indices) == [[0,0], [0,1], [0,2]])
+  check "ListFieldIndices" ((Form.fieldRefs ExampleForms.Invoice.form draft draft).map (·.indices) == [[0,0], [0,1], [0,2], [0], []])
   check "ListRequiresArray" (match JsonProtocol.valueFromJson (.list .natural) (Lean.toJson "1") with
     | .error _ => true
     | _ => false)
@@ -265,6 +265,28 @@ private def testDisabled : IO Unit := do
   check "HiddenDisabledStaysHidden" ((Form.fieldRefs hidden true "Ada").isEmpty)
   check "DisabledJson" ((Form.toJson form).getObjValAs? String "kind" == .ok "disabledWhen")
 
+private def testComputed : IO Unit := do
+  let draft := ExampleForms.Invoice.draft
+  let total := ExampleForms.Invoice.total
+  check "InvoiceTotal" (Expr.eval total draft == 100)
+  check "EmptyInvoiceTotal" (Expr.eval total [] == 0)
+  let huge := 1234567890123456789012345678901234567890
+  let item : DataType.denote ExampleForms.Invoice.itemShape := fun
+    | .description => "Large"
+    | .quantity => huge
+    | .unitPrice => huge
+  check "UnboundedComputedTotal" (Expr.eval total [item, item] == 2 * huge * huge)
+  let fields := Form.fieldRefs ExampleForms.Invoice.form draft draft
+  check "ComputedContent" (match fields.getLast? with
+    | some field => match field.content with
+      | .computed value => JsonProtocol.valueToJson value == Lean.toJson "100"
+      | .input _ => false
+    | none => false)
+  let nestedShape : DataType := .record ExampleForms.Thermostat.temperatureFields fun _ => ExampleForms.Invoice.shape
+  let path : Path nestedShape ExampleForms.Invoice.shape := .child .home .self
+  let nested : DataType.denote nestedShape := fun _ => draft
+  check "ComputedWeakening" (Expr.eval (Expr.weaken path total) nested == 100)
+
 private def testProtocol : IO Unit := do
   for (fixture, encoded) in [
       ("native/tui/tests/shapes.json", JsonProtocol.encode ExampleForms.Shapes.shapeType ExampleForms.Shapes.form ExampleForms.Shapes.draft),
@@ -287,6 +309,7 @@ def main : IO Unit := do
   testRecords
   testDisplayOrder
   testDisabled
+  testComputed
 
 section Theorems
 

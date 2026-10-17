@@ -131,7 +131,7 @@ fn draft_validation_errors_are_visible_outside_the_editor() {
 #[test]
 fn invoice_sections_actions_and_scrolling() {
     let mut engine = Engine::parse(include_str!("../tests/invoice.json")).unwrap();
-    engine.selected = 4;
+    engine.selected = 5;
     engine.step(Key::Enter);
     let fields = engine.fields();
     let values: Vec<_> = fields.iter().map(|field| engine.shown(field)).collect();
@@ -366,5 +366,16 @@ fn disabled_controls_show_values_without_edit_hints() {
     let text = draw_engine(&engine, 100, 24, Theme::FRAPPE);
     assert!(text.contains("22 [disabled]"));
     assert!(text.contains("Disabled ·"));
+    assert!(!text.contains("Enter edit"));
+}
+
+#[test]
+fn computed_total_is_visible_with_read_only_hints() {
+    let mut e = interpreter::Engine::parse(include_str!("../tests/invoice.json")).unwrap();
+    e.selected = e.fields().len() - 1;
+    let text = draw_engine(&e, 100, 24, Theme::FRAPPE);
+    assert!(text.contains("Total (cents)"));
+    assert!(text.contains("100 [computed]"));
+    assert!(text.contains("Computed ·"));
     assert!(!text.contains("Enter edit"));
 }

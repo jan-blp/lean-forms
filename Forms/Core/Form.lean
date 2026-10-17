@@ -28,6 +28,11 @@ inductive Form : (root : DataType) → (t : DataType) → Type 1 where
       (item : Form element element)
       (defaultItem : DataType.denote element)
       : Form root (.list element)
+  | computed {root t result : DataType}
+      (label : String)
+      (expression : Expr root result)
+      (body : Form root t)
+      : Form root t
   | visibleWhen {root t : DataType}
       (condition : Expr root .boolean)
       (body : Form root t)
@@ -37,9 +42,13 @@ inductive Form : (root : DataType) → (t : DataType) → Type 1 where
       (body : Form root t)
       : Form root t
 
+inductive FieldContent (t : DataType) where
+  | input (widget : Widget t)
+  | computed (value : DataType.denote t)
+
 structure FieldRef where
   {t : DataType}
-  widget : Widget t
+  content : FieldContent t
   labels : List String
   indices : List Nat
   disabled : Bool := false
@@ -47,7 +56,7 @@ structure FieldRef where
 def Form.fieldRefs {root t : DataType} (form : Form root t)
     (value : DataType.denote root) (localValue : DataType.denote t) : List FieldRef :=
   match form with
-  | .field label widget => [{ widget, labels := [label], indices := [] }]
+  | .field label widget => [{ content := .input widget, labels := [label], indices := [] }]
   | .group label children displayOrder =>
     (FinEnum.toList _).flatMap fun i =>
       let index := displayOrder i
@@ -63,6 +72,9 @@ def Form.fieldRefs {root t : DataType} (form : Form root t)
         { field with
           labels := label :: toString (index + 1) :: field.labels
           indices := index :: field.indices }
+  | .computed label expression body =>
+    Form.fieldRefs body value localValue ++
+      [{ content := .computed (Expr.eval expression value), labels := [label], indices := [] }]
   | .visibleWhen condition body =>
     if Expr.eval condition value then Form.fieldRefs body value localValue else []
 

@@ -29,6 +29,8 @@ struct Theme {
     border: Color,
     selection: Color,
     accent: Color,
+    computed: Color,
+    add: Color,
     error: Color,
 }
 
@@ -41,6 +43,8 @@ impl Theme {
         border: Color::Rgb(115, 121, 148),
         selection: Color::Rgb(81, 87, 109),
         accent: Color::Rgb(202, 158, 230),
+        computed: Color::Rgb(129, 200, 190),
+        add: Color::Rgb(166, 209, 137),
         error: Color::Rgb(231, 130, 132),
     };
     const LATTE: Self = Self {
@@ -50,6 +54,8 @@ impl Theme {
         border: Color::Rgb(156, 160, 176),
         selection: Color::Rgb(204, 208, 218),
         accent: Color::Rgb(136, 57, 239),
+        computed: Color::Rgb(23, 146, 153),
+        add: Color::Rgb(64, 160, 43),
         error: Color::Rgb(210, 15, 57),
     };
     const MACCHIATO: Self = Self {
@@ -59,6 +65,8 @@ impl Theme {
         border: Color::Rgb(110, 115, 141),
         selection: Color::Rgb(73, 77, 100),
         accent: Color::Rgb(198, 160, 246),
+        computed: Color::Rgb(139, 213, 202),
+        add: Color::Rgb(166, 218, 149),
         error: Color::Rgb(237, 135, 150),
     };
 
@@ -69,6 +77,8 @@ impl Theme {
         border: Color::Rgb(108, 112, 134),
         selection: Color::Rgb(69, 71, 90),
         accent: Color::Rgb(203, 166, 247),
+        computed: Color::Rgb(148, 226, 213),
+        add: Color::Rgb(166, 227, 161),
         error: Color::Rgb(243, 139, 168),
     };
 
@@ -81,6 +91,8 @@ impl Theme {
         border: Color::Rgb(130, 142, 159),
         selection: Color::Rgb(228, 232, 235),
         accent: Color::Rgb(242, 151, 24),
+        computed: Color::Rgb(38, 143, 139),
+        add: Color::Rgb(88, 140, 26),
         error: Color::Rgb(230, 80, 80),
     };
 
@@ -91,6 +103,8 @@ impl Theme {
         border: Color::Rgb(90, 99, 120),
         selection: Color::Rgb(28, 33, 43),
         accent: Color::Rgb(230, 180, 80),
+        computed: Color::Rgb(95, 214, 189),
+        add: Color::Rgb(170, 217, 76),
         error: Color::Rgb(217, 87, 87),
     };
 
@@ -103,6 +117,8 @@ impl Theme {
         border: Color::Rgb(76, 86, 106),
         selection: Color::Rgb(67, 76, 94),
         accent: Color::Rgb(136, 192, 208),
+        computed: Color::Rgb(163, 190, 140),
+        add: Color::Rgb(163, 190, 140),
         error: Color::Rgb(191, 97, 106),
     };
 
@@ -404,6 +420,25 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
                 Style::default()
             })
             .fg(theme.subtext)
+        } else if field.presentation.computed {
+            (if selected {
+                selection
+            } else {
+                Style::default()
+            })
+            .fg(theme.computed)
+        } else if field.action {
+            (if selected {
+                selection
+            } else {
+                Style::default()
+            })
+            .fg(if field.presentation.add {
+                theme.add
+            } else {
+                theme.error
+            })
+            .add_modifier(Modifier::BOLD)
         } else if selected {
             selection
         } else {
@@ -424,7 +459,9 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
             ),
             ratatui::text::Span::styled(format!(" {} ", clean(field.label)), label_style),
         ]);
-        let value = if field.presentation.disabled {
+        let value = if field.presentation.computed {
+            format!("{} [computed]", clean(field.value))
+        } else if field.presentation.disabled {
             format!(
                 "{} [disabled]",
                 if field.action {
@@ -460,6 +497,25 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
                 Style::default()
             })
             .fg(theme.subtext)
+        } else if field.presentation.computed {
+            (if selected {
+                selection
+            } else {
+                Style::default()
+            })
+            .fg(theme.computed)
+        } else if field.action {
+            (if selected {
+                selection
+            } else {
+                Style::default()
+            })
+            .fg(if field.presentation.add {
+                theme.add
+            } else {
+                theme.error
+            })
+            .add_modifier(Modifier::BOLD)
         } else if selected {
             selection
         } else if field.presentation.constructor {
@@ -643,6 +699,12 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         frame.render_widget(
             Paragraph::new(
                 if screen
+                    .fields
+                    .get(screen.selected)
+                    .is_some_and(|f| f.presentation.computed)
+                {
+                    "Computed · ↑/↓ select · q submit · x cancel"
+                } else if screen
                     .fields
                     .get(screen.selected)
                     .is_some_and(|f| f.presentation.disabled)

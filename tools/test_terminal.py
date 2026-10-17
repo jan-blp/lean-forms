@@ -108,7 +108,7 @@ for args in [["--theme"], ["--theme", "unknown"], ["--theme", "dark"], ["--theme
     assert result.returncode != 0 and "theme" in result.stderr
 
 # Add a second item, remove the first, and submit through Lean validation.
-session(b"jjjj\rk\rq", [{"description": "New item", "quantity": 1, "unitPrice": 100}], invoice=True)
+session(b"jjjjj\rk\rq", [{"description": "New item", "quantity": 1, "unitPrice": 100}], invoice=True)
 
 # A scalar payload, a record payload, and an empty constructor in the shapes demo.
 session(b"q", {"tag": "circle", "value": 3}, shapes=True)
@@ -120,3 +120,6 @@ session(b"j\r\x155\rk\rj\r\rk\rq", {"tag": "circle", "value": 5}, shapes=True)
 
 # An invalid cached circle does not block submission of the empty constructor.
 session(b"j\r\x150\rqk\rk\rq", {"tag": "dot", "value": {}}, shapes=True)
+
+output = session(b"j\r\x153\rjjjjj\ri q", [{"description": "New item", "quantity": 3, "unitPrice": 100}], invoice=True)
+assert b"300 [computed]" in output
