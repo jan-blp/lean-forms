@@ -142,9 +142,9 @@ def Component.toJson {state : DataType} (component : Component state) : Json :=
       ("defaults", Json.mkObj ((FinEnum.toList tags).map fun tag => (tags.label tag, Runtime.JsonProtocol.valueToJson (defaults tag))))]
   | .visibleWhen condition body => Json.mkObj [
       ("kind", Lean.toJson "visibleWhen"), ("condition", Expr.toJson condition), ("body", Component.toJson body)]
-  | .stack (items := items) label children => Json.mkObj [
+  | .stack (items := items) label children order => Json.mkObj [
       ("kind", Lean.toJson "stack"), ("label", Lean.toJson label),
-      ("children", Lean.toJson ((FinEnum.toList items).map fun index => Component.toJson (children index)))]
+      ("children", Lean.toJson ((FinEnum.toList items).map fun index => Component.toJson (children (order index))))]
 
 def Constraint.toJson (constraint : Constraint root) : Json :=
   Json.mkObj [("condition", Expr.toJson constraint.condition), ("errorMessage", Lean.toJson constraint.errorMessage),

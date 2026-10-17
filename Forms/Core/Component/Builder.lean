@@ -14,8 +14,9 @@ def field {state value : DataType} (label : String) (widget : Widget value)
 def group {state : DataType} {fields : Enum} {types : fields → DataType}
     (label : String)
     (children : (i : fields) → Component.Builder state (types i))
+    (displayOrder : Equiv.Perm fields := Equiv.refl _)
     : Component.Builder state (.record fields types) :=
-  fun path => .stack (some label) (fun i => children i (path.trans (.field i .self)))
+  fun path => .stack (some label) (fun i => children i (path.trans (.field i .self))) displayOrder
 
 def list {state element : DataType}
     (label : String)

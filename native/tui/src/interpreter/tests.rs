@@ -578,6 +578,76 @@ fn record_fields_named_tag_and_value_are_not_sum_payloads() {
 }
 
 #[test]
+fn display_order_changes_navigation_without_changing_values_or_validation() {
+    let mut spec: Value =
+        serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
+    spec["form"]["children"].as_array_mut().unwrap().reverse();
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(
+        e.fields()
+            .iter()
+            .map(|field| field.title.as_str())
+            .collect::<Vec<_>>(),
+        ["Away temperature (C)", "Home temperature (C)"]
+    );
+    assert_eq!(e.shown(&e.fields()[0]), "18");
+    edit(&mut e, "23");
+    assert_eq!(e.spec.value, json!({"home":"22","away":"23"}));
+    assert!(e.errors()[0].starts_with("Away temperature (C):"));
+    assert!(e.step(Key::Character('q')));
+    keys(&mut e, &[Key::Down]);
+    edit(&mut e, "24");
+    assert!(!e.step(Key::Character('q')));
+    assert_eq!(
+        serde_json::from_str::<Value>(&e.result()).unwrap(),
+        json!({"home":"24","away":"23"})
+    );
+}
+
+#[test]
+fn display_order_applies_inside_lists_and_sum_payloads() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
+    spec["form"]["item"]["children"]
+        .as_array_mut()
+        .unwrap()
+        .rotate_right(1);
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(e.fields()[0].title, "Unit price (cents)");
+    edit(&mut e, "250");
+    assert_eq!(e.spec.value[0]["unitPrice"], "250");
+    e.selected = 4;
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(e.fields()[4].title, "Unit price (cents)");
+
+    let mut spec = shapes_spec();
+    spec["form"]["branches"]["rectangle"]["children"]
+        .as_array_mut()
+        .unwrap()
+        .reverse();
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    select_constructor(&mut e, 2);
+    assert_eq!(e.fields()[1].title, "Height");
+    e.selected = 1;
+    edit(&mut e, "8");
+    assert_eq!(e.spec.value["value"], json!({"width":"4", "height":"8"}));
+    e.selected = 0;
+    select_constructor(&mut e, 0);
+    select_constructor(&mut e, 2);
+    assert_eq!(e.shown(&e.fields()[1]), "8");
+}
+
+#[test]
+fn hidden_components_still_validate_bound_paths() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
+    for path in [json!(["unknown"]), json!(["home", "away"]), json!([0])] {
+        let mut spec = source.clone();
+        spec["form"]["children"][0]["path"] = path;
+        spec["form"] = json!({"kind":"visibleWhen", "condition":json!({"kind":"value","type":{"kind":"boolean"},"value":false}), "body":spec["form"]});
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
+}
+
+#[test]
 fn date_calendar_rules_and_picker_modes() {
     let cases: Value = serde_json::from_str(include_str!("../../tests/dates.json")).unwrap();
     for value in cases["valid"].as_array().unwrap() {

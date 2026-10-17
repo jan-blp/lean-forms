@@ -14,6 +14,7 @@ inductive Component : (state : DataType) → Type 1 where
       {items : Enum}
       (label : Option String := none)
       (children : items → Component state)
+      (order : Equiv.Perm items := Equiv.refl _)
       : Component state
   | list
       {state element : DataType}
