@@ -44,15 +44,22 @@ def newItem : RefinedDataType.ValidatedValue itemType
 def initial : RefinedDataType.ValidatedValue invoiceType := [newItem]
 def draft : ⟦invoice⟧ := RefinedDataType.erase invoiceType initial
 
+def subtotal : Expr item .natural :=
+  .natMul (.project (.field .quantity .self)) (.project (.field .unitPrice .self))
+
 def itemForm : Component item :=
   (show Component.Builder item item from
-    Component.Builder.group "Item" fun
-      | .description => Component.Builder.field "Description" .textInput
-      | .quantity => Component.Builder.field "Quantity" .naturalInput
-      | .unitPrice => Component.Builder.field "Unit price (cents)" .naturalInput) .self
+    Component.Builder.computed "Subtotal (cents)" subtotal
+      (Component.Builder.group "Item" fun
+        | .description => Component.Builder.field "Description" .textInput
+        | .quantity => Component.Builder.field "Quantity" .naturalInput
+        | .unitPrice => Component.Builder.field "Unit price (cents)" .naturalInput)) .self
+
+def total : Expr invoice .natural := .sum (.project .self) subtotal
 
 def form : Component invoice :=
   (show Component.Builder invoice invoice from
-    Component.Builder.list "Invoice" (fun _ => itemForm) (RefinedDataType.erase itemType newItem)) .self
+    Component.Builder.computed "Total (cents)" total
+      (Component.Builder.list "Invoice" (fun _ => itemForm) (RefinedDataType.erase itemType newItem))) .self
 
 end Forms.ExampleForms.Invoice

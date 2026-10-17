@@ -56,79 +56,142 @@
     }
   ],
   "form": {
-    "defaultItem": {
-      "description": "New item",
-      "quantity": "1",
-      "unitPrice": "100"
-    },
-    "item": {
-      "kind": "stack",
-      "label": "Item",
-      "children": [
-        {
-          "kind": "field",
-          "label": "Description",
-          "widget": "textInput",
-          "path": [
-            "description"
-          ],
-          "schema": {
-            "kind": "text"
-          }
+    "kind": "stack",
+    "label": null,
+    "children": [
+      {
+        "defaultItem": {
+          "description": "New item",
+          "quantity": "1",
+          "unitPrice": "100"
         },
-        {
-          "kind": "field",
-          "label": "Quantity",
-          "widget": "naturalInput",
-          "path": [
-            "quantity"
-          ],
-          "schema": {
-            "kind": "natural"
-          }
+        "item": {
+          "kind": "stack",
+          "label": null,
+          "children": [
+            {
+              "kind": "stack",
+              "label": "Item",
+              "children": [
+                {
+                  "kind": "field",
+                  "label": "Description",
+                  "widget": "textInput",
+                  "path": [
+                    "description"
+                  ],
+                  "schema": {
+                    "kind": "text"
+                  }
+                },
+                {
+                  "kind": "field",
+                  "label": "Quantity",
+                  "widget": "naturalInput",
+                  "path": [
+                    "quantity"
+                  ],
+                  "schema": {
+                    "kind": "natural"
+                  }
+                },
+                {
+                  "kind": "field",
+                  "label": "Unit price (cents)",
+                  "widget": "naturalInput",
+                  "path": [
+                    "unitPrice"
+                  ],
+                  "schema": {
+                    "kind": "natural"
+                  }
+                }
+              ]
+            },
+            {
+              "expression": {
+                "kind": "natMul",
+                "left": {
+                  "kind": "project",
+                  "path": [
+                    "quantity"
+                  ]
+                },
+                "right": {
+                  "kind": "project",
+                  "path": [
+                    "unitPrice"
+                  ]
+                }
+              },
+              "kind": "computed",
+              "label": "Subtotal (cents)",
+              "type": {
+                "kind": "natural"
+              }
+            }
+          ]
         },
-        {
-          "kind": "field",
-          "label": "Unit price (cents)",
-          "widget": "naturalInput",
-          "path": [
-            "unitPrice"
-          ],
-          "schema": {
-            "kind": "natural"
-          }
+        "kind": "list",
+        "label": "Invoice",
+        "path": [],
+        "schema": {
+          "element": {
+            "fields": [
+              {
+                "name": "description",
+                "type": {
+                  "kind": "text"
+                }
+              },
+              {
+                "name": "quantity",
+                "type": {
+                  "kind": "natural"
+                }
+              },
+              {
+                "name": "unitPrice",
+                "type": {
+                  "kind": "natural"
+                }
+              }
+            ],
+            "kind": "record"
+          },
+          "kind": "list"
         }
-      ]
-    },
-    "kind": "list",
-    "label": "Invoice",
-    "path": [],
-    "schema": {
-      "element": {
-        "fields": [
-          {
-            "name": "description",
-            "type": {
-              "kind": "text"
-            }
-          },
-          {
-            "name": "quantity",
-            "type": {
-              "kind": "natural"
-            }
-          },
-          {
-            "name": "unitPrice",
-            "type": {
-              "kind": "natural"
-            }
-          }
-        ],
-        "kind": "record"
       },
-      "kind": "list"
-    }
+      {
+        "expression": {
+          "expression": {
+            "kind": "natMul",
+            "left": {
+              "kind": "project",
+              "path": [
+                "quantity"
+              ]
+            },
+            "right": {
+              "kind": "project",
+              "path": [
+                "unitPrice"
+              ]
+            }
+          },
+          "items": {
+            "kind": "project",
+            "path": []
+          },
+          "kind": "sum"
+        },
+        "kind": "computed",
+        "label": "Total (cents)",
+        "type": {
+          "kind": "natural"
+        }
+      }
+    ]
   },
   "schema": {
     "element": {

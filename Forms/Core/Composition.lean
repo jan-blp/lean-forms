@@ -32,6 +32,11 @@ inductive Component : (state : DataType) → Type 1 where
       (branches : (tag : tags) → Component (constructors tag))
       (defaults : (tag : tags) → ⟦constructors tag⟧)
       : Component state
+  | computed
+      {state result : DataType}
+      (label : String)
+      (expression : Expr state result)
+      : Component state
   | visibleWhen
       {state : DataType}
       (condition : Expr state .boolean)
