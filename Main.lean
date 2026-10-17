@@ -1,5 +1,5 @@
-import Forms.ExampleForms.Location
 import Forms.ExampleForms.Booking
+import Forms.ExampleForms.Location
 import Forms.ExampleForms.Shapes
 import Forms.Runtime.Cli
 import Forms.ExampleForms.Invoice
@@ -40,9 +40,9 @@ def runForm (theme : NativeTerminal.Theme)
 private def cli : Cli NativeTerminal.Theme where
   examples := [
     ("person", fun theme => runForm theme Person.personType Person.form Person.initial),
+    ("booking", fun theme => runForm theme Booking.bookingType Booking.form Booking.initial),
     ("location", fun theme => runForm theme Location.locationType Location.form Location.initial),
     ("shapes", fun theme => runForm theme Shapes.shapeType Shapes.form Shapes.initial),
-    ("booking", fun theme => runForm theme Booking.bookingType Booking.form Booking.initial),
     ("invoice", fun theme => runForm theme Invoice.invoiceType Invoice.form Invoice.initial),
     ("thermostat", fun theme => runForm theme Thermostat.thermostatType Thermostat.form Thermostat.initial)]
   options := [("--theme", NativeTerminal.Theme.choices)]

@@ -17,23 +17,31 @@ fn text(engine: &mut Engine, text: &str) {
     }
 }
 fn edit(engine: &mut Engine, input: &str) {
-    keys(engine, &[Key::Enter, Key::Clear]);
+    keys(engine, &[Key::Enter]);
+    if engine
+        .editor
+        .as_ref()
+        .is_some_and(|editor| editor.calendar.is_some())
+    {
+        keys(engine, &[Key::Character('i')]);
+    }
+    keys(engine, &[Key::Clear]);
     text(engine, input);
     keys(engine, &[Key::Enter]);
 }
 #[test]
 fn repeated_items_add_remove_edit_and_validate() {
     let mut e = Engine::parse(include_str!("../../tests/invoice.json")).unwrap();
-    assert_eq!(e.fields().len(), 5);
-    e.selected = 4;
-    keys(&mut e, &[Key::Enter]);
-    assert_eq!(e.fields().len(), 9);
-    edit(&mut e, "Second");
+    assert_eq!(e.fields().len(), 7);
     e.selected = 5;
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(e.fields().len(), 12);
+    edit(&mut e, "Second");
+    e.selected = 6;
     edit(&mut e, "0");
     assert_eq!(e.errors().len(), 1);
     assert!(e.step(Key::Character('q')));
-    e.selected = 3;
+    e.selected = 4;
     keys(&mut e, &[Key::Enter]);
     assert_eq!(
         e.spec.value,
@@ -42,10 +50,11 @@ fn repeated_items_add_remove_edit_and_validate() {
     e.selected = 1;
     edit(&mut e, "2");
     assert!(e.errors().is_empty());
-    e.selected = 3;
+    e.selected = 4;
     keys(&mut e, &[Key::Enter]);
-    assert_eq!(e.fields().len(), 1);
+    assert_eq!(e.fields().len(), 2);
     assert_eq!(e.spec.value, json!([]));
+    e.selected = 0;
     keys(&mut e, &[Key::Enter]);
     assert_eq!(
         e.spec.value,
@@ -57,8 +66,8 @@ fn repeated_items_add_remove_edit_and_validate() {
 #[test]
 fn nested_lists_and_item_visibility_use_local_scope() {
     let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
-    let item = spec["form"]["item"].clone();
-    spec["form"]["item"] = json!({"kind":"visibleWhen", "condition":{
+    let item = spec["form"]["body"]["item"].clone();
+    spec["form"]["body"]["item"] = json!({"kind":"visibleWhen", "condition":{
         "kind":"natLe", "left":{"kind":"value", "type":{"kind":"natural"}, "value":"1"},
         "right":{"kind":"project", "path":["quantity"]}}, "body":item});
     let inner_schema = spec["schema"].clone();
@@ -69,12 +78,12 @@ fn nested_lists_and_item_visibility_use_local_scope() {
     spec["value"] = json!([inner_value]);
     spec["constraints"] = json!([]);
     let mut e = Engine::parse(&spec.to_string()).unwrap();
-    assert_eq!(e.fields().len(), 7);
+    assert_eq!(e.fields().len(), 9);
     e.selected = 1;
     edit(&mut e, "0");
-    assert_eq!(e.fields().len(), 4);
+    assert_eq!(e.fields().len(), 5);
     assert_eq!(e.fields()[0].path, vec![Step::Item(0), Step::Item(0)]);
-    e.selected = 3;
+    e.selected = 4;
     keys(&mut e, &[Key::Enter]);
     assert_eq!(e.spec.value[1], json!([]));
     keys(&mut e, &[Key::Enter]);
@@ -93,7 +102,7 @@ fn malformed_lists_and_defaults_are_rejected() {
         assert!(Engine::parse(&spec.to_string()).is_err());
     }
     let mut spec = source;
-    spec["form"]["defaultItem"] = json!(false);
+    spec["form"]["body"]["defaultItem"] = json!(false);
     assert!(Engine::parse(&spec.to_string()).is_err());
 }
 
@@ -605,14 +614,15 @@ fn display_order_changes_navigation_without_changing_values_or_validation() {
 #[test]
 fn display_order_applies_inside_lists_and_sum_payloads() {
     let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
-    spec["form"]["item"]["displayOrder"] = json!(["unitPrice", "description", "quantity"]);
+    spec["form"]["body"]["item"]["body"]["displayOrder"] =
+        json!(["unitPrice", "description", "quantity"]);
     let mut e = Engine::parse(&spec.to_string()).unwrap();
     assert_eq!(e.fields()[0].title, "Unit price (cents)");
     edit(&mut e, "250");
     assert_eq!(e.spec.value[0]["unitPrice"], "250");
-    e.selected = 4;
+    e.selected = 5;
     keys(&mut e, &[Key::Enter]);
-    assert_eq!(e.fields()[4].title, "Unit price (cents)");
+    assert_eq!(e.fields()[5].title, "Unit price (cents)");
 
     let mut spec = shapes_spec();
     spec["form"]["branches"]["rectangle"]["displayOrder"] = json!(["height", "width"]);
@@ -717,10 +727,10 @@ fn disabled_conditions_use_payload_and_item_scope() {
     assert!(e.fields()[1].presentation.disabled);
     let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
     let condition = json!({"kind":"natLe", "left":{"kind":"project", "path":["quantity"]}, "right":{"kind":"value", "type":{"kind":"natural"}, "value":"5"}});
-    spec["form"]["item"] = disabled(condition, spec["form"]["item"].take());
+    spec["form"]["body"]["item"] = disabled(condition, spec["form"]["body"]["item"].take());
     let e = Engine::parse(&spec.to_string()).unwrap();
-    assert!(e.fields()[0..3].iter().all(|f| f.presentation.disabled));
-    assert!(e.fields()[3..].iter().all(|f| !f.presentation.disabled));
+    assert!(e.fields()[0..4].iter().all(|f| f.presentation.disabled));
+    assert!(e.fields()[4..].iter().all(|f| !f.presentation.disabled));
 }
 
 #[test]
@@ -732,27 +742,90 @@ fn negation_rejects_non_boolean_operands() {
 }
 
 #[test]
-fn date_calendar_rules_and_picker_modes() {
-    let cases: Value = serde_json::from_str(include_str!("../../tests/dates.json")).unwrap();
-    for value in cases["valid"].as_array().unwrap() {
-        assert_eq!(
-            date(value.as_str().unwrap()).unwrap().to_string(),
-            value.as_str().unwrap()
-        );
-    }
-    for value in cases["invalid"].as_array().unwrap() {
-        assert!(date(value.as_str().unwrap()).is_none());
-    }
-    let spec = serde_json::json!({"version":2,"constraints":[],  "schema":{"kind":"date"}, "form":{"kind":"field","label":"Date","widget":"dateInput"}, "value":"2028-02-28"});
-    let mut e = Engine::parse(&spec.to_string()).unwrap();
-    e.step(Key::Enter);
-    e.step(Key::Character('l'));
-    assert_eq!(e.editor.as_ref().unwrap().text, "2028-02-29");
-    e.step(Key::Enter);
-    assert!(e.editor.as_ref().unwrap().date_input);
-    e.step(Key::Enter);
+fn computed_total_updates_and_is_never_submitted_or_edited() {
+    let mut e = Engine::parse(include_str!("../../tests/invoice.json")).unwrap();
+    let total = |e: &Engine| e.shown(e.fields().last().unwrap());
+    assert_eq!(total(&e), "100");
+    e.selected = 1;
+    edit(&mut e, "3");
+    assert_eq!(total(&e), "300");
+    e.selected = 5;
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(total(&e), "400");
+    e.selected = 4;
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(total(&e), "100");
+    let value = e.spec.value.clone();
+    e.selected = e.fields().len() - 1;
+    keys(
+        &mut e,
+        &[Key::Enter, Key::Character('i'), Key::Character(' ')],
+    );
     assert!(e.editor.is_none());
-    assert_eq!(e.spec.value, "2028-02-29");
+    assert_eq!(e.spec.value, value);
+    assert!(!e.step(Key::Character('q')));
+    assert_eq!(serde_json::from_str::<Value>(&e.result()).unwrap(), value);
+    e.selected = 4;
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(total(&e), "0");
+}
+
+#[test]
+fn computed_arithmetic_is_unbounded() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
+    // (10^40 - 1)^2 = 10^80 - 2*10^40 + 1.
+    let n = "9".repeat(40);
+    spec["value"][0]["quantity"] = json!(n);
+    spec["value"][0]["unitPrice"] = json!(n);
+    let e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(
+        e.shown(e.fields().last().unwrap()),
+        format!("{}8{}1", "9".repeat(39), "0".repeat(39))
+    );
+    spec["value"] = json!([
+        {"description":"Large", "quantity":"9".repeat(80), "unitPrice":"1"},
+        {"description":"One", "quantity":"1", "unitPrice":"1"}
+    ]);
+    let e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(
+        e.shown(e.fields().last().unwrap()),
+        format!("1{}", "0".repeat(80))
+    );
+}
+
+#[test]
+fn computed_expressions_are_checked_even_when_hidden() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
+    for expression in [
+        json!({"kind":"project", "path":[]}),
+        json!({"kind":"natMul", "left":{"kind":"project", "path":[]}, "right":{"kind":"project", "path":[]}}),
+        json!({"kind":"sum", "items":{"kind":"project", "path":[]}, "expression":{"kind":"project", "path":["description"]}}),
+    ] {
+        let mut spec = source.clone();
+        spec["form"]["expression"] = expression;
+        spec["form"] =
+            json!({"kind":"visibleWhen", "condition":boolean(false), "body":spec["form"].take()});
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
+}
+
+#[test]
+fn computed_values_use_item_and_constructor_scope() {
+    let spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(e.shown(&e.fields()[3]), "100");
+    e.selected = 1;
+    edit(&mut e, "2");
+    assert_eq!(e.shown(&e.fields()[3]), "200");
+    let mut spec = shapes_spec();
+    spec["value"] = json!({"tag":"circle", "value":"7"});
+    spec["form"]["branches"]["circle"] = json!({"kind":"computed", "label":"Radius copy", "type":{"kind":"natural"},
+        "expression":{"kind":"project", "path":[]}, "body":spec["form"]["branches"]["circle"].take()});
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(e.shown(&e.fields()[2]), "7");
+    e.selected = 1;
+    edit(&mut e, "9");
+    assert_eq!(e.shown(&e.fields()[2]), "9");
 }
 
 #[test]
@@ -780,4 +853,165 @@ fn country_selects_city_type_and_preserves_each_selection() {
         serde_json::from_str::<Value>(&e.result()).unwrap(),
         json!({"tag":"Japan", "value":1})
     );
+}
+
+#[test]
+fn date_validation_matches_lean_and_rejects_invalid_initial_values() {
+    let cases: Value = serde_json::from_str(include_str!("../../tests/dates.json")).unwrap();
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/booking.json")).unwrap();
+    for value in cases["valid"].as_array().unwrap() {
+        assert_eq!(
+            date(value.as_str().unwrap()).unwrap().to_string(),
+            value.as_str().unwrap()
+        );
+        spec["value"]["startDate"] = value.clone();
+        assert!(Engine::parse(&spec.to_string()).is_ok());
+    }
+    for value in cases["invalid"].as_array().unwrap() {
+        assert!(date(value.as_str().unwrap()).is_none());
+        spec["value"]["startDate"] = value.clone();
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
+}
+
+#[test]
+fn date_editor_and_comparisons_preserve_calendar_validity() {
+    let mut e = Engine::parse(include_str!("../../tests/booking.json")).unwrap();
+    edit(&mut e, "2023-02-29");
+    assert!(e
+        .editor
+        .as_ref()
+        .unwrap()
+        .error
+        .as_ref()
+        .unwrap()
+        .contains("YYYY-MM-DD"));
+    assert_eq!(e.spec.value["startDate"], "2028-02-28");
+    keys(&mut e, &[Key::Clear]);
+    text(&mut e, "2028-02-29");
+    keys(&mut e, &[Key::Enter]);
+    assert!(e.editor.is_none());
+    assert!(e.errors().is_empty());
+    e.selected = 1;
+    edit(&mut e, "2028-02-28");
+    assert_eq!(e.errors().len(), 1);
+    assert!(e.step(Key::Character('q')));
+    edit(&mut e, "2028-02-29");
+    assert!(e.errors().is_empty());
+    assert!(!e.step(Key::Character('q')));
+    assert_eq!(
+        serde_json::from_str::<Value>(&e.result()).unwrap(),
+        json!({"startDate":"2028-02-29", "endDate":"2028-02-29"})
+    );
+}
+
+#[test]
+fn date_expressions_and_widgets_are_type_checked() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/booking.json")).unwrap();
+    let mut spec = source.clone();
+    spec["form"]["children"]["startDate"]["widget"] = json!("textInput");
+    assert!(Engine::parse(&spec.to_string()).is_err());
+    let mut spec = source.clone();
+    spec["constraints"][0]["condition"]["left"] =
+        json!({"kind":"value", "type":{"kind":"text"}, "value":"2028-02-28"});
+    assert!(Engine::parse(&spec.to_string()).is_err());
+    spec["constraints"][0]["condition"]["left"] =
+        json!({"kind":"value", "type":{"kind":"date"}, "value":"2028-02-30"});
+    assert!(Engine::parse(&spec.to_string()).is_err());
+    let mut spec = source;
+    spec["form"] = json!({"kind":"computed", "label":"Start copy", "type":{"kind":"date"},
+        "expression":{"kind":"project", "path":["startDate"]}, "body":spec["form"].take()});
+    let e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(e.shown(e.fields().last().unwrap()), "2028-02-28");
+}
+
+#[test]
+fn booking_date_range_includes_endpoints_and_blocks_outside_dates() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/booking.json")).unwrap();
+    for endpoint in ["2028-01-01", "2028-12-31"] {
+        spec["value"] = json!({"startDate":endpoint, "endDate":endpoint});
+        let e = Engine::parse(&spec.to_string()).unwrap();
+        assert!(e.errors().is_empty());
+    }
+    let mut e = Engine::parse(include_str!("../../tests/booking.json")).unwrap();
+    e.selected = 1;
+    edit(&mut e, "2029-01-01");
+    assert_eq!(e.errors().len(), 1);
+    assert!(e.errors()[0].contains("between 2028-01-01 and 2028-12-31"));
+    assert!(e.step(Key::Character('q')));
+    edit(&mut e, "2028-12-31");
+    e.selected = 0;
+    edit(&mut e, "2027-12-31");
+    assert_eq!(e.errors().len(), 1);
+    assert!(e.step(Key::Character('q')));
+    edit(&mut e, "2028-01-01");
+    assert!(!e.step(Key::Character('q')));
+}
+
+#[test]
+fn date_picker_modes_navigation_and_text_stay_in_sync() {
+    let mut e = Engine::parse(include_str!("../../tests/booking.json")).unwrap();
+    let original = e.spec.value.clone();
+    keys(&mut e, &[Key::Enter, Key::Character('l')]);
+    assert_eq!(e.editor.as_ref().unwrap().text, "2028-02-29");
+    keys(&mut e, &[Key::Character('j')]);
+    assert_eq!(e.editor.as_ref().unwrap().text, "2028-03-07");
+    keys(&mut e, &[Key::Character('k'), Key::Character('h')]);
+    assert_eq!(e.editor.as_ref().unwrap().text, "2028-02-28");
+    keys(&mut e, &[Key::Character('9'), Key::Clear, Key::Backspace]);
+    assert_eq!(e.editor.as_ref().unwrap().text, "2028-02-28");
+    keys(&mut e, &[Key::Character('i'), Key::Clear]);
+    text(&mut e, "2028-01-31");
+    assert_eq!(e.editor.as_ref().unwrap().calendar, date("2028-01-31"));
+    keys(&mut e, &[Key::Character('h')]);
+    assert_eq!(e.editor.as_ref().unwrap().text, "2028-01-31h");
+    keys(&mut e, &[Key::Backspace, Key::Escape, Key::PageDown]);
+    assert_eq!(e.editor.as_ref().unwrap().text, "2028-02-29");
+    keys(&mut e, &[Key::PageUp]);
+    assert_eq!(e.editor.as_ref().unwrap().text, "2028-01-29");
+    assert_eq!(e.spec.value, original);
+    keys(&mut e, &[Key::Escape]);
+    assert_eq!(e.spec.value, original);
+    keys(&mut e, &[Key::Enter, Key::Right, Key::Enter]);
+    assert!(e.editor.as_ref().unwrap().date_input);
+    assert_eq!(e.spec.value, original);
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(e.spec.value["startDate"], "2028-02-29");
+}
+
+#[test]
+fn date_picker_handles_invalid_text_and_year_limits() {
+    let mut e = Engine::parse(include_str!("../../tests/booking.json")).unwrap();
+    keys(&mut e, &[Key::Enter, Key::Enter, Key::Clear]);
+    text(&mut e, "2028-02-30");
+    keys(&mut e, &[Key::Enter]);
+    assert!(e.editor.as_ref().unwrap().error.is_some());
+    assert_eq!(e.editor.as_ref().unwrap().calendar, date("2028-02-28"));
+    keys(&mut e, &[Key::Escape, Key::Right]);
+    assert_eq!(e.editor.as_ref().unwrap().text, "2028-02-29");
+    assert!(e.editor.as_ref().unwrap().error.is_none());
+    keys(&mut e, &[Key::Character('i'), Key::Clear]);
+    text(&mut e, "0001-01-01");
+    keys(
+        &mut e,
+        &[
+            Key::Escape,
+            Key::Character('h'),
+            Key::Character('k'),
+            Key::PageUp,
+        ],
+    );
+    assert_eq!(e.editor.as_ref().unwrap().text, "0001-01-01");
+    keys(&mut e, &[Key::Character('i'), Key::Clear]);
+    text(&mut e, "9999-12-31");
+    keys(
+        &mut e,
+        &[
+            Key::Escape,
+            Key::Character('l'),
+            Key::Character('j'),
+            Key::PageDown,
+        ],
+    );
+    assert_eq!(e.editor.as_ref().unwrap().text, "9999-12-31");
 }

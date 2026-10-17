@@ -43,12 +43,20 @@ def newItem : RefinedDataType.ValidatedValue itemType
 def initial : RefinedDataType.ValidatedValue invoiceType := [newItem]
 def draft : DataType.denote shape := RefinedDataType.erase invoiceType initial
 
-def itemForm : Form itemShape itemShape :=
-  .group "Item" fun
-    | .description => .field "Description" .textInput
-    | .quantity => .field "Quantity" .naturalInput
-    | .unitPrice => .field "Unit price (cents)" .naturalInput
+def subtotal : Expr itemShape .natural :=
+  .natMul (.project (.child .quantity .self)) (.project (.child .unitPrice .self))
 
-def form : Form shape shape := .list "Invoice" itemForm (RefinedDataType.erase itemType newItem)
+def itemForm : Form itemShape itemShape :=
+  .computed "Subtotal (cents)" subtotal
+    (.group "Item" fun
+      | .description => .field "Description" .textInput
+      | .quantity => .field "Quantity" .naturalInput
+      | .unitPrice => .field "Unit price (cents)" .naturalInput)
+
+def total : Expr shape .natural := .sum (.project .self) subtotal
+
+def form : Form shape shape :=
+  .computed "Total (cents)" total
+    (.list "Invoice" itemForm (RefinedDataType.erase itemType newItem))
 
 end Forms.ExampleForms.Invoice
