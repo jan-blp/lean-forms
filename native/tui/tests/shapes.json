@@ -146,6 +146,7 @@
       },
       "dot": {
         "children": {},
+        "displayOrder": [],
         "kind": "group",
         "label": "Dot"
       },
@@ -162,6 +163,10 @@
             "widget": "naturalInput"
           }
         },
+        "displayOrder": [
+          "width",
+          "height"
+        ],
         "kind": "group",
         "label": "Dimensions"
       }

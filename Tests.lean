@@ -234,6 +234,26 @@ private def testRecords : IO Unit := do
     | _ => false)
   check "PathsEncodeFieldNames" (Path.toList ExampleForms.Person.street == ["address", "street"])
 
+private def testDisplayOrder : IO Unit := do
+  let form : Form ExampleForms.Thermostat.thermostat ExampleForms.Thermostat.thermostat :=
+    .group "Thermostat"
+      (fun | .home => .field "Home" .naturalInput | .away => .field "Away" .naturalInput)
+      (displayOrder := Equiv.swap .home .away)
+  let draft := ExampleForms.Thermostat.draft
+  let fields := Form.fieldRefs form draft draft
+  check "DisplayOrderReordersFields" (fields.map (·.labels) == [["Thermostat", "Away"], ["Thermostat", "Home"]])
+  check "DisplayOrderPreservesFieldIdentity" (fields.map (·.indices) == [[1], [0]])
+  check "DisplayOrderEncodesNames" (match (Form.toJson form).getObjVal? "displayOrder" with
+    | .ok order => order == Lean.toJson (["away", "home"] : List String)
+    | .error _ => false)
+  let hidden : Form ExampleForms.Thermostat.thermostat ExampleForms.Thermostat.thermostat :=
+    .group "Thermostat"
+      (fun
+        | .home => .field "Home" .naturalInput
+        | .away => .visibleWhen (.value false) (.field "Away" .naturalInput))
+      (displayOrder := Equiv.swap .home .away)
+  check "DisplayOrderRespectsVisibility" ((Form.fieldRefs hidden draft draft).map (·.indices) == [[0]])
+
 private def testProtocol : IO Unit := do
   for (fixture, encoded) in [
       ("native/tui/tests/location.json", JsonProtocol.encode ExampleForms.Location.locationType ExampleForms.Location.form ExampleForms.Location.draft),
@@ -271,6 +291,7 @@ def main : IO Unit := do
   testLists
   testSums
   testRecords
+  testDisplayOrder
 
 section Theorems
 

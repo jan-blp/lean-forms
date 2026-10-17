@@ -66,6 +66,10 @@
             "kind": "visibleWhen"
           }
         },
+        "displayOrder": [
+          "street",
+          "kind"
+        ],
         "kind": "group",
         "label": "Address"
       },
@@ -85,6 +89,12 @@
         "widget": "checkbox"
       }
     },
+    "displayOrder": [
+      "name",
+      "age",
+      "subscribed",
+      "address"
+    ],
     "kind": "group",
     "label": "Registration"
   },

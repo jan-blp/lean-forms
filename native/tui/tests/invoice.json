@@ -79,6 +79,11 @@
           "widget": "naturalInput"
         }
       },
+      "displayOrder": [
+        "description",
+        "quantity",
+        "unitPrice"
+      ],
       "kind": "group",
       "label": "Item"
     },

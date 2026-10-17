@@ -117,6 +117,10 @@
         "widget": "dateInput"
       }
     },
+    "displayOrder": [
+      "startDate",
+      "endDate"
+    ],
     "kind": "group",
     "label": "Booking"
   },
