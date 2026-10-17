@@ -119,8 +119,9 @@ def Form.toJson {root t} (form : Form root t) : Json :=
       ("defaultItem", Runtime.JsonProtocol.valueToJson defaultItem)]
   | .field label widget => Json.mkObj [("kind", Lean.toJson "field"), ("label", Lean.toJson label),
       ("widget", Lean.toJson (Widget.name widget))]
-  | .group (fields := fields) label children => Json.mkObj [("kind", Lean.toJson "group"), ("label", Lean.toJson label),
-      ("children", Json.mkObj ((FinEnum.toList fields.type).map fun i => (fields.label i, Form.toJson (children i))))]
+  | .group (fields := fields) label children displayOrder => Json.mkObj [("kind", Lean.toJson "group"), ("label", Lean.toJson label),
+      ("children", Json.mkObj ((FinEnum.toList fields.type).map fun i => (fields.label i, Form.toJson (children i)))),
+      ("displayOrder", Lean.toJson ((FinEnum.toList fields.type).map fun i => fields.label (displayOrder i)))]
   | .visibleWhen condition body => Json.mkObj [("kind", Lean.toJson "visibleWhen"),
       ("condition", Expr.toJson condition), ("body", Form.toJson body)]
 

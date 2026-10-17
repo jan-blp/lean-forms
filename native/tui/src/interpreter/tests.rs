@@ -482,7 +482,8 @@ fn named_fields_and_constructors_survive_schema_reordering() {
         serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
     spec["schema"]["fields"].as_array_mut().unwrap().reverse();
     let mut e = Engine::parse(&spec.to_string()).unwrap();
-    assert_eq!(e.fields()[0].title, "Away temperature (C)");
+    assert_eq!(e.fields()[0].title, "Home temperature (C)");
+    e.selected = 1;
     edit(&mut e, "23");
     assert_eq!(e.spec.value, json!({"home":"22","away":"23"}));
     assert_eq!(e.errors().len(), 1);
@@ -555,7 +556,7 @@ fn record_fields_named_tag_and_value_are_not_sum_payloads() {
     let spec = json!({"version":2,"constraints":[],
         "schema":{"kind":"record","fields":[{"name":"tag","type":{"kind":"text"}},
             {"name":"value","type":{"kind":"natural"}}]},
-        "form":{"kind":"group","label":"Record","children":{
+        "form":{"kind":"group","label":"Record","displayOrder":["tag","value"],"children":{
             "tag":{"kind":"field","label":"Tag","widget":"textInput"},
             "value":{"kind":"field","label":"Value","widget":"naturalInput"}}},
         "value":{"tag":"hello","value":"3"}});
@@ -568,4 +569,76 @@ fn record_fields_named_tag_and_value_are_not_sum_payloads() {
         serde_json::from_str::<Value>(&e.result()).unwrap(),
         json!({"tag":"world","value":"4"})
     );
+}
+
+#[test]
+fn display_order_changes_navigation_without_changing_values_or_validation() {
+    let mut spec: Value =
+        serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
+    spec["form"]["displayOrder"] = json!(["away", "home"]);
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(
+        e.fields()
+            .iter()
+            .map(|field| field.title.as_str())
+            .collect::<Vec<_>>(),
+        ["Away temperature (C)", "Home temperature (C)"]
+    );
+    assert_eq!(e.shown(&e.fields()[0]), "18");
+    edit(&mut e, "23");
+    assert_eq!(e.spec.value, json!({"home":"22","away":"23"}));
+    assert!(e.errors()[0].starts_with("Away temperature (C):"));
+    assert!(e.step(Key::Character('q')));
+    keys(&mut e, &[Key::Down]);
+    edit(&mut e, "24");
+    assert!(!e.step(Key::Character('q')));
+    assert_eq!(
+        serde_json::from_str::<Value>(&e.result()).unwrap(),
+        json!({"home":"24","away":"23"})
+    );
+}
+
+#[test]
+fn display_order_applies_inside_lists_and_sum_payloads() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
+    spec["form"]["item"]["displayOrder"] = json!(["unitPrice", "description", "quantity"]);
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(e.fields()[0].title, "Unit price (cents)");
+    edit(&mut e, "250");
+    assert_eq!(e.spec.value[0]["unitPrice"], "250");
+    e.selected = 4;
+    keys(&mut e, &[Key::Enter]);
+    assert_eq!(e.fields()[4].title, "Unit price (cents)");
+
+    let mut spec = shapes_spec();
+    spec["form"]["branches"]["rectangle"]["displayOrder"] = json!(["height", "width"]);
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    select_constructor(&mut e, 2);
+    assert_eq!(e.fields()[1].title, "Height");
+    e.selected = 1;
+    edit(&mut e, "8");
+    assert_eq!(e.spec.value["value"], json!({"width":"4", "height":"8"}));
+    e.selected = 0;
+    select_constructor(&mut e, 0);
+    select_constructor(&mut e, 2);
+    assert_eq!(e.shown(&e.fields()[1]), "8");
+}
+
+#[test]
+fn display_order_must_be_a_permutation_even_for_hidden_groups() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
+    for order in [
+        json!([]),
+        json!(["home"]),
+        json!(["home", "home"]),
+        json!(["home", "unknown"]),
+        json!(["home", "away", "extra"]),
+        json!([0, 1]),
+    ] {
+        let mut spec = source.clone();
+        spec["form"]["displayOrder"] = order;
+        let body = spec["form"].clone();
+        spec["form"] = json!({"kind":"visibleWhen", "condition":{"kind":"value", "type":{"kind":"boolean"}, "value":false}, "body":body});
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
 }

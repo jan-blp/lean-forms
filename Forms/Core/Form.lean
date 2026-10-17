@@ -16,6 +16,7 @@ inductive Form : (root : DataType) → (t : DataType) → Type 1 where
   | group {root : DataType} {fields : Enum} {children : fields.type → DataType}
       (label : String)
       (forms : (i : fields.type) → Form root (children i))
+      (displayOrder : Equiv.Perm fields.type := Equiv.refl _)
       : Form root (.record fields children)
   | sum {root : DataType} {tags : Enum} {constructors : tags.type → DataType}
       (label : String)
@@ -42,8 +43,9 @@ def Form.fieldRefs {root t : DataType} (form : Form root t)
     (value : DataType.denote root) (localValue : DataType.denote t) : List FieldRef :=
   match form with
   | .field label widget => [{ widget, labels := [label], indices := [] }]
-  | .group label children =>
-    (FinEnum.toList _).flatMap fun index =>
+  | .group label children displayOrder =>
+    (FinEnum.toList _).flatMap fun i =>
+      let index := displayOrder i
       (Form.fieldRefs (children index) value (localValue index)).map fun field =>
         { field with labels := label :: field.labels, indices := (FinEnum.equiv index).val :: field.indices }
   | .sum (tags := tags) label branches _ =>
