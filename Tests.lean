@@ -98,7 +98,9 @@ private def testHiddenValidation : IO Unit := do
 private def testPathsAndChoices : IO Unit := do
   let shown := Path.set ExampleForms.Person.subscribed true ExampleForms.Person.draft
   let fields := Form.fieldRefs ExampleForms.Person.form shown shown
-  check "VisibilityStillWorks" ((Form.fieldRefs ExampleForms.Person.form ExampleForms.Person.draft ExampleForms.Person.draft).length == 4 && fields.length == 5)
+  let initialFields := Form.fieldRefs ExampleForms.Person.form ExampleForms.Person.draft ExampleForms.Person.draft
+  check "StreetDisabledUntilSubscribed" (initialFields.length == 5 &&
+    initialFields[3]?.map (·.disabled) == some true && fields[3]?.map (·.disabled) == some false)
   check "PathUpdatePreservesOtherValues" (JsonProtocol.valueToJson (Path.set ExampleForms.Person.age 42 shown) == Lean.Json.mkObj [("name", Lean.toJson "Ada"), ("age", Lean.toJson "42"), ("subscribed", Lean.toJson true), ("address", Lean.Json.mkObj [("street", Lean.toJson "Lambda Lane"), ("kind", Lean.toJson (0 : Nat))])])
   check "LabelsFollowGroups"
     ((fields.map fun field => field.labels)[1]? == some ["Registration", "Age (18-120)"])
@@ -252,6 +254,17 @@ private def testDisplayOrder : IO Unit := do
       (displayOrder := Equiv.swap .home .away)
   check "DisplayOrderRespectsVisibility" ((Form.fieldRefs hidden draft draft).map (·.indices) == [[0]])
 
+private def testDisabled : IO Unit := do
+  let form : Form .boolean .text := .disabledWhen (.project .self) (.field "Name" .textInput)
+  check "DisabledCondition" ((Form.fieldRefs form true "Ada").all (·.disabled))
+  check "EnabledCondition" ((Form.fieldRefs form false "Ada").all (! ·.disabled))
+  let nested := Form.disabledWhen (.value true) (.disabledWhen (.value false) form)
+  check "ParentDisablesChildren" ((Form.fieldRefs nested false "Ada").all (·.disabled))
+  check "DisabledStillVisible" ((Form.fieldRefs nested false "Ada").map (·.labels) == [["Name"]])
+  let hidden := Form.visibleWhen (.value false) nested
+  check "HiddenDisabledStaysHidden" ((Form.fieldRefs hidden true "Ada").isEmpty)
+  check "DisabledJson" ((Form.toJson form).getObjValAs? String "kind" == .ok "disabledWhen")
+
 private def testProtocol : IO Unit := do
   for (fixture, encoded) in [
       ("native/tui/tests/shapes.json", JsonProtocol.encode ExampleForms.Shapes.shapeType ExampleForms.Shapes.form ExampleForms.Shapes.draft),
@@ -273,6 +286,7 @@ def main : IO Unit := do
   testSums
   testRecords
   testDisplayOrder
+  testDisabled
 
 section Theorems
 

@@ -397,7 +397,14 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
             .bg(theme.selection)
             .fg(theme.text)
             .add_modifier(Modifier::BOLD);
-        let label_style = if selected {
+        let label_style = if field.presentation.disabled {
+            (if selected {
+                selection
+            } else {
+                Style::default()
+            })
+            .fg(theme.subtext)
+        } else if selected {
             selection
         } else {
             Style::default().fg(if field.action {
@@ -417,7 +424,16 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
             ),
             ratatui::text::Span::styled(format!(" {} ", clean(field.label)), label_style),
         ]);
-        let value = if field.presentation.constructor {
+        let value = if field.presentation.disabled {
+            format!(
+                "{} [disabled]",
+                if field.action {
+                    String::new()
+                } else {
+                    clean(field.value)
+                }
+            )
+        } else if field.presentation.constructor {
             format!(
                 "{} ▾{}",
                 clean(field.value),
@@ -437,6 +453,13 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
                 Style::default()
             })
             .fg(theme.error)
+        } else if field.presentation.disabled {
+            (if selected {
+                selection
+            } else {
+                Style::default()
+            })
+            .fg(theme.subtext)
         } else if selected {
             selection
         } else if field.presentation.constructor {
@@ -620,6 +643,12 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         frame.render_widget(
             Paragraph::new(
                 if screen
+                    .fields
+                    .get(screen.selected)
+                    .is_some_and(|f| f.presentation.disabled)
+                {
+                    "Disabled · ↑/↓ select · q submit · x cancel"
+                } else if screen
                     .fields
                     .get(screen.selected)
                     .is_some_and(|f| f.presentation.constructor)

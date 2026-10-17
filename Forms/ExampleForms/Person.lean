@@ -96,7 +96,7 @@ def form : Form shape shape :=
     | .age => field "Age (18-120)" naturalInput
     | .subscribed => field "Subscribed" checkbox
     | .address => group "Address" fun
-      | .street => visibleWhen (project subscribed) (field "Street" textInput)
+      | .street => disabledWhen (Expr.not (project subscribed)) (field "Street" textInput)
       | .kind => field "Kind" select
 
 end Forms.ExampleForms.Person

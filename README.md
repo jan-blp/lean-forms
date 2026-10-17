@@ -1,7 +1,7 @@
 # lean-forms
 
 Typed forms in Lean with a Rust terminal UI. Supports named records, sums, lists,
-conditional visibility, and refinements. Lean validates submissions and constructs proofs.
+conditional visibility, disabling, and refinements. Lean validates submissions and constructs proofs.
 
 Requires Linux or macOS, [elan](https://lean-lang.org/install/), Rust/Cargo 1.88+, and `cc`.
 

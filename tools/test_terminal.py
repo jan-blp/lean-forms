@@ -86,21 +86,22 @@ initial = {'name': 'Ada', 'age': 28, 'subscribed': False, 'address': {'street': 
 output = session(b'j\r\x15-1\r\x1542\rj j\r\x15Elm Street\rk  q', {'name': 'Ada', 'age': 42, 'subscribed': True, 'address': {'street': 'Elm Street', 'kind': 'Home'}})
 assert b'non-negative whole number' in output
 session('i\x15Ω'.encode(), None, interrupt=True)
-session(b'q', initial)
+output = session(b'jjj\ri q', initial)
+assert b'[disabled]' in output
 for theme in ['frappe', 'macchiato', 'mocha', 'latte', 'ayu-light', 'ayu-dark', 'nord']:
     session(b'q', initial, theme=theme)
     session(b'q', {'home': 22, 'away': 18}, thermostat=True, theme=theme)
 output = session(b'j\r\x1517\rq\r\x15121\rq\r\x1518\rq', {'name': 'Ada', 'age': 18, 'subscribed': False, 'address': {'street': 'Lambda Lane', 'kind': 'Home'}})
 assert b'Attendees must be between 18 and 120' in output
-session(b'jjj\rj\rq', {'name': 'Ada', 'age': 28, 'subscribed': False, 'address': {'street': 'Lambda Lane', 'kind': 'Work'}})
-session(b'jjj\rj', initial, cancel=True)
+session(b'jjjj\rj\rq', {'name': 'Ada', 'age': 28, 'subscribed': False, 'address': {'street': 'Lambda Lane', 'kind': 'Work'}})
+session(b'jjjj\rj', initial, cancel=True)
 output = session(b'\r\x1516\rqj\r\x1516\rq', {'home': 16, 'away': 16}, thermostat=True)
 assert b'Away temperature must not exceed home temperature' in output
 session(b'\r\x1516\rx', None, thermostat=True)
 session(b'x', None)
 result = subprocess.run([str(BINARY)], capture_output=True, text=True)
 assert result.returncode != 0 and 'interactive terminal' in result.stderr + result.stdout
-print('PASS: FFI editing, validation, visibility, typed result, interruption, and terminal restoration')
+print('PASS: FFI editing, validation, disabling, typed result, interruption, and terminal restoration')
 
 for args in [["--theme"], ["--theme", "unknown"], ["--theme", "dark"], ["--theme", "light"]]:
     result = subprocess.run([str(BINARY), *args], capture_output=True, text=True)

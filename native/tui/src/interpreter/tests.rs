@@ -200,21 +200,25 @@ fn schema_constraints_and_error_locations_are_type_checked() {
     assert!(Engine::parse(&spec.to_string()).is_err());
 }
 #[test]
-fn visibility_choice_and_text_editing_still_work() {
+fn disabling_choice_and_text_editing_still_work() {
     let mut e = person();
-    assert_eq!(e.fields().len(), 4);
+    assert_eq!(e.fields().len(), 5);
+    assert!(e.fields()[3].presentation.disabled);
     keys(&mut e, &[Key::Down, Key::Down, Key::Character(' ')]);
     assert_eq!(e.fields().len(), 5);
     keys(&mut e, &[Key::Down]);
     edit(&mut e, "Elm Street");
     keys(&mut e, &[Key::Up, Key::Character(' ')]);
-    assert_eq!(e.fields().len(), 4);
+    assert_eq!(e.fields().len(), 5);
+    assert!(e.fields()[3].presentation.disabled);
     assert_eq!(e.spec.value["address"]["street"], "Elm Street");
+    keys(&mut e, &[Key::Down, Key::Enter]);
+    assert!(e.editor.is_none());
     keys(&mut e, &[Key::Down, Key::Enter, Key::Down, Key::Escape]);
     assert_eq!(e.spec.value["address"]["kind"], 0);
     keys(&mut e, &[Key::Enter, Key::Up, Key::Down, Key::Enter]);
     assert_eq!(e.spec.value["address"]["kind"], 1);
-    assert_eq!(e.shown(&e.fields()[3]), "Work");
+    assert_eq!(e.shown(&e.fields()[4]), "Work");
     e.selected = 0;
     edit(&mut e, "qjx界");
     assert_eq!(e.spec.value["name"], "qjx界");
@@ -641,4 +645,88 @@ fn display_order_must_be_a_permutation_even_for_hidden_groups() {
         spec["form"] = json!({"kind":"visibleWhen", "condition":{"kind":"value", "type":{"kind":"boolean"}, "value":false}, "body":body});
         assert!(Engine::parse(&spec.to_string()).is_err());
     }
+}
+
+fn disabled(condition: Value, body: Value) -> Value {
+    json!({"kind":"disabledWhen", "condition":condition, "body":body})
+}
+fn boolean(value: bool) -> Value {
+    json!({"kind":"value", "type":{"kind":"boolean"}, "value":value})
+}
+
+#[test]
+fn disabled_controls_preserve_values_and_validation() {
+    for fixture in [
+        include_str!("../../tests/person.json"),
+        include_str!("../../tests/invoice.json"),
+        include_str!("../../tests/shapes.json"),
+    ] {
+        let mut spec: Value = serde_json::from_str(fixture).unwrap();
+        spec["form"] = disabled(boolean(true), disabled(boolean(false), spec["form"].take()));
+        let mut e = Engine::parse(&spec.to_string()).unwrap();
+        let original = e.spec.value.clone();
+        for index in 0..e.fields().len() {
+            e.selected = index;
+            assert!(e.fields()[index].presentation.disabled);
+            keys(
+                &mut e,
+                &[Key::Enter, Key::Character('i'), Key::Character(' ')],
+            );
+            assert!(e.editor.is_none());
+            assert_eq!(e.spec.value, original);
+        }
+    }
+    let mut spec: Value =
+        serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
+    spec["value"]["home"] = json!("0");
+    spec["form"] = disabled(boolean(true), spec["form"].take());
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert!(!e.errors().is_empty());
+    assert!(e.step(Key::Character('q')));
+}
+
+#[test]
+fn disabled_condition_reacts_to_edits_and_checks_types() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
+    spec["form"]["children"]["name"] = disabled(
+        json!({"kind":"project", "path":["subscribed"]}),
+        spec["form"]["children"]["name"].take(),
+    );
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert!(!e.fields()[0].presentation.disabled);
+    e.selected = 2;
+    keys(&mut e, &[Key::Character(' ')]);
+    assert!(e.fields()[0].presentation.disabled);
+    keys(&mut e, &[Key::Character(' ')]);
+    e.selected = 0;
+    edit(&mut e, "Grace");
+    assert_eq!(e.spec.value["name"], json!("Grace"));
+    spec["form"]["children"]["name"]["condition"] = json!({"kind":"project", "path":["age"]});
+    assert!(Engine::parse(&spec.to_string()).is_err());
+}
+
+#[test]
+fn disabled_conditions_use_payload_and_item_scope() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/shapes.json")).unwrap();
+    spec["value"] = json!({"tag":"circle", "value":"3"});
+    let condition = json!({"kind":"natLe", "left":{"kind":"project", "path":[]}, "right":{"kind":"value", "type":{"kind":"natural"}, "value":"5"}});
+    spec["form"]["branches"]["circle"] =
+        disabled(condition, spec["form"]["branches"]["circle"].take());
+    let e = Engine::parse(&spec.to_string()).unwrap();
+    assert!(!e.fields()[0].presentation.disabled);
+    assert!(e.fields()[1].presentation.disabled);
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
+    let condition = json!({"kind":"natLe", "left":{"kind":"project", "path":["quantity"]}, "right":{"kind":"value", "type":{"kind":"natural"}, "value":"5"}});
+    spec["form"]["item"] = disabled(condition, spec["form"]["item"].take());
+    let e = Engine::parse(&spec.to_string()).unwrap();
+    assert!(e.fields()[0..3].iter().all(|f| f.presentation.disabled));
+    assert!(e.fields()[3..].iter().all(|f| !f.presentation.disabled));
+}
+
+#[test]
+fn negation_rejects_non_boolean_operands() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
+    spec["form"]["children"]["address"]["children"]["street"]["condition"]["operand"] =
+        json!({"kind":"project", "path":["age"]});
+    assert!(Engine::parse(&spec.to_string()).is_err());
 }

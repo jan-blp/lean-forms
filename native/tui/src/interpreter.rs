@@ -85,6 +85,9 @@ pub enum Expr {
         subject: Box<Expr>,
         branches: BTreeMap<String, Expr>,
     },
+    Not {
+        operand: Box<Expr>,
+    },
     And {
         left: Box<Expr>,
         right: Box<Expr>,
@@ -142,6 +145,10 @@ pub enum Form {
         label: String,
         branches: BTreeMap<String, Form>,
         defaults: BTreeMap<String, Value>,
+    },
+    DisabledWhen {
+        condition: Expr,
+        body: Box<Form>,
     },
     VisibleWhen {
         condition: Expr,
@@ -265,6 +272,12 @@ impl Expr {
                 }
                 Ok(Ty::Boolean)
             }
+            Self::Not { operand } => {
+                if operand.ty(root)? != Ty::Boolean {
+                    return Err("not requires boolean".into());
+                }
+                Ok(Ty::Boolean)
+            }
             Self::And { left, right } | Self::NatLe { left, right } => {
                 let expected = match self {
                     Self::And { .. } => Ty::Boolean,
@@ -296,6 +309,7 @@ impl Expr {
                     .iter()
                     .all(|v| predicate.eval(v).as_bool().unwrap()),
             ),
+            Self::Not { operand } => Value::Bool(!operand.eval(root).as_bool().unwrap()),
             Self::And { left, right } => Value::Bool(
                 left.eval(root).as_bool().unwrap() && right.eval(root).as_bool().unwrap(),
             ),
@@ -383,6 +397,12 @@ impl Form {
                 }
                 _ => Err("Group children must match schema".into()),
             },
+            Self::DisabledWhen { condition, body } => {
+                if condition.ty(root)? != Ty::Boolean {
+                    return Err("Disabling requires boolean".into());
+                }
+                body.validate(root, ty)
+            }
             Self::VisibleWhen { condition, body } => {
                 if condition.ty(root)? != Ty::Boolean {
                     return Err("Visibility requires boolean".into());
@@ -454,7 +474,8 @@ impl Form {
                 // The selector names the payload. Keep deeper groups, but fold the
                 // branch's outer group into this section instead of repeating it.
                 let mut branch = &branches[tag];
-                while let Self::VisibleWhen { body, .. } = branch {
+                while let Self::VisibleWhen { body, .. } | Self::DisabledWhen { body, .. } = branch
+                {
                     branch = body;
                 }
                 let prefix = if let Self::Group { label, .. } = branch {
@@ -582,6 +603,15 @@ impl Form {
                     );
                 }
             }
+            Self::DisabledWhen { condition, body } => {
+                let start = out.len();
+                body.fields(ty, value, path, scope, labels, out);
+                if condition.eval(get(value, scope)).as_bool().unwrap() {
+                    for field in &mut out[start..] {
+                        field.presentation.disabled = true;
+                    }
+                }
+            }
             Self::VisibleWhen { condition, body } => {
                 if condition.eval(get(value, scope)).as_bool().unwrap() {
                     body.fields(ty, value, path, scope, labels, out);
@@ -592,6 +622,7 @@ impl Form {
 }
 #[derive(Clone, Copy, Default)]
 pub struct Presentation {
+    pub disabled: bool,
     pub constructor: bool,
     pub depth: usize,
     pub note: Option<&'static str>,
@@ -743,6 +774,15 @@ impl Engine {
             return false;
         }
         let fields = self.fields();
+        if fields
+            .get(self.selected)
+            .is_some_and(|field| field.presentation.disabled)
+        {
+            self.editor = None;
+            if matches!(key, Key::Enter | Key::Character('i' | ' ')) {
+                return true;
+            }
+        }
         if let Some(editor) = &mut self.editor {
             if let Some(index) = &mut editor.choice {
                 match key {
