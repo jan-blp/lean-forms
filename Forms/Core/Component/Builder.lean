@@ -5,6 +5,20 @@ namespace Forms.Composition
 /-- A reusable editor builder. Apply its target path to obtain an ordinary component. -/
 abbrev Component.Builder (state value : DataType) := Path state value → Component state
 
+private inductive PairSection where
+  | body
+  | extra
+  deriving DecidableEq
+
+private instance : FinEnum PairSection :=
+  FinEnum.ofList [.body, .extra] (by grind [PairSection])
+
+private def pairFields : Enum where
+  type := PairSection
+  label
+    | .body => "body"
+    | .extra => "extra"
+
 namespace Component.Builder
 
 /-- Build a component by applying the builder to the whole state. -/
@@ -43,6 +57,13 @@ def visibleWhen {state value : DataType} (condition : Expr state .boolean)
 def disabledWhen {state value : DataType} (condition : Expr state .boolean)
     (body : Component.Builder state value) : Component.Builder state value :=
   fun path => .disabledWhen condition (body path)
+
+def computed {state value result : DataType}
+    (label : String) (expression : Expr state result)
+    (body : Component.Builder state value) : Component.Builder state value :=
+  fun path => .stack (items := pairFields) none fun
+    | .body => body path
+    | .extra => .computed label expression
 
 end Component.Builder
 end Forms.Composition
