@@ -135,7 +135,7 @@ fn draft_validation_errors_are_visible_outside_the_editor() {
 #[test]
 fn invoice_sections_actions_and_scrolling() {
     let mut engine = Engine::parse(include_str!("../tests/invoice.json")).unwrap();
-    engine.selected = 4;
+    engine.selected = 5;
     engine.step(Key::Enter);
     let fields = engine.fields();
     let values: Vec<_> = fields.iter().map(|field| engine.shown(field)).collect();
@@ -373,4 +373,35 @@ fn disabled_controls_show_values_without_edit_hints() {
     assert!(text.contains("22 [disabled]"));
     assert!(text.contains("Disabled ·"));
     assert!(!text.contains("Enter edit"));
+}
+
+#[test]
+fn computed_total_is_visible_with_read_only_hints() {
+    let mut e = interpreter::Engine::parse(include_str!("../tests/invoice.json")).unwrap();
+    e.selected = e.fields().len() - 1;
+    let text = draw_engine(&e, 100, 24, Theme::FRAPPE);
+    assert!(text.contains("Total (cents)"));
+    assert!(text.contains("100 [computed]"));
+    assert!(text.contains("Computed ·"));
+    assert!(!text.contains("Enter edit"));
+}
+
+#[test]
+fn hybrid_date_editor_shows_input_calendar_and_controls() {
+    let mut e = Engine::parse(include_str!("../tests/booking.json")).unwrap();
+    e.step(Key::Enter);
+    e.step(Key::Right);
+    for (width, height) in [(100, 24), (32, 12), (40, 16)] {
+        let text = draw_engine(&e, width, height, Theme::FRAPPE);
+        assert!(text.contains("2028-02-29"));
+        assert!(text.contains("February 2028"));
+        assert!(text.contains("Mo Tu We Th Fr Sa Su"));
+        assert!(text.contains("29"));
+        assert!(text.contains("i / Enter edit input"));
+        assert!(text.contains("PgUp/PgDn month"));
+    }
+    e.step(Key::Character('i'));
+    e.step(Key::Clear);
+    let text = draw_engine(&e, 100, 24, Theme::LATTE);
+    assert!(text.contains("Calendar shows the last valid date."));
 }
