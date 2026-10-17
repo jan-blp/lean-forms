@@ -58,12 +58,15 @@
               "widget": "textInput"
             },
             "condition": {
-              "kind": "project",
-              "path": [
-                "subscribed"
-              ]
+              "kind": "not",
+              "operand": {
+                "kind": "project",
+                "path": [
+                  "subscribed"
+                ]
+              }
             },
-            "kind": "visibleWhen"
+            "kind": "disabledWhen"
           }
         },
         "displayOrder": [
