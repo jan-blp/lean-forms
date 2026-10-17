@@ -28,6 +28,8 @@ inductive RefinedDataType : (unrefined : DataType) → Type 1 where
       (refined : RefinedDataType t)
       (constraint : Constraint t)
       : RefinedDataType t
+  | sum {tags : Enum} {constructors : tags → DataType}
+      (branches : (i : tags) → RefinedDataType (constructors i)) : RefinedDataType (.sum tags constructors)
   | list {element : DataType}
       (item : RefinedDataType element)
       : RefinedDataType (.list element)
@@ -59,6 +61,10 @@ variable {t : DataType}
     let inner := RefinedDataType.denotation refined
     { ValidatedValue := { value : inner.ValidatedValue // Expr.eval constraint.condition (inner.erase value) = true }
       erase := fun value => inner.erase value.val }
+  | .sum branches =>
+    let inner := fun i => RefinedDataType.denotation (branches i)
+    { ValidatedValue := SumValue (fun i => (inner i).ValidatedValue)
+      erase := fun value => ⟨value.tag, (inner value.tag).erase value.payload⟩ }
   | .list item =>
     let inner := RefinedDataType.denotation item
     { ValidatedValue := List inner.ValidatedValue
@@ -89,6 +95,8 @@ private def sequence {ι : Type} [FinEnum ι] {α : ι → Type}
 
 def RefinedDataType.validate {t} (refined : RefinedDataType t) (draft : DataType.denote t) : Option (RefinedDataType.ValidatedValue refined) :=
   match refined with
+  | .sum branches =>
+    Option.map (fun value => ⟨draft.tag, value⟩) (RefinedDataType.validate (branches draft.tag) draft.payload)
   | .list item => draft.mapM (RefinedDataType.validate item)
   | .base _ => some draft
   | .record fields => sequence (fun i => RefinedDataType.validate (fields i) (draft i))
@@ -100,6 +108,13 @@ def RefinedDataType.validate {t} (refined : RefinedDataType t) (draft : DataType
 
 def RefinedDataType.constraints {t} (refined : RefinedDataType t) : List (Constraint t) :=
   match refined with
+  | .sum branches =>
+    (FinEnum.toList _).flatMap fun i =>
+      (RefinedDataType.constraints (branches i)).map fun constraint =>
+        { condition := .cases (.project .self) fun j =>
+            if h : j = i then h.symm ▸ constraint.condition else .value true
+          errorMessage := constraint.errorMessage
+          errorLocation := some ⟨.self⟩ }
   | .list item => (RefinedDataType.constraints item).map fun constraint =>
       { condition := .all (.project .self) constraint.condition
         errorMessage := constraint.errorMessage
@@ -131,6 +146,11 @@ private theorem sequence_some {ι : Type} [FinEnum ι] {α : ι → Type} (value
 theorem RefinedDataType.validate_erase (refined : RefinedDataType t) (value : RefinedDataType.ValidatedValue refined) :
     RefinedDataType.validate refined (RefinedDataType.erase refined value) = some value := by
   induction refined with
+  | sum branches ih =>
+    rcases value with ⟨index, payload⟩
+    change Option.map _ (RefinedDataType.validate (branches index) (RefinedDataType.erase (branches index) payload)) = _
+    rw [ih]
+    rfl
   | base => rfl
   | record fields ih => simp_all [validate, erase, sequence_some]
   | refine refined constraint ih =>

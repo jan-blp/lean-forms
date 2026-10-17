@@ -18,6 +18,11 @@ inductive Form : (root : DataType) → (t : DataType) → Type 1 where
       (label : String)
       (forms : (i : fields) → Form root (children i))
       : Form root (.record fields children)
+  | sum {root : DataType} {tags : Enum} {constructors : tags → DataType}
+      (label : String)
+      (branches : (i : tags) → Form (constructors i) (constructors i))
+      (defaults : (i : tags) → DataType.denote (constructors i))
+      : Form root (.sum tags constructors)
   | list {root element : DataType}
       (label : String)
       (item : Form element element)
@@ -42,6 +47,10 @@ def Form.fieldRefs {root t : DataType} (form : Form root t)
     (FinEnum.toList _).flatMap fun index =>
       (Form.fieldRefs (children index) value (localValue index)).map fun field =>
         { field with labels := label :: field.labels, indices := (FinEnum.equiv index).val :: field.indices }
+  | .sum (tags := tags) label branches _ =>
+    (Form.fieldRefs (branches localValue.tag) localValue.payload localValue.payload).map fun field =>
+      { field with labels := label :: tags.label localValue.tag :: field.labels
+                   indices := (FinEnum.equiv localValue.tag).val :: field.indices }
   | .list label item _ =>
     (localValue.zipIdx).flatMap fun (entry, index) =>
       (Form.fieldRefs item entry entry).map fun field =>

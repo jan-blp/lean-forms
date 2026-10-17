@@ -255,6 +255,261 @@ fn malformed_choices_are_rejected() {
     }
 }
 
+fn shapes_spec() -> Value {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/shapes.json")).unwrap();
+    spec["value"] = json!({"tag":"dot","value":{}});
+    spec
+}
+
+fn select_constructor(e: &mut Engine, index: usize) {
+    keys(e, &[Key::Enter]);
+    for _ in 0..e.editor.as_ref().unwrap().options.len() {
+        keys(e, &[Key::Up]);
+    }
+    for _ in 0..index {
+        keys(e, &[Key::Down]);
+    }
+    keys(e, &[Key::Enter]);
+}
+
+#[test]
+fn constructors_validate_only_active_payload_and_preserve_drafts() {
+    let mut e = Engine::parse(&shapes_spec().to_string()).unwrap();
+    assert_eq!(e.fields().len(), 1);
+    assert_eq!(e.shown(&e.fields()[0]), "dot");
+    keys(&mut e, &[Key::Enter, Key::Down, Key::Escape]);
+    assert_eq!(e.spec.value, json!({"tag":"dot", "value":{}}));
+    select_constructor(&mut e, 2);
+    assert_eq!(e.fields().len(), 3);
+    assert_eq!(e.shown(&e.fields()[0]), "rectangle");
+    e.selected = 1;
+    edit(&mut e, "7");
+    e.selected = 2;
+    edit(&mut e, "0");
+    assert_eq!(e.errors().len(), 1);
+    assert!(e.step(Key::Character('q')));
+    e.selected = 0;
+    select_constructor(&mut e, 0);
+    assert!(e.errors().is_empty());
+    select_constructor(&mut e, 2);
+    assert_eq!(
+        e.spec.value,
+        json!({"tag":"rectangle","value":{"width":"7","height":"0"}})
+    );
+    assert_eq!(e.errors().len(), 1);
+    e.selected = 2;
+    edit(&mut e, "2");
+    e.selected = 0;
+    select_constructor(&mut e, 0);
+    assert!(!e.step(Key::Character('q')));
+    assert_eq!(
+        serde_json::from_str::<Value>(&e.result()).unwrap(),
+        json!({"tag":"dot","value":{}})
+    );
+}
+
+#[test]
+fn malformed_sums_and_inactive_branch_forms_are_rejected() {
+    let source = shapes_spec();
+    for invalid in [
+        json!({}),
+        json!([0, []]),
+        json!({"tag":3,"value":[]}),
+        json!({"tag":-1,"value":[]}),
+        json!({"tag":"0","value":[]}),
+        json!({"tag":"dot","value":false}),
+        json!({"tag":"rectangle","value":{"width":"","height":false}}),
+        json!({"tag":"dot","value":{},"extra":true}),
+    ] {
+        let mut spec = source.clone();
+        spec["value"] = invalid;
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
+    for (path, invalid) in [
+        ("/form/defaults/circle", json!([])),
+        (
+            "/form/branches/rectangle/children/width/widget",
+            json!("checkbox"),
+        ),
+        ("/form/branches", json!([])),
+        ("/constraints/0/condition/branches", json!([])),
+        (
+            "/constraints/0/condition/branches/circle",
+            json!({"kind":"project","path":[0]}),
+        ),
+        (
+            "/constraints/0/condition/subject",
+            json!({"kind":"value","type":{"kind":"boolean"},"value":true}),
+        ),
+        ("/constraints/0/errorLocation", json!([0])),
+    ] {
+        let mut spec = source.clone();
+        *spec.pointer_mut(path).unwrap() = invalid;
+        assert!(Engine::parse(&spec.to_string()).is_err(), "{path}");
+    }
+}
+
+#[test]
+fn sums_in_lists_preserve_the_correct_cache_after_removal() {
+    let source = shapes_spec();
+    let mut spec = source.clone();
+    spec["schema"] = json!({"kind":"list","element":source["schema"]});
+    spec["form"] =
+        json!({"kind":"list","label":"Shapes","item":source["form"],"defaultItem":source["value"]});
+    spec["value"] = json!([source["value"], source["value"]]);
+    spec["constraints"] = json!([]);
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    for (selector, width) in [(0, "6"), (2, "9")] {
+        e.selected = selector;
+        select_constructor(&mut e, 2);
+        e.selected = selector + 1;
+        edit(&mut e, width);
+        e.selected = selector;
+        select_constructor(&mut e, 0);
+    }
+    e.selected = 1;
+    keys(&mut e, &[Key::Enter]); // Remove first shape; the second cache moves with it.
+    e.selected = 0;
+    select_constructor(&mut e, 2);
+    assert_eq!(e.spec.value[0]["value"]["width"], "9");
+    e.selected = 4;
+    keys(&mut e, &[Key::Enter]); // A new item must not inherit an old cache.
+    select_constructor(&mut e, 2);
+    assert_eq!(e.spec.value[1]["value"]["width"], "4");
+}
+
+#[test]
+fn nested_sums_and_visibility_use_constructor_local_scope() {
+    let source = shapes_spec();
+    let mut spec = source.clone();
+    // The outer sum has two identical sum payload types. Their caches must stay separate.
+    spec["schema"] = json!({"kind":"sum", "constructors":[{"name":"a","type":source["schema"]},{"name":"b","type":source["schema"]}]});
+    spec["form"] = json!({"kind":"sum", "label":"Shape",
+        "branches":{"a":source["form"],"b":source["form"]}, "defaults":{"a":source["value"],"b":source["value"]}});
+    spec["value"] = json!({"tag":"a","value":source["value"]});
+    spec["constraints"] = json!([]);
+    // Visibility sees the selected inner payload, not the outer sum.
+    for index in ["a", "b"] {
+        let branch = spec["form"]["branches"][index]["branches"]["rectangle"].clone();
+        spec["form"]["branches"][index]["branches"]["rectangle"] = json!({"kind":"visibleWhen",
+            "condition":{"kind":"natLe","left":{"kind":"value","type":{"kind":"natural"},"value":"1"},"right":{"kind":"project","path":["height"]}},"body":branch});
+    }
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    e.selected = 1;
+    select_constructor(&mut e, 2);
+    e.selected = 2;
+    edit(&mut e, "8");
+    e.selected = 1;
+    select_constructor(&mut e, 0);
+    e.selected = 0;
+    select_constructor(&mut e, 1);
+    e.selected = 1;
+    select_constructor(&mut e, 2);
+    assert_eq!(e.spec.value["value"]["value"]["width"], "4");
+    e.selected = 0;
+    select_constructor(&mut e, 0);
+    e.selected = 1;
+    select_constructor(&mut e, 2);
+    assert_eq!(e.spec.value["value"]["value"]["width"], "8");
+    e.selected = 3;
+    edit(&mut e, "0");
+    assert_eq!(e.fields().len(), 2);
+}
+
+#[test]
+fn cases_support_typed_results_and_only_evaluate_the_selected_branch() {
+    let spec = shapes_spec();
+    let root: Ty = serde_json::from_value(spec["schema"].clone()).unwrap();
+    let dimension = json!({"kind":"cases", "type":{"kind":"natural"},
+        "subject":{"kind":"project","path":[]},
+        "branches":{"dot":{"kind":"value","type":{"kind":"natural"},"value":"0"},
+                    "circle":{"kind":"project","path":[]}, "rectangle":{"kind":"project","path":["height"]}}});
+    let expr: Expr = serde_json::from_value(dimension.clone()).unwrap();
+    assert_eq!(expr.ty(&root).unwrap(), Ty::Natural);
+    // Evaluating the rectangle branch on Dot would access a missing field.
+    assert_eq!(expr.eval(&json!({"tag":"dot","value":{}})), "0");
+    assert_eq!(
+        expr.eval(&json!({"tag":"rectangle","value":{"width":"7","height":"2"}})),
+        "2"
+    );
+    let condition: Expr = serde_json::from_value(json!({"kind":"natLe","left":dimension,
+        "right":{"kind":"value","type":{"kind":"natural"},"value":"1"}}))
+    .unwrap();
+    assert_eq!(condition.ty(&root).unwrap(), Ty::Boolean);
+    assert_eq!(
+        condition.eval(&json!({"tag":"rectangle","value":{"width":"7","height":"2"}})),
+        false
+    );
+    for (ty, value) in [
+        (json!({"kind":"text"}), json!("Dot")),
+        (json!({"kind":"record","fields":[]}), json!({})),
+        (spec["schema"].clone(), spec["value"].clone()),
+    ] {
+        let branch = json!({"kind":"value","type":ty,"value":value});
+        let expr: Expr = serde_json::from_value(json!({"kind":"cases","type":ty,
+            "subject":{"kind":"project","path":[]},"branches":{"dot":branch,"circle":branch,"rectangle":branch}}))
+        .unwrap();
+        assert_eq!(
+            expr.ty(&root).unwrap(),
+            serde_json::from_value::<Ty>(ty).unwrap()
+        );
+        assert_eq!(expr.eval(&spec["value"]), value);
+    }
+    for (path, replacement) in [
+        ("/type", json!({"kind":"boolean"})),
+        ("/branches", json!({})),
+        (
+            "/branches",
+            json!({"dot":dimension["branches"]["dot"], "circle":dimension["branches"]["circle"],
+                "rectangle":dimension["branches"]["rectangle"], "extra":dimension["branches"]["dot"]}),
+        ),
+        ("/branches/circle/path", json!(["missing"])),
+        (
+            "/branches/circle",
+            json!({"kind":"value","type":{"kind":"text"},"value":"wrong"}),
+        ),
+    ] {
+        let mut invalid = dimension.clone();
+        *invalid.pointer_mut(path).unwrap() = replacement;
+        let expr: Expr = serde_json::from_value(invalid).unwrap();
+        assert!(expr.ty(&root).is_err(), "{path}");
+    }
+}
+
+#[test]
+fn named_fields_and_constructors_survive_schema_reordering() {
+    let mut spec: Value =
+        serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
+    spec["schema"]["fields"].as_array_mut().unwrap().reverse();
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(e.fields()[0].title, "Away temperature (C)");
+    edit(&mut e, "23");
+    assert_eq!(e.spec.value, json!({"home":"22","away":"23"}));
+    assert_eq!(e.errors().len(), 1);
+    assert!(e.errors()[0].starts_with("Away temperature (C):"));
+
+    let mut spec = shapes_spec();
+    spec["schema"]["constructors"]
+        .as_array_mut()
+        .unwrap()
+        .reverse();
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(e.shown(&e.fields()[0]), "dot");
+    select_constructor(&mut e, 0);
+    assert_eq!(
+        e.spec.value,
+        json!({"tag":"rectangle","value":{"width":"4","height":"2"}})
+    );
+    e.selected = 1;
+    edit(&mut e, "0");
+    assert_eq!(e.errors().len(), 1);
+    e.selected = 0;
+    select_constructor(&mut e, 2);
+    assert!(e.errors().is_empty());
+    select_constructor(&mut e, 0);
+    assert_eq!(e.spec.value["value"]["width"], "0");
+}
+
 #[test]
 fn records_reject_missing_extra_and_unknown_fields() {
     let source: Value = serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
@@ -276,6 +531,23 @@ fn records_reject_missing_extra_and_unknown_fields() {
         .remove("away");
     spec["form"]["children"]["wrong"] = source["form"]["children"]["away"].clone();
     assert!(Engine::parse(&spec.to_string()).is_err());
+}
+
+#[test]
+fn duplicate_schema_names_are_rejected_even_in_inactive_payloads() {
+    let source = shapes_spec();
+    for pointer in [
+        "/schema/constructors/1/name",
+        "/schema/constructors/2/type/fields/1/name",
+    ] {
+        let mut spec = source.clone();
+        *spec.pointer_mut(pointer).unwrap() = json!(if pointer.contains("fields") {
+            "width"
+        } else {
+            "dot"
+        });
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
 }
 
 #[test]
@@ -320,4 +592,31 @@ fn date_calendar_rules_and_picker_modes() {
     e.step(Key::Enter);
     assert!(e.editor.is_none());
     assert_eq!(e.spec.value, "2028-02-29");
+}
+
+#[test]
+fn country_selects_city_type_and_preserves_each_selection() {
+    let mut e = Engine::parse(include_str!("../../tests/location.json")).unwrap();
+    assert_eq!(e.fields()[0].title, "Country");
+    assert_eq!(e.fields()[1].title, "City");
+    assert_eq!(e.fields()[1].options, ["Paris", "Lyon", "Marseille"]);
+    e.selected = 1;
+    keys(&mut e, &[Key::Enter, Key::Down, Key::Enter]);
+    assert_eq!(e.shown(&e.fields()[1]), "Lyon");
+    e.selected = 0;
+    select_constructor(&mut e, 1);
+    assert_eq!(e.fields()[1].options, ["Tokyo", "Kyoto", "Osaka"]);
+    assert_eq!(e.shown(&e.fields()[1]), "Tokyo");
+    e.selected = 1;
+    keys(&mut e, &[Key::Enter, Key::Down, Key::Enter]);
+    e.selected = 0;
+    select_constructor(&mut e, 0);
+    assert_eq!(e.shown(&e.fields()[1]), "Lyon");
+    select_constructor(&mut e, 1);
+    assert_eq!(e.shown(&e.fields()[1]), "Kyoto");
+    assert!(!e.step(Key::Character('q')));
+    assert_eq!(
+        serde_json::from_str::<Value>(&e.result()).unwrap(),
+        json!({"tag":"Japan", "value":1})
+    );
 }

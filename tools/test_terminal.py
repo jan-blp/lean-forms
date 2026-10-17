@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms'
 
 
-def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None, invoice=False):
+def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None, invoice=False, shapes=False):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 100, 0, 0))
     before = termios.tcgetattr(slave)
@@ -24,7 +24,7 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
     if theme:
         env.update(TERM='xterm-256color', COLORTERM='truecolor')
         env.pop('NO_COLOR', None)
-    process = subprocess.Popen([str(BINARY)] + (["invoice"] if invoice else ["thermostat"] if thermostat else ["person"]) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
+    process = subprocess.Popen([str(BINARY)] + (["shapes"] if shapes else ["invoice"] if invoice else ["thermostat"] if thermostat else ["person"]) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
     output = bytearray()
 
     def read_until(predicate):
@@ -41,7 +41,7 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
                     break
 
     try:
-        read_until(lambda: (b'Description' if invoice else b'Home temperature (C)' if thermostat else b'Name') in output)
+        read_until(lambda: (b'Shape' if shapes else b'Description' if invoice else b'Home temperature (C)' if thermostat else b'Name') in output)
         os.write(master, keys)
         if cancel:
             read_until(lambda: b'Other' in output)
@@ -108,3 +108,14 @@ for args in [["--theme"], ["--theme", "unknown"], ["--theme", "dark"], ["--theme
 
 # Add a second item, remove the first, and submit through Lean validation.
 session(b"jjjj\rk\rq", [{"description": "New item", "quantity": 1, "unitPrice": 100}], invoice=True)
+
+# A scalar payload, a record payload, and an empty constructor in the shapes demo.
+session(b"q", {"tag": "circle", "value": 3}, shapes=True)
+output = session(b"j\r\x150\rqk\rj\rj\r\x156\rq", {"tag": "rectangle", "value": {"width": 6, "height": 2}}, shapes=True)
+assert b'Size must be at least 1' in output
+session(b"\rk\rq", {"tag": "dot", "value": {}}, shapes=True)
+# Return to the circle to recover its edited radius.
+session(b"j\r\x155\rk\rj\r\rk\rq", {"tag": "circle", "value": 5}, shapes=True)
+
+# An invalid cached circle does not block submission of the empty constructor.
+session(b"j\r\x150\rqk\rk\rq", {"tag": "dot", "value": {}}, shapes=True)
