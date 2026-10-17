@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms'
 
 
-def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None, invoice=False, shapes=False):
+def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None, invoice=False, shapes=False, booking=False):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 100, 0, 0))
     before = termios.tcgetattr(slave)
@@ -24,7 +24,7 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
     if theme:
         env.update(TERM='xterm-256color', COLORTERM='truecolor')
         env.pop('NO_COLOR', None)
-    process = subprocess.Popen([str(BINARY)] + (["shapes"] if shapes else ["invoice"] if invoice else ["thermostat"] if thermostat else ["person"]) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
+    process = subprocess.Popen([str(BINARY)] + (["booking"] if booking else ["shapes"] if shapes else ["invoice"] if invoice else ["thermostat"] if thermostat else ["person"]) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
     output = bytearray()
 
     def read_until(predicate):
@@ -41,7 +41,7 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
                     break
 
     try:
-        read_until(lambda: (b'Shape' if shapes else b'Description' if invoice else b'Home temperature (C)' if thermostat else b'Name') in output)
+        read_until(lambda: (b'Start date' if booking else b'Shape' if shapes else b'Description' if invoice else b'Home temperature (C)' if thermostat else b'Name') in output)
         os.write(master, keys)
         if cancel:
             read_until(lambda: b'Other' in output)
@@ -108,7 +108,7 @@ for args in [["--theme"], ["--theme", "unknown"], ["--theme", "dark"], ["--theme
     assert result.returncode != 0 and "theme" in result.stderr
 
 # Add a second item, remove the first, and submit through Lean validation.
-session(b"jjjj\rk\rq", [{"description": "New item", "quantity": 1, "unitPrice": 100}], invoice=True)
+session(b"jjjjj\rk\rq", [{"description": "New item", "quantity": 1, "unitPrice": 100}], invoice=True)
 
 # A scalar payload, a record payload, and an empty constructor in the shapes demo.
 session(b"q", {"tag": "circle", "value": 3}, shapes=True)
@@ -120,3 +120,17 @@ session(b"j\r\x155\rk\rj\r\rk\rq", {"tag": "circle", "value": 5}, shapes=True)
 
 # An invalid cached circle does not block submission of the empty constructor.
 session(b"j\r\x150\rqk\rk\rq", {"tag": "dot", "value": {}}, shapes=True)
+
+output = session(b"j\r\x153\rjjjjj\ri q", [{"description": "New item", "quantity": 3, "unitPrice": 100}], invoice=True)
+assert b"300 [computed]" in output
+
+# Invalid calendar input stays in the editor; ordering errors block submission.
+output = session(b"\ri\x152023-02-29\r\x152028-02-29\rj\ri\x152028-02-28\rq\ri\x152028-03-01\rq",
+                 {"startDate": "2028-02-29", "endDate": "2028-03-01"}, booking=True)
+assert b"Enter a valid date" in output
+assert b"End date must be on or after start date" in output
+
+# Calendar navigation updates the same date input before saving.
+output = session(b"\rl\r\rq", {"startDate": "2028-02-29", "endDate": "2028-03-01"}, booking=True)
+assert b"February 2028" in output
+assert b"PgUp/PgDn month" in output

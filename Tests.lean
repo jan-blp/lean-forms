@@ -1,5 +1,5 @@
-import Forms.ExampleForms.Location
 import Forms.ExampleForms.Booking
+import Forms.ExampleForms.Location
 import Forms.ExampleForms.Shapes
 import Forms.ExampleForms.Invoice
 import Mathlib.Data.Nat.Basic
@@ -151,7 +151,7 @@ private def testLists : IO Unit := do
       (← IO.ofExcept (Lean.Json.parse "[{\"description\":\"Good\",\"quantity\":\"1\",\"unitPrice\":\"100\"},{\"description\":\"Bad\",\"quantity\":\"1\",\"unitPrice\":\"0\"}]")) with
     | .error _ => true
     | _ => false)
-  check "ListFieldIndices" ((Form.fieldRefs ExampleForms.Invoice.form draft draft).map (·.indices) == [[0,0], [0,1], [0,2]])
+  check "ListFieldIndices" ((Form.fieldRefs ExampleForms.Invoice.form draft draft).map (·.indices) == [[0,0], [0,1], [0,2], [0], []])
   check "ListRequiresArray" (match JsonProtocol.valueFromJson (.list .natural) (Lean.toJson "1") with
     | .error _ => true
     | _ => false)
@@ -267,10 +267,65 @@ private def testDisabled : IO Unit := do
   check "HiddenDisabledStaysHidden" ((Form.fieldRefs hidden true "Ada").isEmpty)
   check "DisabledJson" ((Form.toJson form).getObjValAs? String "kind" == .ok "disabledWhen")
 
+private def testComputed : IO Unit := do
+  let draft := ExampleForms.Invoice.draft
+  let total := ExampleForms.Invoice.total
+  check "InvoiceTotal" (Expr.eval total draft == 100)
+  check "EmptyInvoiceTotal" (Expr.eval total [] == 0)
+  let huge := 1234567890123456789012345678901234567890
+  let item : DataType.denote ExampleForms.Invoice.item := fun
+    | .description => "Large"
+    | .quantity => huge
+    | .unitPrice => huge
+  check "UnboundedComputedTotal" (Expr.eval total [item, item] == 2 * huge * huge)
+  let fields := Form.fieldRefs ExampleForms.Invoice.form draft draft
+  check "ComputedContent" (match fields.getLast? with
+    | some field => match field.content with
+      | .computed value => JsonProtocol.valueToJson value == Lean.toJson "100"
+      | .input _ => false
+    | none => false)
+  let nestedShape : DataType := .record ExampleForms.Thermostat.temperatureFields fun _ => ExampleForms.Invoice.invoice
+  let path : Path nestedShape ExampleForms.Invoice.invoice := .field .home .self
+  let nested : DataType.denote nestedShape := fun _ => draft
+  check "ComputedWeakening" (Expr.eval (Expr.weaken path total) nested == 100)
+
+private def testDates : IO Unit := do
+  let cases ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "native/tui/tests/dates.json"))
+  let valid ← IO.ofExcept (cases.getObjValAs? (List String) "valid")
+  let invalid ← IO.ofExcept (cases.getObjValAs? (List String) "invalid")
+  for text in valid do
+    let value ← IO.ofExcept (JsonProtocol.valueFromJson .date (Lean.toJson text))
+    check "DateRoundTrip" (JsonProtocol.valueToJson (t := .date) value == Lean.toJson text)
+  for text in invalid do
+    check "RejectInvalidDate" (match JsonProtocol.valueFromJson .date (Lean.toJson text) with
+      | .error _ => true
+      | .ok _ => false)
+  let early : Date := ⟨⟨2028, 2, 29, by decide⟩, by decide⟩
+  let late : Date := ⟨⟨2028, 3, 1, by decide⟩, by decide⟩
+  check "DateComparison" (Expr.eval (root := .date) (.dateLe (.value early) (.project .self)) late)
+  check "DateComparisonEqual" (Expr.eval (root := .date) (.dateLe (.value early) (.project .self)) early)
+  check "DateComparisonReversed" (!Expr.eval (root := .date) (.dateLe (.value late) (.project .self)) early)
+  let range := RefinedDataType.dateRange early late
+  for value in [early, late] do
+    check "DateRangeIncludesEndpoints" ((RefinedDataType.validate range value).isSome)
+  for value in ([⟨⟨2028, 2, 28, by decide⟩, by decide⟩,
+                 ⟨⟨2028, 3, 2, by decide⟩, by decide⟩] : List Date) do
+    check "DateRangeRejectsOutside" ((RefinedDataType.validate range value).isNone)
+  check "DateRangeSingleDay" ((RefinedDataType.validate (.dateRange early early) early).isSome)
+  check "DateRangeReversed" ((RefinedDataType.validate (.dateRange late early) early).isNone)
+  let condition : Expr .date .boolean := .dateLe (.value early) (.project .self)
+  check "DateComparisonWeakening" (Expr.eval (Expr.weaken ExampleForms.Booking.endDate condition) ExampleForms.Booking.draft)
+  let invalidBooking := Path.set ExampleForms.Booking.endDate
+    ⟨⟨2028, 2, 27, by decide⟩, by decide⟩ ExampleForms.Booking.draft
+  check "DateRefinementRejectsForgedResult" (match JsonProtocol.decodeResult ExampleForms.Booking.bookingType
+      (JsonProtocol.valueToJson invalidBooking) with
+    | .error _ => true
+    | _ => false)
+
 private def testProtocol : IO Unit := do
   for (fixture, encoded) in [
-      ("native/tui/tests/location.json", JsonProtocol.encode ExampleForms.Location.locationType ExampleForms.Location.form ExampleForms.Location.draft),
       ("native/tui/tests/booking.json", JsonProtocol.encode ExampleForms.Booking.bookingType ExampleForms.Booking.form ExampleForms.Booking.draft),
+      ("native/tui/tests/location.json", JsonProtocol.encode ExampleForms.Location.locationType ExampleForms.Location.form ExampleForms.Location.draft),
       ("native/tui/tests/shapes.json", JsonProtocol.encode ExampleForms.Shapes.shapeType ExampleForms.Shapes.form ExampleForms.Shapes.draft),
       ("native/tui/tests/invoice.json", JsonProtocol.encode ExampleForms.Invoice.invoiceType ExampleForms.Invoice.form ExampleForms.Invoice.draft),
       ("native/tui/tests/person.json", JsonProtocol.encode ExampleForms.Person.personType ExampleForms.Person.form ExampleForms.Person.draft),
@@ -280,22 +335,7 @@ private def testProtocol : IO Unit := do
   check "UnboundedJsonRoundTrip"
     (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (t := .natural) huge) == .ok huge)
 
-private def testDates : IO Unit := do
-  let cases ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "native/tui/tests/dates.json"))
-  let valid ← IO.ofExcept (cases.getObjValAs? (List String) "valid")
-  let invalid ← IO.ofExcept (cases.getObjValAs? (List String) "invalid")
-  for text in valid do
-    check "DateRoundTrip" ((Date.ofString? text).map Date.toString == some text)
-  for text in invalid do
-    check "RejectInvalidDate" ((Date.ofString? text).isNone)
-  let early : Date := ⟨⟨2028, 2, 29, by decide⟩, by decide⟩
-  let late : Date := ⟨⟨2028, 3, 1, by decide⟩, by decide⟩
-  check "DateComparison" (Expr.eval (root := .date) (.dateLe (.value early) (.project .self)) late)
-  check "DateComparisonEqual" (Expr.eval (root := .date) (.dateLe (.value early) (.project .self)) early)
-  check "DateComparisonReversed" (!Expr.eval (root := .date) (.dateLe (.value late) (.project .self)) early)
-
 def main : IO Unit := do
-  testDates
   testRefinedTypes
   testPathsAndChoices
   testHiddenValidation
@@ -306,6 +346,8 @@ def main : IO Unit := do
   testRecords
   testDisplayOrder
   testDisabled
+  testComputed
+  testDates
 
 section Theorems
 

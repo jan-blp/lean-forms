@@ -12,6 +12,10 @@ inductive Expr : (root : DataType) → (result : DataType) → Type 1 where
   | cases {root result : DataType} {tags : Enum} {constructors : tags → DataType}
       (subject : Expr root (.sum tags constructors))
       (branches : (i : tags) → Expr (constructors i) result) : Expr root result
+  | sum {root element : DataType}
+      (items : Expr root (.list element))
+      (value : Expr element .natural) : Expr root .natural
+  | natMul {root : DataType} (l r : Expr root .natural) : Expr root .natural
   | not {root : DataType} (operand : Expr root .boolean) : Expr root .boolean
   | and {root : DataType} (l r : Expr root .boolean) : Expr root .boolean
   | dateLe {root : DataType} (l r : Expr root .date) : Expr root .boolean
@@ -29,6 +33,8 @@ def Expr.eval
   | .cases subject branches =>
     let selected := Expr.eval subject value
     Expr.eval (branches selected.tag) selected.payload
+  | .sum items expression => List.sum ((Expr.eval items value).map (Expr.eval expression))
+  | .natMul left right => Expr.eval left value * Expr.eval right value
   | .not operand => !Expr.eval operand value
   | .and left right => Expr.eval left value && Expr.eval right value
   | .dateLe left right => Date.le (Expr.eval left value) (Expr.eval right value)
@@ -44,6 +50,8 @@ def Expr.weaken {outer root result} (path : Path outer root) (expression : Expr 
   | .project field => .project (Path.trans path field)
   | .all items predicate => .all (Expr.weaken path items) predicate
   | .cases subject branches => .cases (Expr.weaken path subject) branches
+  | .sum items expression => .sum (Expr.weaken path items) expression
+  | .natMul l r => .natMul (Expr.weaken path l) (Expr.weaken path r)
   | .not operand => .not (Expr.weaken path operand)
   | .and l r => .and (Expr.weaken path l) (Expr.weaken path r)
   | .dateLe l r => .dateLe (Expr.weaken path l) (Expr.weaken path r)
