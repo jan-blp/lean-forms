@@ -8,6 +8,9 @@ variable {root input context t : DataType}
 
 def DataType.toJson (t : DataType) : Json :=
   match t with
+  | .sum tags constructors => Json.mkObj [("kind", Lean.toJson "sum"),
+      ("constructors", Json.arr ((FinEnum.toList tags).map fun i =>
+        Json.mkObj [("name", Lean.toJson (tags.label i)), ("type", DataType.toJson (constructors i))]).toArray)]
   | .list element => Json.mkObj [("kind", Lean.toJson "list"), ("element", element.toJson)]
   | .text => Json.mkObj [("kind", Lean.toJson "text")]
   | .boolean => Json.mkObj [("kind", Lean.toJson "boolean")]
@@ -22,6 +25,8 @@ namespace Runtime.JsonProtocol
 
 def valueToJson {t} (value : ⟦t⟧) : Json :=
   match t with
+  | .sum tags constructors => Json.mkObj [("tag", Lean.toJson (tags.label value.tag)),
+      ("value", valueToJson (t := constructors value.tag) value.payload)]
   | .list element => Json.arr ((value.map (valueToJson (t := element))).toArray)
   | .text => Lean.toJson value
   | .boolean => Lean.toJson value
@@ -47,6 +52,14 @@ private def sequence {ι : Type} [FinEnum ι] {α : ι → Type}
 
 def valueFromJson (t : DataType) (json : Json) : Except String ⟦t⟧ :=
   match t with
+  | .sum tags constructors => do
+    let fields ← json.getObj?
+    if fields.size != 2 then throw "Expected only tag and value in sum"
+    let name ← (← json.getObjVal? "tag").getStr?
+    let some tag := (FinEnum.toList tags).find? (fun i => tags.label i == name)
+      | throw "Invalid sum tag in interpreter result"
+    let payload ← valueFromJson (constructors tag) (← json.getObjVal? "value")
+    return ⟨tag, payload⟩
   | .list element => do
     let items ← json.getArr?
     items.toList.mapM (valueFromJson element)
@@ -94,6 +107,9 @@ def Expr.toJson {input t} (expression : Expr input t) : Json :=
   | .project p => Json.mkObj [("kind", Lean.toJson "project"), ("path", Lean.toJson (Path.toList p))]
   | .all items predicate => Json.mkObj [("kind", Lean.toJson "all"),
       ("items", items.toJson), ("predicate", predicate.toJson)]
+  | .cases (tags := tags) subject branches => Json.mkObj [("kind", Lean.toJson "cases"),
+      ("type", DataType.toJson t), ("subject", Expr.toJson subject),
+      ("branches", Json.mkObj ((FinEnum.toList tags).map fun i => (tags.label i, Expr.toJson (branches i))))]
   | .and l r => binary "and" (Expr.toJson l) (Expr.toJson r)
   | .dateLe l r => binary "dateLe" (Expr.toJson l) (Expr.toJson r)
   | .natLe l r => binary "natLe" (Expr.toJson l) (Expr.toJson r)
@@ -118,6 +134,11 @@ def Component.toJson {state : DataType} (component : Component state) : Json :=
       ("kind", Lean.toJson "list"), ("path", Lean.toJson (Path.toList path)),
       ("schema", DataType.toJson (.list element)), ("label", Lean.toJson label),
       ("item", Component.toJson item), ("defaultItem", Runtime.JsonProtocol.valueToJson defaultItem)]
+  | .sum (tags := tags) (constructors := constructors) path label branches defaults => Json.mkObj [
+      ("kind", Lean.toJson "sum"), ("path", Lean.toJson (Path.toList path)),
+      ("schema", DataType.toJson (.sum tags constructors)), ("label", Lean.toJson label),
+      ("branches", Json.mkObj ((FinEnum.toList tags).map fun tag => (tags.label tag, Component.toJson (branches tag)))),
+      ("defaults", Json.mkObj ((FinEnum.toList tags).map fun tag => (tags.label tag, Runtime.JsonProtocol.valueToJson (defaults tag))))]
   | .visibleWhen condition body => Json.mkObj [
       ("kind", Lean.toJson "visibleWhen"), ("condition", Expr.toJson condition), ("body", Component.toJson body)]
   | .stack (items := items) label children => Json.mkObj [

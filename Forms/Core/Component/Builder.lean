@@ -24,6 +24,13 @@ def list {state element : DataType}
     : Component.Builder state (.list element) :=
   fun path => .list path label (item .self) defaultItem
 
+def sum {state : DataType} {tags : Enum} {constructors : tags → DataType}
+    (label : String)
+    (branches : (tag : tags) → Component.Builder (constructors tag) (constructors tag))
+    (defaults : (tag : tags) → ⟦constructors tag⟧)
+    : Component.Builder state (.sum tags constructors) :=
+  fun path => .sum path label (fun tag => branches tag .self) defaults
+
 def visibleWhen {state value : DataType} (condition : Expr state .boolean)
     (body : Component.Builder state value) : Component.Builder state value :=
   fun path => .visibleWhen condition (body path)

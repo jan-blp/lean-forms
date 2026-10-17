@@ -13,6 +13,7 @@ pub enum Ty {
     Enum { options: Vec<String> },
     Record { fields: Vec<NamedType> },
     List { element: Box<Ty> },
+    Sum { constructors: Vec<NamedType> },
 }
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -21,20 +22,28 @@ pub struct NamedType {
     #[serde(rename = "type")]
     ty: Ty,
 }
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(untagged)]
 pub enum Step {
     Field(String),
     #[serde(skip)]
     Item(usize),
+    #[serde(skip)]
+    Payload(String),
 }
+
 fn matches_names<T>(values: &BTreeMap<String, T>, types: &[NamedType]) -> bool {
     values.len() == types.len() && types.iter().all(|ty| values.contains_key(&ty.name))
 }
+
 impl Ty {
     fn validate(&self) -> Result<(), String> {
         match self {
-            Self::Record { fields } => {
+            Self::Record { fields }
+            | Self::Sum {
+                constructors: fields,
+            } => {
                 let unique: std::collections::HashSet<_> =
                     fields.iter().map(|field| &field.name).collect();
                 if unique.len() != fields.len() {
@@ -45,11 +54,18 @@ impl Ty {
                 }
             }
             Self::List { element } => element.validate()?,
+            Self::Enum { options } => {
+                let unique: std::collections::HashSet<_> = options.iter().collect();
+                if unique.len() != options.len() {
+                    return Err("Enum names must be unique".into());
+                }
+            }
             _ => {}
         }
         Ok(())
     }
 }
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Expr {
@@ -64,6 +80,12 @@ pub enum Expr {
     All {
         items: Box<Expr>,
         predicate: Box<Expr>,
+    },
+    Cases {
+        #[serde(rename = "type")]
+        ty: Ty,
+        subject: Box<Expr>,
+        branches: BTreeMap<String, Expr>,
     },
     And {
         left: Box<Expr>,
@@ -89,12 +111,14 @@ pub enum Widget {
     #[serde(skip)]
     Add,
     #[serde(skip)]
+    Constructor,
+    #[serde(skip)]
     Remove,
 }
 impl Widget {
     fn matches(self, ty: &Ty) -> bool {
         match self {
-            Self::Add | Self::Remove => false,
+            Self::Add | Self::Remove | Self::Constructor => false,
             Self::TextInput => *ty == Ty::Text,
             Self::Checkbox => *ty == Ty::Boolean,
             Self::DateInput => *ty == Ty::Date,
@@ -123,6 +147,13 @@ pub enum Component {
         item: Box<Component>,
         #[serde(rename = "defaultItem")]
         default_item: Value,
+    },
+    Sum {
+        path: Vec<Step>,
+        schema: Ty,
+        label: String,
+        branches: BTreeMap<String, Component>,
+        defaults: BTreeMap<String, Value>,
     },
     VisibleWhen {
         condition: Expr,
@@ -165,6 +196,19 @@ fn date(text: &str) -> Option<NaiveDate> {
 
 fn validate_value(ty: &Ty, value: &Value) -> Result<(), String> {
     let valid = match ty {
+        Ty::Sum { constructors } => value.as_object().is_some_and(|object| {
+            object.len() == 2
+                && object
+                    .get("tag")
+                    .and_then(Value::as_str)
+                    .and_then(|tag| {
+                        constructors
+                            .iter()
+                            .find(|constructor| constructor.name == tag)
+                    })
+                    .zip(object.get("value"))
+                    .is_some_and(|(ty, payload)| validate_value(&ty.ty, payload).is_ok())
+        }),
         Ty::List { element } => value
             .as_array()
             .is_some_and(|items| items.iter().all(|v| validate_value(element, v).is_ok())),
@@ -215,6 +259,25 @@ impl Expr {
                 }
                 Ok(ty.clone())
             }
+            Self::Cases {
+                ty,
+                subject,
+                branches,
+            } => {
+                let Ty::Sum { constructors } = subject.ty(input)? else {
+                    return Err("cases requires a sum".into());
+                };
+                ty.validate()?;
+                if !matches_names(branches, &constructors) {
+                    return Err("cases requires one branch per constructor".into());
+                }
+                for constructor in &constructors {
+                    if branches[&constructor.name].ty(&constructor.ty)? != *ty {
+                        return Err("cases branches must match the result type".into());
+                    }
+                }
+                Ok(ty.clone())
+            }
             Self::All { items, predicate } => {
                 let Ty::List { element } = items.ty(input)? else {
                     return Err("all requires a list".into());
@@ -243,6 +306,13 @@ impl Expr {
         match self {
             Self::Value { value, .. } => value.clone(),
             Self::Project { path } => get(input, path).clone(),
+            Self::Cases {
+                subject, branches, ..
+            } => {
+                let selected = subject.eval(input);
+                let tag = selected["tag"].as_str().unwrap();
+                branches[tag].eval(&selected["value"])
+            }
             Self::All { items, predicate } => Value::Bool(
                 items
                     .eval(input)
@@ -271,6 +341,7 @@ fn get<'a>(mut value: &'a Value, path: &[Step]) -> &'a Value {
         value = match step {
             Step::Field(name) => &value[name],
             Step::Item(index) => &value[*index],
+            Step::Payload(_) => &value["value"],
         };
     }
     value
@@ -280,12 +351,14 @@ fn set(value: &mut Value, path: &[Step], replacement: Value) {
         let child = match first {
             Step::Field(name) => &mut value[name],
             Step::Item(index) => &mut value[*index],
+            Step::Payload(_) => &mut value["value"],
         };
         set(child, rest, replacement);
     } else {
         *value = replacement;
     }
 }
+
 impl Component {
     fn validate(&self, context: &Ty, _ty: &Ty) -> Result<(), String> {
         match self {
@@ -326,6 +399,30 @@ impl Component {
                 validate_value(element, default_item)?;
                 item.validate(element, element)
             }
+            Self::Sum {
+                path,
+                schema,
+                branches,
+                defaults,
+                ..
+            } => {
+                schema.validate()?;
+                if (Expr::Project { path: path.clone() }).ty(context)? != *schema {
+                    return Err("Component path and schema must agree".into());
+                }
+                let Ty::Sum { constructors } = schema else {
+                    return Err("Sum requires sum schema".into());
+                };
+                if !matches_names(branches, constructors) || !matches_names(defaults, constructors)
+                {
+                    return Err("Sum branches and defaults must match schema".into());
+                }
+                for constructor in constructors {
+                    validate_value(&constructor.ty, &defaults[&constructor.name])?;
+                    branches[&constructor.name].validate(&constructor.ty, &constructor.ty)?;
+                }
+                Ok(())
+            }
             Self::VisibleWhen { condition, body } => {
                 if condition.ty(context)? != Ty::Boolean {
                     return Err("Condition requires boolean".into());
@@ -344,6 +441,95 @@ impl Component {
         out: &mut Vec<Field>,
     ) {
         match self {
+            Self::Sum {
+                path: target,
+                schema: ty,
+                label,
+                branches,
+                defaults,
+            } => {
+                let path: Vec<Step> = scope
+                    .iter()
+                    .cloned()
+                    .chain(target.iter().cloned())
+                    .collect();
+                let Ty::Sum { constructors } = ty else {
+                    unreachable!()
+                };
+                let tag = get(value, &path)["tag"].as_str().unwrap();
+                let constructor = constructors
+                    .iter()
+                    .find(|constructor| constructor.name == tag)
+                    .unwrap();
+                let mut labels = labels;
+                labels.push(label.clone());
+                out.push(Field {
+                    presentation: Presentation::default(),
+                    title: label.clone(),
+                    section: labels.join(" › "),
+                    action: false,
+                    label: labels.join("."),
+                    path: path.clone(),
+                    widget: Widget::Constructor,
+                    options: constructors
+                        .iter()
+                        .map(|constructor| constructor.name.clone())
+                        .collect(),
+                    default_item: Some(Value::Array(
+                        constructors
+                            .iter()
+                            .map(|constructor| defaults[&constructor.name].clone())
+                            .collect(),
+                    )),
+                });
+                let selector = out.len() - 1;
+                out[selector].presentation.constructor = true;
+                let section = labels.join(" › ");
+                let mut payload_path = path;
+                payload_path.push(Step::Payload(tag.to_owned()));
+                labels.push(tag.to_owned());
+                let payload_section = labels.join(" › ");
+                branches[tag].fields(
+                    &constructor.ty,
+                    value,
+                    payload_path.clone(),
+                    &payload_path,
+                    labels,
+                    out,
+                );
+                // The selector names the payload. Keep deeper groups, but fold the
+                // branch's outer group into this section instead of repeating it.
+                let mut branch = &branches[tag];
+                while let Self::VisibleWhen { body, .. } = branch {
+                    branch = body;
+                }
+                let prefix = if let Self::Stack {
+                    label: Some(label), ..
+                } = branch
+                {
+                    format!("{payload_section} › {label}")
+                } else {
+                    payload_section
+                };
+                for field in &mut out[selector + 1..] {
+                    field.presentation.depth += 1;
+                    if field.section == prefix {
+                        field.section = section.clone();
+                    } else if let Some(suffix) = field.section.strip_prefix(&format!("{prefix} › "))
+                    {
+                        field.section = format!("{section} › {suffix}");
+                    }
+                }
+                if out.len() == selector + 1 {
+                    out[selector].presentation.note = Some(
+                        if matches!(&constructor.ty, Ty::Record { fields } if fields.is_empty()) {
+                            "No details required"
+                        } else {
+                            "No fields to edit"
+                        },
+                    );
+                }
+            }
             Self::List {
                 path: target,
                 schema: ty,
@@ -380,6 +566,7 @@ impl Component {
                         .map(|field| field.section.clone())
                         .unwrap_or_else(|| item_labels.join(" › "));
                     out.push(Field {
+                        presentation: Presentation::default(),
                         title: "− Remove item".into(),
                         section,
                         action: true,
@@ -391,6 +578,7 @@ impl Component {
                     });
                 }
                 out.push(Field {
+                    presentation: Presentation::default(),
                     title: "+ Add item".into(),
                     section: labels.join(" › "),
                     action: true,
@@ -416,6 +604,7 @@ impl Component {
                 let section = labels.join(" › ");
                 labels.push(label.clone());
                 out.push(Field {
+                    presentation: Presentation::default(),
                     title: label.clone(),
                     section,
                     action: false,
@@ -452,7 +641,16 @@ impl Component {
         }
     }
 }
+#[derive(Clone, Copy, Default)]
+pub struct Presentation {
+    pub constructor: bool,
+    pub depth: usize,
+    pub note: Option<&'static str>,
+    pub invalid: bool,
+}
+
 pub struct Field {
+    pub presentation: Presentation,
     pub label: String,
     pub title: String,
     pub section: String,
@@ -472,6 +670,7 @@ pub struct Editor {
 }
 pub struct Engine {
     spec: Specification,
+    constructor_drafts: std::collections::HashMap<(Vec<Step>, String), Value>,
     pub selected: usize,
     pub editor: Option<Editor>,
 }
@@ -501,6 +700,7 @@ impl Engine {
         spec.form.validate(&spec.schema, &spec.schema)?;
         Ok(Self {
             spec,
+            constructor_drafts: std::collections::HashMap::new(),
             selected: 0,
             editor: None,
         })
@@ -531,6 +731,7 @@ impl Engine {
                 "[ ]"
             }
             .into(),
+            Widget::Constructor => value["tag"].as_str().unwrap().to_owned(),
             Widget::Select => field.options[value.as_u64().unwrap() as usize].clone(),
             _ => value.as_str().unwrap().to_owned(),
         }
@@ -592,7 +793,30 @@ impl Engine {
                     }
                     Key::Enter => {
                         if let Some(field) = fields.get(self.selected) {
-                            set(&mut self.spec.value, &field.path, Value::from(*index));
+                            if matches!(field.widget, Widget::Constructor) {
+                                let old = get(&self.spec.value, &field.path);
+                                let old_tag = old["tag"].as_str().unwrap();
+                                let tag = &field.options[*index];
+                                if old_tag != tag {
+                                    self.constructor_drafts.insert(
+                                        (field.path.clone(), old_tag.to_owned()),
+                                        old["value"].clone(),
+                                    );
+                                    let payload = self
+                                        .constructor_drafts
+                                        .remove(&(field.path.clone(), tag.clone()))
+                                        .unwrap_or_else(|| {
+                                            field.default_item.as_ref().unwrap()[*index].clone()
+                                        });
+                                    set(
+                                        &mut self.spec.value,
+                                        &field.path,
+                                        serde_json::json!({"tag": tag, "value": payload}),
+                                    );
+                                }
+                            } else {
+                                set(&mut self.spec.value, &field.path, Value::from(*index));
+                            }
                         }
                         self.editor = None;
                     }
@@ -628,6 +852,7 @@ impl Engine {
                                 .map(Value::String),
                                 Widget::Checkbox
                                 | Widget::Select
+                                | Widget::Constructor
                                 | Widget::Add
                                 | Widget::Remove => unreachable!(),
                             };
@@ -675,6 +900,27 @@ impl Engine {
                                 let mut items =
                                     get(&self.spec.value, parent).as_array().unwrap().clone();
                                 items.remove(*index);
+                                self.constructor_drafts =
+                                    std::mem::take(&mut self.constructor_drafts)
+                                        .into_iter()
+                                        .filter_map(|((mut path, tag), draft)| {
+                                            if path.starts_with(parent) && path.len() > parent.len()
+                                            {
+                                                let Step::Item(item_index) =
+                                                    &mut path[parent.len()]
+                                                else {
+                                                    unreachable!()
+                                                };
+                                                if *item_index == *index {
+                                                    return None;
+                                                }
+                                                if *item_index > *index {
+                                                    *item_index -= 1;
+                                                }
+                                            }
+                                            Some(((path, tag), draft))
+                                        })
+                                        .collect();
                                 set(&mut self.spec.value, parent, Value::Array(items));
                             }
                             Widget::Checkbox => {
@@ -691,7 +937,19 @@ impl Engine {
                                     },
                                     text: self.shown(field),
                                     error: None,
-                                    choice: if matches!(field.widget, Widget::Select) {
+                                    choice: if matches!(field.widget, Widget::Constructor) {
+                                        Some(
+                                            field
+                                                .options
+                                                .iter()
+                                                .position(|name| {
+                                                    Some(name.as_str())
+                                                        == get(&self.spec.value, &field.path)["tag"]
+                                                            .as_str()
+                                                })
+                                                .unwrap(),
+                                        )
+                                    } else if matches!(field.widget, Widget::Select) {
                                         Some(get(&self.spec.value, &field.path).as_u64().unwrap()
                                             as usize)
                                     } else {

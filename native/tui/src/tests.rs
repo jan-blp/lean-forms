@@ -18,6 +18,7 @@ fn table_scrolls_to_selection_and_shows_validation() {
         fields: labels
             .iter()
             .map(|label| Field {
+                presentation: interpreter::Presentation::default(),
                 label,
                 value: "12",
                 section: "",
@@ -28,6 +29,7 @@ fn table_scrolls_to_selection_and_shows_validation() {
         editor: Some(Editor {
             calendar: None,
             date_input: false,
+            constructor: false,
             label: "Person.Field29".into(),
             text: "-1".into(),
             error: Some("Enter a non-negative whole number.".into()),
@@ -57,6 +59,7 @@ fn choice_editor_shows_selection_and_navigation() {
     let options = vec!["Home".into(), "Work".into(), "Other".into()];
     let screen = Screen {
         fields: vec![Field {
+            presentation: interpreter::Presentation::default(),
             label: "Address kind",
             value: "Home",
             section: "",
@@ -66,6 +69,7 @@ fn choice_editor_shows_selection_and_navigation() {
         editor: Some(Editor {
             calendar: None,
             date_input: false,
+            constructor: false,
             label: "Address kind",
             text: "Home",
             error: None,
@@ -111,6 +115,7 @@ fn invoice_sections_actions_and_scrolling() {
             .iter()
             .zip(&values)
             .map(|(field, value)| Field {
+                presentation: field.presentation,
                 label: &field.title,
                 section: &field.section,
                 action: field.action,
@@ -167,6 +172,7 @@ fn narrow_terminal_and_wide_text_are_handled() {
 fn field_selection_leaves_heading_and_unused_width_unshaded() {
     let screen = Screen {
         fields: vec![Field {
+            presentation: interpreter::Presentation::default(),
             label: "Description",
             value: "New item",
             section: "Invoice › Item 1",
@@ -192,4 +198,125 @@ fn field_selection_leaves_heading_and_unused_width_unshaded() {
         assert!((0..100).all(|x| buffer[(x, y - 1)].bg != theme.selection));
         assert_eq!(buffer[(90, y)].bg, theme.base);
     }
+}
+
+fn draw_engine(engine: &Engine, width: u16, height: u16, theme: Theme) -> String {
+    let fields = engine.fields();
+    let values: Vec<_> = fields.iter().map(|field| engine.shown(field)).collect();
+    let screen = Screen {
+        fields: fields
+            .iter()
+            .zip(&values)
+            .map(|(field, value)| Field {
+                presentation: field.presentation,
+                label: &field.title,
+                section: &field.section,
+                action: field.action,
+                value,
+            })
+            .collect(),
+        selected: engine.selected,
+        editor: engine.editor.as_ref().map(|editor| Editor {
+            calendar: editor.calendar,
+            date_input: editor.date_input,
+            constructor: fields[engine.selected].presentation.constructor,
+            label: &fields[engine.selected].title,
+            text: &editor.text,
+            error: editor.error.as_deref(),
+            choice: editor.choice,
+            options: &editor.options,
+        }),
+    };
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| render(frame, &screen, &mut TableState::default(), theme))
+        .unwrap();
+    terminal
+        .backend()
+        .buffer()
+        .content()
+        .chunks(width as usize)
+        .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn sum_selector_groups_payload_and_explains_empty_constructors() {
+    let mut spec: serde_json::Value =
+        serde_json::from_str(include_str!("../tests/shapes.json")).unwrap();
+    spec["value"] = serde_json::json!({"tag":"dot","value":{}});
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    for theme in [Theme::FRAPPE, Theme::LATTE] {
+        let text = draw_engine(&engine, 80, 24, theme);
+        assert!(text.contains("dot ▾"));
+        assert!(text.contains("No details required"));
+        assert!(text.contains("Enter choose"));
+        assert_eq!(text.matches("Shape").count(), 2); // Page title and selector.
+    }
+    for (width, height) in [(32, 12), (40, 14)] {
+        let text = draw_engine(&engine, width, height, Theme::FRAPPE);
+        assert!(text.contains("dot ▾"));
+        assert!(text.contains("No details"));
+        assert!(text.contains("required"));
+    }
+    for key in [Key::Enter, Key::Down, Key::Down] {
+        engine.step(key);
+    }
+    let text = draw_engine(&engine, 80, 24, Theme::FRAPPE);
+    assert!(text.contains("› rectangle"));
+    assert!(text.contains("Enter switch"));
+    assert!(text.contains("Drafts kept"));
+    engine.step(Key::Enter);
+    let fields = engine.fields();
+    assert_eq!(fields.len(), 3);
+    assert_eq!(fields[1].presentation.depth, 1);
+    assert_eq!(fields[0].section, fields[1].section);
+    let text = draw_engine(&engine, 80, 24, Theme::FRAPPE);
+    assert!(text.contains("rectangle ▾"));
+    assert!(text.contains("│  Width"));
+    assert!(text.contains("│  Height"));
+    assert!(!text.contains("No details required"));
+    assert!(!text.contains("Dimensions"));
+}
+
+#[test]
+fn sum_preserves_nested_grouping() {
+    let source: serde_json::Value =
+        serde_json::from_str(include_str!("../tests/shapes.json")).unwrap();
+    let mut spec = source.clone();
+    spec["schema"] = serde_json::json!({"kind":"sum","constructors":[{"name":"standard","type":source["schema"]}]});
+    spec["form"] = serde_json::json!({"kind":"sum","path":[],"schema":spec["schema"],"label":"Order",
+        "branches":{"standard":source["form"]},"defaults":{"standard":source["value"]}});
+    spec["value"] = serde_json::json!({"tag":"standard","value":{"tag":"rectangle","value":{"width":"7","height":"1"}}});
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    let fields = engine.fields();
+    assert_eq!(
+        fields
+            .iter()
+            .map(|field| field.presentation.depth)
+            .collect::<Vec<_>>(),
+        [0, 1, 2, 2]
+    );
+    assert_eq!(fields[1].section, "Order › Shape");
+    assert_eq!(fields[2].section, fields[1].section);
+    engine.selected = 3;
+    let text = draw_engine(&engine, 40, 14, Theme::LATTE);
+    assert!(text.contains("Height"));
+    assert!(text.contains("4 / 4"));
+}
+
+#[test]
+fn hidden_payload_is_distinguished_from_an_empty_constructor() {
+    let mut spec: serde_json::Value =
+        serde_json::from_str(include_str!("../tests/shapes.json")).unwrap();
+    let body = spec["form"]["branches"]["rectangle"].clone();
+    spec["form"]["branches"]["rectangle"] = serde_json::json!({"kind":"visibleWhen",
+        "condition":{"kind":"value","type":{"kind":"boolean"},"value":false}, "body":body});
+    spec["value"] = serde_json::json!({"tag":"rectangle","value":{"width":"7","height":"0"}});
+    let engine = Engine::parse(&spec.to_string()).unwrap();
+    let text = draw_engine(&engine, 80, 24, Theme::FRAPPE);
+    assert!(text.contains("No fields to edit"));
+    assert!(!text.contains("No details required"));
+    assert!(text.contains("rectangle ▾"));
 }

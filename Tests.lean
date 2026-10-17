@@ -1,4 +1,6 @@
 import Forms.Runtime.FormSnapshot
+import Forms.ExampleForms.Shapes
+import Forms.ExampleForms.Location
 import Mathlib.Data.Nat.Basic
 import Forms.ExampleForms.Invoice
 import Forms.ExampleForms.Person
@@ -99,7 +101,7 @@ private def testLists : IO Unit := do
   check "AllListItems" (allPositive.eval [1, 2] && !(allPositive.eval [1, 0]))
   let fixture ← IO.FS.readFile "native/tui/tests/invoice.json"
   check "InvoiceFixtureMatchesLean"
-    ((Lean.Json.parse fixture).toOption == (Lean.Json.parse (JsonProtocol.encode ExampleForms.Invoice.form initial)).toOption)
+    ((← IO.ofExcept (Lean.Json.parse fixture)).compress == JsonProtocol.encode ExampleForms.Invoice.form initial)
 
 private def testDates : IO Unit := do
   let cases ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "native/tui/tests/dates.json"))
@@ -115,6 +117,52 @@ private def testDates : IO Unit := do
   check "DateComparisonEqual" (Expr.eval (input := .date) (.dateLe (.value early) (.project .self)) early)
   check "DateComparisonReversed" (!Expr.eval (input := .date) (.dateLe (.value late) (.project .self)) early)
 
+private def testSums : IO Unit := do
+  for (fixture, encoded) in [
+      ("native/tui/tests/shapes.json", JsonProtocol.encode ExampleForms.Shapes.form ExampleForms.Shapes.initial),
+      ("native/tui/tests/location.json", JsonProtocol.encode ExampleForms.Location.form ExampleForms.Location.initial)] do
+    let fixtureJson ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile fixture))
+    let encodedJson ← IO.ofExcept (Lean.Json.parse encoded)
+    check "SumFixtureMatchesLean" (fixtureJson.compress == encodedJson.compress)
+  let dot : ⟦ExampleForms.Shapes.shape⟧ := ⟨.dot, fun i => nomatch i⟩
+  let valid : ⟦ExampleForms.Shapes.shape⟧ := ⟨.rectangle, fun | .width => 7 | .height => 2⟩
+  let invalid : ⟦ExampleForms.Shapes.shape⟧ := ⟨.rectangle, fun | .width => 7 | .height => 0⟩
+  let dimension : Expr ExampleForms.Shapes.shape .natural :=
+    .cases (.project .self) fun
+      | .dot => .value 0
+      | .circle => .project .self
+      | .rectangle => .project (.field .height .self)
+  check "CasesReturnsSelectedPayloadValue" (Expr.eval dimension dot == 0 && Expr.eval dimension valid == 2)
+  let name : Expr ExampleForms.Shapes.shape .text :=
+    .cases (.project .self) fun
+      | .dot => .value "Dot"
+      | .circle => .value "Circle"
+      | .rectangle => .value "Rectangle"
+  check "CasesSupportsTextResult" (Expr.eval name dot == "Dot" && Expr.eval name valid == "Rectangle")
+  let withinLimit : Expr ExampleForms.Shapes.shape .boolean := .natLe dimension (.value 1)
+  check "CasesComposesWithExpressions" (Expr.eval withinLimit dot && !(Expr.eval withinLimit valid))
+  check "CasesEncodesResultType" (match (Expr.toJson dimension).getObjVal? "type" with
+    | .ok ty => ty == DataType.toJson .natural
+    | _ => false)
+
+  for draft in [dot, valid, invalid] do
+    let encoded := JsonProtocol.valueToJson draft
+    check "SumDraftRoundTrip" (match JsonProtocol.valueFromJson ExampleForms.Shapes.shape encoded with
+      | .ok value => JsonProtocol.valueToJson value == encoded
+      | _ => false)
+  check "SumOnlyShowsActivePayload" ((fieldRefs ExampleForms.Shapes.form dot).isEmpty &&
+    (fieldRefs ExampleForms.Shapes.form valid).map (·.indices) == [[2,0], [2,1]])
+  check "SumPayloadLabels" ((fieldRefs ExampleForms.Shapes.form valid).map (·.labels) ==
+    [["Shape", "rectangle", "Dimensions", "Width"], ["Shape", "rectangle", "Dimensions", "Height"]])
+  for malformed in ["{}", "[0,[]]", "{\"tag\":3,\"value\":[]}",
+      "{\"tag\":-1,\"value\":[]}", "{\"tag\":\"0\",\"value\":[]}",
+      "{\"tag\":\"dot\",\"value\":false}", "{\"tag\":\"circle\",\"value\":false}",
+      "{\"tag\":\"dot\",\"value\":{},\"extra\":true}"] do
+    check "MalformedSumRejected" (match JsonProtocol.valueFromJson ExampleForms.Shapes.shape
+        (← IO.ofExcept (Lean.Json.parse malformed)) with
+      | .error _ => true
+      | _ => false)
+
 def main : IO Unit := do
   testDates
   testEditsAndVisibility
@@ -123,12 +171,13 @@ def main : IO Unit := do
   testChoice
   testGroups
   testLists
+  testSums
   let encoded := JsonProtocol.encode ExampleForms.Person.form ExampleForms.Person.initial
   let json ← IO.ofExcept (Lean.Json.parse encoded)
   let value ← IO.ofExcept (json.getObjVal? "value" >>= JsonProtocol.valueFromJson ExampleForms.Person.person)
   check "SpecificationValueRoundTrip" (JsonProtocol.valueToJson value == JsonProtocol.valueToJson ExampleForms.Person.initial)
   let fixture ← IO.FS.readFile "native/tui/tests/person.json"
-  check "RustFixtureMatchesLeanSpecification" ((Lean.Json.parse fixture).toOption == (Lean.Json.parse encoded).toOption)
+  check "RustFixtureMatchesLeanSpecification" ((← IO.ofExcept (Lean.Json.parse fixture)).compress == encoded)
   let huge := 12345678901234567890123456789012345678901234567890
   check "UnboundedNaturalRoundTrip"
     (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (t := .natural) huge) == .ok huge)

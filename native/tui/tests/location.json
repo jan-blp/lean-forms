@@ -1,0 +1,137 @@
+{
+  "form": {
+    "branches": {
+      "Catalonia": {
+        "kind": "field",
+        "label": "City",
+        "widget": "select",
+        "path": [],
+        "schema": {
+          "kind": "enum",
+          "options": [
+            "Vic",
+            "Barcelona",
+            "Girona"
+          ]
+        }
+      },
+      "France": {
+        "kind": "field",
+        "label": "City",
+        "widget": "select",
+        "path": [],
+        "schema": {
+          "kind": "enum",
+          "options": [
+            "Paris",
+            "Lyon",
+            "Marseille"
+          ]
+        }
+      },
+      "Japan": {
+        "kind": "field",
+        "label": "City",
+        "widget": "select",
+        "path": [],
+        "schema": {
+          "kind": "enum",
+          "options": [
+            "Tokyo",
+            "Kyoto",
+            "Osaka"
+          ]
+        }
+      }
+    },
+    "defaults": {
+      "Catalonia": 0,
+      "France": 0,
+      "Japan": 0
+    },
+    "kind": "sum",
+    "label": "Country",
+    "path": [],
+    "schema": {
+      "constructors": [
+        {
+          "name": "France",
+          "type": {
+            "kind": "enum",
+            "options": [
+              "Paris",
+              "Lyon",
+              "Marseille"
+            ]
+          }
+        },
+        {
+          "name": "Japan",
+          "type": {
+            "kind": "enum",
+            "options": [
+              "Tokyo",
+              "Kyoto",
+              "Osaka"
+            ]
+          }
+        },
+        {
+          "name": "Catalonia",
+          "type": {
+            "kind": "enum",
+            "options": [
+              "Vic",
+              "Barcelona",
+              "Girona"
+            ]
+          }
+        }
+      ],
+      "kind": "sum"
+    }
+  },
+  "schema": {
+    "constructors": [
+      {
+        "name": "France",
+        "type": {
+          "kind": "enum",
+          "options": [
+            "Paris",
+            "Lyon",
+            "Marseille"
+          ]
+        }
+      },
+      {
+        "name": "Japan",
+        "type": {
+          "kind": "enum",
+          "options": [
+            "Tokyo",
+            "Kyoto",
+            "Osaka"
+          ]
+        }
+      },
+      {
+        "name": "Catalonia",
+        "type": {
+          "kind": "enum",
+          "options": [
+            "Vic",
+            "Barcelona",
+            "Girona"
+          ]
+        }
+      }
+    ],
+    "kind": "sum"
+  },
+  "value": {
+    "tag": "France",
+    "value": 0
+  },
+  "version": 4
+}
