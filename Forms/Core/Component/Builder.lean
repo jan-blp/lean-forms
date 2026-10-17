@@ -36,5 +36,9 @@ def visibleWhen {state value : DataType} (condition : Expr state .boolean)
     (body : Component.Builder state value) : Component.Builder state value :=
   fun path => .visibleWhen condition (body path)
 
+def disabledWhen {state value : DataType} (condition : Expr state .boolean)
+    (body : Component.Builder state value) : Component.Builder state value :=
+  fun path => .disabledWhen condition (body path)
+
 end Component.Builder
 end Forms.Composition

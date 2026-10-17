@@ -12,6 +12,7 @@ inductive Expr : (input : DataType) → (result : DataType) → Type 1 where
   | cases {input result : DataType} {tags : Enum} {constructors : tags → DataType}
       (subject : Expr input (.sum tags constructors))
       (branches : (i : tags) → Expr (constructors i) result) : Expr input result
+  | not {input : DataType} (operand : Expr input .boolean) : Expr input .boolean
   | and {input : DataType} (l r : Expr input .boolean) : Expr input .boolean
   | dateLe {input : DataType} (l r : Expr input .date) : Expr input .boolean
   | natLe {input : DataType} (l r : Expr input .natural) : Expr input .boolean
@@ -28,6 +29,7 @@ def Expr.eval
   | .cases subject branches =>
     let selected := Expr.eval subject value
     Expr.eval (branches selected.tag) selected.payload
+  | .not operand => !Expr.eval operand value
   | .and left right => Expr.eval left value && Expr.eval right value
   | .dateLe left right => Expr.eval left value ≤ Expr.eval right value
   | .natLe left right => Expr.eval left value ≤ Expr.eval right value
@@ -42,6 +44,7 @@ def Expr.weaken {outer input result} (path : Path outer input) (expression : Exp
   | .project field => .project (Path.trans path field)
   | .all items predicate => .all (Expr.weaken path items) predicate
   | .cases subject branches => .cases (Expr.weaken path subject) branches
+  | .not operand => .not (Expr.weaken path operand)
   | .and l r => .and (Expr.weaken path l) (Expr.weaken path r)
   | .dateLe l r => .dateLe (Expr.weaken path l) (Expr.weaken path r)
   | .natLe l r => .natLe (Expr.weaken path l) (Expr.weaken path r)

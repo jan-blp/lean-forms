@@ -86,7 +86,9 @@ initial = {'name': 'Ada', 'age': 28, 'subscribed': False, 'address': {'street': 
 output = session(b'j\r\x15-1\r\x1542\rj j\r\x15Elm Street\rk  q', {'name': 'Ada', 'age': 42, 'subscribed': True, 'address': {'street': 'Elm Street', 'kind': 'Home'}})
 assert b'non-negative whole number' in output
 session('i\x15Ω'.encode(), None, interrupt=True)
-session(b'q', initial)
+output = session(b'q', initial)
+assert b'Send me postal mail' in output
+assert b'Address' not in output
 for theme in ['frappe', 'macchiato', 'mocha', 'latte', 'ayu-light', 'ayu-dark', 'nord']:
     session(b'q', initial, theme=theme)
     session(b'q', {'home': 22, 'away': 18}, thermostat=True, theme=theme)
