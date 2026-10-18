@@ -1,3 +1,4 @@
+use chrono::{Datelike, Days, Months, NaiveDate};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -7,6 +8,7 @@ pub enum Ty {
     Text,
     Boolean,
     Natural,
+    Date,
 }
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
@@ -23,6 +25,10 @@ pub enum Expr {
         left: Box<Expr>,
         right: Box<Expr>,
     },
+    DateLe {
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
     NatLe {
         left: Box<Expr>,
         right: Box<Expr>,
@@ -34,12 +40,14 @@ pub enum Widget {
     TextInput,
     Checkbox,
     NaturalInput,
+    DateInput,
 }
 impl Widget {
     fn ty(self) -> Ty {
         match self {
             Self::TextInput => Ty::Text,
             Self::Checkbox => Ty::Boolean,
+            Self::DateInput => Ty::Date,
             Self::NaturalInput => Ty::Natural,
         }
     }
@@ -64,10 +72,30 @@ fn natural(text: &str) -> Option<String> {
     let digits = text.trim_start_matches('0');
     Some(if digits.is_empty() { "0" } else { digits }.to_owned())
 }
+fn date(text: &str) -> Option<NaiveDate> {
+    let bytes = text.as_bytes();
+    if bytes.len() != 10
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || !bytes
+            .iter()
+            .enumerate()
+            .all(|(i, b)| i == 4 || i == 7 || b.is_ascii_digit())
+    {
+        return None;
+    }
+    let year = text[..4].parse().ok()?;
+    if year == 0 {
+        return None;
+    }
+    NaiveDate::from_ymd_opt(year, text[5..7].parse().ok()?, text[8..].parse().ok()?)
+}
+
 fn validate_value(ty: &Ty, value: &Value) -> Result<(), String> {
     let valid = match ty {
         Ty::Text => value.is_string(),
         Ty::Boolean => value.is_boolean(),
+        Ty::Date => value.as_str().and_then(date).is_some(),
         Ty::Natural => value.as_str().and_then(natural).is_some(),
     };
     if valid {
@@ -89,9 +117,12 @@ impl Expr {
                 }
                 Ok(root.clone())
             }
-            Self::And { left, right } | Self::NatLe { left, right } => {
+            Self::And { left, right }
+            | Self::NatLe { left, right }
+            | Self::DateLe { left, right } => {
                 let expected = match self {
                     Self::And { .. } => Ty::Boolean,
+                    Self::DateLe { .. } => Ty::Date,
                     _ => Ty::Natural,
                 };
                 if left.ty(root)? != expected || right.ty(root)? != expected {
@@ -107,6 +138,10 @@ impl Expr {
             Self::Project { path } => get(root, path).clone(),
             Self::And { left, right } => Value::Bool(
                 left.eval(root).as_bool().unwrap() && right.eval(root).as_bool().unwrap(),
+            ),
+            Self::DateLe { left, right } => Value::Bool(
+                date(left.eval(root).as_str().unwrap()).unwrap()
+                    <= date(right.eval(root).as_str().unwrap()).unwrap(),
             ),
             Self::NatLe { left, right } => {
                 let l = natural(left.eval(root).as_str().unwrap()).unwrap();
@@ -142,7 +177,6 @@ impl Form {
                     widget: *widget,
                 });
             }
-
         }
     }
 }
@@ -152,6 +186,8 @@ pub struct Field {
     widget: Widget,
 }
 pub struct Editor {
+    pub calendar: Option<NaiveDate>,
+    pub date_input: bool,
     pub text: String,
     pub error: Option<String>,
 }
@@ -164,6 +200,10 @@ pub struct Engine {
 pub enum Key {
     Up,
     Down,
+    Left,
+    Right,
+    PageUp,
+    PageDown,
     Enter,
     Escape,
     Backspace,
@@ -213,6 +253,49 @@ impl Engine {
         }
         let fields = self.fields();
         if let Some(editor) = &mut self.editor {
+            if let Some(current) = editor.calendar {
+                if !editor.date_input {
+                    match key {
+                        Key::Character('i') | Key::Enter => editor.date_input = true,
+                        Key::Escape => {
+                            self.editor = None;
+                            return true;
+                        }
+                        _ => {
+                            let moved = match key {
+                                Key::Left | Key::Character('h') => {
+                                    current.checked_sub_days(Days::new(1))
+                                }
+                                Key::Right | Key::Character('l') => {
+                                    current.checked_add_days(Days::new(1))
+                                }
+                                Key::Up | Key::Character('k') => {
+                                    current.checked_sub_days(Days::new(7))
+                                }
+                                Key::Down | Key::Character('j') => {
+                                    current.checked_add_days(Days::new(7))
+                                }
+                                Key::PageUp => current.checked_sub_months(Months::new(1)),
+                                Key::PageDown => current.checked_add_months(Months::new(1)),
+                                _ => None,
+                            };
+                            if let Some(next) =
+                                moved.filter(|value| (1..=9999).contains(&value.year()))
+                            {
+                                editor.calendar = Some(next);
+                                editor.text = next.to_string();
+                                editor.error = None;
+                            }
+                        }
+                    }
+                    return true;
+                }
+                if matches!(key, Key::Escape) {
+                    editor.date_input = false;
+                    return true;
+                }
+            }
+
             match key {
                 Key::Escape => self.editor = None,
                 Key::Clear => {
@@ -231,6 +314,10 @@ impl Engine {
                     if let Some(field) = fields.get(self.selected) {
                         let parsed = match field.widget {
                             Widget::TextInput => Some(Value::String(editor.text.clone())),
+                            Widget::DateInput => {
+                                date(editor.text.trim_matches(|c: char| c.is_ascii_whitespace()))
+                                    .map(|value| Value::String(value.to_string()))
+                            }
                             Widget::NaturalInput => {
                                 natural(editor.text.trim_matches(|c: char| c.is_ascii_whitespace()))
                                     .map(Value::String)
@@ -241,7 +328,14 @@ impl Engine {
                             set(&mut self.spec.value, &field.path, value);
                             self.editor = None;
                         } else {
-                            editor.error = Some("Enter a non-negative whole number.".into());
+                            editor.error = Some(
+                                if matches!(field.widget, Widget::DateInput) {
+                                    "Enter a valid date: YYYY-MM-DD (0001–9999)."
+                                } else {
+                                    "Enter a non-negative whole number."
+                                }
+                                .into(),
+                            );
                         }
                     }
                 }
@@ -263,6 +357,12 @@ impl Engine {
                             }
                             _ if !matches!(key, Key::Character(' ')) => {
                                 self.editor = Some(Editor {
+                                    date_input: false,
+                                    calendar: if matches!(field.widget, Widget::DateInput) {
+                                        date(&self.shown(field))
+                                    } else {
+                                        None
+                                    },
                                     text: self.shown(field),
                                     error: None,
                                 })
@@ -272,6 +372,15 @@ impl Engine {
                     }
                 }
                 _ => {}
+            }
+        }
+        if let Some(editor) = &mut self.editor {
+            if editor.calendar.is_some() {
+                if let Some(value) =
+                    date(editor.text.trim_matches(|c: char| c.is_ascii_whitespace()))
+                {
+                    editor.calendar = Some(value);
+                }
             }
         }
         self.selected = self.selected.min(self.fields().len().saturating_sub(1));

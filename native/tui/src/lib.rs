@@ -1,3 +1,4 @@
+use chrono::{Datelike, NaiveDate};
 use crossterm::{
     cursor::{Hide, Show},
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
@@ -6,10 +7,10 @@ use crossterm::{
 };
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Layout},
+    layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::Line,
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState},
+    text::{Line, Span},
+    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, TableState},
     Frame, Terminal,
 };
 use std::{
@@ -127,6 +128,8 @@ struct Field<'a> {
     value: &'a str,
 }
 struct Editor<'a> {
+    calendar: Option<NaiveDate>,
+    date_input: bool,
     label: &'a str,
     text: &'a str,
     error: Option<&'a str>,
@@ -184,6 +187,8 @@ fn run(engine: &mut Engine, theme: Theme, interrupted: extern "C" fn() -> i32) -
                 selected: engine.selected,
                 editor: engine.editor.as_ref().and_then(|e| {
                     fields.get(engine.selected).map(|f| Editor {
+                        calendar: e.calendar,
+                        date_input: e.date_input,
                         label: &f.label,
                         text: &e.text,
                         error: e.error.as_deref(),
@@ -210,6 +215,10 @@ fn run(engine: &mut Engine, theme: Theme, interrupted: extern "C" fn() -> i32) -
         let key = match key.code {
             KeyCode::Up => Key::Up,
             KeyCode::Down => Key::Down,
+            KeyCode::Left => Key::Left,
+            KeyCode::Right => Key::Right,
+            KeyCode::PageUp => Key::PageUp,
+            KeyCode::PageDown => Key::PageDown,
             KeyCode::Enter => Key::Enter,
             KeyCode::Esc => Key::Escape,
             KeyCode::Backspace => Key::Backspace,
@@ -291,12 +300,13 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         frame.render_widget(Paragraph::new("Enlarge terminal to at least 32 x 12"), area);
         return;
     }
-    let footer_height = if screen.editor.is_some() { 6 } else { 3 };
-    let sections = Layout::vertical([
-        Constraint::Min(4),
-        Constraint::Length(footer_height),
-    ])
-    .split(area);
+    let footer_height = if screen.editor.as_ref().is_some_and(|e| e.calendar.is_none()) {
+        6
+    } else {
+        3
+    };
+    let sections =
+        Layout::vertical([Constraint::Min(4), Constraint::Length(footer_height)]).split(area);
     let rows = screen.fields.iter().map(|field| {
         Row::new([
             Cell::from(clean(&field.label)),
@@ -343,6 +353,10 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
     });
     frame.render_stateful_widget(table, sections[0], table_state);
     if let Some(editor) = &screen.editor {
+        if let Some(date) = editor.calendar {
+            render_date_editor(frame, editor, date, theme);
+            return;
+        }
         let parts = Layout::vertical([
             Constraint::Length(3),
             Constraint::Length(1),
@@ -386,6 +400,123 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
             sections[1],
         );
     }
+}
+
+fn render_date_editor(frame: &mut Frame, editor: &Editor<'_>, date: NaiveDate, theme: Theme) {
+    let area = frame.area();
+    let width = area.width.min(60);
+    let height = area.height.min(18);
+    let popup = Rect::new(
+        area.x + (area.width - width) / 2,
+        area.y + (area.height - height) / 2,
+        width,
+        height,
+    );
+    frame.render_widget(Clear, popup);
+    let block = Block::bordered()
+        .title(format!(" {} ", clean(editor.label)))
+        .style(Style::default().fg(theme.text).bg(theme.base))
+        .border_style(Style::default().fg(theme.accent));
+    let inner = block.inner(popup);
+    frame.render_widget(block, popup);
+    let parts = Layout::vertical([
+        Constraint::Length(if height < 16 { 1 } else { 3 }),
+        Constraint::Min(0),
+        Constraint::Length(1),
+        Constraint::Length(4),
+    ])
+    .split(inner);
+    frame.render_widget(
+        Paragraph::new(format!(
+            "{}{}",
+            editor_tail(&clean(editor.text), parts[0].width.saturating_sub(3)),
+            if editor.date_input { "▏" } else { "" }
+        ))
+        .block(
+            (if parts[0].height > 1 {
+                Block::bordered().title(" YYYY-MM-DD ")
+            } else {
+                Block::default()
+            })
+            .border_style(Style::default().fg(if editor.error.is_some() {
+                theme.error
+            } else {
+                theme.accent
+            })),
+        ),
+        parts[0],
+    );
+    let mut lines = vec![
+        Line::styled(
+            date.format("%B %Y").to_string(),
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Line::styled(" Mo Tu We Th Fr Sa Su", Style::default().fg(theme.subtext)),
+    ];
+    let offset = date.with_day(1).unwrap().weekday().num_days_from_monday();
+    for week in 0..6 {
+        let mut cells = Vec::new();
+        for weekday in 0..7 {
+            let position = week * 7 + weekday;
+            let day = position as i32 - offset as i32 + 1;
+            let valid =
+                day > 0 && NaiveDate::from_ymd_opt(date.year(), date.month(), day as u32).is_some();
+            let style = if valid && day as u32 == date.day() {
+                Style::default()
+                    .fg(theme.text)
+                    .bg(theme.selection)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(theme.text)
+            };
+            cells.push(Span::styled(
+                if valid {
+                    format!("{day:>3}")
+                } else {
+                    "   ".into()
+                },
+                style,
+            ));
+        }
+        lines.push(Line::from(cells));
+    }
+    // In short terminals, keep the selected week in view with its heading.
+    if parts[1].height < lines.len() as u16 && parts[1].height > 2 {
+        let selected_week = ((offset + date.day() - 1) / 7) as usize;
+        let visible_weeks = parts[1].height as usize - 2;
+        let start = (selected_week + 1).saturating_sub(visible_weeks);
+        lines = lines[..2]
+            .iter()
+            .cloned()
+            .chain(lines[2 + start..].iter().take(visible_weeks).cloned())
+            .collect();
+    }
+    frame.render_widget(
+        Paragraph::new(lines).alignment(ratatui::layout::Alignment::Center),
+        parts[1],
+    );
+    let invalid_text = editor.text.trim() != date.to_string();
+    frame.render_widget(
+        Paragraph::new(editor.error.as_deref().unwrap_or(if invalid_text {
+            "Calendar shows the last valid date."
+        } else {
+            ""
+        }))
+        .style(Style::default().fg(if editor.error.is_some() {
+            theme.error
+        } else {
+            theme.subtext
+        })),
+        parts[2],
+    );
+    frame.render_widget(Paragraph::new(if editor.date_input {
+        "INPUT · YYYY-MM-DD\nCtrl-U clear · Backspace delete\nEnter save\nEsc back to calendar"
+    } else {
+        "CALENDAR · h/l day · k/j week\nArrows move · PgUp/PgDn month\ni / Enter edit input\nEsc cancel"
+    })
+        .style(Style::default().fg(theme.subtext)).wrap(ratatui::widgets::Wrap { trim: true }), parts[3]);
 }
 
 #[cfg(test)]

@@ -23,6 +23,8 @@ fn table_scrolls_to_selection_and_shows_validation() {
                 .collect(),
             selected: 29,
             editor: Some(Editor {
+                calendar: None,
+                date_input: false,
                 label: "Person.Field29".into(),
                 text: "-1".into(),
                 error: Some("Enter a non-negative whole number.".into()),
