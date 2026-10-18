@@ -6,6 +6,7 @@ inductive Widget : (type : DataType) → Type where
   | textInput : Widget .text
   | checkbox : Widget .boolean
   | naturalInput : Widget .natural
+  | dateInput : Widget .date
 
 inductive Form : (type : DataType) → Type where
   | field

@@ -6,6 +6,7 @@ inductive Expr (input : DataType) : (result : DataType) → Type where
   | value {t : DataType} (v : ⟦t⟧) : Expr input t
   | project {t : DataType} (p : Path input t) : Expr input t
   | and (l r : Expr input .boolean) : Expr input .boolean
+  | dateLe (l r : Expr input .date) : Expr input .boolean
   | natLe (l r : Expr input .natural) : Expr input .boolean
 
 def Expr.eval
@@ -17,6 +18,7 @@ def Expr.eval
   | .value constant => constant
   | .project path => Path.get path value
   | .and left right => Expr.eval left value && Expr.eval right value
+  | .dateLe left right => Expr.eval left value ≤ Expr.eval right value
   | .natLe left right => Expr.eval left value ≤ Expr.eval right value
 
 end Forms
