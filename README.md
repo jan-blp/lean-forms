@@ -47,3 +47,10 @@ CARGO_HOME="$PWD/.lake/cargo-home" cargo test --locked --manifest-path native/tu
 python3 tools/test_terminal.py
 python3 tools/test_cli.py  # requires Bash and Fish
 ```
+
+## Future work
+
+- Typed deltas for partial updates and change tracking.
+- API-backed choices with search, pagination, and dependent lookups.
+- Tables with filtering, sorting, reordering, and bulk actions.
+- Tabs, columns, and groups independent of the data structure.
