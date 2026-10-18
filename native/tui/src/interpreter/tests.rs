@@ -24,7 +24,10 @@ fn natural_edits_validate_and_preserve_value_on_error() {
         keys(&mut e, &[Key::Clear]);
         text(&mut e, invalid);
         keys(&mut e, &[Key::Enter]);
-        assert_eq!(e.editor.as_ref().unwrap().error.as_deref(), Some("Enter a non-negative whole number."));
+        assert_eq!(
+            e.editor.as_ref().unwrap().error.as_deref(),
+            Some("Enter a non-negative whole number.")
+        );
         assert_eq!(e.spec.value, "12");
     }
     keys(&mut e, &[Key::Clear]);
@@ -94,4 +97,28 @@ fn invalid_specifications_are_rejected_before_rendering() {
     let mut v = source;
     v["extra"] = json!(true);
     assert!(Engine::parse(&v.to_string()).is_err());
+}
+
+#[test]
+fn date_calendar_rules_and_picker_modes() {
+    let cases: Value = serde_json::from_str(include_str!("../../tests/dates.json")).unwrap();
+    for value in cases["valid"].as_array().unwrap() {
+        assert_eq!(
+            date(value.as_str().unwrap()).unwrap().to_string(),
+            value.as_str().unwrap()
+        );
+    }
+    for value in cases["invalid"].as_array().unwrap() {
+        assert!(date(value.as_str().unwrap()).is_none());
+    }
+    let spec = serde_json::json!({"version":1, "schema":{"kind":"date"}, "form":{"kind":"field","label":"Date","widget":"dateInput"}, "value":"2028-02-28"});
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    e.step(Key::Enter);
+    e.step(Key::Character('l'));
+    assert_eq!(e.editor.as_ref().unwrap().text, "2028-02-29");
+    e.step(Key::Enter);
+    assert!(e.editor.as_ref().unwrap().date_input);
+    e.step(Key::Enter);
+    assert!(e.editor.is_none());
+    assert_eq!(e.spec.value, "2028-02-29");
 }

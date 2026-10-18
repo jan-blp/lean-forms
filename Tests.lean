@@ -20,7 +20,22 @@ private def testPredicates : IO Unit := do
   check "EvaluatesTypedPredicate" (Expr.eval eligible 12)
   check "PredicateUsesEditedValue" (!(Expr.eval eligible 9))
 
+private def testDates : IO Unit := do
+  let cases ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "native/tui/tests/dates.json"))
+  let valid ← IO.ofExcept (cases.getObjValAs? (List String) "valid")
+  let invalid ← IO.ofExcept (cases.getObjValAs? (List String) "invalid")
+  for text in valid do
+    check "DateRoundTrip" ((Date.ofString? text).map Date.toString == some text)
+  for text in invalid do
+    check "RejectInvalidDate" ((Date.ofString? text).isNone)
+  let early : Date := ⟨⟨2028, 2, 29, by decide⟩, by decide⟩
+  let late : Date := ⟨⟨2028, 3, 1, by decide⟩, by decide⟩
+  check "DateComparison" (Expr.eval (root := .date) (.dateLe (.value early) (.project .self)) late)
+  check "DateComparisonEqual" (Expr.eval (root := .date) (.dateLe (.value early) (.project .self)) early)
+  check "DateComparisonReversed" (!Expr.eval (root := .date) (.dateLe (.value late) (.project .self)) early)
+
 def main : IO Unit := do
+  testDates
   testFields
   testPredicates
   let encoded := JsonProtocol.encode ExampleForms.Person.form ExampleForms.Person.initial

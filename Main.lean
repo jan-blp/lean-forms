@@ -12,6 +12,7 @@ private def valueToJson {type : DataType} (value : DataType.denote type) : Lean.
   | .text => Lean.toJson value
   | .boolean => Lean.toJson value
   | .natural => Lean.toJson value
+  | .date => Lean.toJson (Date.toString value)
 
 private def runPerson (theme : NativeTerminal.Theme) : IO Unit := do
   let _ : MonadTui IO := NativeTerminal.interpreter theme
