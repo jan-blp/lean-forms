@@ -1,0 +1,30 @@
+digraph Architecture {
+  graph [bgcolor="transparent", rankdir=LR, nodesep=0.7, ranksep=0.6,
+         pad=0.15, fontname="DejaVu Sans", fontsize=12,
+         fontcolor="#59636e"];
+  node [shape=box, style="rounded,filled", fontname="DejaVu Sans",
+        fontsize=16, margin="0.22,0.18", penwidth=1.5];
+  edge [fontname="DejaVu Sans", fontsize=12, color="#59636e",
+        fontcolor="#364152", penwidth=1.3, arrowsize=0.8];
+
+  describe [group=lean, color="#3454a5", fillcolor="#f0f3fc",
+    label="Lean\nDescribe form + types"];
+  client [color="#137c80", fillcolor="#edf7f6",
+    label="Rust client\nRender, edit and check inputs"];
+  validate [group=lean, color="#3454a5", fillcolor="#f0f3fc",
+    label="Lean\nValidate result"];
+
+  specification [group=json, shape=ellipse, style=filled,
+    color="#b7791f", fillcolor="#fff4d6", fontsize=14,
+    label="JSON\nspecification"];
+  submission [group=json, shape=ellipse, style=filled,
+    color="#b7791f", fillcolor="#fff4d6", fontsize=14,
+    label="JSON\nsubmission"];
+
+  { rank=same; describe; validate; }
+  { rank=same; specification; submission; }
+  describe -> specification -> client;
+  validate -> submission -> client [dir=back];
+  describe -> validate [style=invis];
+  specification -> submission [style=invis];
+}

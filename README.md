@@ -47,3 +47,21 @@ CARGO_HOME="$PWD/.lake/cargo-home" cargo test --locked --manifest-path native/tu
 python3 tools/test_terminal.py
 python3 tools/test_cli.py  # requires Bash and Fish
 ```
+
+## Presentations
+
+Prepare successive sessions on the `presentations` branch. Tags named
+`presentation-1`, `presentation-2`, and so on capture each session's slides and
+matching demo code. A tag may mark a draft while a session is being prepared;
+keep the delivered tag fixed after presenting.
+
+Present from a detached worktree at the selected tag. Create worktrees as sibling
+directories of this repository. For example, from the repository root:
+
+```sh
+git worktree add --detach ../lean-forms-presentation-1 refs/tags/presentation-1
+make -C ../lean-forms-presentation-1/presentation build
+```
+
+The PDF is `presentation/slides.pdf` inside that worktree. Continue preparing the
+next session on `presentations`; changes there do not alter tagged snapshots.
