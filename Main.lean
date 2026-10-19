@@ -15,14 +15,21 @@ private def valueToJson {type : DataType} (value : DataType.denote type) : Lean.
   | .date => Lean.toJson (Date.toString value)
   | .enum domain => Lean.toJson (domain.label value)
 
-private def runPerson (theme : NativeTerminal.Theme) : IO Unit := do
+private def runForm {root : DataType} (form : Form root root)
+    (initial : DataType.denote root) (theme : NativeTerminal.Theme) : IO Unit := do
   let _ : MonadTui IO := NativeTerminal.interpreter theme
-  let value ← Tui.run Person.form Person.initial
+  let value ← Tui.run form initial
   IO.println "\n  Final values\n  ------------"
-  IO.println (Lean.Json.pretty (valueToJson (type := Person.schema) value))
+  IO.println (Lean.Json.pretty (valueToJson value))
+
+private def runPerson (theme : NativeTerminal.Theme) : IO Unit :=
+  runForm Person.form Person.initial theme
+
+private def runEnum (theme : NativeTerminal.Theme) : IO Unit :=
+  runForm (root := Person.addressKind) (.field "Kind" .select) .home theme
 
 private def cli : Cli NativeTerminal.Theme where
-  examples := [("person", runPerson)]
+  examples := [("person", runPerson), ("enum", runEnum)]
   options := [("--theme", NativeTerminal.Theme.choices)]
   initial := .frappe
 

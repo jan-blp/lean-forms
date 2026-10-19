@@ -319,10 +319,22 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
     };
     let sections =
         Layout::vertical([Constraint::Min(4), Constraint::Length(footer_height)]).split(area);
-    let rows = screen.fields.iter().map(|field| {
+    let rows = screen.fields.iter().enumerate().map(|(index, field)| {
+        let value_style = if index == screen.selected {
+            Style::default()
+                .bg(theme.selection)
+                .fg(theme.text)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(theme.text)
+        };
         Row::new([
-            Cell::from(clean(&field.label)),
-            Cell::from(clean(&field.value)),
+            Cell::from(format!(" {}: ", clean(field.label)))
+                .style(Style::default().fg(theme.subtext)),
+            Cell::from(Line::from(ratatui::text::Span::styled(
+                format!(" {} ", clean(field.value)),
+                value_style,
+            ))),
         ])
     });
     let table = Table::new(
@@ -350,12 +362,6 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
                 ))
                 .right_aligned(),
             ),
-    )
-    .row_highlight_style(
-        Style::default()
-            .bg(theme.selection)
-            .fg(theme.text)
-            .add_modifier(Modifier::BOLD),
     )
     .highlight_symbol("› ");
     table_state.select(if screen.fields.is_empty() {

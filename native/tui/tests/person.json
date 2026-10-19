@@ -1,17 +1,1 @@
-{
-  "form": {
-    "kind": "field",
-    "label": "Kind",
-    "widget": "select"
-  },
-  "schema": {
-    "kind": "enum",
-    "options": [
-      "Home",
-      "Work",
-      "Other"
-    ]
-  },
-  "value": 0,
-  "version": 1
-}
+{"form":{"kind":"field","label":"Kind","widget":"select"},"schema":{"kind":"enum","options":["Home","Work","Other"]},"value":0,"version":1}

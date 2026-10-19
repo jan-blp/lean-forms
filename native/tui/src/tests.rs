@@ -104,3 +104,40 @@ fn narrow_terminal_and_wide_text_are_handled() {
         assert_eq!(clean("Ada\n\u{1b}"), "Ada  ");
     }
 }
+
+#[test]
+fn field_selection_distinguishes_labels_from_values() {
+    let screen = Screen {
+        fields: vec![Field {
+            label: "Description",
+            value: "New item",
+        }],
+        selected: 0,
+        editor: None,
+    };
+    for theme in [Theme::FRAPPE, Theme::LATTE] {
+        let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+        terminal
+            .draw(|frame| render(frame, &screen, &mut TableState::default(), theme))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let highlighted: Vec<_> = (0..24)
+            .flat_map(|y| (0..100).map(move |x| (x, y)))
+            .filter(|&(x, y)| buffer[(x, y)].bg == theme.selection)
+            .collect();
+        assert_eq!(highlighted.len(), " New item ".len());
+        let y = highlighted[0].1;
+        assert!(highlighted.iter().all(|&(_, row)| row == y));
+        assert_eq!(buffer[(1, y)].symbol(), "›");
+        let row: String = (0..100).map(|x| buffer[(x, y)].symbol()).collect();
+        let label_x = row.chars().position(|c| c == 'D').unwrap() as u16;
+        assert!(row.contains("Description:"));
+        for x in label_x..label_x + "Description:".len() as u16 {
+            assert_eq!(buffer[(x, y)].bg, theme.base);
+            assert_eq!(buffer[(x, y)].fg, theme.subtext);
+            assert!(!buffer[(x, y)].modifier.contains(Modifier::BOLD));
+        }
+        assert!((0..100).all(|x| buffer[(x, y - 1)].bg != theme.selection));
+        assert_eq!(buffer[(90, y)].bg, theme.base);
+    }
+}

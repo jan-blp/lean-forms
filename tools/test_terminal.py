@@ -16,11 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms'
 
 
-def session(keys, expected, interrupt=False, cancel=False, theme=None):
+def session(keys, expected, interrupt=False, cancel=False, theme=None, example="person"):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 100, 0, 0))
     before = termios.tcgetattr(slave)
-    process = subprocess.Popen([str(BINARY), "person"] + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave)
+    process = subprocess.Popen([str(BINARY), example] + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave)
     output = bytearray()
 
     def read_until(predicate):
@@ -43,7 +43,7 @@ def session(keys, expected, interrupt=False, cancel=False, theme=None):
             read_until(lambda: b'Other' in output)
             start = len(output)
             os.write(master, b'\x1b')
-            read_until(lambda: len(output) > start)
+            read_until(lambda: b'quit' in output[start:])
             os.write(master, b'q')
         if interrupt:
             read_until(lambda: 'Ω▏'.encode() in output)
@@ -73,6 +73,8 @@ session(b'\rj', initial, cancel=True)
 session(b'q', initial)
 for theme in ['frappe', 'macchiato', 'mocha', 'latte', 'ayu-light', 'ayu-dark', 'nord']:
     session(b'q', initial, theme=theme)
+session(b'\rj\rq', 'Work', example="enum")
+session(b'\rj', 'Home', cancel=True, example="enum")
 result = subprocess.run([str(BINARY)], capture_output=True, text=True)
 assert result.returncode != 0 and 'interactive terminal' in result.stderr + result.stdout
 print('PASS: FFI choice editing, cancellation, typed result, and terminal restoration')
