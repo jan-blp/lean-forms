@@ -683,6 +683,6 @@ def initial : AddressKind := .home
 :end:
 #+begin_export latex
 \begin{lstlisting}
-$ forms enum
+$ forms person
 \end{lstlisting}
 #+end_export
