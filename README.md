@@ -50,18 +50,29 @@ python3 tools/test_cli.py  # requires Bash and Fish
 
 ## Presentations
 
-Prepare successive sessions on the `presentations` branch. Tags named
-`presentation-1`, `presentation-2`, and so on capture each session's slides and
-matching demo code. A tag may mark a draft while a session is being prepared;
-keep the delivered tag fixed after presenting.
+Keep every session's slide sources in its own folder on the `presentations`
+branch. The session tags point to the demo code in `main`'s history:
 
-Present from a detached worktree at the selected tag. Create worktrees as sibling
-directories of this repository. For example, from the repository root:
+| Slide folder on `presentations` | Demo code tag | Commit on `main` |
+| --- | --- | --- |
+| `presentation/01/` | `presentation-1` | `fabd15a` — add enum |
+| `presentation/02/` | `presentation-2` | `5943131` — add list |
+
+Build the decks from this branch:
 
 ```sh
-git worktree add --detach ../lean-forms-presentation-1 refs/tags/presentation-1
-make -C ../lean-forms-presentation-1/presentation build
+make -C presentation/01 build
+make -C presentation/02 build
 ```
 
-The PDF is `presentation/slides.pdf` inside that worktree. Continue preparing the
-next session on `presentations`; changes there do not alter tagged snapshots.
+Each PDF is `slides.pdf` inside its session folder. The tags select the
+application code for live demos; the slide sources remain on `presentations`.
+
+Create a demo worktree at the appropriate tag when needed. For example, from
+the repository root:
+
+```sh
+git worktree add --detach ../lean-forms-presentations/worktree-for-presentation-1 refs/tags/presentation-1
+```
+
+Run `lake exe forms person` from that worktree for the session-1 enum demo.
