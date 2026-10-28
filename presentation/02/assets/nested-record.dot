@@ -1,0 +1,23 @@
+digraph NestedRecord {
+  graph [rankdir=LR, bgcolor="transparent", pad=0.12, nodesep=0.3,
+         ranksep=0.6, ordering=out];
+  node [shape=box, style="rounded,filled", fontname="DejaVu Sans",
+        fontsize=17, margin="0.18,0.12", color="#CDD5DF",
+        fillcolor="#F5F7FA", fontcolor="#687482", penwidth=1.2];
+  edge [color="#CDD5DF", penwidth=1.4, arrowsize=0.65];
+
+  order [label="order"];
+  customer [label="customer"];
+  address [label="address"];
+  street [label="street : text"];
+  number [label="number : natural"];
+  name [label="name : text"];
+  city [label="city : text"];
+
+  order -> customer;
+  order -> number;
+  customer -> address;
+  customer -> name;
+  address -> street;
+  address -> city;
+}

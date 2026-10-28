@@ -1,0 +1,27 @@
+digraph RecordPath {
+  graph [rankdir=LR, bgcolor="transparent", pad=0.12, nodesep=0.3,
+         ranksep=0.6, ordering=out];
+  node [shape=box, style="rounded,filled", fontname="DejaVu Sans",
+        fontsize=17, margin="0.18,0.12", color="#CDD5DF",
+        fillcolor="#F5F7FA", fontcolor="#687482", penwidth=1.2];
+  edge [color="#CDD5DF", penwidth=1.4, arrowsize=0.65];
+
+  order [label="order", color="#C62828", fontcolor="#C62828",
+         fillcolor="#FFF3F3", penwidth=2.2];
+  customer [label="customer", color="#C62828", fontcolor="#C62828",
+            fillcolor="#FFF3F3", penwidth=2.2];
+  address [label="address", color="#C62828", fontcolor="#C62828",
+           fillcolor="#FFF3F3", penwidth=2.2];
+  street [label="street : text", color="#C62828", fontcolor="#C62828",
+          fillcolor="#FFF3F3", penwidth=2.2];
+  number [label="number : natural"];
+  name [label="name : text"];
+  city [label="city : text"];
+
+  order -> customer [color="#C62828", penwidth=2.8];
+  order -> number;
+  customer -> address [color="#C62828", penwidth=2.8];
+  customer -> name;
+  address -> street [color="#C62828", penwidth=2.8];
+  address -> city;
+}
