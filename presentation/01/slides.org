@@ -71,7 +71,7 @@ A form with a single text field with no constraints
 #+begin_src lean
 def nameType : DataType := .text
 
-def nameForm : Form nameType nameType :=
+def nameForm : Form nameType :=
   .field "Name" .textInput
 
 def initial : String := "Ada"
@@ -236,7 +236,7 @@ structure Date where
 #+begin_src lean
 def dateType : DataType := .date
 
-def dateForm : Form dateType dateType :=
+def dateForm : Form dateType :=
   .field "Date" .dateInput
 
 def initial : Date :=
@@ -538,15 +538,15 @@ For now we only support forms with a single field.
 
 #+attr_latex: :options basicstyle=\ttfamily\footnotesize
 #+begin_src lean
-inductive Form (context : DataType) : (type : DataType) → Type where
-  | field {t : DataType} (label : String) (widget : Widget t) : Form context t
+inductive Form : (type : DataType) → Type where
+  | field {t : DataType} (label : String) (widget : Widget t) : Form t
 #+end_src
 \pause{}
 Example revisited:
 #+begin_src lean
 def nameType : DataType := .text
 
-def nameForm : Form nameType nameType :=
+def nameForm : Form nameType :=
   .field "Name" .textInput
 
 def initial : String := "Ada"
@@ -671,7 +671,7 @@ inductive Widget : (type : DataType) → Type 1 where
 #+begin_src lean
 abbrev addressKind : DataType := .enum addressEnum
 
-def kindForm : Form addressKind addressKind :=
+def kindForm : Form addressKind :=
   .field "Kind" .select
 
 def initial : AddressKind := .home
