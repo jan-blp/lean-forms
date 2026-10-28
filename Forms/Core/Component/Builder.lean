@@ -21,6 +21,10 @@ private def pairFields : Enum where
 
 namespace Component.Builder
 
+/-- Build a component by applying the builder to the whole state. -/
+def build {state : DataType} (builder : Component.Builder state state) : Component state :=
+  builder .self
+
 def field {state value : DataType} (label : String) (widget : Widget value)
     : Component.Builder state value :=
   fun path => .field path label widget
@@ -57,7 +61,7 @@ def disabledWhen {state value : DataType} (condition : Expr state .boolean)
 def computed {state value result : DataType}
     (label : String) (expression : Expr state result)
     (body : Component.Builder state value) : Component.Builder state value :=
-  fun path => .stack none (items := pairFields) fun
+  fun path => .stack (items := pairFields) none fun
     | .body => body path
     | .extra => .computed label expression
 

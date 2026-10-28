@@ -1,61 +1,28 @@
--- Check against the "add tuples and groups" revision (41f41f5).
--- From that checkout: lake env lean -DwarningAsError=true /path/to/Examples.lean
+-- Check at presentation-1 ("add enum"):
+-- lake env lean -DwarningAsError=true /path/to/presentation/01/Examples.lean
 import Forms.ExampleForms.Person
 import Forms.Runtime.Tui
 
 namespace Forms.Presentation
-open scoped Forms.DependentVec
 
-def nameForm : Form .text .text := .field "Name" .textInput
+def nameForm : Form .text := .field "Name" .textInput
 def nameValue : DataType.denote .text := "Ada"
-def subscribed : Form .boolean .boolean := .field "Send me postal mail" .checkbox
+def subscribed : Form .boolean := .field "Send me postal mail" .checkbox
+def dateForm : Form .date := .field "Date" .dateInput
 
-abbrev address : DataType := .tuple ![.text, .natural]
-abbrev person : DataType := .tuple ![.text, .boolean, address]
+def kindForm : Form Forms.ExampleForms.Person.addressKind := .field "Kind" .select
 
-def initial : DataType.denote person :=
-  !["Ada", false, !["Lambda Lane", (12 : Nat)]]
+#guard (Form.fieldRefs nameForm).length == 1
+#guard (Form.fieldRefs kindForm).length == 1
+#guard (Runtime.JsonProtocol.valueFromJson .text (Lean.toJson nameValue)).isOk
 
-def form : Form person person :=
-  .group "Person" ![
-    .field "Name" .textInput,
-    .field "Send me postal mail" .checkbox,
-    .group "Address" ![
-      .field "Street" .textInput,
-      .field "Number" .naturalInput]]
-
-def number : Path person .natural := .field 2 (.field 1 .here)
-def updated : DataType.denote person := Path.set number 42 initial
-
-def atLeastTen : Expr person .boolean :=
-  .natLe (.value 10) (.project number)
-
-example : initial 0 = ("Ada" : String) := rfl
-example : initial 1 = false := rfl
-example : (initial 2) 1 = (12 : Nat) := rfl
-#guard Path.get number initial == 12
-#guard Path.get number updated == 42
-example : updated 0 = initial 0 := rfl
-#guard Expr.eval atLeastTen initial
-
-example : Form .text .text := .field "Name" .textInput
-abbrev personChildren : Fin 3 → DataType := ![.text, .boolean, address]
-example : DataType.denote person = ((i : Fin 3) → DataType.denote (personChildren i)) := rfl
-
--- These failures are part of the presentation's static-safety examples.
 example : True := by
-  fail_if_success have : Form .text .text := .field "Name" .checkbox
-  fail_if_success have := Path.set number "forty-two" initial
-  fail_if_success have : DataType.denote person :=
-    ![false, "Ada", !["Lambda Lane", (12 : Nat)]]
+  fail_if_success have : Form .text := .field "Name" .checkbox
+  fail_if_success have : DataType.denote .natural := "forty-two"
   trivial
 
 def run {m : Type → Type} [Monad m] [MonadExceptOf IO.Error m]
-    [Runtime.MonadTui m] : m (DataType.denote person) :=
-  Runtime.Tui.run form initial
-
-#guard (Runtime.JsonProtocol.valueFromJson person
-  (Lean.Json.arr #[Lean.toJson "Ada", Lean.toJson true,
-    Lean.Json.arr #[Lean.toJson "Lambda Lane", Lean.toJson "42"]])).isOk
+    [Runtime.MonadTui m] : m String :=
+  Runtime.Tui.run nameForm nameValue
 
 end Forms.Presentation
