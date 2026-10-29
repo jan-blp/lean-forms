@@ -3,23 +3,19 @@ use serde_json::json;
 fn person() -> Engine {
     Engine::parse(include_str!("../../tests/person.json")).unwrap()
 }
-
 fn thermostat() -> Engine {
     Engine::parse(include_str!("../../tests/thermostat.json")).unwrap()
 }
-
 fn keys(engine: &mut Engine, keys: &[Key]) {
     for key in keys {
         assert!(engine.step(*key));
     }
 }
-
 fn text(engine: &mut Engine, text: &str) {
     for c in text.chars() {
         assert!(engine.step(Key::Character(c)));
     }
 }
-
 fn edit(engine: &mut Engine, input: &str) {
     keys(engine, &[Key::Enter]);
     if engine
@@ -33,7 +29,6 @@ fn edit(engine: &mut Engine, input: &str) {
     text(engine, input);
     keys(engine, &[Key::Enter]);
 }
-
 #[test]
 fn repeated_items_add_remove_edit_and_validate() {
     let mut e = Engine::parse(include_str!("../../tests/invoice.json")).unwrap();
@@ -132,7 +127,6 @@ fn invalid_drafts_are_editable_but_not_submittable() {
         json!({"home":"16", "away":"16"})
     );
 }
-
 #[test]
 fn age_rule_allows_endpoints_and_reports_invalid_values() {
     let mut e = person();
@@ -150,7 +144,6 @@ fn age_rule_allows_endpoints_and_reports_invalid_values() {
     }
     assert!(!e.step(Key::Character('q')));
 }
-
 #[test]
 fn parsing_errors_stay_in_editor_and_cancellation_discards_draft() {
     let mut e = thermostat();
@@ -174,7 +167,6 @@ fn parsing_errors_stay_in_editor_and_cancellation_discards_draft() {
     assert!(!e.step(Key::Quit));
     assert_eq!(e.result(), "null");
 }
-
 #[test]
 fn invalid_initial_and_hidden_fields_still_validate() {
     let mut spec: Value =
@@ -193,7 +185,6 @@ fn invalid_initial_and_hidden_fields_still_validate() {
     assert!(!e.step(Key::Escape));
     assert_eq!(e.result(), "null");
 }
-
 #[test]
 fn schema_constraints_and_error_locations_are_type_checked() {
     let source: Value = serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
@@ -254,7 +245,6 @@ fn visibility_choice_and_text_editing_still_work() {
     edit(&mut e, "");
     assert_eq!(e.spec.value["name"], "");
 }
-
 #[test]
 fn arbitrary_precision_constraints_and_all_predicates() {
     let mut spec: Value =
@@ -274,7 +264,6 @@ fn arbitrary_precision_constraints_and_all_predicates() {
     assert_eq!(expr.ty(&Ty::Natural).unwrap(), Ty::Boolean);
     assert_eq!(expr.eval(&json!("1")), true);
 }
-
 #[test]
 fn malformed_choices_are_rejected() {
     let source: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
@@ -389,7 +378,8 @@ fn sums_in_lists_preserve_the_correct_cache_after_removal() {
     let source = shapes_spec();
     let mut spec = source.clone();
     spec["schema"] = json!({"kind":"list","element":source["schema"]});
-    spec["form"] = json!({"kind":"list","path":[],"schema":spec["schema"],"label":"Shapes","item":source["form"],"defaultItem":source["value"]});
+    spec["form"] =
+        json!({"kind":"list","path":[],"schema":spec["schema"],"label":"Shapes","item":source["form"],"defaultItem":source["value"]});
     spec["value"] = json!([source["value"], source["value"]]);
     spec["validation"] = json!({"kind":"base"});
     let mut e = Engine::parse(&spec.to_string()).unwrap();
@@ -632,10 +622,7 @@ fn display_order_changes_navigation_without_changing_values_or_validation() {
 #[test]
 fn display_order_applies_inside_lists_and_sum_payloads() {
     let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
-    spec["form"]["children"][0]["item"]["children"][0]["children"]
-        .as_array_mut()
-        .unwrap()
-        .rotate_right(1);
+    spec["form"]["children"][0]["item"]["children"][0]["children"].as_array_mut().unwrap().rotate_right(1);
     let mut e = Engine::parse(&spec.to_string()).unwrap();
     assert_eq!(e.fields()[0].title, "Unit price (cents)");
     edit(&mut e, "250");
@@ -645,10 +632,7 @@ fn display_order_applies_inside_lists_and_sum_payloads() {
     assert_eq!(e.fields()[5].title, "Unit price (cents)");
 
     let mut spec = shapes_spec();
-    spec["form"]["branches"]["rectangle"]["children"]
-        .as_array_mut()
-        .unwrap()
-        .reverse();
+    spec["form"]["branches"]["rectangle"]["children"].as_array_mut().unwrap().reverse();
     let mut e = Engine::parse(&spec.to_string()).unwrap();
     select_constructor(&mut e, 2);
     assert_eq!(e.fields()[1].title, "Height");
@@ -667,8 +651,7 @@ fn hidden_components_still_validate_bound_paths() {
     for path in [json!(["unknown"]), json!(["home", "away"]), json!([0])] {
         let mut spec = source.clone();
         spec["form"]["children"][0]["path"] = path;
-        spec["form"] =
-            json!({"kind":"visibleWhen", "condition":boolean(false), "body":spec["form"]});
+        spec["form"] = json!({"kind":"visibleWhen", "condition":boolean(false), "body":spec["form"]});
         assert!(Engine::parse(&spec.to_string()).is_err());
     }
 }
@@ -676,7 +659,6 @@ fn hidden_components_still_validate_bound_paths() {
 fn disabled(condition: Value, body: Value) -> Value {
     json!({"kind":"disabledWhen", "condition":condition, "body":body})
 }
-
 fn boolean(value: bool) -> Value {
     json!({"kind":"value", "type":{"kind":"boolean"}, "value":value})
 }
@@ -744,8 +726,7 @@ fn disabled_conditions_use_payload_and_item_scope() {
     assert!(e.fields()[1].presentation.disabled);
     let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
     let condition = json!({"kind":"natLe", "left":{"kind":"project", "path":["quantity"]}, "right":{"kind":"value", "type":{"kind":"natural"}, "value":"5"}});
-    spec["form"]["children"][0]["item"] =
-        disabled(condition, spec["form"]["children"][0]["item"].take());
+    spec["form"]["children"][0]["item"] = disabled(condition, spec["form"]["children"][0]["item"].take());
     let e = Engine::parse(&spec.to_string()).unwrap();
     assert!(e.fields()[0..4].iter().all(|f| f.presentation.disabled));
     assert!(e.fields()[4..].iter().all(|f| !f.presentation.disabled));
@@ -754,7 +735,8 @@ fn disabled_conditions_use_payload_and_item_scope() {
 #[test]
 fn negation_rejects_non_boolean_operands() {
     let mut spec: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
-    spec["form"]["children"][3]["condition"] = json!({"kind":"project", "path":["age"]});
+    spec["form"]["children"][3]["condition"] =
+        json!({"kind":"project", "path":["age"]});
     assert!(Engine::parse(&spec.to_string()).is_err());
 }
 
@@ -1033,6 +1015,68 @@ fn date_picker_handles_invalid_text_and_year_limits() {
     assert_eq!(e.editor.as_ref().unwrap().text, "9999-12-31");
 }
 
+fn select_title(engine: &mut Engine, title: &str) {
+    engine.selected = engine.fields().iter().position(|field| field.title == title).unwrap();
+}
+
+#[test]
+fn shopping_search_and_numeric_sort_match_lean_and_preserve_precision() {
+    let expr: Expr = serde_json::from_value(json!({"kind":"sortNatBy",
+        "items":{"kind":"value","type":{"kind":"list","element":{"kind":"natural"}},
+        "value":["10000000000000000000000000000000000000000","12","2"]},
+        "key":{"kind":"project","path":[]},"descending":false})).unwrap();
+    assert_eq!(expr.eval(&Value::Null), json!(["2","12","10000000000000000000000000000000000000000"]));
+    let search: Expr = serde_json::from_value(json!({"kind":"search",
+        "items":{"kind":"value","type":{"kind":"list","element":{"kind":"text"}},"value":["Notebook","PEN","é"]},
+        "key":{"kind":"project","path":[]},
+        "query":{"kind":"value","type":{"kind":"text"},"value":"pen"}})).unwrap();
+    assert_eq!(search.eval(&Value::Null), json!(["PEN"]));
+}
+
+#[test]
+fn components_inside_lists_and_sums_use_local_state() {
+    let numbers = json!({"kind":"list", "element":{"kind":"natural"}});
+    let body = json!({"kind":"stack", "children":[
+        {"kind":"table", "rows":{"kind":"project","path":[]},
+         "columns":[{"label":"Number", "expression":{"kind":"natToText",
+             "operand":{"kind":"project","path":[]}}}]},
+        {"kind":"appendItemButton", "label":"Append seven", "path":[],
+         "value":{"kind":"value","type":{"kind":"natural"},"value":"7"}}
+    ]});
+    let list_schema = json!({"kind":"list","element":numbers});
+    let sum_schema = json!({"kind":"sum","constructors":[{"name":"numbers","type":numbers}]});
+    let cases = [
+        (list_schema.clone(), json!([["1"],["2"]]),
+         json!({"kind":"list","path":[],"schema":list_schema,"label":"Groups",
+             "item":body,"defaultItem":[]}), json!([["1","7"],["2"]])),
+        (sum_schema.clone(), json!({"tag":"numbers","value":["1"]}),
+         json!({"kind":"sum","path":[],"schema":sum_schema,"label":"Choice",
+             "branches":{"numbers":body},"defaults":{"numbers":[]}}),
+         json!({"tag":"numbers","value":["1","7"]})),
+    ];
+    for (schema, value, form, expected) in cases {
+        let spec = json!({"version":7,"schema":schema,"value":value,"validation":{"kind":"base"},"form":form});
+        let mut engine = Engine::parse(&spec.to_string()).unwrap();
+        assert_eq!(engine.content().1[0].rows, vec![vec!["1"]]);
+        select_title(&mut engine, "Append seven");
+        engine.step(Key::Enter);
+        assert_eq!(engine.spec.value, expected);
+        assert_eq!(engine.content().1[0].rows, vec![vec!["1"], vec!["7"]]);
+        if engine.content().1.len() == 2 {
+            assert_eq!(engine.content().1[1].rows, vec![vec!["2"]]);
+        }
+        let mut disabled = spec;
+        disabled["form"] = json!({"kind":"disabledWhen",
+            "condition":{"kind":"value","type":{"kind":"boolean"},"value":true},
+            "body":disabled["form"]});
+        let mut engine = Engine::parse(&disabled.to_string()).unwrap();
+        select_title(&mut engine, "Append seven");
+        assert!(engine.fields()[engine.selected].presentation.disabled);
+        engine.step(Key::Enter);
+        assert_eq!(engine.spec.value, value);
+    }
+}
+
 #[test]
 fn text_equality_is_typed_and_exact() {
     let expression: Expr = serde_json::from_value(json!({
@@ -1056,7 +1100,7 @@ fn validation_rules_iterate_with_context_and_accumulate_errors() {
                     "left":{"kind":"project","path":["item"]},
                     "right":{"kind":"value","type":{"kind":"natural"},"value":"0"}},
                 "body":{"kind":"report",
-                    "message":{"kind":"value","type":{"kind":"text"},"value":"Invalid item"},
+                    "message":{"kind":"natToText","operand":{"kind":"project","path":["index"]}},
                     "targets":{"kind":"fields","locations":[[
                         {"kind":"item","index":{"kind":"project","path":["index"]}}
                     ]]}}
@@ -1067,7 +1111,7 @@ fn validation_rules_iterate_with_context_and_accumulate_errors() {
     checker.validate(&schema, &schema).unwrap();
     let value = json!(["0", "2", "0"]);
     let errors = checker.eval(&value, &schema, &value);
-    assert_eq!(errors.iter().map(|error| error.message.as_str()).collect::<Vec<_>>(), ["Invalid item", "Invalid item"]);
+    assert_eq!(errors.iter().map(|error| error.message.as_str()).collect::<Vec<_>>(), ["0", "2"]);
     assert_eq!(errors[0].locations, vec![vec![Step::Item(0)]]);
     assert_eq!(errors[1].locations, vec![vec![Step::Item(2)]]);
     assert!(checker.validate(&Ty::Natural, &Ty::Natural).is_err());

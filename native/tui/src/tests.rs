@@ -15,6 +15,8 @@ fn contents(terminal: &Terminal<TestBackend>) -> String {
 fn table_scrolls_to_selection_and_shows_validation() {
     let labels: Vec<_> = (0..30).map(|i| format!("Person.Field{i}")).collect();
     let screen = Screen {
+        tables: &[],
+        table_offset: 0,
         errors: vec![],
         fields: labels
             .iter()
@@ -59,6 +61,8 @@ fn table_scrolls_to_selection_and_shows_validation() {
 fn choice_editor_shows_selection_and_navigation() {
     let options = vec!["Home".into(), "Work".into(), "Other".into()];
     let screen = Screen {
+        tables: &[],
+        table_offset: 0,
         errors: vec![],
         fields: vec![Field {
             presentation: interpreter::Presentation::default(),
@@ -108,6 +112,8 @@ fn choice_editor_shows_selection_and_navigation() {
 #[test]
 fn draft_validation_errors_are_visible_outside_the_editor() {
     let screen = Screen {
+        tables: &[],
+        table_offset: 0,
         fields: vec![Field {
             presentation: interpreter::Presentation::default(),
             label: "Thermostat.Away temperature (C)",
@@ -140,6 +146,8 @@ fn invoice_sections_actions_and_scrolling() {
     let fields = engine.fields();
     let values: Vec<_> = fields.iter().map(|field| engine.shown(field)).collect();
     let mut screen = Screen {
+        tables: &[],
+        table_offset: 0,
         fields: fields
             .iter()
             .zip(&values)
@@ -186,6 +194,8 @@ fn invoice_sections_actions_and_scrolling() {
 #[test]
 fn narrow_terminal_and_wide_text_are_handled() {
     let screen = Screen {
+        tables: &[],
+        table_offset: 0,
         errors: vec![],
         fields: vec![],
         selected: 0,
@@ -203,6 +213,8 @@ fn narrow_terminal_and_wide_text_are_handled() {
 #[test]
 fn field_selection_leaves_heading_and_unused_width_unshaded() {
     let screen = Screen {
+        tables: &[],
+        table_offset: 0,
         fields: vec![Field {
             presentation: interpreter::Presentation::default(),
             label: "Description",
@@ -234,9 +246,15 @@ fn field_selection_leaves_heading_and_unused_width_unshaded() {
 }
 
 fn draw_engine(engine: &Engine, width: u16, height: u16, theme: Theme) -> String {
-    let fields = engine.fields();
+    draw_engine_with_viewports(engine, width, height, theme).0
+}
+
+fn draw_engine_with_viewports(engine: &Engine, width: u16, height: u16, theme: Theme) -> (String, Vec<usize>) {
+    let (fields, tables) = engine.content();
     let values: Vec<_> = fields.iter().map(|field| engine.shown(field)).collect();
     let screen = Screen {
+        tables: &tables,
+        table_offset: engine.table_offset,
         fields: fields
             .iter()
             .zip(&values)
@@ -262,17 +280,21 @@ fn draw_engine(engine: &Engine, width: u16, height: u16, theme: Theme) -> String
         }),
     };
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    let mut viewports = Vec::new();
     terminal
-        .draw(|frame| render(frame, &screen, &mut TableState::default(), theme))
+        .draw(|frame| {
+            viewports = render_with_viewports(frame, &screen, &mut TableState::default(), theme);
+        })
         .unwrap();
-    terminal
+    let text = terminal
         .backend()
         .buffer()
         .content()
         .chunks(width as usize)
         .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
         .collect::<Vec<_>>()
-        .join("\n")
+        .join("\n");
+    (text, viewports)
 }
 
 #[test]

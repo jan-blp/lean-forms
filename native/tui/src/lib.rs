@@ -159,6 +159,8 @@ struct Editor<'a> {
     options: &'a [String],
 }
 struct Screen<'a> {
+    tables: &'a [interpreter::ReportTable],
+    table_offset: usize,
     fields: Vec<Field<'a>>,
     errors: Vec<String>,
     selected: usize,
@@ -198,9 +200,11 @@ fn run(engine: &mut Engine, theme: Theme, interrupted: extern "C" fn() -> i32) -
     let mut dirty = true;
     loop {
         if dirty {
-            let fields = engine.fields();
+            let (fields, report_tables) = engine.content();
             let values: Vec<_> = fields.iter().map(|f| engine.shown(f)).collect();
             let screen = Screen {
+                tables: &report_tables,
+                table_offset: engine.table_offset,
                 errors: engine.errors(),
                 fields: fields
                     .iter()
@@ -227,7 +231,11 @@ fn run(engine: &mut Engine, theme: Theme, interrupted: extern "C" fn() -> i32) -
                     })
                 }),
             };
-            terminal.draw(|frame| render(frame, &screen, &mut table, theme))?;
+            let mut viewports = Vec::new();
+            terminal.draw(|frame| {
+                viewports = render_with_viewports(frame, &screen, &mut table, theme);
+            })?;
+            engine.set_table_viewports(viewports);
             dirty = false;
         }
         if interrupted() != 0 {
@@ -322,7 +330,60 @@ fn editor_tail(text: &str, width: u16) -> String {
     chars.into_iter().rev().collect()
 }
 
+fn render_report_tables(
+    frame: &mut Frame,
+    tables: &[interpreter::ReportTable],
+    offset: usize,
+    area: ratatui::layout::Rect,
+    theme: Theme,
+) -> Vec<usize> {
+    let areas = Layout::vertical(tables.iter().map(|_| Constraint::Min(3))).split(area);
+    for (table, area) in tables.iter().zip(areas.iter()) {
+        let block = Block::bordered()
+            .border_style(Style::default().fg(theme.border))
+            .title(format!(" Results · {} rows ", table.rows.len()));
+        if table.rows.is_empty() {
+            frame.render_widget(Paragraph::new("No matching results").block(block), *area);
+            continue;
+        }
+        let rows = table
+            .rows
+            .iter()
+            .map(|row| Row::new(row.iter().map(|cell| clean(cell))));
+        let widths = table
+            .columns
+            .iter()
+            .map(|_| Constraint::Ratio(1, table.columns.len() as u32));
+        let widget = Table::new(rows, widths)
+            .header(
+                Row::new(table.columns.iter().map(|label| clean(label))).style(
+                    Style::default()
+                        .fg(theme.accent)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            )
+            .column_spacing(2)
+            .block(block);
+        let visible_rows = usize::from(area.height.saturating_sub(3)).max(1);
+        let mut state = TableState::default()
+            .with_offset(offset.min(table.rows.len().saturating_sub(visible_rows)));
+        frame.render_stateful_widget(widget, *area, &mut state);
+    }
+    areas.iter().map(|area| usize::from(area.height.saturating_sub(3)).max(1)).collect()
+}
+
+#[cfg(test)]
 fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, theme: Theme) {
+    render_with_viewports(frame, screen, table_state, theme);
+}
+
+fn render_with_viewports(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, theme: Theme) -> Vec<usize> {
+    let fields: Vec<_> = screen.fields.iter().filter(|field| !field.presentation.text).collect();
+    let selected = screen.fields.iter().take(screen.selected)
+        .filter(|field| !field.presentation.text).count();
+    let summaries: Vec<_> = screen.fields.iter().filter(|field| field.presentation.text)
+        .map(|field| Line::styled(clean(field.value), Style::default().fg(theme.computed)))
+        .collect();
     let area = frame.area();
     frame.render_widget(
         Block::default().style(Style::default().fg(theme.text).bg(theme.base)),
@@ -330,7 +391,7 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
     );
     if area.width < 32 || area.height < 12 {
         frame.render_widget(Paragraph::new("Enlarge terminal to at least 32 x 12"), area);
-        return;
+        return vec![];
     }
     let footer_height = match &screen.editor {
         Some(editor) if editor.calendar.is_some() => 3,
@@ -349,20 +410,48 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         (screen.errors.len() as u16 + 2).min(area.height.saturating_sub(footer_height + 7))
     };
     let sections = Layout::vertical([
-        Constraint::Length(3),
+        Constraint::Length(if screen.tables.is_empty() { 3 } else { 2 }),
         Constraint::Min(4),
         Constraint::Length(error_height),
         Constraint::Length(footer_height),
     ])
     .split(area);
-    let title = screen
-        .fields
+    let compact_summary = area.height < 14 && !summaries.is_empty();
+    let summary_height = if compact_summary { 0 } else {
+        (summaries.len() as u16).min(sections[1].height.saturating_sub(4))
+    };
+    let body_areas = Layout::vertical([Constraint::Length(summary_height), Constraint::Min(4)])
+        .split(sections[1]);
+    frame.render_widget(Paragraph::new(summaries.clone()), body_areas[0]);
+    let content_area = body_areas[1];
+    let content_areas = if screen.tables.is_empty() {
+        vec![content_area]
+    } else if area.width >= 100 {
+        Layout::horizontal([Constraint::Percentage(45), Constraint::Percentage(55)])
+            .split(content_area).to_vec()
+    } else {
+        let controls_height =
+            (fields.len() as u16 + 5).min(content_area.height.saturating_sub(4));
+        Layout::vertical([Constraint::Length(controls_height), Constraint::Min(4)])
+            .split(content_area)
+            .to_vec()
+    };
+    let title = fields
         .first()
         .map(|field| field.section.split(" › ").next().unwrap_or("Form"))
         .filter(|title| !title.is_empty())
         .unwrap_or("Form");
+    let title = if screen.tables.is_empty() {
+        title
+    } else {
+        "Report"
+    };
     let status = if screen.errors.is_empty() {
-        "Ready to submit".to_owned()
+        if screen.tables.is_empty() {
+            "Ready to submit".to_owned()
+        } else {
+            "PgUp/PgDn scroll results".to_owned()
+        }
     } else {
         format!(
             "{} validation issue{}",
@@ -394,8 +483,12 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         ),
         sections[0],
     );
-    let label_width = screen
-        .fields
+    if compact_summary {
+        frame.render_widget(Paragraph::new(summaries).block(
+            Block::default().borders(Borders::BOTTOM)
+                .border_style(Style::default().fg(theme.border))), sections[0]);
+    }
+    let label_width = fields
         .iter()
         .map(|field| {
             field
@@ -416,11 +509,12 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         .max()
         .unwrap_or(20)
         .min(38) as u16;
-    let rows = screen.fields.iter().enumerate().map(|(index, field)| {
-        let heading = !field.section.is_empty()
+    let rows = fields.iter().enumerate().map(|(index, field)| {
+        let heading = (screen.tables.is_empty() || area.height >= 18)
+            && !field.section.is_empty()
             && !(index == 0 && field.presentation.constructor && field.section == title)
-            && (index == 0 || screen.fields[index - 1].section != field.section);
-        let selected = index == screen.selected;
+            && (index == 0 || fields[index - 1].section != field.section);
+        let selected = index == selected;
         let selection = Style::default()
             .bg(theme.selection)
             .fg(theme.text)
@@ -471,7 +565,9 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
             ),
             ratatui::text::Span::styled(format!(" {} ", clean(field.label)), label_style),
         ]);
-        let value = if field.presentation.computed {
+        let value = if field.presentation.text {
+            clean(field.value)
+        } else if field.presentation.computed {
             format!("{} [computed]", clean(field.value))
         } else if field.presentation.disabled {
             format!(
@@ -482,7 +578,7 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
                     clean(field.value)
                 }
             )
-        } else if field.presentation.constructor {
+        } else if field.presentation.constructor || field.presentation.choice {
             format!(
                 "{} ▾{}",
                 clean(field.value),
@@ -530,7 +626,7 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
             .add_modifier(Modifier::BOLD)
         } else if selected {
             selection
-        } else if field.presentation.constructor {
+        } else if field.presentation.constructor || field.presentation.choice {
             Style::default()
                 .fg(theme.accent)
                 .add_modifier(Modifier::BOLD)
@@ -559,7 +655,7 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
         if let Some(note) = field.presentation.note {
             let available = sections[1]
                 .width
-                .saturating_sub(label_width.min(area.width / 2) + 6)
+                .saturating_sub(label_width.min(content_areas[0].width.saturating_sub(14).max(8)) + 6)
                 as usize;
             let mut line = String::new();
             for word in note.split_whitespace() {
@@ -593,7 +689,7 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
     let table = Table::new(
         rows,
         [
-            Constraint::Length(label_width.min(area.width / 2)),
+            Constraint::Length(label_width.min(content_areas[0].width.saturating_sub(14).max(8))),
             Constraint::Min(10),
         ],
     )
@@ -604,22 +700,27 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
             .title_bottom(
                 Line::from(format!(
                     " {} / {} ",
-                    if screen.fields.is_empty() {
+                    if fields.is_empty() {
                         0
                     } else {
-                        screen.selected + 1
+                        selected + 1
                     },
-                    screen.fields.len()
+                    fields.len()
                 ))
                 .right_aligned(),
             ),
     );
-    table_state.select(if screen.fields.is_empty() {
+    table_state.select(if fields.is_empty() {
         None
     } else {
-        Some(screen.selected)
+        Some(selected)
     });
-    frame.render_stateful_widget(table, sections[1], table_state);
+    frame.render_stateful_widget(table, content_areas[0], table_state);
+    let viewports = if let Some(area) = content_areas.get(1) {
+        render_report_tables(frame, screen.tables, screen.table_offset, *area, theme)
+    } else {
+        vec![]
+    };
     if !screen.errors.is_empty() {
         let lines: Vec<Line> = screen
             .errors
@@ -636,7 +737,7 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
     if let Some(editor) = &screen.editor {
         if let Some(date) = editor.calendar {
             render_date_editor(frame, editor, date, theme);
-            return;
+            return viewports;
         }
         if let Some(index) = editor.choice {
             let parts =
@@ -675,7 +776,7 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
                 .style(Style::default().fg(theme.subtext)),
                 parts[1],
             );
-            return;
+            return viewports;
         }
         let parts = Layout::vertical([
             Constraint::Length(3),
@@ -714,25 +815,27 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
     } else {
         frame.render_widget(
             Paragraph::new(
-                if screen
-                    .fields
-                    .get(screen.selected)
+                if fields
+                    .get(selected)
+                    .is_some_and(|f| f.presentation.text)
+                {
+                    "Read-only · ↑/↓ select · q submit · x cancel"
+                } else if fields
+                    .get(selected)
                     .is_some_and(|f| f.presentation.computed)
                 {
                     "Computed · ↑/↓ select · q submit · x cancel"
-                } else if screen
-                    .fields
-                    .get(screen.selected)
+                } else if fields
+                    .get(selected)
                     .is_some_and(|f| f.presentation.disabled)
                 {
                     "Disabled · ↑/↓ select · q submit · x cancel"
-                } else if screen
-                    .fields
-                    .get(screen.selected)
-                    .is_some_and(|f| f.presentation.constructor)
+                } else if fields
+                    .get(selected)
+                    .is_some_and(|f| f.presentation.constructor || f.presentation.choice)
                 {
                     "↑/↓ select · Enter choose · q submit · x cancel"
-                } else if screen.fields.get(screen.selected).is_some_and(|f| f.action) {
+                } else if fields.get(selected).is_some_and(|f| f.action) {
                     "↑/↓ select · Enter activate · q submit · x cancel"
                 } else {
                     "↑/↓ select · Enter edit · Space toggle · q submit · x cancel"
@@ -748,6 +851,7 @@ fn render(frame: &mut Frame, screen: &Screen, table_state: &mut TableState, them
             sections[3],
         );
     }
+    viewports
 }
 
 fn render_date_editor(frame: &mut Frame, editor: &Editor<'_>, date: NaiveDate, theme: Theme) {
