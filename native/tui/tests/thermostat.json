@@ -105,32 +105,32 @@
     }
   ],
   "form": {
-    "kind": "stack",
-    "label": "Thermostat",
     "children": [
       {
         "kind": "field",
         "label": "Home temperature (C)",
-        "widget": "naturalInput",
         "path": [
           "home"
         ],
         "schema": {
           "kind": "natural"
-        }
+        },
+        "widget": "naturalInput"
       },
       {
         "kind": "field",
         "label": "Away temperature (C)",
-        "widget": "naturalInput",
         "path": [
           "away"
         ],
         "schema": {
           "kind": "natural"
-        }
+        },
+        "widget": "naturalInput"
       }
-    ]
+    ],
+    "kind": "stack",
+    "label": "Thermostat"
   },
   "schema": {
     "fields": [

@@ -56,8 +56,6 @@
     }
   ],
   "form": {
-    "kind": "stack",
-    "label": null,
     "children": [
       {
         "defaultItem": {
@@ -66,47 +64,45 @@
           "unitPrice": "100"
         },
         "item": {
-          "kind": "stack",
-          "label": null,
           "children": [
             {
-              "kind": "stack",
-              "label": "Item",
               "children": [
                 {
                   "kind": "field",
                   "label": "Description",
-                  "widget": "textInput",
                   "path": [
                     "description"
                   ],
                   "schema": {
                     "kind": "text"
-                  }
+                  },
+                  "widget": "textInput"
                 },
                 {
                   "kind": "field",
                   "label": "Quantity",
-                  "widget": "naturalInput",
                   "path": [
                     "quantity"
                   ],
                   "schema": {
                     "kind": "natural"
-                  }
+                  },
+                  "widget": "naturalInput"
                 },
                 {
                   "kind": "field",
                   "label": "Unit price (cents)",
-                  "widget": "naturalInput",
                   "path": [
                     "unitPrice"
                   ],
                   "schema": {
                     "kind": "natural"
-                  }
+                  },
+                  "widget": "naturalInput"
                 }
-              ]
+              ],
+              "kind": "stack",
+              "label": "Item"
             },
             {
               "expression": {
@@ -130,7 +126,9 @@
                 "kind": "natural"
               }
             }
-          ]
+          ],
+          "kind": "stack",
+          "label": null
         },
         "kind": "list",
         "label": "Invoice",
@@ -191,7 +189,9 @@
           "kind": "natural"
         }
       }
-    ]
+    ],
+    "kind": "stack",
+    "label": null
   },
   "schema": {
     "element": {

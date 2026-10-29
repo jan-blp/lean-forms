@@ -43,63 +43,58 @@
     }
   ],
   "form": {
-    "kind": "stack",
-    "label": "Registration",
     "children": [
       {
         "kind": "field",
         "label": "Name",
-        "widget": "textInput",
         "path": [
           "name"
         ],
         "schema": {
           "kind": "text"
-        }
+        },
+        "widget": "textInput"
       },
       {
         "kind": "field",
         "label": "Age (18-120)",
-        "widget": "naturalInput",
         "path": [
           "age"
         ],
         "schema": {
           "kind": "natural"
-        }
+        },
+        "widget": "naturalInput"
       },
       {
         "kind": "field",
         "label": "Send me postal mail",
-        "widget": "checkbox",
         "path": [
           "subscribed"
         ],
         "schema": {
           "kind": "boolean"
-        }
+        },
+        "widget": "checkbox"
       },
       {
         "body": {
-          "kind": "stack",
-          "label": "Address",
           "children": [
             {
               "kind": "field",
               "label": "Street",
-              "widget": "textInput",
               "path": [
                 "address",
                 "street"
               ],
               "schema": {
                 "kind": "text"
-              }
+              },
+              "widget": "textInput"
             },
             {
               "kind": "field",
               "label": "Kind",
-              "widget": "select",
               "path": [
                 "address",
                 "kind"
@@ -111,9 +106,12 @@
                   "Work",
                   "Other"
                 ]
-              }
+              },
+              "widget": "select"
             }
-          ]
+          ],
+          "kind": "stack",
+          "label": "Address"
         },
         "condition": {
           "kind": "project",
@@ -123,7 +121,9 @@
         },
         "kind": "visibleWhen"
       }
-    ]
+    ],
+    "kind": "stack",
+    "label": "Registration"
   },
   "schema": {
     "fields": [

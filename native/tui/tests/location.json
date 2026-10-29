@@ -5,7 +5,6 @@
       "Catalonia": {
         "kind": "field",
         "label": "City",
-        "widget": "select",
         "path": [],
         "schema": {
           "kind": "enum",
@@ -14,12 +13,12 @@
             "Barcelona",
             "Girona"
           ]
-        }
+        },
+        "widget": "select"
       },
       "France": {
         "kind": "field",
         "label": "City",
-        "widget": "select",
         "path": [],
         "schema": {
           "kind": "enum",
@@ -28,12 +27,12 @@
             "Lyon",
             "Marseille"
           ]
-        }
+        },
+        "widget": "select"
       },
       "Japan": {
         "kind": "field",
         "label": "City",
-        "widget": "select",
         "path": [],
         "schema": {
           "kind": "enum",
@@ -42,7 +41,8 @@
             "Kyoto",
             "Osaka"
           ]
-        }
+        },
+        "widget": "select"
       }
     },
     "defaults": {

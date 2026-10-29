@@ -1,4 +1,6 @@
-import Forms.Runtime.FormSnapshot
+import Tests.Weakening
+import Tests.Basket
+import Tests.Composition
 import Forms.ExampleForms.Booking
 import Forms.ExampleForms.Location
 import Forms.ExampleForms.Shapes
@@ -340,6 +342,9 @@ private def testProtocol : IO Unit := do
     (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (t := .natural) huge) == .ok huge)
 
 def main : IO Unit := do
+  Tests.Weakening.run
+  Tests.Basket.run
+  Tests.Composition.run
   testRefinedTypes
   testPathsAndChoices
   testHiddenValidation

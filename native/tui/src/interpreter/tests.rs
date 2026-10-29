@@ -1012,8 +1012,206 @@ fn date_picker_handles_invalid_text_and_year_limits() {
     assert_eq!(e.editor.as_ref().unwrap().text, "9999-12-31");
 }
 
+fn report() -> Engine {
+    Engine::parse(include_str!("../../tests/report.json")).unwrap()
+}
+
+#[test]
+fn report_filters_refresh_summary_and_rows_without_changing_source_results() {
+    let mut engine = report();
+    let source = engine.spec.value["results"].clone();
+    let (fields, tables) = engine.content();
+    assert_eq!(engine.shown(fields.last().unwrap()), "2/4 passed");
+    assert_eq!(tables[0].columns, ["Test", "Provider", "Result"]);
+    assert_eq!(tables[0].rows[0], ["Alpha", "Vertex", "PASS"]);
+    keys(&mut engine, &[Key::Enter, Key::Down, Key::Enter]);
+    assert_eq!(engine.content().1[0].rows.len(), 2);
+    assert_eq!(engine.shown(engine.fields().last().unwrap()), "1/2 passed");
+    keys(&mut engine, &[Key::Down, Key::Character(' ')]);
+    assert_eq!(
+        engine.content().1[0].rows,
+        [vec!["Zulu", "Bedrock", "FAIL"]]
+    );
+    assert_eq!(engine.shown(engine.fields().last().unwrap()), "1/2 passed");
+    assert_eq!(engine.spec.value["results"], source);
+    assert!(!engine.step(Key::Character('q')));
+    let result: Value = serde_json::from_str(&engine.result()).unwrap();
+    assert_eq!(result["filters"], json!({"provider":1,"failuresOnly":true}));
+}
+
+#[test]
+fn report_sort_selection_is_live_and_stable() {
+    let mut engine = report();
+    keys(
+        &mut engine,
+        &[Key::Down, Key::Down, Key::Enter, Key::Down, Key::Enter],
+    );
+    let names = |engine: &Engine| {
+        engine.content().1[0]
+            .rows
+            .iter()
+            .map(|row| row[0].clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(names(&engine), ["Zulu", "Delta", "Beta", "Alpha"]);
+    keys(&mut engine, &[Key::Enter, Key::Down, Key::Enter]);
+    assert_eq!(names(&engine), ["Zulu", "Beta", "Alpha", "Delta"]);
+    assert_eq!(engine.shown(engine.fields().last().unwrap()), "2/4 passed");
+}
+
+#[test]
+fn report_empty_results_keep_the_summary_denominator() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/report.json")).unwrap();
+    for result in spec["value"]["results"].as_array_mut().unwrap() {
+        result["passed"] = json!(true);
+    }
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    keys(&mut engine, &[Key::Down, Key::Character(' ')]);
+    assert!(engine.content().1[0].rows.is_empty());
+    assert_eq!(engine.shown(engine.fields().last().unwrap()), "4/4 passed");
+}
+
+#[test]
+fn report_weakened_by_lean_preserves_siblings_and_resolves_queries_locally() {
+    let mut engine = Engine::parse(include_str!("../../tests/weakened-report.json")).unwrap();
+    keys(
+        &mut engine,
+        &[
+            Key::Enter,
+            Key::Down,
+            Key::Enter,
+            Key::Down,
+            Key::Character(' '),
+        ],
+    );
+    assert_eq!(
+        engine.content().1[0].rows,
+        [vec!["Zulu", "Bedrock", "FAIL"]]
+    );
+    assert_eq!(engine.spec.value["title"], "Keep this title");
+}
+
+#[test]
+fn report_protocol_rejects_invalid_bindings_and_queries() {
+    let spec: Value = serde_json::from_str(include_str!("../../tests/report.json")).unwrap();
+    let mut invalid = spec.clone();
+    invalid["form"]["children"][0]["children"][0]["path"] = json!(["missing"]);
+    assert!(Engine::parse(&invalid.to_string()).is_err());
+    let mut invalid = spec.clone();
+    invalid["form"]["children"][0]["children"][0]["schema"] = json!({"kind":"boolean"});
+    assert!(Engine::parse(&invalid.to_string()).is_err());
+    let mut invalid = spec.clone();
+    invalid["form"]["children"][3]["rows"]["branches"]
+        .as_array_mut()
+        .unwrap()
+        .pop();
+    assert!(Engine::parse(&invalid.to_string()).is_err());
+    let mut invalid = spec.clone();
+    invalid["form"]["children"][3]["columns"][0]["expression"] =
+        json!({"kind":"value","type":{"kind":"natural"},"value":"12"});
+    assert!(Engine::parse(&invalid.to_string()).is_err());
+    for expression in [
+        json!({"kind":"filter","items":{"kind":"project","path":["results"]},
+            "predicate":{"kind":"project","path":["name"]}}),
+        json!({"kind":"sortBy","items":{"kind":"project","path":["results"]},
+            "key":{"kind":"project","path":["passed"]},"descending":false}),
+    ] {
+        let mut invalid = spec.clone();
+        invalid["form"]["children"][3]["rows"] = expression;
+        assert!(Engine::parse(&invalid.to_string()).is_err());
+    }
+}
+
+fn basket() -> Engine {
+    Engine::parse(include_str!("../../tests/basket.json")).unwrap()
+}
 fn select_title(engine: &mut Engine, title: &str) {
     engine.selected = engine.fields().iter().position(|field| field.title == title).unwrap();
+}
+fn choose_title(engine: &mut Engine, title: &str, option: usize) {
+    select_title(engine, title);
+    engine.step(Key::Enter);
+    // Start at the first option, regardless of the current choice.
+    for _ in 0..10 { engine.step(Key::Up); }
+    for _ in 0..option { engine.step(Key::Down); }
+    engine.step(Key::Enter);
+}
+fn basket_total(engine: &Engine) -> String {
+    engine.shown(&engine.fields()[0])
+}
+fn catalogue_names(engine: &Engine) -> Vec<String> {
+    engine.content().1[0].rows.iter().map(|row| row[0].clone()).collect()
+}
+
+#[test]
+fn basket_filters_sort_and_search_preserve_items_and_total() {
+    let mut engine = basket();
+    let items = engine.spec.value["items"].clone();
+    assert_eq!(catalogue_names(&engine), ["Backpack", "Mug", "Notebook", "Pen", "Water bottle"]);
+    choose_title(&mut engine, "Sort", 1);
+    assert_eq!(catalogue_names(&engine), ["Pen", "Notebook", "Mug", "Water bottle", "Backpack"]);
+    choose_title(&mut engine, "Sort", 2);
+    assert_eq!(catalogue_names(&engine), ["Backpack", "Water bottle", "Mug", "Notebook", "Pen"]);
+    choose_title(&mut engine, "Category", 1);
+    assert_eq!(catalogue_names(&engine), ["Notebook", "Pen"]);
+    select_title(&mut engine, "Search");
+    edit(&mut engine, "PEN");
+    assert_eq!(catalogue_names(&engine), ["Pen"]);
+    edit(&mut engine, "no match");
+    assert!(catalogue_names(&engine).is_empty());
+    assert_eq!(basket_total(&engine), "Basket total: EUR 16");
+    assert_eq!(engine.spec.value["items"], items);
+    edit(&mut engine, "");
+    choose_title(&mut engine, "Category", 0);
+    choose_title(&mut engine, "Price limit", 1);
+    assert_eq!(catalogue_names(&engine), ["Notebook", "Pen"]);
+}
+
+#[test]
+fn basket_add_edit_remove_and_switch_pages_keep_current_state() {
+    let mut engine = basket();
+    choose_title(&mut engine, "Product to add", 2); // Mug, EUR 12
+    select_title(&mut engine, "Add selected product");
+    engine.step(Key::Enter);
+    assert_eq!(basket_total(&engine), "Basket total: EUR 28");
+    assert_eq!(engine.spec.value["items"].as_array().unwrap().len(), 3);
+    engine.step(Key::Enter);
+    assert_eq!(basket_total(&engine), "Basket total: EUR 40");
+    choose_title(&mut engine, "Page", 1);
+    assert!(!engine.fields().iter().any(|field| field.title == "Search"));
+    select_title(&mut engine, "Quantity");
+    edit(&mut engine, "4");
+    assert_eq!(basket_total(&engine), "Basket total: EUR 50");
+    assert_eq!(engine.content().1[0].rows[0], ["Notebook", "4", "20"]);
+    for _ in 0..4 {
+        select_title(&mut engine, "− Remove item");
+        engine.step(Key::Enter);
+    }
+    assert_eq!(basket_total(&engine), "Basket total: EUR 0");
+    assert!(engine.content().1[0].rows.is_empty());
+    choose_title(&mut engine, "Page", 0);
+    select_title(&mut engine, "Add selected product");
+    engine.step(Key::Enter);
+    assert_eq!(basket_total(&engine), "Basket total: EUR 12");
+    assert!(!engine.step(Key::Character('q')));
+    let result: Value = serde_json::from_str(&engine.result()).unwrap();
+    assert_eq!(result["items"], json!([{"product":2,"quantity":"1"}]));
+}
+
+#[test]
+fn shopping_operators_reject_invalid_types() {
+    let schema = basket().spec.schema;
+    let catalogue = json!({"kind":"value","type":{"kind":"list","element":{"kind":"natural"}},"value":["2","12"]});
+    let self_key = json!({"kind":"project","path":[]});
+    for expr in [
+        json!({"kind":"search","items":catalogue,"key":self_key,"query":{"kind":"value","type":{"kind":"text"},"value":"2"}}),
+        json!({"kind":"sortNatBy","items":{"kind":"value","type":{"kind":"list","element":{"kind":"text"}},"value":["a"]},"key":self_key,"descending":false}),
+    ] {
+        assert!(serde_json::from_value::<Expr>(expr).unwrap().ty(&schema).is_err());
+    }
+    let invalid = json!({"kind":"appendItemButton","label":"Bad","path":["items"],
+        "value":{"kind":"value","type":{"kind":"text"},"value":"not an item"}});
+    assert!(serde_json::from_value::<Component>(invalid).unwrap().validate(&schema).is_err());
 }
 
 #[test]
@@ -1028,6 +1226,44 @@ fn shopping_search_and_numeric_sort_match_lean_and_preserve_precision() {
         "key":{"kind":"project","path":[]},
         "query":{"kind":"value","type":{"kind":"text"},"value":"pen"}})).unwrap();
     assert_eq!(search.eval(&Value::Null), json!(["PEN"]));
+}
+
+#[test]
+fn bound_field_reads_outer_context_and_only_writes_its_target() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/report.json")).unwrap();
+    let editor = spec["form"]["children"][1].clone();
+    spec["form"] = json!({"kind":"visibleWhen",
+        "condition":{"kind":"project","path":["filters","failuresOnly"]},
+        "body":editor});
+    let engine = Engine::parse(&spec.to_string()).unwrap();
+    assert!(engine.fields().is_empty());
+    spec["value"]["filters"]["failuresOnly"] = json!(true);
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    let results = engine.spec.value["results"].clone();
+    assert_eq!(engine.fields().len(), 1);
+    keys(&mut engine, &[Key::Enter, Key::Down, Key::Enter]);
+    assert_eq!(engine.spec.value["sort"], json!(1));
+    assert_eq!(engine.spec.value["filters"]["failuresOnly"], json!(true));
+    assert_eq!(engine.spec.value["results"], results);
+    spec["form"]["body"]["path"] = Value::Null;
+    assert!(Engine::parse(&spec.to_string()).is_err());
+}
+
+#[test]
+fn basket_weakened_by_lean_preserves_outer_siblings() {
+    let mut engine = Engine::parse(include_str!("../../tests/weakened-basket.json")).unwrap();
+    choose_title(&mut engine, "Product to add", 2);
+    select_title(&mut engine, "Add selected product");
+    engine.step(Key::Enter);
+    assert_eq!(basket_total(&engine), "Basket total: EUR 28");
+    assert_eq!(engine.spec.value["title"], json!("Keep this title"));
+    assert_eq!(engine.spec.value["content"]["items"].as_array().unwrap().len(), 3);
+    choose_title(&mut engine, "Page", 1);
+    select_title(&mut engine, "Quantity");
+    edit(&mut engine, "4");
+    assert_eq!(engine.content().1[0].rows[0], ["Notebook", "4", "20"]);
+    assert_eq!(basket_total(&engine), "Basket total: EUR 38");
+    assert_eq!(engine.spec.value["title"], json!("Keep this title"));
 }
 
 #[test]

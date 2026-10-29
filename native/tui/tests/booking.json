@@ -105,32 +105,32 @@
     }
   ],
   "form": {
-    "kind": "stack",
-    "label": "Booking",
     "children": [
       {
         "kind": "field",
         "label": "Start date (YYYY-MM-DD)",
-        "widget": "dateInput",
         "path": [
           "startDate"
         ],
         "schema": {
           "kind": "date"
-        }
+        },
+        "widget": "dateInput"
       },
       {
         "kind": "field",
         "label": "End date (YYYY-MM-DD)",
-        "widget": "dateInput",
         "path": [
           "endDate"
         ],
         "schema": {
           "kind": "date"
-        }
+        },
+        "widget": "dateInput"
       }
-    ]
+    ],
+    "kind": "stack",
+    "label": "Booking"
   },
   "schema": {
     "fields": [

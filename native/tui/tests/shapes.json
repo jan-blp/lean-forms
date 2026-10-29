@@ -142,44 +142,44 @@
       "circle": {
         "kind": "field",
         "label": "Radius",
-        "widget": "naturalInput",
         "path": [],
         "schema": {
           "kind": "natural"
-        }
+        },
+        "widget": "naturalInput"
       },
       "dot": {
+        "children": [],
         "kind": "stack",
-        "label": "Dot",
-        "children": []
+        "label": "Dot"
       },
       "rectangle": {
-        "kind": "stack",
-        "label": "Dimensions",
         "children": [
           {
             "kind": "field",
             "label": "Width",
-            "widget": "naturalInput",
             "path": [
               "width"
             ],
             "schema": {
               "kind": "natural"
-            }
+            },
+            "widget": "naturalInput"
           },
           {
             "kind": "field",
             "label": "Height",
-            "widget": "naturalInput",
             "path": [
               "height"
             ],
             "schema": {
               "kind": "natural"
-            }
+            },
+            "widget": "naturalInput"
           }
-        ]
+        ],
+        "kind": "stack",
+        "label": "Dimensions"
       }
     },
     "defaults": {

@@ -427,3 +427,234 @@ fn hybrid_date_editor_shows_input_calendar_and_controls() {
     let text = draw_engine(&e, 100, 24, Theme::LATTE);
     assert!(text.contains("Calendar shows the last valid date."));
 }
+
+#[test]
+fn report_displays_controls_summary_and_live_table() {
+    let mut engine = Engine::parse(include_str!("../tests/report.json")).unwrap();
+    for theme in [Theme::FRAPPE, Theme::LATTE] {
+        let text = draw_engine(&engine, 100, 24, theme);
+        for expected in [
+            "Report",
+            "Provider",
+            "Failures only",
+            "Sort",
+            "2/4 passed",
+            "Test",
+            "Result",
+            "Alpha",
+            "Zulu",
+            "PASS",
+            "FAIL",
+        ] {
+            assert!(text.contains(expected), "Missing {expected}:\n{text}");
+        }
+        assert!(!text.contains("[computed]"));
+    }
+    for key in [
+        Key::Enter,
+        Key::Down,
+        Key::Enter,
+        Key::Down,
+        Key::Character(' '),
+    ] {
+        engine.step(key);
+    }
+    let text = draw_engine(&engine, 100, 24, Theme::FRAPPE);
+    assert!(text.contains("1/2 passed"), "{text}");
+    assert!(text.contains("Zulu"));
+    assert!(!text.contains("Alpha"));
+    assert!(!text.contains("Beta"));
+    for (width, height) in [(32, 12), (40, 16)] {
+        let text = draw_engine(&engine, width, height, Theme::FRAPPE);
+        assert!(text.contains("Zulu"), "{text}");
+        assert!(text.contains("Failures only"), "{text}");
+    }
+}
+
+#[test]
+fn tables_without_columns_render_and_preserve_rows() {
+    let mut spec: serde_json::Value =
+        serde_json::from_str(include_str!("../tests/report.json")).unwrap();
+    spec["form"]["children"][3]["columns"] = serde_json::json!([]);
+    for count in [4, 0] {
+        spec["value"]["results"].as_array_mut().unwrap().truncate(count);
+        let mut engine = Engine::parse(&spec.to_string()).unwrap();
+        let (_, tables) = engine.content();
+        assert!(tables[0].columns.is_empty());
+        assert_eq!(tables[0].rows.len(), count);
+        assert!(tables[0].rows.iter().all(Vec::is_empty));
+        for (width, height) in [(100, 24), (60, 12)] {
+            let text = draw_engine(&engine, width, height, Theme::FRAPPE);
+            assert!(text.contains(&format!("Results · {count} rows")), "{text}");
+        }
+        assert!(!engine.step(Key::Character('q')));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&engine.result()).unwrap(),
+            spec["value"]
+        );
+    }
+}
+
+#[test]
+fn report_results_scroll_and_empty_tables_are_explicit() {
+    let mut spec: serde_json::Value =
+        serde_json::from_str(include_str!("../tests/report.json")).unwrap();
+    spec["value"]["results"] = serde_json::Value::Array((0..40).map(|index| {
+        serde_json::json!({"name":format!("Test{index:03}"),"provider":0,"passed":true})
+    }).collect());
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    let (_, viewports) = draw_engine_with_viewports(&engine, 100, 24, Theme::FRAPPE);
+    let page_size = viewports[0];
+    engine.set_table_viewports(viewports);
+    engine.step(Key::PageDown);
+    let text = draw_engine(&engine, 100, 24, Theme::FRAPPE);
+    assert!(text.contains(&format!("Test{page_size:03}")), "{text}");
+    assert!(!text.contains("Test000"));
+    engine.step(Key::PageUp);
+    assert!(draw_engine(&engine, 100, 24, Theme::FRAPPE).contains("Test000"));
+    engine.step(Key::Down);
+    engine.step(Key::Character(' '));
+    let text = draw_engine(&engine, 100, 24, Theme::FRAPPE);
+    assert!(text.contains("No matching results"), "{text}");
+    assert!(text.contains("40/40 passed"));
+}
+
+#[test]
+fn text_views_are_plain_summaries_and_skipped_by_navigation() {
+    let mut spec: serde_json::Value =
+        serde_json::from_str(include_str!("../tests/report.json")).unwrap();
+    let children = spec["form"]["children"].as_array().unwrap().clone();
+    spec["form"]["children"] = serde_json::json!([
+        children[2], children[0], children[2], children[1], children[2], children[3]
+    ]);
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    assert_eq!(engine.selected, 1);
+    let text = draw_engine(&engine, 100, 24, Theme::FRAPPE);
+    let summary_lines: Vec<_> = text.lines().filter(|line| line.contains("2/4 passed")).collect();
+    assert_eq!(summary_lines.len(), 3);
+    assert!(summary_lines.iter().all(|line| line.starts_with("2/4 passed")));
+    assert!(text.contains("1 / 3"), "{text}");
+    assert!(text.contains("Enter choose"), "{text}");
+    assert!(!text.contains("Read-only"), "{text}");
+    for expected in [2, 4, 4] {
+        engine.step(Key::Down);
+        assert_eq!(engine.selected, expected);
+    }
+    for expected in [2, 1, 1] {
+        engine.step(Key::Up);
+        assert_eq!(engine.selected, expected);
+    }
+    engine.step(Key::Enter);
+    assert!(engine.editor.is_some());
+}
+
+#[test]
+fn text_only_view_has_no_selected_editor() {
+    let mut spec: serde_json::Value =
+        serde_json::from_str(include_str!("../tests/report.json")).unwrap();
+    spec["form"] = spec["form"]["children"][2].clone();
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    for key in [Key::Down, Key::Up, Key::Enter] {
+        engine.step(key);
+    }
+    assert!(engine.editor.is_none());
+    let text = draw_engine(&engine, 100, 24, Theme::FRAPPE);
+    assert!(text.lines().any(|line| line.starts_with("2/4 passed")));
+    assert!(text.contains("0 / 0"));
+    assert!(!text.contains('›'));
+}
+
+#[test]
+fn catalogue_and_basket_are_usable_on_wide_and_small_terminals() {
+    let mut engine = Engine::parse(include_str!("../tests/basket.json")).unwrap();
+    let wide = draw_engine(&engine, 120, 30, Theme::FRAPPE);
+    for expected in ["Basket total: EUR 16", "5 products match", "Search", "Category", "Price limit",
+                     "Sort", "Product to add", "Add selected product", "Backpack", "Water bottle"] {
+        assert!(wide.contains(expected), "Missing {expected}:\n{wide}");
+    }
+    for (width, height) in [(100, 24), (80, 24), (40, 16), (32, 12)] {
+        let display = draw_engine(&engine, width, height, Theme::FRAPPE);
+        assert!(display.contains("Basket total: EUR 16"), "{display}");
+        assert!(display.contains("Page"), "{display}");
+    }
+    for key in [Key::Enter, Key::Down, Key::Enter] { engine.step(key); }
+    let display = draw_engine(&engine, 120, 30, Theme::FRAPPE);
+    for expected in ["Quantity", "Notebook", "Pen", "Subtotal (EUR)", "16"] {
+        assert!(display.contains(expected), "Missing {expected}:\n{display}");
+    }
+    assert!(!display.contains("Product to add"));
+    assert!(!display.contains("Search"));
+}
+
+#[test]
+fn enum_selectors_show_dropdown_affordance_and_open_choices() {
+    let mut engine = Engine::parse(include_str!("../tests/basket.json")).unwrap();
+    for theme in [Theme::FRAPPE, Theme::LATTE] {
+        let display = draw_engine(&engine, 120, 30, theme);
+        assert!(display.contains("Catalogue ▾"), "{display}");
+        assert!(display.contains("Notebook ▾"), "{display}");
+        assert!(display.contains("Enter choose"), "{display}");
+    }
+    engine.step(Key::Enter);
+    let display = draw_engine(&engine, 120, 30, Theme::FRAPPE);
+    assert!(display.contains("Catalogue"));
+    assert!(display.contains("Basket"));
+    engine.step(Key::Down);
+    engine.step(Key::Enter);
+    let display = draw_engine(&engine, 120, 30, Theme::FRAPPE);
+    assert!(display.contains("Basket ▾"), "{display}");
+}
+
+#[test]
+fn short_tables_page_through_every_row_and_clamp_after_resize_and_filter() {
+    let mut engine = Engine::parse(include_str!("../tests/report.json")).unwrap();
+    for name in ["Alpha", "Beta", "Delta", "Zulu"] {
+        let (text, viewports) = draw_engine_with_viewports(&engine, 60, 12, Theme::FRAPPE);
+        engine.set_table_viewports(viewports);
+        assert!(text.contains(name), "Missing {name}:\n{text}");
+        engine.step(Key::PageDown);
+    }
+    assert_eq!(engine.table_offset, 3);
+    engine.step(Key::PageUp);
+    assert_eq!(engine.table_offset, 2);
+    let (text, viewports) = draw_engine_with_viewports(&engine, 100, 24, Theme::FRAPPE);
+    engine.set_table_viewports(viewports);
+    assert_eq!(engine.table_offset, 0);
+    for name in ["Alpha", "Beta", "Delta", "Zulu"] {
+        assert!(text.contains(name), "{text}");
+    }
+    let (_, viewports) = draw_engine_with_viewports(&engine, 60, 12, Theme::FRAPPE);
+    engine.set_table_viewports(viewports);
+    for _ in 0..3 { engine.step(Key::PageDown); }
+    engine.step(Key::Down);
+    engine.step(Key::Character(' '));
+    assert_eq!(engine.table_offset, 1);
+    assert!(draw_engine(&engine, 60, 12, Theme::FRAPPE).contains("Zulu"));
+    engine.step(Key::PageUp);
+    assert!(draw_engine(&engine, 60, 12, Theme::FRAPPE).contains("Delta"));
+}
+
+#[test]
+fn multiple_tables_use_smallest_viewport_and_clamp_their_own_offsets() {
+    let mut spec: serde_json::Value =
+        serde_json::from_str(include_str!("../tests/report.json")).unwrap();
+    let mut short_table = spec["form"]["children"][3].clone();
+    short_table["rows"] = serde_json::json!({
+        "kind":"filter", "items":short_table["rows"],
+        "predicate":{"kind":"project", "path":["passed"]}
+    });
+    spec["form"]["children"].as_array_mut().unwrap().push(short_table);
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    let (_, viewports) = draw_engine_with_viewports(&engine, 100, 16, Theme::FRAPPE);
+    let page_size = *viewports.iter().min().unwrap();
+    let maximum = engine.content().1.iter().zip(&viewports)
+        .map(|(table, height)| table.rows.len().saturating_sub(*height)).max().unwrap();
+    engine.set_table_viewports(viewports);
+    engine.step(Key::PageDown);
+    assert_eq!(engine.table_offset, page_size.min(maximum));
+    for _ in 0..4 { engine.step(Key::PageDown); }
+    assert_eq!(engine.table_offset, maximum);
+    let text = draw_engine(&engine, 100, 16, Theme::FRAPPE);
+    assert!(text.contains("Zulu"), "{text}");
+    assert!(text.contains("Beta"), "{text}");
+}
