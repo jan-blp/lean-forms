@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms'
 
 
-def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None, invoice=False, shapes=False, booking=False):
+def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None, invoice=False, shapes=False, booking=False, report=False, basket=False):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 100, 0, 0))
     before = termios.tcgetattr(slave)
@@ -24,7 +24,7 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
     if theme:
         env.update(TERM='xterm-256color', COLORTERM='truecolor')
         env.pop('NO_COLOR', None)
-    process = subprocess.Popen([str(BINARY)] + (["booking"] if booking else ["shapes"] if shapes else ["invoice"] if invoice else ["thermostat"] if thermostat else ["person"]) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
+    process = subprocess.Popen([str(BINARY)] + (["basket"] if basket else ["report"] if report else ["booking"] if booking else ["shapes"] if shapes else ["invoice"] if invoice else ["thermostat"] if thermostat else ["person"]) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
     output = bytearray()
 
     def read_until(predicate):
@@ -41,7 +41,7 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
                     break
 
     try:
-        read_until(lambda: (b'Start date' if booking else b'Shape' if shapes else b'Description' if invoice else b'Home temperature (C)' if thermostat else b'Name') in output)
+        read_until(lambda: (b'Basket total: EUR 16' if basket else b'Results' if report else b'Start date' if booking else b'Shape' if shapes else b'Description' if invoice else b'Home temperature (C)' if thermostat else b'Name') in output)
         os.write(master, keys)
         if cancel:
             read_until(lambda: b'Other' in output)
@@ -102,7 +102,6 @@ session(b'\r\x1516\rx', None, thermostat=True)
 session(b'x', None)
 result = subprocess.run([str(BINARY)], capture_output=True, text=True)
 assert result.returncode != 0 and 'interactive terminal' in result.stderr + result.stdout
-print('PASS: FFI editing, validation, visibility, typed result, interruption, and terminal restoration')
 
 for args in [["--theme"], ["--theme", "unknown"], ["--theme", "dark"], ["--theme", "light"]]:
     result = subprocess.run([str(BINARY), *args], capture_output=True, text=True)
@@ -135,3 +134,37 @@ assert b"End date must be on or after start date" in output
 output = session(b"\rl\r\rq", {"startDate": "2028-02-29", "endDate": "2028-03-01"}, booking=True)
 assert b"February 2028" in output
 assert b"PgUp/PgDn month" in output
+
+output = session(b"\rj\rj j\rj\rq", {
+    "filters": {"provider": "Bedrock", "failuresOnly": True},
+    "sort": "Name descending",
+    "results": [
+        {"name": "Zulu", "provider": "Bedrock", "passed": False},
+        {"name": "Alpha", "provider": "Vertex", "passed": True},
+        {"name": "Beta", "provider": "Bedrock", "passed": True},
+        {"name": "Delta", "provider": "Vertex", "passed": False},
+    ],
+}, report=True)
+assert b"Results" in output
+assert b"PgUp/PgDn scroll results" in output
+
+# Search only changes the catalogue view, not the stored basket.
+basket_initial = {
+    "page": "Catalogue",
+    "filters": {"search": "", "category": "All categories", "budget": "Any price", "sort": "Name"},
+    "selected": "Notebook",
+    "items": [{"product": "Notebook", "quantity": 2}, {"product": "Pen", "quantity": 3}],
+}
+output = session(b"j\rpen\rq", {
+    **basket_initial, "filters": {**basket_initial["filters"], "search": "pen"},
+}, basket=True)
+assert b'Basket total: EUR 16' in output
+
+# Pick Mug, activate Add, switch to Basket, and change notebook quantity to 4.
+output = session(b"jjjjj\rjj\rj\rkkkkkk\rj\rjj\r\x154\rq", {
+    **basket_initial, "page": "Basket", "selected": "Mug",
+    "items": [{"product": "Notebook", "quantity": 4}, {"product": "Pen", "quantity": 3},
+              {"product": "Mug", "quantity": 1}],
+}, basket=True)
+assert b'Basket total: EUR 16' in output
+print('PASS: FFI editing, validation, catalogue search, basket actions, typed result, interruption, and terminal restoration')

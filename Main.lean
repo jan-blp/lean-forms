@@ -1,3 +1,5 @@
+import Forms.ExampleForms.Basket
+import Forms.ExampleForms.TestReport
 import Forms.ExampleForms.Booking
 import Forms.ExampleForms.Location
 import Forms.ExampleForms.Shapes
@@ -10,7 +12,7 @@ import Forms.Runtime.Tui
 
 namespace Forms.Application
 
-open ExampleForms Forms.Runtime Composition
+open ExampleForms Forms.Runtime
 
 private def valueToJson {t : DataType} (value : ⟦t⟧) : Lean.Json :=
   match t with
@@ -26,11 +28,11 @@ private def valueToJson {t : DataType} (value : ⟦t⟧) : Lean.Json :=
     .mkObj ((FinEnum.toList fieldNames).map fun i =>
       (fieldNames.label i, valueToJson (t := fieldTypes i) (value i)))
 
-def runForm (theme : NativeTerminal.Theme)
-  {context : DataType} (refined : RefinedDataType context) (form : Component context) (initial : RefinedDataType.ValidatedValue refined)
-  : IO Unit := do
+private def runComponent (theme : NativeTerminal.Theme)
+    {state : DataType} (refined : RefinedDataType state)
+    (component : Composition.Component state) (draft : ⟦state⟧) : IO Unit := do
   let _ : MonadTui IO := NativeTerminal.interpreter theme
-  let result ← Tui.run refined form (RefinedDataType.erase refined initial)
+  let result ← Tui.run refined component draft
   match result with
   | none => IO.println "\nCancelled."
   | some value =>
@@ -39,12 +41,14 @@ def runForm (theme : NativeTerminal.Theme)
 
 private def cli : Cli NativeTerminal.Theme where
   examples := [
-    ("person", fun theme => runForm theme Person.personType Person.form Person.initial),
-    ("booking", fun theme => runForm theme Booking.bookingType Booking.form Booking.initial),
-    ("location", fun theme => runForm theme Location.locationType Location.form Location.initial),
-    ("shapes", fun theme => runForm theme Shapes.shapeType Shapes.form Shapes.initial),
-    ("invoice", fun theme => runForm theme Invoice.invoiceType Invoice.form Invoice.initial),
-    ("thermostat", fun theme => runForm theme Thermostat.thermostatType Thermostat.form Thermostat.initial)]
+    ("person", fun theme => runComponent theme Person.personType Person.form Person.draft),
+    ("report", fun theme => runComponent theme (.base TestReport.reportShape) TestReport.report TestReport.initial),
+    ("basket", fun theme => runComponent theme (.base Basket.basket) Basket.basketView Basket.initial),
+    ("booking", fun theme => runComponent theme Booking.bookingType Booking.form Booking.draft),
+    ("location", fun theme => runComponent theme Location.locationType Location.form Location.draft),
+    ("shapes", fun theme => runComponent theme Shapes.shapeType Shapes.form Shapes.draft),
+    ("invoice", fun theme => runComponent theme Invoice.invoiceType Invoice.form Invoice.draft),
+    ("thermostat", fun theme => runComponent theme Thermostat.thermostatType Thermostat.form Thermostat.draft)]
   options := [("--theme", NativeTerminal.Theme.choices)]
   initial := .frappe
 
