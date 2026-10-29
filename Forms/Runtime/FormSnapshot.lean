@@ -58,10 +58,14 @@ def FormSnapshot.render {state : DataType} (component : Component state)
         labels := label :: tags.label selected.tag :: field.labels
         indices := pathIndices path ++ ((FinEnum.equiv selected.tag).val :: field.indices) })
         (render (branches selected.tag) selected.payload)
+  | .text expression => .text (expression.eval value)
+  | .table rows columns => .table (columns.map (·.label))
+      ((rows.eval value).map fun row => columns.map fun column => column.format.eval row)
   | .visibleWhen condition body =>
       if condition.eval value then render body value else .stack []
   | .disabledWhen condition body =>
       if condition.eval value then disable (render body value) else render body value
+  | .appendItemButton label _ _ => .action label
   | .stack (items := items) label children order =>
       let snapshot := .stack ((FinEnum.toList items).map fun i => render (children (order i)) value)
       match label with

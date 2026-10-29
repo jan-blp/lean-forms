@@ -92,6 +92,56 @@ pub enum Expr {
         items: Box<Expr>,
         expression: Box<Expr>,
     },
+    Filter {
+        items: Box<Expr>,
+        predicate: Box<Expr>,
+    },
+    SortBy {
+        items: Box<Expr>,
+        key: Box<Expr>,
+        descending: bool,
+    },
+    Search {
+        items: Box<Expr>,
+        key: Box<Expr>,
+        query: Box<Expr>,
+    },
+    SortNatBy {
+        items: Box<Expr>,
+        key: Box<Expr>,
+        descending: bool,
+    },
+    Length {
+        items: Box<Expr>,
+    },
+    EnumCases {
+        #[serde(rename = "type")]
+        ty: Ty,
+        subject: Box<Expr>,
+        branches: Vec<Expr>,
+    },
+    EnumEq {
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
+    EnumLabel {
+        subject: Box<Expr>,
+        options: Vec<String>,
+    },
+    IfThenElse {
+        condition: Box<Expr>,
+        #[serde(rename = "whenTrue")]
+        when_true: Box<Expr>,
+        #[serde(rename = "whenFalse")]
+        when_false: Box<Expr>,
+    },
+    NatToText {
+        operand: Box<Expr>,
+    },
+    TextAppend {
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
     NatMul {
         left: Box<Expr>,
         right: Box<Expr>,
@@ -144,15 +194,28 @@ impl Widget {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Component {
+    Stack {
+        #[serde(default)]
+        label: Option<String>,
+        children: Vec<Component>,
+    },
+    AppendItemButton {
+        label: String,
+        path: Vec<Step>,
+        value: Expr,
+    },
+    Text {
+        expression: Expr,
+    },
+    Table {
+        rows: Expr,
+        columns: Vec<Column>,
+    },
     Field {
         path: Vec<Step>,
         schema: Ty,
         label: String,
         widget: Widget,
-    },
-    Stack {
-        label: Option<String>,
-        children: Vec<Component>,
     },
     List {
         path: Vec<Step>,
@@ -186,6 +249,19 @@ pub enum Component {
 }
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct Column {
+    label: String,
+    expression: Expr,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ReportTable {
+    pub columns: Vec<String>,
+    pub rows: Vec<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Constraint {
     condition: Expr,
     #[serde(rename = "errorMessage")]
@@ -202,6 +278,7 @@ pub struct Specification {
     form: Component,
     value: Value,
 }
+
 fn natural(text: &str) -> Option<String> {
     if text.is_empty() || !text.bytes().all(|c| c.is_ascii_digit()) {
         return None;
@@ -368,6 +445,107 @@ impl Expr {
                 }
                 Ok(Ty::Natural)
             }
+            Self::Filter { items, predicate } => {
+                let Ty::List { element } = items.ty(input)? else {
+                    return Err("filter requires a list".into());
+                };
+                if predicate.ty(&element)? != Ty::Boolean {
+                    return Err("filter requires a boolean predicate".into());
+                }
+                Ok(Ty::List { element })
+            }
+            Self::SortBy { items, key, .. } => {
+                let Ty::List { element } = items.ty(input)? else {
+                    return Err("sortBy requires a list".into());
+                };
+                if key.ty(&element)? != Ty::Text {
+                    return Err("sortBy requires a text key".into());
+                }
+                Ok(Ty::List { element })
+            }
+            Self::Search { items, key, query } => {
+                let Ty::List { element } = items.ty(input)? else {
+                    return Err("search requires a list".into());
+                };
+                if key.ty(&element)? != Ty::Text || query.ty(input)? != Ty::Text {
+                    return Err("search requires a text key and query".into());
+                }
+                Ok(Ty::List { element })
+            }
+            Self::SortNatBy { items, key, .. } => {
+                let Ty::List { element } = items.ty(input)? else {
+                    return Err("sortNatBy requires a list".into());
+                };
+                if key.ty(&element)? != Ty::Natural {
+                    return Err("sortNatBy requires a natural key".into());
+                }
+                Ok(Ty::List { element })
+            }
+            Self::Length { items } => {
+                if !matches!(items.ty(input)?, Ty::List { .. }) {
+                    return Err("length requires a list".into());
+                }
+                Ok(Ty::Natural)
+            }
+            Self::EnumCases {
+                ty,
+                subject,
+                branches,
+            } => {
+                let Ty::Enum { options } = subject.ty(input)? else {
+                    return Err("enumCases requires an enum".into());
+                };
+                ty.validate()?;
+                if branches.len() != options.len() {
+                    return Err("enumCases requires one branch per option".into());
+                }
+                for branch in branches {
+                    if branch.ty(input)? != *ty {
+                        return Err("enumCases branches must match the result type".into());
+                    }
+                }
+                Ok(ty.clone())
+            }
+            Self::EnumEq { left, right } => {
+                let ty = left.ty(input)?;
+                if !matches!(ty, Ty::Enum { .. }) || right.ty(input)? != ty {
+                    return Err("enumEq requires matching enums".into());
+                }
+                Ok(Ty::Boolean)
+            }
+            Self::EnumLabel { subject, options } => {
+                if subject.ty(input)?
+                    != (Ty::Enum {
+                        options: options.clone(),
+                    })
+                {
+                    return Err("enumLabel options must match the enum".into());
+                }
+                Ok(Ty::Text)
+            }
+            Self::IfThenElse {
+                condition,
+                when_true,
+                when_false,
+            } => {
+                let result = when_true.ty(input)?;
+                if condition.ty(input)? != Ty::Boolean || when_false.ty(input)? != result {
+                    return Err("ifThenElse requires a boolean and matching branches".into());
+                }
+                Ok(result)
+            }
+            Self::NatToText { operand } => {
+                if operand.ty(input)? != Ty::Natural {
+                    return Err("natToText requires a natural".into());
+                }
+                Ok(Ty::Text)
+            }
+            Self::TextAppend { left, right } => {
+                if left.ty(input)? != Ty::Text || right.ty(input)? != Ty::Text {
+                    return Err("textAppend requires text operands".into());
+                }
+                Ok(Ty::Text)
+            }
             Self::NatMul { left, right } => {
                 if left.ty(input)? != Ty::Natural || right.ty(input)? != Ty::Natural {
                     return Err("natMul requires natural operands".into());
@@ -429,6 +607,75 @@ impl Expr {
                     .sum::<BigUint>()
                     .to_string(),
             ),
+            Self::Filter { items, predicate } => Value::Array(
+                items
+                    .eval(input)
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|item| predicate.eval(item).as_bool().unwrap())
+                    .cloned()
+                    .collect(),
+            ),
+            Self::SortBy {
+                items,
+                key,
+                descending,
+            } => {
+                let mut rows = items.eval(input).as_array().unwrap().clone();
+                rows.sort_by(|left, right| {
+                    let left = key.eval(left);
+                    let right = key.eval(right);
+                    let order = left.as_str().unwrap().cmp(right.as_str().unwrap());
+                    if *descending {
+                        order.reverse()
+                    } else {
+                        order
+                    }
+                });
+                Value::Array(rows)
+            }
+            Self::Search { items, key, query } => {
+                let query = query.eval(input).as_str().unwrap().to_ascii_lowercase();
+                Value::Array(items.eval(input).as_array().unwrap().iter()
+                    .filter(|row| key.eval(row).as_str().unwrap().to_ascii_lowercase().contains(&query))
+                    .cloned().collect())
+            }
+            Self::SortNatBy { items, key, descending } => {
+                let mut rows = items.eval(input).as_array().unwrap().clone();
+                rows.sort_by(|left, right| {
+                    let order = key.eval_natural(left).cmp(&key.eval_natural(right));
+                    if *descending { order.reverse() } else { order }
+                });
+                Value::Array(rows)
+            }
+            Self::Length { items } => {
+                Value::String(items.eval(input).as_array().unwrap().len().to_string())
+            }
+            Self::EnumCases {
+                subject, branches, ..
+            } => branches[subject.eval(input).as_u64().unwrap() as usize].eval(input),
+            Self::EnumEq { left, right } => Value::Bool(left.eval(input) == right.eval(input)),
+            Self::EnumLabel { subject, options } => {
+                Value::String(options[subject.eval(input).as_u64().unwrap() as usize].clone())
+            }
+            Self::IfThenElse {
+                condition,
+                when_true,
+                when_false,
+            } => {
+                if condition.eval(input).as_bool().unwrap() {
+                    when_true.eval(input)
+                } else {
+                    when_false.eval(input)
+                }
+            }
+            Self::NatToText { operand } => Value::String(operand.eval_natural(input).to_string()),
+            Self::TextAppend { left, right } => Value::String(format!(
+                "{}{}",
+                left.eval(input).as_str().unwrap(),
+                right.eval(input).as_str().unwrap()
+            )),
             Self::NatMul { left, right } => {
                 Value::String((left.eval_natural(input) * right.eval_natural(input)).to_string())
             }
@@ -470,58 +717,54 @@ fn set(value: &mut Value, path: &[Step], replacement: Value) {
 }
 
 impl Component {
-    fn validate(&self, context: &Ty, _ty: &Ty) -> Result<(), String> {
+    fn validate(&self, context: &Ty) -> Result<(), String> {
         match self {
-            Self::Field {
-                path,
-                schema,
-                widget,
-                ..
-            } => {
+            Self::Field { path, schema, .. } | Self::List { path, schema, .. } | Self::Sum { path, schema, .. } => {
                 schema.validate()?;
-                if (Expr::Project { path: path.clone() }).ty(context)? != *schema
-                    || !widget.matches(schema)
-                {
-                    return Err("Field path, schema, and widget must agree".into());
+                if (Expr::Project { path: path.clone() }).ty(context)? != *schema {
+                    return Err("Control schema must match its path".into());
                 }
-                Ok(())
             }
+            _ => {}
+        }
+        match self {
             Self::Stack { children, .. } => {
                 for child in children {
-                    child.validate(context, context)?;
+                    child.validate(context)?;
                 }
                 Ok(())
             }
-            Self::List {
-                path,
-                schema,
-                item,
-                default_item,
-                ..
-            } => {
-                schema.validate()?;
-                if (Expr::Project { path: path.clone() }).ty(context)? != *schema {
-                    return Err("Component path and schema must agree".into());
-                }
-                let Ty::List { element } = schema else {
-                    return Err("List requires list schema".into());
+            Self::AppendItemButton { path, value, .. } => {
+                let Ty::List { element } = (Expr::Project { path: path.clone() }).ty(context)? else {
+                    return Err("appendItemButton requires a list target".into());
                 };
-                validate_value(element, default_item)?;
-                item.validate(element, element)
+                if value.ty(context)? != *element {
+                    return Err("appendItemButton value must match list element type".into());
+                }
+                Ok(())
+            }
+            Self::Text { expression } => {
+                if expression.ty(context)? != Ty::Text {
+                    return Err("Text view requires text".into());
+                }
+                Ok(())
+            }
+            Self::Table { rows, columns } => {
+                let Ty::List { element } = rows.ty(context)? else {
+                    return Err("Table requires a list".into());
+                };
+                for column in columns {
+                    if column.expression.ty(&element)? != Ty::Text {
+                        return Err("Table cells require text".into());
+                    }
+                }
+                Ok(())
             }
             Self::Sum {
-                path,
-                schema,
-                branches,
-                defaults,
-                ..
+                schema: ty, branches, defaults, ..
             } => {
-                schema.validate()?;
-                if (Expr::Project { path: path.clone() }).ty(context)? != *schema {
-                    return Err("Component path and schema must agree".into());
-                }
-                let Ty::Sum { constructors } = schema else {
-                    return Err("Sum requires sum schema".into());
+                let Ty::Sum { constructors } = ty else {
+                    return Err("Sum form requires sum schema".into());
                 };
                 if !matches_names(branches, constructors) || !matches_names(defaults, constructors)
                 {
@@ -529,29 +772,44 @@ impl Component {
                 }
                 for constructor in constructors {
                     validate_value(&constructor.ty, &defaults[&constructor.name])?;
-                    branches[&constructor.name].validate(&constructor.ty, &constructor.ty)?;
+                    branches[&constructor.name].validate(&constructor.ty)?;
                 }
                 Ok(())
             }
-            Self::VisibleWhen { condition, body } => {
-                if condition.ty(context)? != Ty::Boolean {
-                    return Err("Condition requires boolean".into());
-                }
-                body.validate(context, context)
+            Self::List {
+                schema: ty, item, default_item, ..
+            } => {
+                let Ty::List { element } = ty else {
+                    return Err("List form requires list schema".into());
+                };
+                validate_value(element, default_item)?;
+                item.validate(element)
             }
-            Self::DisabledWhen { condition, body } => {
-                if condition.ty(context)? != Ty::Boolean {
-                    return Err("Condition requires boolean".into());
-                }
-                body.validate(context, context)
-            }
-            Self::Computed { ty, expression, .. } => {
-                ty.validate()?;
-                if expression.ty(context)? != *ty {
+            Self::Field { widget, schema, .. } if widget.matches(schema) => Ok(()),
+            Self::Computed {
+                ty: result,
+                expression,
+                ..
+            } => {
+                result.validate()?;
+                if expression.ty(context)? != *result {
                     return Err("Computed expression must match its result type".into());
                 }
                 Ok(())
             }
+            Self::DisabledWhen { condition, body } => {
+                if condition.ty(context)? != Ty::Boolean {
+                    return Err("Disabling requires boolean".into());
+                }
+                body.validate(context)
+            }
+            Self::VisibleWhen { condition, body } => {
+                if condition.ty(context)? != Ty::Boolean {
+                    return Err("Visibility requires boolean".into());
+                }
+                body.validate(context)
+            }
+            _ => Err("Widget does not match field type".into()),
         }
     }
     fn fields(
@@ -562,20 +820,72 @@ impl Component {
         scope: &[Step],
         labels: Vec<String>,
         out: &mut Vec<Field>,
+        tables: &mut Vec<ReportTable>,
     ) {
         match self {
+            Self::Stack { children, label } => {
+                let mut labels = labels;
+                if let Some(label) = label {
+                    if !(label == "Item" && labels.last().is_some_and(|parent| parent.starts_with("Item "))) {
+                        labels.push(label.clone());
+                    }
+                }
+                for child in children {
+                    child.fields(ty, value, path.clone(), scope, labels.clone(), out, tables);
+                }
+            }
+            Self::AppendItemButton { label, path: relative, value: expression } => out.push(Field {
+                presentation: Presentation { add: true, ..Presentation::default() },
+                title: label.clone(), section: labels.join(" › "), action: true,
+                label: label.clone(), path: scope.iter().chain(relative).cloned().collect(),
+                widget: Widget::Add, options: vec![],
+                default_item: Some(expression.eval(get(value, scope))), computed_value: None,
+            }),
+            Self::Text { expression } => out.push(Field {
+                presentation: Presentation {
+                    computed: true,
+                    text: true,
+                    ..Presentation::default()
+                },
+                title: String::new(),
+                section: labels.join(" › "),
+                action: false,
+                label: labels.join("."),
+                path,
+                widget: Widget::Computed,
+                options: vec![],
+                default_item: None,
+                computed_value: Some(
+                    expression
+                        .eval(get(value, scope))
+                        .as_str()
+                        .unwrap()
+                        .to_owned(),
+                ),
+            }),
+            Self::Table { rows, columns } => {
+                tables.push(ReportTable {
+                    columns: columns.iter().map(|column| column.label.clone()).collect(),
+                    rows: rows
+                        .eval(get(value, scope))
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|row| {
+                            columns
+                                .iter()
+                                .map(|column| {
+                                    column.expression.eval(row).as_str().unwrap().to_owned()
+                                })
+                                .collect()
+                        })
+                        .collect(),
+                });
+            }
             Self::Sum {
-                path: target,
-                schema: ty,
-                label,
-                branches,
-                defaults,
+                path: relative, schema: ty, label, branches, defaults,
             } => {
-                let path: Vec<Step> = scope
-                    .iter()
-                    .cloned()
-                    .chain(target.iter().cloned())
-                    .collect();
+                let path: Vec<_> = scope.iter().chain(relative).cloned().collect();
                 let Ty::Sum { constructors } = ty else {
                     unreachable!()
                 };
@@ -620,6 +930,7 @@ impl Component {
                     &payload_path,
                     labels,
                     out,
+                    tables,
                 );
                 // The selector names the payload. Keep deeper groups, but fold the
                 // branch's outer group into this section instead of repeating it.
@@ -628,10 +939,7 @@ impl Component {
                 {
                     branch = body;
                 }
-                let prefix = if let Self::Stack {
-                    label: Some(label), ..
-                } = branch
-                {
+                let prefix = if let Self::Stack { label: Some(label), .. } = branch {
                     format!("{payload_section} › {label}")
                 } else {
                     payload_section
@@ -656,17 +964,9 @@ impl Component {
                 }
             }
             Self::List {
-                path: target,
-                schema: ty,
-                label,
-                item,
-                default_item,
+                path: relative, schema: ty, label, item, default_item,
             } => {
-                let path: Vec<Step> = scope
-                    .iter()
-                    .cloned()
-                    .chain(target.iter().cloned())
-                    .collect();
+                let path: Vec<_> = scope.iter().chain(relative).cloned().collect();
                 let Ty::List { element } = ty else {
                     unreachable!()
                 };
@@ -684,6 +984,7 @@ impl Component {
                         &item_path,
                         item_labels.clone(),
                         out,
+                        tables,
                     );
                     let section = out
                         .last()
@@ -743,23 +1044,17 @@ impl Component {
                     computed_value: Some(show_value(result, &expression.eval(get(value, scope)))),
                 });
             }
-            Self::Field {
-                path: target,
-                schema: ty,
-                label,
-                widget,
-            } => {
-                let path: Vec<Step> = scope
-                    .iter()
-                    .cloned()
-                    .chain(target.iter().cloned())
-                    .collect();
+            Self::Field { path: relative, schema: ty, label, widget } => {
+                let path = scope.iter().chain(relative).cloned().collect();
                 let mut labels = labels;
                 let section = labels.join(" › ");
                 labels.push(label.clone());
                 out.push(Field {
                     computed_value: None,
-                    presentation: Presentation::default(),
+                    presentation: Presentation {
+                        choice: matches!(widget, Widget::Select),
+                        ..Presentation::default()
+                    },
                     title: label.clone(),
                     section,
                     action: false,
@@ -773,24 +1068,9 @@ impl Component {
                     },
                 });
             }
-            Self::Stack { label, children } => {
-                let mut labels = labels;
-                if let Some(label) = label {
-                    if !(label == "Item"
-                        && labels
-                            .last()
-                            .is_some_and(|parent| parent.starts_with("Item ")))
-                    {
-                        labels.push(label.clone());
-                    }
-                }
-                for child in children {
-                    child.fields(ty, value, path.clone(), scope, labels.clone(), out);
-                }
-            }
             Self::DisabledWhen { condition, body } => {
                 let start = out.len();
-                body.fields(ty, value, path, scope, labels, out);
+                body.fields(ty, value, path, scope, labels, out, tables);
                 if condition.eval(get(value, scope)).as_bool().unwrap() {
                     for field in &mut out[start..] {
                         field.presentation.disabled = true;
@@ -799,7 +1079,7 @@ impl Component {
             }
             Self::VisibleWhen { condition, body } => {
                 if condition.eval(get(value, scope)).as_bool().unwrap() {
-                    body.fields(ty, value, path, scope, labels, out);
+                    body.fields(ty, value, path, scope, labels, out, tables);
                 }
             }
         }
@@ -807,10 +1087,12 @@ impl Component {
 }
 #[derive(Clone, Copy, Default)]
 pub struct Presentation {
+    pub text: bool,
     pub computed: bool,
     pub add: bool,
     pub disabled: bool,
     pub constructor: bool,
+    pub choice: bool,
     pub depth: usize,
     pub note: Option<&'static str>,
     pub invalid: bool,
@@ -841,6 +1123,8 @@ pub struct Engine {
     submitted: bool,
     constructor_drafts: std::collections::HashMap<(Vec<Step>, String), Value>,
     pub selected: usize,
+    pub table_offset: usize,
+    table_viewports: Vec<usize>,
     pub editor: Option<Editor>,
 }
 #[derive(Clone, Copy)]
@@ -862,11 +1146,11 @@ impl Engine {
     pub fn parse(json: &str) -> Result<Self, String> {
         let spec: Specification = serde_json::from_str(json).map_err(|e| e.to_string())?;
         if spec.version != 4 {
-            return Err("Unsupported form specification version".into());
+            return Err("Unsupported component specification version".into());
         }
         spec.schema.validate()?;
         validate_value(&spec.schema, &spec.value)?;
-        spec.form.validate(&spec.schema, &spec.schema)?;
+        spec.form.validate(&spec.schema)?;
         for constraint in &spec.constraints {
             if constraint.condition.ty(&spec.schema)? != Ty::Boolean {
                 return Err("Validation constraint requires a boolean".into());
@@ -875,14 +1159,45 @@ impl Engine {
                 Expr::Project { path: path.clone() }.ty(&spec.schema)?;
             }
         }
-        Ok(Self {
+        let mut engine = Self {
             spec,
             submitted: false,
             constructor_drafts: std::collections::HashMap::new(),
             selected: 0,
+            table_offset: 0,
+            table_viewports: vec![],
             editor: None,
-        })
+        };
+        engine.skip_text();
+        Ok(engine)
     }
+    pub fn set_table_viewports(&mut self, viewports: Vec<usize>) {
+        self.table_viewports = viewports;
+        self.clamp_table_offset();
+    }
+
+    fn maximum_table_offset(&self) -> usize {
+        self.content().1.iter().enumerate().map(|(index, table)| {
+            table.rows.len().saturating_sub(
+                self.table_viewports.get(index).copied().unwrap_or(1).max(1))
+        }).max().unwrap_or(0)
+    }
+
+    fn clamp_table_offset(&mut self) {
+        self.table_offset = self.table_offset.min(self.maximum_table_offset());
+    }
+
+    fn skip_text(&mut self) {
+        let fields = self.fields();
+        self.selected = self.selected.min(fields.len().saturating_sub(1));
+        if fields.get(self.selected).is_some_and(|field| field.presentation.text) {
+            self.selected = (self.selected..fields.len())
+                .find(|&index| !fields[index].presentation.text)
+                .or_else(|| (0..self.selected).rev().find(|&index| !fields[index].presentation.text))
+                .unwrap_or(0);
+        }
+    }
+
     pub fn result(&self) -> String {
         if self.submitted {
             self.spec.value.to_string()
@@ -923,8 +1238,9 @@ impl Engine {
             })
             .collect()
     }
-    pub fn fields(&self) -> Vec<Field> {
+    pub fn content(&self) -> (Vec<Field>, Vec<ReportTable>) {
         let mut out = Vec::new();
+        let mut tables = Vec::new();
         self.spec.form.fields(
             &self.spec.schema,
             &self.spec.value,
@@ -932,6 +1248,7 @@ impl Engine {
             &[],
             vec![],
             &mut out,
+            &mut tables,
         );
         for field in &mut out {
             if field.presentation.constructor {
@@ -945,7 +1262,10 @@ impl Engine {
                 });
             }
         }
-        out
+        (out, tables)
+    }
+    pub fn fields(&self) -> Vec<Field> {
+        self.content().0
     }
     pub fn shown(&self, field: &Field) -> String {
         if let Some(value) = &field.computed_value {
@@ -970,6 +1290,15 @@ impl Engine {
     pub fn step(&mut self, key: Key) -> bool {
         if matches!(key, Key::Quit) {
             return false;
+        }
+        if self.editor.is_none() && matches!(key, Key::PageUp | Key::PageDown) {
+            let maximum = self.maximum_table_offset();
+            let page_size = self.table_viewports.iter().copied().min().unwrap_or(1).max(1);
+            self.table_offset = match key {
+                Key::PageUp => self.table_offset.saturating_sub(page_size),
+                _ => self.table_offset.saturating_add(page_size).min(maximum),
+            };
+            return true;
         }
         let fields = self.fields();
         if fields
@@ -1123,9 +1452,15 @@ impl Engine {
                         return false;
                     }
                 }
-                Key::Up | Key::Character('k') => self.selected = self.selected.saturating_sub(1),
+                Key::Up | Key::Character('k') => {
+                    if let Some(index) = (0..self.selected).rev().find(|&i| !fields[i].presentation.text) {
+                        self.selected = index;
+                    }
+                },
                 Key::Down | Key::Character('j') => {
-                    self.selected = (self.selected + 1).min(fields.len().saturating_sub(1))
+                    if let Some(index) = (self.selected + 1..fields.len()).find(|&i| !fields[i].presentation.text) {
+                        self.selected = index;
+                    }
                 }
                 Key::Enter | Key::Character('i' | ' ') => {
                     if let Some(field) = fields.get(self.selected) {
@@ -1220,7 +1555,8 @@ impl Engine {
                 }
             }
         }
-        self.selected = self.selected.min(self.fields().len().saturating_sub(1));
+        self.skip_text();
+        self.clamp_table_offset();
         true
     }
 }

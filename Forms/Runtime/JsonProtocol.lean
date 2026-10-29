@@ -1,9 +1,9 @@
-import Forms.Core.Composition
+import Forms.Core.Widget
 import Forms.Core.RefinedDataType
 import Lean.Data.Json
 
 namespace Forms
-open Lean Composition
+open Lean
 
 variable {root input context t : DataType}
 
@@ -91,7 +91,7 @@ theorem valueFromJson_date_sound {json : Json} {date : Date}
     valueToJson (t := .date) date = json := by
   cases json <;>
     simp_all [valueFromJson, Json.getStr?, bind, Except.bind, pure, Except.pure,
-      valueToJson, Lean.toJson]
+      valueToJson, toJson]
   split at h <;> simp_all
   grind [Date.ofString?_sound]
 
@@ -113,6 +113,25 @@ def Expr.toJson {input t} (expression : Expr input t) : Json :=
       ("branches", Json.mkObj ((FinEnum.toList tags).map fun i => (tags.label i, Expr.toJson (branches i))))]
   | .sum items expression => Json.mkObj [("kind", Lean.toJson "sum"),
       ("items", Expr.toJson items), ("expression", Expr.toJson expression)]
+  | .filter items predicate => Json.mkObj [("kind", Lean.toJson "filter"),
+      ("items", Expr.toJson items), ("predicate", Expr.toJson predicate)]
+  | .sortBy items key descending => Json.mkObj [("kind", Lean.toJson "sortBy"),
+      ("items", Expr.toJson items), ("key", Expr.toJson key), ("descending", Lean.toJson descending)]
+  | .search items key query => Json.mkObj [("kind", Lean.toJson "search"),
+      ("items", Expr.toJson items), ("key", Expr.toJson key), ("query", Expr.toJson query)]
+  | .sortNatBy items key descending => Json.mkObj [("kind", Lean.toJson "sortNatBy"),
+      ("items", Expr.toJson items), ("key", Expr.toJson key), ("descending", Lean.toJson descending)]
+  | .length items => Json.mkObj [("kind", Lean.toJson "length"), ("items", Expr.toJson items)]
+  | .enumCases (domain := domain) subject branches => Json.mkObj [("kind", Lean.toJson "enumCases"),
+      ("type", DataType.toJson t), ("subject", Expr.toJson subject),
+      ("branches", Lean.toJson ((FinEnum.toList domain).map fun choice => Expr.toJson (branches choice)))]
+  | .enumEq left right => binary "enumEq" (Expr.toJson left) (Expr.toJson right)
+  | .enumLabel (domain := domain) subject => Json.mkObj [("kind", Lean.toJson "enumLabel"),
+      ("options", Lean.toJson (Enum.options domain)), ("subject", Expr.toJson subject)]
+  | .ifThenElse condition whenTrue whenFalse => Json.mkObj [("kind", Lean.toJson "ifThenElse"),
+      ("condition", Expr.toJson condition), ("whenTrue", Expr.toJson whenTrue), ("whenFalse", Expr.toJson whenFalse)]
+  | .natToText operand => Json.mkObj [("kind", Lean.toJson "natToText"), ("operand", Expr.toJson operand)]
+  | .textAppend left right => binary "textAppend" (Expr.toJson left) (Expr.toJson right)
   | .natMul l r => binary "natMul" (Expr.toJson l) (Expr.toJson r)
   | .not operand => Json.mkObj [("kind", Lean.toJson "not"), ("operand", Expr.toJson operand)]
   | .and l r => binary "and" (Expr.toJson l) (Expr.toJson r)
@@ -130,31 +149,6 @@ def Widget.name (widget : Widget t) : String :=
   | .naturalInput => "naturalInput"
   | .select => "select"
 
-def Component.toJson {state : DataType} (component : Component state) : Json :=
-  match component with
-  | .field (value := value) path label widget => Json.mkObj [
-      ("kind", Lean.toJson "field"), ("path", Lean.toJson (Path.toList path)),
-      ("schema", DataType.toJson value), ("label", Lean.toJson label), ("widget", Lean.toJson (Widget.name widget))]
-  | .list (element := element) path label item defaultItem => Json.mkObj [
-      ("kind", Lean.toJson "list"), ("path", Lean.toJson (Path.toList path)),
-      ("schema", DataType.toJson (.list element)), ("label", Lean.toJson label),
-      ("item", Component.toJson item), ("defaultItem", Runtime.JsonProtocol.valueToJson defaultItem)]
-  | .sum (tags := tags) (constructors := constructors) path label branches defaults => Json.mkObj [
-      ("kind", Lean.toJson "sum"), ("path", Lean.toJson (Path.toList path)),
-      ("schema", DataType.toJson (.sum tags constructors)), ("label", Lean.toJson label),
-      ("branches", Json.mkObj ((FinEnum.toList tags).map fun tag => (tags.label tag, Component.toJson (branches tag)))),
-      ("defaults", Json.mkObj ((FinEnum.toList tags).map fun tag => (tags.label tag, Runtime.JsonProtocol.valueToJson (defaults tag))))]
-  | .computed (result := result) label expression => Json.mkObj [
-      ("kind", Lean.toJson "computed"), ("label", Lean.toJson label),
-      ("type", DataType.toJson result), ("expression", Expr.toJson expression)]
-  | .visibleWhen condition body => Json.mkObj [
-      ("kind", Lean.toJson "visibleWhen"), ("condition", Expr.toJson condition), ("body", Component.toJson body)]
-  | .disabledWhen condition body => Json.mkObj [
-      ("kind", Lean.toJson "disabledWhen"), ("condition", Expr.toJson condition), ("body", Component.toJson body)]
-  | .stack (items := items) label children order => Json.mkObj [
-      ("kind", Lean.toJson "stack"), ("label", Lean.toJson label),
-      ("children", Lean.toJson ((FinEnum.toList items).map fun index => Component.toJson (children (order index))))]
-
 def Constraint.toJson (constraint : Constraint root) : Json :=
   Json.mkObj [("condition", Expr.toJson constraint.condition), ("errorMessage", Lean.toJson constraint.errorMessage),
     ("errorLocation", match constraint.errorLocation with
@@ -162,11 +156,6 @@ def Constraint.toJson (constraint : Constraint root) : Json :=
       | some target => Lean.toJson (Path.toList target.path))]
 
 namespace Runtime.JsonProtocol
-
-def encode (refined : RefinedDataType context) (form : Component context) (draft : ⟦context⟧) : String :=
-  (Json.mkObj [("version", Lean.toJson (4 : Nat)), ("schema", DataType.toJson context),
-    ("constraints", Lean.toJson ((RefinedDataType.constraints refined).map Constraint.toJson)),
-    ("form", Component.toJson form), ("value", valueToJson draft)]).compress
 
 def decodeResult (refined : RefinedDataType root) (json : Json) : Except String (Option (RefinedDataType.ValidatedValue refined)) := do
   if json == Json.null then return none

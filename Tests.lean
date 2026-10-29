@@ -248,7 +248,7 @@ private def testDisplayOrder : IO Unit := do
   let fields := fieldRefs form draft
   check "DisplayOrderReordersFields" (fields.map (·.labels) == [["Thermostat", "Away"], ["Thermostat", "Home"]])
   check "DisplayOrderPreservesFieldIdentity" (fields.map (·.indices) == [[1], [0]])
-  check "DisplayOrderEncodesPaths" (match (Component.toJson form).getObjVal? "children" with
+  check "DisplayOrderEncodesPaths" (match (CompositionProtocol.componentToJson form).getObjVal? "children" with
     | .ok (.arr children) => ((children[0]!).getObjVal? "path").toOption == some (Lean.toJson (["away"] : List String))
     | _ => false)
   let hidden : Component ExampleForms.Thermostat.thermostat :=
@@ -269,7 +269,7 @@ private def testDisabled : IO Unit := do
   check "DisabledStillVisible" ((fieldRefs nested "Ada").map (·.labels) == [["Name"]])
   let hidden := Component.visibleWhen (.value false) nested
   check "HiddenDisabledStaysHidden" ((fieldRefs hidden "Ada").isEmpty)
-  check "DisabledJson" ((Component.toJson form).getObjValAs? String "kind" == .ok "disabledWhen")
+  check "DisabledJson" ((CompositionProtocol.componentToJson form).getObjValAs? String "kind" == .ok "disabledWhen")
 
 private def testComputed : IO Unit := do
   let draft := ExampleForms.Invoice.draft
@@ -328,12 +328,12 @@ private def testDates : IO Unit := do
 
 private def testProtocol : IO Unit := do
   for (fixture, encoded) in [
-      ("native/tui/tests/booking.json", JsonProtocol.encode ExampleForms.Booking.bookingType ExampleForms.Booking.form ExampleForms.Booking.draft),
-      ("native/tui/tests/location.json", JsonProtocol.encode ExampleForms.Location.locationType ExampleForms.Location.form ExampleForms.Location.draft),
-      ("native/tui/tests/shapes.json", JsonProtocol.encode ExampleForms.Shapes.shapeType ExampleForms.Shapes.form ExampleForms.Shapes.draft),
-      ("native/tui/tests/invoice.json", JsonProtocol.encode ExampleForms.Invoice.invoiceType ExampleForms.Invoice.form ExampleForms.Invoice.draft),
-      ("native/tui/tests/person.json", JsonProtocol.encode ExampleForms.Person.personType ExampleForms.Person.form ExampleForms.Person.draft),
-      ("native/tui/tests/thermostat.json", JsonProtocol.encode ExampleForms.Thermostat.thermostatType ExampleForms.Thermostat.form ExampleForms.Thermostat.draft)] do
+      ("native/tui/tests/booking.json", CompositionProtocol.encode ExampleForms.Booking.bookingType ExampleForms.Booking.form ExampleForms.Booking.draft),
+      ("native/tui/tests/location.json", CompositionProtocol.encode ExampleForms.Location.locationType ExampleForms.Location.form ExampleForms.Location.draft),
+      ("native/tui/tests/shapes.json", CompositionProtocol.encode ExampleForms.Shapes.shapeType ExampleForms.Shapes.form ExampleForms.Shapes.draft),
+      ("native/tui/tests/invoice.json", CompositionProtocol.encode ExampleForms.Invoice.invoiceType ExampleForms.Invoice.form ExampleForms.Invoice.draft),
+      ("native/tui/tests/person.json", CompositionProtocol.encode ExampleForms.Person.personType ExampleForms.Person.form ExampleForms.Person.draft),
+      ("native/tui/tests/thermostat.json", CompositionProtocol.encode ExampleForms.Thermostat.thermostatType ExampleForms.Thermostat.form ExampleForms.Thermostat.draft)] do
     check "RustFixtureMatchesLean" ((Lean.Json.parse (← IO.FS.readFile fixture)).toOption == (Lean.Json.parse encoded).toOption)
   let huge := 12345678901234567890123456789012345678901234567890
   check "UnboundedJsonRoundTrip"
