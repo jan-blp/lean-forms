@@ -1,2 +1,3 @@
-import Forms.Core.Component.Builder
+import Forms.Core.Composition
 import Forms.Core.RefinedDataType.Theorems
+import Forms.Core.Component.Builder
