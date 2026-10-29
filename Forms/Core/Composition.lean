@@ -2,6 +2,10 @@ import Forms.Core.Widget
 
 namespace Forms.Composition
 
+structure Column (row : DataType) where
+  label : String
+  format : Expr row .text
+
 inductive Component : (state : DataType) → Type 1 where
   | field
       {state value : DataType}
@@ -37,6 +41,15 @@ inductive Component : (state : DataType) → Type 1 where
       (label : String)
       (expression : Expr state result)
       : Component state
+  | text
+      {state : DataType}
+      (expression : Expr state .text)
+      : Component state
+  | table
+      {state row : DataType}
+      (rows : Expr state (.list row))
+      (columns : List (Column row))
+      : Component state
   | visibleWhen
       {state : DataType}
       (condition : Expr state .boolean)
@@ -47,5 +60,29 @@ inductive Component : (state : DataType) → Type 1 where
       (condition : Expr state .boolean)
       (body : Component state)
       : Component state
+  | appendItemButton
+      {state element : DataType}
+      (label : String)
+      (target : Path state (.list element))
+      (newItem : Expr state element)
+      : Component state
+
+def Component.weaken
+    {outer inner : DataType}
+    (path : Path outer inner)
+    (body : Component inner)
+    : Component outer :=
+  match body with
+  | .field target label widget => .field (path.trans target) label widget
+  | .stack label children order => .stack label (fun index => (children index).weaken path) order
+  | .list target label item defaultItem => .list (path.trans target) label item defaultItem
+  | .sum target label branches defaults => .sum (path.trans target) label branches defaults
+  | .computed label expression => .computed label (expression.weaken path)
+  | .text expression => .text (expression.weaken path)
+  | .table rows columns => .table (rows.weaken path) columns
+  | .visibleWhen condition component => .visibleWhen (condition.weaken path) (component.weaken path)
+  | .disabledWhen condition component => .disabledWhen (condition.weaken path) (component.weaken path)
+  | .appendItemButton label target newItem =>
+      .appendItemButton label (path.trans target) (newItem.weaken path)
 
 end Forms.Composition
