@@ -1,6 +1,8 @@
 import Forms.Core.RefinedDataType.Theorems
 import Tests.Validation
-import Forms.Runtime.FormSnapshot
+import Tests.Weakening
+import Tests.Basket
+import Tests.Composition
 import Forms.ExampleForms.Booking
 import Forms.ExampleForms.Location
 import Forms.ExampleForms.Shapes
@@ -344,6 +346,9 @@ private def testProtocol : IO Unit := do
 
 def main : IO Unit := do
   Forms.Tests.ValidationExperiment.run
+  Tests.Weakening.run
+  Tests.Basket.run
+  Tests.Composition.run
   testRefinedTypes
   testPathsAndChoices
   testHiddenValidation
