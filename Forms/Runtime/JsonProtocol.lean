@@ -132,6 +132,8 @@ def Expr.toJson {input t} (expression : Expr input t) : Json :=
       ("condition", Expr.toJson condition), ("whenTrue", Expr.toJson whenTrue), ("whenFalse", Expr.toJson whenFalse)]
   | .natToText operand => Json.mkObj [("kind", Lean.toJson "natToText"), ("operand", Expr.toJson operand)]
   | .textAppend left right => binary "textAppend" (Expr.toJson left) (Expr.toJson right)
+  | .natAdd l r => binary "natAdd" (Expr.toJson l) (Expr.toJson r)
+  | .natSub l r => binary "natSub" (Expr.toJson l) (Expr.toJson r)
   | .natMul l r => binary "natMul" (Expr.toJson l) (Expr.toJson r)
   | .not operand => Json.mkObj [("kind", Lean.toJson "not"), ("operand", Expr.toJson operand)]
   | .and l r => binary "and" (Expr.toJson l) (Expr.toJson r)

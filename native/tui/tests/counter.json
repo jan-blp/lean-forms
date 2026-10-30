@@ -1,0 +1,87 @@
+{
+  "constraints": [],
+  "form": {
+    "actions": [
+      {
+        "body": {
+          "kind": "natAdd",
+          "left": {
+            "kind": "project",
+            "path": []
+          },
+          "right": {
+            "kind": "value",
+            "type": {
+              "kind": "natural"
+            },
+            "value": "1"
+          }
+        },
+        "id": "plusOne",
+        "kind": "button",
+        "label": "+1"
+      },
+      {
+        "body": {
+          "kind": "natAdd",
+          "left": {
+            "kind": "project",
+            "path": []
+          },
+          "right": {
+            "kind": "value",
+            "type": {
+              "kind": "natural"
+            },
+            "value": "5"
+          }
+        },
+        "id": "plusFive",
+        "kind": "button",
+        "label": "+5"
+      },
+      {
+        "body": {
+          "kind": "project",
+          "path": [
+            "argument"
+          ]
+        },
+        "id": "replace",
+        "kind": "editor",
+        "label": "Value",
+        "widget": "naturalInput"
+      },
+      {
+        "body": {
+          "kind": "natSub",
+          "left": {
+            "kind": "project",
+            "path": []
+          },
+          "right": {
+            "kind": "value",
+            "type": {
+              "kind": "natural"
+            },
+            "value": "1"
+          }
+        },
+        "id": "minusOne",
+        "kind": "button",
+        "label": "−1"
+      }
+    ],
+    "kind": "actionWidget",
+    "label": "Counter",
+    "path": [],
+    "schema": {
+      "kind": "natural"
+    }
+  },
+  "schema": {
+    "kind": "natural"
+  },
+  "value": "0",
+  "version": 5
+}

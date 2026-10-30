@@ -67,7 +67,7 @@ impl Ty {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Expr {
     Value {
@@ -142,6 +142,8 @@ pub enum Expr {
         left: Box<Expr>,
         right: Box<Expr>,
     },
+    NatAdd { left: Box<Expr>, right: Box<Expr> },
+    NatSub { left: Box<Expr>, right: Box<Expr> },
     NatMul {
         left: Box<Expr>,
         right: Box<Expr>,
@@ -168,6 +170,8 @@ pub enum Widget {
     TextInput,
     Checkbox,
     NaturalInput,
+    #[serde(skip)]
+    Button,
     DateInput,
     Select,
     #[serde(skip)]
@@ -182,7 +186,7 @@ pub enum Widget {
 impl Widget {
     fn matches(self, ty: &Ty) -> bool {
         match self {
-            Self::Computed | Self::Add | Self::Remove | Self::Constructor => false,
+            Self::Computed | Self::Add | Self::Remove | Self::Constructor | Self::Button => false,
             Self::TextInput => *ty == Ty::Text,
             Self::Checkbox => *ty == Ty::Boolean,
             Self::DateInput => *ty == Ty::Date,
@@ -193,7 +197,39 @@ impl Widget {
 }
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum Action {
+    Set { path: Vec<Step>, value: Expr },
+}
+impl Action {
+    fn path(&self) -> &[Step] {
+        match self { Self::Set { path, .. } => path }
+    }
+    fn validate(&self, context: &Ty) -> Result<(), String> {
+        let Self::Set { value, .. } = self;
+        if (Expr::Project { path: self.path().to_vec() }).ty(context)? != value.ty(context)? {
+            return Err("Action value must match its target type".into());
+        }
+        Ok(())
+    }
+    fn replacement(&self, state: &Value) -> Value {
+        match self { Self::Set { value, .. } => value.eval(state) }
+    }
+}
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum WidgetAction {
+    Button { id: String, label: String, body: Expr },
+    Editor { id: String, label: String, widget: Widget, body: Expr },
+}
+fn action_context(ty: &Ty) -> Ty {
+    Ty::Record { fields: ["current", "argument"].into_iter()
+        .map(|name| NamedType { name: name.into(), ty: ty.clone() }).collect() }
+}
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Component {
+    ActionWidget { path: Vec<Step>, schema: Ty, label: String, actions: Vec<WidgetAction> },
+    Button { label: String, action: Action },
     Stack {
         #[serde(default)]
         label: Option<String>,
@@ -546,9 +582,9 @@ impl Expr {
                 }
                 Ok(Ty::Text)
             }
-            Self::NatMul { left, right } => {
+            Self::NatAdd { left, right } | Self::NatSub { left, right } | Self::NatMul { left, right } => {
                 if left.ty(input)? != Ty::Natural || right.ty(input)? != Ty::Natural {
-                    return Err("natMul requires natural operands".into());
+                    return Err("Natural arithmetic requires natural operands".into());
                 }
                 Ok(Ty::Natural)
             }
@@ -676,6 +712,13 @@ impl Expr {
                 left.eval(input).as_str().unwrap(),
                 right.eval(input).as_str().unwrap()
             )),
+            Self::NatAdd { left, right } =>
+                Value::String((left.eval_natural(input) + right.eval_natural(input)).to_string()),
+            Self::NatSub { left, right } => {
+                let l = left.eval_natural(input);
+                let r = right.eval_natural(input);
+                Value::String(if l < r { "0".into() } else { (l - r).to_string() })
+            }
             Self::NatMul { left, right } => {
                 Value::String((left.eval_natural(input) * right.eval_natural(input)).to_string())
             }
@@ -719,7 +762,7 @@ fn set(value: &mut Value, path: &[Step], replacement: Value) {
 impl Component {
     fn validate(&self, context: &Ty) -> Result<(), String> {
         match self {
-            Self::Field { path, schema, .. } | Self::List { path, schema, .. } | Self::Sum { path, schema, .. } => {
+            Self::ActionWidget { path, schema, .. } | Self::Field { path, schema, .. } | Self::List { path, schema, .. } | Self::Sum { path, schema, .. } => {
                 schema.validate()?;
                 if (Expr::Project { path: path.clone() }).ty(context)? != *schema {
                     return Err("Control schema must match its path".into());
@@ -734,6 +777,22 @@ impl Component {
                 }
                 Ok(())
             }
+            Self::ActionWidget { schema, actions, .. } => {
+                let mut ids = std::collections::HashSet::new();
+                for action in actions {
+                    let (id, result) = match action {
+                        WidgetAction::Button { id, body, .. } => (id, body.ty(schema)?),
+                        WidgetAction::Editor { id, widget, body, .. } => {
+                            if !widget.matches(schema) { return Err("Action editor must match value type".into()); }
+                            (id, body.ty(&action_context(schema))?)
+                        }
+                    };
+                    if id.is_empty() || !ids.insert(id) { return Err("Action IDs must be nonempty and unique within a widget".into()); }
+                    if result != *schema { return Err("Action body must return the widget value type".into()); }
+                }
+                Ok(())
+            }
+            Self::Button { action, .. } => action.validate(context),
             Self::AppendItemButton { path, value, .. } => {
                 let Ty::List { element } = (Expr::Project { path: path.clone() }).ty(context)? else {
                     return Err("appendItemButton requires a list target".into());
@@ -834,7 +893,41 @@ impl Component {
                     child.fields(ty, value, path.clone(), scope, labels.clone(), out, tables);
                 }
             }
+            Self::ActionWidget { path: relative, schema, label, actions } => {
+                let target: Vec<Step> = scope.iter().chain(relative).cloned().collect();
+                let current = get(value, &target);
+                let mut labels = labels;
+                labels.push(label.clone());
+                for action in actions {
+                    let (id, title, widget, replacement, transform) = match action {
+                        WidgetAction::Button { id, label, body } =>
+                            (id, label, Widget::Button, Some(body.eval(current)), None),
+                        WidgetAction::Editor { id, label, widget, body } =>
+                            (id, label, *widget, None, Some(body.clone())),
+                    };
+                    let button = matches!(widget, Widget::Button);
+                    out.push(Field {
+                        presentation: Presentation { button, choice: matches!(widget, Widget::Select), ..Presentation::default() },
+                        title: title.clone(), section: labels.join(" › "), action: button,
+                        label: format!("{}.{}", labels.join("."), title), path: target.clone(), widget,
+                        options: match schema { Ty::Enum { options } => options.clone(), _ => vec![] },
+                        default_item: replacement, computed_value: None, input_transform: transform,
+                        action_id: Some(id.clone()),
+                    });
+                }
+            }
+            Self::Button { label, action } => out.push(Field {
+                    action_id: None,
+                    input_transform: None,
+                presentation: Presentation { button: true, ..Presentation::default() },
+                title: label.clone(), section: labels.join(" › "), action: true,
+                label: label.clone(), path: scope.iter().chain(action.path()).cloned().collect(),
+                widget: Widget::Button, options: vec![],
+                default_item: Some(action.replacement(get(value, scope))), computed_value: None,
+            }),
             Self::AppendItemButton { label, path: relative, value: expression } => out.push(Field {
+                    action_id: None,
+                    input_transform: None,
                 presentation: Presentation { add: true, ..Presentation::default() },
                 title: label.clone(), section: labels.join(" › "), action: true,
                 label: label.clone(), path: scope.iter().chain(relative).cloned().collect(),
@@ -842,6 +935,8 @@ impl Component {
                 default_item: Some(expression.eval(get(value, scope))), computed_value: None,
             }),
             Self::Text { expression } => out.push(Field {
+                    action_id: None,
+                    input_transform: None,
                 presentation: Presentation {
                     computed: true,
                     text: true,
@@ -897,6 +992,8 @@ impl Component {
                 let mut labels = labels;
                 labels.push(label.clone());
                 out.push(Field {
+                    action_id: None,
+                    input_transform: None,
                     computed_value: None,
                     presentation: Presentation::default(),
                     title: label.clone(),
@@ -992,6 +1089,8 @@ impl Component {
                         .map(|field| field.section.clone())
                         .unwrap_or_else(|| item_labels.join(" › "));
                     out.push(Field {
+                    action_id: None,
+                    input_transform: None,
                         computed_value: None,
                         presentation: Presentation::default(),
                         title: "− Remove item".into(),
@@ -1005,6 +1104,8 @@ impl Component {
                     });
                 }
                 out.push(Field {
+                    action_id: None,
+                    input_transform: None,
                     computed_value: None,
                     presentation: Presentation {
                         add: true,
@@ -1029,6 +1130,8 @@ impl Component {
                 let mut labels = labels;
                 labels.push(label.clone());
                 out.push(Field {
+                    action_id: None,
+                    input_transform: None,
                     presentation: Presentation {
                         computed: true,
                         ..Presentation::default()
@@ -1050,6 +1153,8 @@ impl Component {
                 let section = labels.join(" › ");
                 labels.push(label.clone());
                 out.push(Field {
+                    action_id: None,
+                    input_transform: None,
                     computed_value: None,
                     presentation: Presentation {
                         choice: matches!(widget, Widget::Select),
@@ -1090,6 +1195,7 @@ pub struct Presentation {
     pub text: bool,
     pub computed: bool,
     pub add: bool,
+    pub button: bool,
     pub disabled: bool,
     pub constructor: bool,
     pub choice: bool,
@@ -1109,6 +1215,29 @@ pub struct Field {
     options: Vec<String>,
     default_item: Option<Value>,
     computed_value: Option<String>,
+    input_transform: Option<Expr>,
+    action_id: Option<String>,
+}
+impl Field {
+    fn apply(&self, state: &mut Value, history: &mut Vec<Value>, argument: Option<Value>) {
+        let next = match &argument {
+            Some(argument) => self.apply_input(state, argument.clone()),
+            None => self.default_item.clone().unwrap(),
+        };
+        set(state, &self.path, next);
+        if let Some(id) = &self.action_id {
+            history.push(match argument {
+                Some(argument) => serde_json::json!({"action": id, "argument": argument}),
+                None => Value::String(id.clone()),
+            });
+        }
+    }
+    fn apply_input(&self, state: &Value, argument: Value) -> Value {
+        match &self.input_transform {
+            Some(body) => body.eval(&serde_json::json!({"current":get(state, &self.path), "argument":argument})),
+            None => argument,
+        }
+    }
 }
 pub struct Editor {
     pub calendar: Option<NaiveDate>,
@@ -1121,6 +1250,7 @@ pub struct Editor {
 pub struct Engine {
     spec: Specification,
     submitted: bool,
+    actions: Vec<Value>,
     constructor_drafts: std::collections::HashMap<(Vec<Step>, String), Value>,
     pub selected: usize,
     pub table_offset: usize,
@@ -1145,8 +1275,11 @@ pub enum Key {
 impl Engine {
     pub fn parse(json: &str) -> Result<Self, String> {
         let spec: Specification = serde_json::from_str(json).map_err(|e| e.to_string())?;
-        if spec.version != 4 {
+        if !matches!(spec.version, 4 | 5) {
             return Err("Unsupported component specification version".into());
+        }
+        if spec.version == 5 && !matches!(&spec.form, Component::ActionWidget { path, .. } if path.is_empty()) {
+            return Err("Action history requires a root action widget".into());
         }
         spec.schema.validate()?;
         validate_value(&spec.schema, &spec.value)?;
@@ -1162,6 +1295,7 @@ impl Engine {
         let mut engine = Self {
             spec,
             submitted: false,
+            actions: vec![],
             constructor_drafts: std::collections::HashMap::new(),
             selected: 0,
             table_offset: 0,
@@ -1200,7 +1334,11 @@ impl Engine {
 
     pub fn result(&self) -> String {
         if self.submitted {
-            self.spec.value.to_string()
+            if self.spec.version == 5 {
+                serde_json::json!({"value": self.spec.value, "actions": self.actions}).to_string()
+            } else {
+                self.spec.value.to_string()
+            }
         } else {
             "null".into()
         }
@@ -1274,6 +1412,7 @@ impl Engine {
         let value = get(&self.spec.value, &field.path);
         match field.widget {
             Widget::Computed => unreachable!(),
+            Widget::Button => "[↵]".into(),
             Widget::Add => "[+]".into(),
             Widget::Remove => "[-]".into(),
             Widget::Checkbox => if value.as_bool().unwrap() {
@@ -1383,7 +1522,7 @@ impl Engine {
                                     );
                                 }
                             } else {
-                                set(&mut self.spec.value, &field.path, Value::from(*index));
+                                field.apply(&mut self.spec.value, &mut self.actions, Some(Value::from(*index)));
                             }
                         }
                         self.editor = None;
@@ -1422,11 +1561,12 @@ impl Engine {
                                 | Widget::Checkbox
                                 | Widget::Select
                                 | Widget::Constructor
+                                | Widget::Button
                                 | Widget::Add
                                 | Widget::Remove => unreachable!(),
                             };
                             if let Some(value) = parsed {
-                                set(&mut self.spec.value, &field.path, value);
+                                field.apply(&mut self.spec.value, &mut self.actions, Some(value));
                                 self.editor = None;
                             } else {
                                 editor.error = Some(
@@ -1465,6 +1605,9 @@ impl Engine {
                 Key::Enter | Key::Character('i' | ' ') => {
                     if let Some(field) = fields.get(self.selected) {
                         match field.widget {
+                            Widget::Button => {
+                                field.apply(&mut self.spec.value, &mut self.actions, None);
+                            }
                             Widget::Add => {
                                 let mut items = get(&self.spec.value, &field.path)
                                     .as_array()
@@ -1506,7 +1649,7 @@ impl Engine {
                             }
                             Widget::Checkbox => {
                                 let value = !get(&self.spec.value, &field.path).as_bool().unwrap();
-                                set(&mut self.spec.value, &field.path, Value::Bool(value));
+                                field.apply(&mut self.spec.value, &mut self.actions, Some(Value::Bool(value)));
                             }
                             _ if !matches!(key, Key::Character(' ')) => {
                                 self.editor = Some(Editor {

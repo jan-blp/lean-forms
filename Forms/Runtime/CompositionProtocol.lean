@@ -4,6 +4,18 @@ import Forms.Runtime.JsonProtocol
 namespace Forms.Runtime.CompositionProtocol
 open Lean Composition
 
+def actionToJson {state : DataType} : Action state → Json
+  | .set target replacement => Json.mkObj [
+      ("kind", toJson "set"), ("path", toJson (Path.toList target)),
+      ("value", Expr.toJson replacement)]
+
+def widgetActionToJson {value : DataType} (id : String) (action : WidgetAction value) : Json :=
+  Json.mkObj ([("id", toJson id), ("label", toJson action.label)] ++
+    match action.presentation with
+    | .button body => [("kind", toJson "button"), ("body", Expr.toJson body)]
+    | .editor widget body => [("kind", toJson "editor"),
+        ("widget", toJson (Widget.name widget)), ("body", Expr.toJson body)])
+
 def componentToJson {state : DataType} (component : Component state) : Json :=
   match component with
   | .field (value := value) path label widget => Json.mkObj [
@@ -30,6 +42,12 @@ def componentToJson {state : DataType} (component : Component state) : Json :=
       ("kind", toJson "visibleWhen"), ("condition", Expr.toJson condition), ("body", componentToJson body)]
   | .disabledWhen condition body => Json.mkObj [
       ("kind", toJson "disabledWhen"), ("condition", Expr.toJson condition), ("body", componentToJson body)]
+  | .actionWidget (value := value) (ids := ids) path label actions => Json.mkObj [
+      ("kind", toJson "actionWidget"), ("path", toJson (Path.toList path)),
+      ("schema", DataType.toJson value), ("label", toJson label),
+      ("actions", toJson ((FinEnum.toList ids).map fun id => widgetActionToJson (ids.label id) (actions id)))]
+  | .button label action => Json.mkObj [
+      ("kind", toJson "button"), ("label", toJson label), ("action", actionToJson action)]
   | .appendItemButton label target newItem => Json.mkObj [
       ("kind", toJson "appendItemButton"), ("label", toJson label),
       ("path", toJson (Path.toList target)), ("value", Expr.toJson newItem)]
@@ -40,7 +58,9 @@ def componentToJson {state : DataType} (component : Component state) : Json :=
 def encode {state : DataType} (refined : RefinedDataType state) (component : Component state)
     (draft : ⟦state⟧) : String :=
   (Json.mkObj [
-    ("version", toJson (4 : Nat)), ("schema", DataType.toJson state),
+    ("version", toJson (match component with
+      | .actionWidget .self .. => (5 : Nat)
+      | _ => 4)), ("schema", DataType.toJson state),
     ("constraints", toJson ((RefinedDataType.constraints refined).map Constraint.toJson)),
     ("form", componentToJson component), ("value", JsonProtocol.valueToJson draft)]).compress
 

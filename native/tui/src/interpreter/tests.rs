@@ -1309,3 +1309,218 @@ fn components_inside_lists_and_sums_use_local_state() {
         assert_eq!(engine.spec.value, value);
     }
 }
+
+#[test]
+fn typed_natural_actions_update_live_values_and_preserve_local_scope() {
+    for source in [include_str!("../../tests/basket.json"), include_str!("../../tests/weakened-basket.json")] {
+        let mut engine = Engine::parse(source).unwrap();
+        choose_title(&mut engine, "Page", 1);
+        let before = engine.spec.value.clone();
+        select_title(&mut engine, "+1");
+        keys(&mut engine, &[Key::Enter, Key::Enter]);
+        assert_eq!(engine.content().1[0].rows[0], ["Notebook", "4", "20"]);
+        assert_eq!(basket_total(&engine), "Basket total: EUR 26");
+        select_title(&mut engine, "−1");
+        keys(&mut engine, &[Key::Enter]);
+        assert_eq!(engine.content().1[0].rows[0][1], "3");
+        select_title(&mut engine, "Reset quantity");
+        keys(&mut engine, &[Key::Enter]);
+        select_title(&mut engine, "−1");
+        keys(&mut engine, &[Key::Enter]);
+        assert_eq!(engine.content().1[0].rows[0][1], "0");
+        select_title(&mut engine, "Quantity");
+        edit(&mut engine, &"9".repeat(80));
+        select_title(&mut engine, "+1");
+        keys(&mut engine, &[Key::Enter]);
+        assert_eq!(engine.content().1[0].rows[0][1], format!("1{}", "0".repeat(80)));
+        select_title(&mut engine, "−1");
+        keys(&mut engine, &[Key::Enter]);
+        assert_eq!(engine.content().1[0].rows[0][1], "9".repeat(80));
+        assert_eq!(engine.content().1[0].rows[1], ["Pen", "3", "6"]);
+        assert_eq!(engine.spec.value["title"], before["title"]);
+    }
+}
+
+#[test]
+fn typed_actions_validate_paths_and_replacements_and_respect_disabled() {
+    let mut spec = json!({"version":4, "schema":{"kind":"natural"}, "value":"4", "constraints":[],
+        "form":{"kind":"button","label":"Set","action":{"kind":"set","path":[],
+            "value":{"kind":"project","path":[]}}}});
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    engine.step(Key::Enter);
+    assert_eq!(engine.spec.value, json!("4"));
+    spec["form"]["action"]["value"] = json!({"kind":"value","type":{"kind":"natural"},"value":"7"});
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    engine.step(Key::Enter);
+    assert_eq!(engine.spec.value, json!("7"));
+    let mut disabled = spec.clone();
+    disabled["form"] = json!({"kind":"disabledWhen",
+        "condition":{"kind":"value","type":{"kind":"boolean"},"value":true},"body":spec["form"]});
+    let mut engine = Engine::parse(&disabled.to_string()).unwrap();
+    engine.step(Key::Enter);
+    assert_eq!(engine.spec.value, json!("4"));
+    spec["form"]["action"]["value"] = json!({"kind":"value","type":{"kind":"text"},"value":"oops"});
+    assert!(Engine::parse(&spec.to_string()).is_err());
+    for kind in ["increment", "decrement"] {
+        spec["form"]["action"] = json!({"kind":kind,"path":["missing"]});
+        assert!(Engine::parse(&spec.to_string()).is_err());
+        spec["schema"] = json!({"kind":"text"});
+        spec["value"] = json!("text");
+        spec["form"]["action"] = json!({"kind":kind,"path":[]});
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
+}
+
+#[test]
+fn expression_actions_support_open_definitions_and_editor_arguments() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/counter.json")).unwrap();
+    let mut engine = Engine::parse(&source.to_string()).unwrap();
+    select_title(&mut engine, "+1");
+    engine.step(Key::Enter);
+    select_title(&mut engine, "+5");
+    engine.step(Key::Enter);
+    assert_eq!(engine.spec.value, json!("6"));
+    select_title(&mut engine, "Value");
+    edit(&mut engine, "0");
+    select_title(&mut engine, "−1");
+    engine.step(Key::Enter);
+    assert_eq!(engine.spec.value, json!("0"));
+    select_title(&mut engine, "Value");
+    edit(&mut engine, &"9".repeat(80));
+    select_title(&mut engine, "+1");
+    engine.step(Key::Enter);
+    assert_eq!(engine.spec.value, json!(format!("1{}", "0".repeat(80))));
+
+    // A new action needs only an expression, with access to current and argument.
+    let mut spec = source.clone();
+    spec["value"] = json!("5");
+    spec["form"]["actions"] = json!([{"id":"addAmount","label":"Add amount","kind":"editor",
+        "widget":"naturalInput", "body":{"kind":"natAdd",
+            "left":{"kind":"project","path":["current"]},
+            "right":{"kind":"project","path":["argument"]}}}]);
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    edit(&mut engine, "3");
+    assert_eq!(engine.spec.value, json!("8"));
+    edit(&mut engine, "2");
+    assert_eq!(engine.spec.value, json!("10"));
+    edit(&mut engine, "-1");
+    assert!(engine.editor.as_ref().unwrap().error.is_some());
+    assert_eq!(engine.spec.value, json!("10"));
+
+    // The same widget operates on each list item's local state.
+    let natural = json!({"kind":"natural"});
+    let list = json!({"kind":"list","element":natural});
+    let nested = json!({"version":4,"schema":list,"value":["5","20"],"constraints":[],
+        "form":{"kind":"list","path":[],"schema":list,"label":"Numbers",
+            "item":spec["form"],"defaultItem":"0"}});
+    let mut engine = Engine::parse(&nested.to_string()).unwrap();
+    select_title(&mut engine, "Add amount");
+    edit(&mut engine, "3");
+    assert_eq!(engine.spec.value, json!(["8","20"]));
+
+    let mut disabled = source.clone();
+    disabled["version"] = json!(4);
+    disabled["form"] = json!({"kind":"disabledWhen",
+        "condition":{"kind":"value","type":{"kind":"boolean"},"value":true},"body":source["form"]});
+    let mut engine = Engine::parse(&disabled.to_string()).unwrap();
+    engine.step(Key::Enter);
+    assert_eq!(engine.spec.value, json!("0"));
+    select_title(&mut engine, "Value");
+    engine.step(Key::Enter);
+    assert!(engine.editor.is_none());
+}
+
+#[test]
+fn widget_action_specs_reject_duplicate_ids_and_wrong_types() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/counter.json")).unwrap();
+    for invalid in [
+        json!({"id":"bad","label":"Bad","kind":"button", "body":{"kind":"project","path":["argument"]}}),
+        json!({"id":"bad","label":"Bad","kind":"button", "body":{"kind":"value","type":{"kind":"text"},"value":"oops"}}),
+        json!({"id":"bad","label":"Bad","kind":"editor","widget":"textInput", "body":{"kind":"project","path":["argument"]}}),
+        json!({"id":"bad","label":"Bad","kind":"button", "body":{"kind":"natSub", "left":{"kind":"value","type":{"kind":"text"},"value":"oops"}, "right":{"kind":"project","path":[]}}}),
+    ] {
+        let mut spec = source.clone();
+        spec["form"]["actions"] = json!([invalid]);
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
+    let mut spec = source.clone();
+    spec["form"]["actions"][1]["id"] = spec["form"]["actions"][0]["id"].clone();
+    assert!(Engine::parse(&spec.to_string()).is_err());
+    spec["form"]["actions"] = json!([]);
+    assert!(Engine::parse(&spec.to_string()).unwrap().fields().is_empty());
+}
+
+#[test]
+fn root_widget_returns_only_accepted_invocations() {
+    let source = include_str!("../../tests/counter.json");
+    let mut engine = Engine::parse(source).unwrap();
+    assert!(!engine.step(Key::Character('q')));
+    assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(),
+        json!({"value":"0", "actions":[]}));
+
+    let mut engine = Engine::parse(source).unwrap();
+    keys(&mut engine, &[Key::Enter, Key::Enter]);
+    select_title(&mut engine, "Value");
+    edit(&mut engine, "bad");
+    assert!(engine.editor.as_ref().unwrap().error.is_some());
+    engine.step(Key::Escape);
+    keys(&mut engine, &[Key::Enter, Key::Clear, Key::Character('9'), Key::Escape]);
+    edit(&mut engine, "42");
+    select_title(&mut engine, "−1");
+    engine.step(Key::Enter);
+    assert!(!engine.step(Key::Character('q')));
+    assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
+        "value":"41", "actions":["plusOne", "plusOne", {"action":"replace", "argument":"42"}, "minusOne"]
+    }));
+
+    let mut engine = Engine::parse(source).unwrap();
+    engine.step(Key::Enter);
+    assert!(!engine.step(Key::Escape));
+    assert_eq!(engine.result(), "null");
+}
+
+#[test]
+fn root_editor_history_records_arguments_before_transformation() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/counter.json")).unwrap();
+    spec["value"] = json!("5");
+    spec["form"]["actions"] = json!([{"id":"add", "label":"Add", "kind":"editor",
+        "widget":"naturalInput", "body":{"kind":"natAdd",
+            "left":{"kind":"project","path":["current"]},
+            "right":{"kind":"project","path":["argument"]}}}]);
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    edit(&mut engine, "3");
+    engine.step(Key::Character('q'));
+    assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(),
+        json!({"value":"8", "actions":[{"action":"add", "argument":"3"}]}));
+}
+
+#[test]
+fn history_protocol_rejects_unsupported_forms() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
+    spec["version"] = json!(5);
+    assert!(Engine::parse(&spec.to_string()).is_err());
+}
+
+#[test]
+fn root_widget_records_each_editor_input_kind() {
+    for (schema, widget, initial, argument) in [
+        (json!({"kind":"boolean"}), "checkbox", json!(false), json!(true)),
+        (json!({"kind":"enum","options":["A","B"]}), "select", json!(0), json!(1)),
+        (json!({"kind":"text"}), "textInput", json!("old"), json!("new")),
+        (json!({"kind":"date"}), "dateInput", json!("2028-02-28"), json!("2028-02-29")),
+    ] {
+        let spec = json!({"version":5,"schema":schema,"value":initial,"constraints":[],
+            "form":{"kind":"actionWidget","path":[],"schema":schema,"label":"Editor",
+                "actions":[{"id":"replace","label":"Value","kind":"editor","widget":widget,
+                    "body":{"kind":"project","path":["argument"]}}]}});
+        let mut engine = Engine::parse(&spec.to_string()).unwrap();
+        match widget {
+            "checkbox" => { engine.step(Key::Character(' ')); }
+            "select" => keys(&mut engine, &[Key::Enter, Key::Down, Key::Enter]),
+            _ => edit(&mut engine, argument.as_str().unwrap()),
+        }
+        assert!(!engine.step(Key::Character('q')));
+        assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(),
+            json!({"value":argument,"actions":[{"action":"replace","argument":argument}]}));
+    }
+}

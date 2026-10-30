@@ -9306,6 +9306,75 @@
                 "widget": "naturalInput"
               },
               {
+                "action": {
+                  "kind": "set",
+                  "path": [
+                    "quantity"
+                  ],
+                  "value": {
+                    "kind": "natSub",
+                    "left": {
+                      "kind": "project",
+                      "path": [
+                        "quantity"
+                      ]
+                    },
+                    "right": {
+                      "kind": "value",
+                      "type": {
+                        "kind": "natural"
+                      },
+                      "value": "1"
+                    }
+                  }
+                },
+                "kind": "button",
+                "label": "−1"
+              },
+              {
+                "action": {
+                  "kind": "set",
+                  "path": [
+                    "quantity"
+                  ],
+                  "value": {
+                    "kind": "natAdd",
+                    "left": {
+                      "kind": "project",
+                      "path": [
+                        "quantity"
+                      ]
+                    },
+                    "right": {
+                      "kind": "value",
+                      "type": {
+                        "kind": "natural"
+                      },
+                      "value": "1"
+                    }
+                  }
+                },
+                "kind": "button",
+                "label": "+1"
+              },
+              {
+                "action": {
+                  "kind": "set",
+                  "path": [
+                    "quantity"
+                  ],
+                  "value": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "natural"
+                    },
+                    "value": "0"
+                  }
+                },
+                "kind": "button",
+                "label": "Reset quantity"
+              },
+              {
                 "expression": {
                   "branches": [
                     {

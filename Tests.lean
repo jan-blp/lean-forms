@@ -1,3 +1,4 @@
+import Tests.Actions
 import Tests.Weakening
 import Tests.Basket
 import Tests.Composition
@@ -342,6 +343,7 @@ private def testProtocol : IO Unit := do
     (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (t := .natural) huge) == .ok huge)
 
 def main : IO Unit := do
+  Tests.Actions.run
   Tests.Weakening.run
   Tests.Basket.run
   Tests.Composition.run

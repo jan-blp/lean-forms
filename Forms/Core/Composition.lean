@@ -1,4 +1,6 @@
 import Forms.Core.Widget
+import Forms.Core.Action
+import Forms.Core.WidgetAction
 
 namespace Forms.Composition
 
@@ -60,6 +62,9 @@ inductive Component : (state : DataType) → Type 1 where
       (condition : Expr state .boolean)
       (body : Component state)
       : Component state
+  | actionWidget {state value : DataType} {ids : Enum} (path : Path state value)
+      (label : String) (actions : ids → WidgetAction value) : Component state
+  | button {state : DataType} (label : String) (action : Action state) : Component state
   | appendItemButton
       {state element : DataType}
       (label : String)
@@ -82,6 +87,8 @@ def Component.weaken
   | .table rows columns => .table (rows.weaken path) columns
   | .visibleWhen condition component => .visibleWhen (condition.weaken path) (component.weaken path)
   | .disabledWhen condition component => .disabledWhen (condition.weaken path) (component.weaken path)
+  | .actionWidget target label actions => .actionWidget (path.trans target) label actions
+  | .button label action => .button label (action.weaken path)
   | .appendItemButton label target newItem =>
       .appendItemButton label (path.trans target) (newItem.weaken path)
 

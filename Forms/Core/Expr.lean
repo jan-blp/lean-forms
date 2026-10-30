@@ -37,6 +37,8 @@ inductive Expr : (input : DataType) → (result : DataType) → Type 1 where
       (whenTrue whenFalse : Expr input result) : Expr input result
   | natToText {input : DataType} (value : Expr input .natural) : Expr input .text
   | textAppend {input : DataType} (left right : Expr input .text) : Expr input .text
+  | natAdd {input : DataType} (l r : Expr input .natural) : Expr input .natural
+  | natSub {input : DataType} (l r : Expr input .natural) : Expr input .natural
   | natMul {input : DataType} (l r : Expr input .natural) : Expr input .natural
   | not {input : DataType} (operand : Expr input .boolean) : Expr input .boolean
   | and {input : DataType} (l r : Expr input .boolean) : Expr input .boolean
@@ -76,6 +78,8 @@ def Expr.eval
     if Expr.eval condition value then Expr.eval whenTrue value else Expr.eval whenFalse value
   | .natToText operand => toString (Expr.eval operand value)
   | .textAppend left right => Expr.eval left value ++ Expr.eval right value
+  | .natAdd left right => Expr.eval left value + Expr.eval right value
+  | .natSub left right => Expr.eval left value - Expr.eval right value
   | .natMul left right => Expr.eval left value * Expr.eval right value
   | .not operand => !Expr.eval operand value
   | .and left right => Expr.eval left value && Expr.eval right value
@@ -106,6 +110,8 @@ def Expr.weaken {outer input result} (path : Path outer input) (expression : Exp
     .ifThenElse (Expr.weaken path condition) (Expr.weaken path whenTrue) (Expr.weaken path whenFalse)
   | .natToText operand => .natToText (Expr.weaken path operand)
   | .textAppend left right => .textAppend (Expr.weaken path left) (Expr.weaken path right)
+  | .natAdd l r => .natAdd (Expr.weaken path l) (Expr.weaken path r)
+  | .natSub l r => .natSub (Expr.weaken path l) (Expr.weaken path r)
   | .natMul l r => .natMul (Expr.weaken path l) (Expr.weaken path r)
   | .not operand => .not (Expr.weaken path operand)
   | .and l r => .and (Expr.weaken path l) (Expr.weaken path r)

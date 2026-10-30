@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms'
 
 
-def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None, invoice=False, shapes=False, booking=False, report=False, basket=False):
+def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None, invoice=False, shapes=False, booking=False, report=False, basket=False, counter=False, actions=None):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 100, 0, 0))
     before = termios.tcgetattr(slave)
@@ -24,7 +24,7 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
     if theme:
         env.update(TERM='xterm-256color', COLORTERM='truecolor')
         env.pop('NO_COLOR', None)
-    process = subprocess.Popen([str(BINARY)] + (["basket"] if basket else ["report"] if report else ["booking"] if booking else ["shapes"] if shapes else ["invoice"] if invoice else ["thermostat"] if thermostat else ["person"]) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
+    process = subprocess.Popen([str(BINARY)] + (["counter"] if counter else ["basket"] if basket else ["report"] if report else ["booking"] if booking else ["shapes"] if shapes else ["invoice"] if invoice else ["thermostat"] if thermostat else ["person"]) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
     output = bytearray()
 
     def read_until(predicate):
@@ -41,7 +41,7 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
                     break
 
     try:
-        read_until(lambda: (b'Basket total: EUR 16' if basket else b'Results' if report else b'Start date' if booking else b'Shape' if shapes else b'Description' if invoice else b'Home temperature (C)' if thermostat else b'Name') in output)
+        read_until(lambda: (b'Counter' if counter else b'Basket total: EUR 16' if basket else b'Results' if report else b'Start date' if booking else b'Shape' if shapes else b'Description' if invoice else b'Home temperature (C)' if thermostat else b'Name') in output)
         os.write(master, keys)
         if cancel:
             read_until(lambda: b'Other' in output)
@@ -63,8 +63,12 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
             assert b'Final values' not in output
         else:
             tail = output.split(b'Final values', 1)[1]
-            result = json.loads(tail[tail.index(b'[' if invoice else b'{'):].decode())
-            assert result == expected, result
+            result = (json.loads(tail.split(b'------------', 1)[1].strip()) if counter else
+                      json.loads(tail[tail.index(b'[' if invoice else b'{'):].decode()))
+            if counter:
+                assert result == {"value": str(expected), "actions": actions}, result
+            else:
+                assert result == expected, result
         if theme:
             backgrounds = {
                 'frappe': '48;2;48;52;70', 'macchiato': '48;2;36;39;58',
@@ -168,3 +172,12 @@ output = session(b"jjjjj\rjj\rj\rkkkkkk\rj\rjj\r\x154\rq", {
 }, basket=True)
 assert b'Basket total: EUR 16' in output
 print('PASS: FFI editing, validation, catalogue search, basket actions, typed result, interruption, and terminal restoration')
+
+# Root-state typed actions, saturation, and ordinary input editing.
+session(b"\rj\rj\r\x157\rj\rq", 6, counter=True,
+        actions=["plusOne", "plusFive", {"action": "replace", "argument": "7"}, "minusOne"])
+session(b"jjj\r\rq", 0, counter=True, actions=["minusOne", "minusOne"])
+session(b"j\r\rq", 10, counter=True, actions=["plusFive", "plusFive"])
+
+session(b"q", 0, counter=True, actions=[])
+session(b"\rx", None, counter=True)
