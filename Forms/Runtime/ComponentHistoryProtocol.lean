@@ -87,7 +87,6 @@ private def invocationToJson {ty : DataType}
   | .disabledWhen _ body => invocationToJson body target
   | .button .. => fun
       | .press => Json.mkObj [("target", toJson target), ("action", toJson "press")]
-  | .appendItemButton .. => fun invocation => Empty.elim invocation
 
 private def invocationFromJson {ty : DataType}
   (component : Component ty)
@@ -125,7 +124,6 @@ private def invocationFromJson {ty : DataType}
       unless name == "press" do throw (.unknownAction name)
       buttonArgumentFromJson json
       return .press
-  | .appendItemButton .. => .error .targetNotWidget
 
 def encode {ty : DataType} {component : Component ty}
   (history : ComponentHistory component)

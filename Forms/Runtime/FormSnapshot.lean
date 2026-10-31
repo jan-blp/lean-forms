@@ -73,7 +73,6 @@ def FormSnapshot.render {state : DataType}
       | .button _ => .action action.label
       | .editor widget _ => .fields [{ content := .input widget, labels := [label, action.label], indices := pathIndices path }])
   | .button label _ => .action label
-  | .appendItemButton label _ _ => .action label
   | .stack (items := items) label children order =>
       let snapshot := .stack ((FinEnum.toList items).map fun i => render (children (order i)) value)
       match label with

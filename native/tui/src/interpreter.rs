@@ -199,20 +199,43 @@ impl Widget {
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Action {
     Set { path: Vec<Step>, value: Expr },
+    Append { path: Vec<Step>, value: Expr },
 }
 impl Action {
     fn path(&self) -> &[Step] {
-        match self { Self::Set { path, .. } => path }
+        match self {
+            Self::Set { path, .. } => path,
+            Self::Append { path, .. } => path,
+        }
     }
     fn validate(&self, context: &Ty) -> Result<(), String> {
-        let Self::Set { value, .. } = self;
-        if (Expr::Project { path: self.path().to_vec() }).ty(context)? != value.ty(context)? {
-            return Err("Action value must match its target type".into());
+        let target = (Expr::Project { path: self.path().to_vec() }).ty(context)?;
+        match self {
+            Self::Set { value, .. } => {
+                if target != value.ty(context)? {
+                    return Err("Action value must match its target type".into());
+                }
+            }
+            Self::Append { value, .. } => {
+                let Ty::List { element } = target else {
+                    return Err("Append action requires a list target".into());
+                };
+                if *element != value.ty(context)? {
+                    return Err("Append action value must match list element type".into());
+                }
+            }
         }
         Ok(())
     }
     fn replacement(&self, state: &Value) -> Value {
-        match self { Self::Set { value, .. } => value.eval(state) }
+        match self {
+            Self::Set { value, .. } => value.eval(state),
+            Self::Append { path, value } => {
+                let mut items = get(state, path).as_array().unwrap().clone();
+                items.push(value.eval(state));
+                Value::Array(items)
+            }
+        }
     }
 }
 #[derive(Debug, Deserialize)]
@@ -236,11 +259,6 @@ pub enum Component {
         children: Vec<Component>,
         #[serde(default, rename = "childIds")]
         child_ids: Option<Vec<String>>,
-    },
-    AppendItemButton {
-        label: String,
-        path: Vec<Step>,
-        value: Expr,
     },
     Text {
         expression: Expr,
@@ -814,15 +832,6 @@ impl Component {
                 Ok(())
             }
             Self::Button { action, .. } => action.validate(context),
-            Self::AppendItemButton { path, value, .. } => {
-                let Ty::List { element } = (Expr::Project { path: path.clone() }).ty(context)? else {
-                    return Err("appendItemButton requires a list target".into());
-                };
-                if value.ty(context)? != *element {
-                    return Err("appendItemButton value must match list element type".into());
-                }
-                Ok(())
-            }
             Self::Text { expression } => {
                 if expression.ty(context)? != Ty::Text {
                     return Err("Text view requires text".into());
@@ -952,16 +961,6 @@ impl Component {
                 label: label.clone(), path: scope.iter().chain(action.path()).cloned().collect(),
                 widget: Widget::Button, options: vec![],
                 default_item: Some(action.replacement(get(value, scope))), computed_value: None,
-            }),
-            Self::AppendItemButton { label, path: relative, value: expression } => out.push(Field {
-                    action_id: None,
-                    target: vec![],
-                    input_transform: None,
-                presentation: Presentation { add: true, ..Presentation::default() },
-                title: label.clone(), section: labels.join(" › "), action: true,
-                label: label.clone(), path: scope.iter().chain(relative).cloned().collect(),
-                widget: Widget::Add, options: vec![],
-                default_item: Some(expression.eval(get(value, scope))), computed_value: None,
             }),
             Self::Text { expression } => out.push(Field {
                     action_id: None,

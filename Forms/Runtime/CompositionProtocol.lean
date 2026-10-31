@@ -8,6 +8,9 @@ def actionToJson {state : DataType} : Action state → Json
   | .set target replacement => Json.mkObj [
       ("kind", toJson "set"), ("path", toJson (Path.toList target)),
       ("value", Expr.toJson replacement)]
+  | .append target expression => Json.mkObj [
+      ("kind", toJson "append"), ("path", toJson (Path.toList target)),
+      ("value", Expr.toJson expression)]
 
 def widgetActionToJson {value : DataType}
   (id : String)
@@ -54,9 +57,6 @@ def componentToJson {state : DataType}
       ("actions", toJson ((FinEnum.toList ids).map fun id => widgetActionToJson (ids.label id) (actions id)))]
   | .button label action => Json.mkObj [
       ("kind", toJson "button"), ("label", toJson label), ("action", actionToJson action)]
-  | .appendItemButton label target newItem => Json.mkObj [
-      ("kind", toJson "appendItemButton"), ("label", toJson label),
-      ("path", toJson (Path.toList target)), ("value", Expr.toJson newItem)]
   | .stack (items := items) label children order => Json.mkObj ([
       ("kind", toJson "stack"), ("label", toJson label),
       ("children", toJson ((FinEnum.toList items).map fun index => componentToJson (children (order index)) history))] ++

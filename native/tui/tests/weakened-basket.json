@@ -9047,203 +9047,206 @@
       },
       {
         "body": {
-          "kind": "appendItemButton",
-          "label": "Add selected product",
-          "path": [
-            "content",
-            "items"
-          ],
-          "value": {
-            "branches": [
-              {
-                "kind": "value",
-                "type": {
-                  "fields": [
-                    {
-                      "name": "product",
-                      "type": {
-                        "kind": "enum",
-                        "options": [
-                          "Notebook",
-                          "Pen",
-                          "Mug",
-                          "Water bottle",
-                          "Backpack"
-                        ]
-                      }
-                    },
-                    {
-                      "name": "quantity",
-                      "type": {
-                        "kind": "natural"
-                      }
-                    }
-                  ],
-                  "kind": "record"
-                },
-                "value": {
-                  "product": 0,
-                  "quantity": "1"
-                }
-              },
-              {
-                "kind": "value",
-                "type": {
-                  "fields": [
-                    {
-                      "name": "product",
-                      "type": {
-                        "kind": "enum",
-                        "options": [
-                          "Notebook",
-                          "Pen",
-                          "Mug",
-                          "Water bottle",
-                          "Backpack"
-                        ]
-                      }
-                    },
-                    {
-                      "name": "quantity",
-                      "type": {
-                        "kind": "natural"
-                      }
-                    }
-                  ],
-                  "kind": "record"
-                },
-                "value": {
-                  "product": 1,
-                  "quantity": "1"
-                }
-              },
-              {
-                "kind": "value",
-                "type": {
-                  "fields": [
-                    {
-                      "name": "product",
-                      "type": {
-                        "kind": "enum",
-                        "options": [
-                          "Notebook",
-                          "Pen",
-                          "Mug",
-                          "Water bottle",
-                          "Backpack"
-                        ]
-                      }
-                    },
-                    {
-                      "name": "quantity",
-                      "type": {
-                        "kind": "natural"
-                      }
-                    }
-                  ],
-                  "kind": "record"
-                },
-                "value": {
-                  "product": 2,
-                  "quantity": "1"
-                }
-              },
-              {
-                "kind": "value",
-                "type": {
-                  "fields": [
-                    {
-                      "name": "product",
-                      "type": {
-                        "kind": "enum",
-                        "options": [
-                          "Notebook",
-                          "Pen",
-                          "Mug",
-                          "Water bottle",
-                          "Backpack"
-                        ]
-                      }
-                    },
-                    {
-                      "name": "quantity",
-                      "type": {
-                        "kind": "natural"
-                      }
-                    }
-                  ],
-                  "kind": "record"
-                },
-                "value": {
-                  "product": 3,
-                  "quantity": "1"
-                }
-              },
-              {
-                "kind": "value",
-                "type": {
-                  "fields": [
-                    {
-                      "name": "product",
-                      "type": {
-                        "kind": "enum",
-                        "options": [
-                          "Notebook",
-                          "Pen",
-                          "Mug",
-                          "Water bottle",
-                          "Backpack"
-                        ]
-                      }
-                    },
-                    {
-                      "name": "quantity",
-                      "type": {
-                        "kind": "natural"
-                      }
-                    }
-                  ],
-                  "kind": "record"
-                },
-                "value": {
-                  "product": 4,
-                  "quantity": "1"
-                }
-              }
+          "action": {
+            "kind": "append",
+            "path": [
+              "content",
+              "items"
             ],
-            "kind": "enumCases",
-            "subject": {
-              "kind": "project",
-              "path": [
-                "content",
-                "selected"
-              ]
-            },
-            "type": {
-              "fields": [
+            "value": {
+              "branches": [
                 {
-                  "name": "product",
+                  "kind": "value",
                   "type": {
-                    "kind": "enum",
-                    "options": [
-                      "Notebook",
-                      "Pen",
-                      "Mug",
-                      "Water bottle",
-                      "Backpack"
-                    ]
+                    "fields": [
+                      {
+                        "name": "product",
+                        "type": {
+                          "kind": "enum",
+                          "options": [
+                            "Notebook",
+                            "Pen",
+                            "Mug",
+                            "Water bottle",
+                            "Backpack"
+                          ]
+                        }
+                      },
+                      {
+                        "name": "quantity",
+                        "type": {
+                          "kind": "natural"
+                        }
+                      }
+                    ],
+                    "kind": "record"
+                  },
+                  "value": {
+                    "product": 0,
+                    "quantity": "1"
                   }
                 },
                 {
-                  "name": "quantity",
+                  "kind": "value",
                   "type": {
-                    "kind": "natural"
+                    "fields": [
+                      {
+                        "name": "product",
+                        "type": {
+                          "kind": "enum",
+                          "options": [
+                            "Notebook",
+                            "Pen",
+                            "Mug",
+                            "Water bottle",
+                            "Backpack"
+                          ]
+                        }
+                      },
+                      {
+                        "name": "quantity",
+                        "type": {
+                          "kind": "natural"
+                        }
+                      }
+                    ],
+                    "kind": "record"
+                  },
+                  "value": {
+                    "product": 1,
+                    "quantity": "1"
+                  }
+                },
+                {
+                  "kind": "value",
+                  "type": {
+                    "fields": [
+                      {
+                        "name": "product",
+                        "type": {
+                          "kind": "enum",
+                          "options": [
+                            "Notebook",
+                            "Pen",
+                            "Mug",
+                            "Water bottle",
+                            "Backpack"
+                          ]
+                        }
+                      },
+                      {
+                        "name": "quantity",
+                        "type": {
+                          "kind": "natural"
+                        }
+                      }
+                    ],
+                    "kind": "record"
+                  },
+                  "value": {
+                    "product": 2,
+                    "quantity": "1"
+                  }
+                },
+                {
+                  "kind": "value",
+                  "type": {
+                    "fields": [
+                      {
+                        "name": "product",
+                        "type": {
+                          "kind": "enum",
+                          "options": [
+                            "Notebook",
+                            "Pen",
+                            "Mug",
+                            "Water bottle",
+                            "Backpack"
+                          ]
+                        }
+                      },
+                      {
+                        "name": "quantity",
+                        "type": {
+                          "kind": "natural"
+                        }
+                      }
+                    ],
+                    "kind": "record"
+                  },
+                  "value": {
+                    "product": 3,
+                    "quantity": "1"
+                  }
+                },
+                {
+                  "kind": "value",
+                  "type": {
+                    "fields": [
+                      {
+                        "name": "product",
+                        "type": {
+                          "kind": "enum",
+                          "options": [
+                            "Notebook",
+                            "Pen",
+                            "Mug",
+                            "Water bottle",
+                            "Backpack"
+                          ]
+                        }
+                      },
+                      {
+                        "name": "quantity",
+                        "type": {
+                          "kind": "natural"
+                        }
+                      }
+                    ],
+                    "kind": "record"
+                  },
+                  "value": {
+                    "product": 4,
+                    "quantity": "1"
                   }
                 }
               ],
-              "kind": "record"
+              "kind": "enumCases",
+              "subject": {
+                "kind": "project",
+                "path": [
+                  "content",
+                  "selected"
+                ]
+              },
+              "type": {
+                "fields": [
+                  {
+                    "name": "product",
+                    "type": {
+                      "kind": "enum",
+                      "options": [
+                        "Notebook",
+                        "Pen",
+                        "Mug",
+                        "Water bottle",
+                        "Backpack"
+                      ]
+                    }
+                  },
+                  {
+                    "name": "quantity",
+                    "type": {
+                      "kind": "natural"
+                    }
+                  }
+                ],
+                "kind": "record"
+              }
             }
-          }
+          },
+          "kind": "button",
+          "label": "Add selected product"
         },
         "condition": {
           "kind": "enumEq",

@@ -277,7 +277,7 @@ def boundItems : Component basket :=
 def selectedItem : Expr basket item :=
   .enumCases (.project (.field .selected .self)) fun p => .value (line p 1)
 
-def addSelected : Component basket := .appendItemButton "Add selected product" itemsPath selectedItem
+def addSelected : Component basket := .button "Add selected product" (.append itemsPath selectedItem)
 
 def onPage (page : Page) : Expr basket .boolean :=
   .enumEq (.project (.field .page .self)) (.value page)

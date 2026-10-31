@@ -1217,8 +1217,8 @@ fn shopping_operators_reject_invalid_types() {
     ] {
         assert!(serde_json::from_value::<Expr>(expr).unwrap().ty(&schema).is_err());
     }
-    let invalid = json!({"kind":"appendItemButton","label":"Bad","path":["items"],
-        "value":{"kind":"value","type":{"kind":"text"},"value":"not an item"}});
+    let invalid = json!({"kind":"button","label":"Bad","action":{"kind":"append","path":["items"],
+        "value":{"kind":"value","type":{"kind":"text"},"value":"not an item"}}});
     assert!(serde_json::from_value::<Component>(invalid).unwrap().validate(&schema).is_err());
 }
 
@@ -1281,8 +1281,8 @@ fn components_inside_lists_and_sums_use_local_state() {
         {"kind":"table", "rows":{"kind":"project","path":[]},
          "columns":[{"label":"Number", "expression":{"kind":"natToText",
              "operand":{"kind":"project","path":[]}}}]},
-        {"kind":"appendItemButton", "label":"Append seven", "path":[],
-         "value":{"kind":"value","type":{"kind":"natural"},"value":"7"}}
+        {"kind":"button", "label":"Append seven", "action":{"kind":"append","path":[],
+         "value":{"kind":"value","type":{"kind":"natural"},"value":"7"}}}
     ]});
     let list_schema = json!({"kind":"list","element":numbers});
     let sum_schema = json!({"kind":"sum","constructors":[{"name":"numbers","type":numbers}]});
@@ -1367,6 +1367,11 @@ fn typed_actions_validate_paths_and_replacements_and_respect_disabled() {
     let mut engine = Engine::parse(&disabled.to_string()).unwrap();
     engine.step(Key::Enter);
     assert_eq!(engine.spec.value, json!("4"));
+    let mut append = spec.clone();
+    append["form"]["action"]["kind"] = json!("append");
+    assert!(Engine::parse(&append.to_string()).is_err());
+    append["form"]["action"]["path"] = json!(["missing"]);
+    assert!(Engine::parse(&append.to_string()).is_err());
     spec["form"]["action"]["value"] = json!({"kind":"value","type":{"kind":"text"},"value":"oops"});
     assert!(Engine::parse(&spec.to_string()).is_err());
     for kind in ["increment", "decrement"] {
@@ -1723,6 +1728,61 @@ fn standalone_button_targets_follow_components_and_read_current_state() {
         "value":{"left":"1","right":"1"},"actions":[
             {"target":["outer","left"],"action":"plusOne"},
             {"target":["outer","right"],"action":"press"}]}));
+}
+
+#[test]
+fn append_buttons_record_presses_and_evaluate_current_state() {
+    let button = json!({"kind":"button","label":"Append length","action":{"kind":"append","path":[],
+        "value":{"kind":"length","items":{"kind":"project","path":[]}}}});
+    let spec = json!({"version":6,"schema":{"kind":"list","element":{"kind":"natural"}},
+        "value":["7"],"constraints":[],"form":button});
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    keys(&mut engine, &[Key::Enter, Key::Enter]);
+    assert!(!engine.step(Key::Character('q')));
+    assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
+        "value":["7","1","2"],"actions":[{"target":[],"action":"press"},{"target":[],"action":"press"}]}));
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    engine.step(Key::Enter);
+    assert!(!engine.step(Key::Escape));
+    assert_eq!(engine.result(), "null");
+
+    for kind in ["visibleWhen", "disabledWhen"] {
+        let mut guarded = spec.clone();
+        let condition = json!({"kind":"natLe",
+            "left":{"kind":"length","items":{"kind":"project","path":[]}},
+            "right":{"kind":"value","type":{"kind":"natural"},"value":"1"}});
+        let condition = if kind == "visibleWhen" { condition } else { json!({"kind":"not","operand":condition}) };
+        guarded["form"] = json!({"kind":kind,"condition":condition,"body":button});
+        let mut engine = Engine::parse(&guarded.to_string()).unwrap();
+        keys(&mut engine, &[Key::Enter, Key::Enter]);
+        assert!(!engine.step(Key::Character('q')));
+        assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
+            "value":["7","1"],"actions":[{"target":[],"action":"press"}]}));
+    }
+}
+
+#[test]
+fn append_targets_preserve_identity_and_read_edited_siblings() {
+    let spec = json!({"version":6,"constraints":[],
+        "schema":{"kind":"record","fields":[{"name":"value","type":{"kind":"natural"}},
+            {"name":"items","type":{"kind":"list","element":{"kind":"natural"}}}]},
+        "value":{"value":"0","items":["7"]},
+        "form":{"kind":"stack","childIds":["outer"],"children":[
+            {"kind":"stack","childIds":["append","edit"],"children":[
+                {"kind":"button","label":"Append value","action":{"kind":"append","path":["items"],
+                    "value":{"kind":"project","path":["value"]}}},
+                {"kind":"field","label":"Value","path":["value"],"schema":{"kind":"natural"},"widget":"naturalInput"}]}]}});
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    engine.selected = 1;
+    edit(&mut engine, "42");
+    engine.selected = 0;
+    keys(&mut engine, &[Key::Enter, Key::Enter]);
+    assert!(!engine.step(Key::Character('q')));
+    assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
+        "value":{"value":"42","items":["7","42","42"]},"actions":[
+            {"target":["outer","edit"],"action":"replace","argument":"42"},
+            {"target":["outer","append"],"action":"press"},
+            {"target":["outer","append"],"action":"press"}]}));
 }
 
 #[test]

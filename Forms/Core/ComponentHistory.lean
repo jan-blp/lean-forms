@@ -3,6 +3,7 @@ import Forms.Core.ActionInvocation
 
 namespace Forms.Composition
 
+/-- Temporary until all components support replay. -/
 def Component.supportsHistory {ty : DataType} : Component ty → Bool
   | .actionWidget .. => true
   | .stack (items := items) _ children _ =>
@@ -16,7 +17,6 @@ def Component.supportsHistory {ty : DataType} : Component ty → Bool
   | .visibleWhen _ body => body.supportsHistory
   | .disabledWhen _ body => body.supportsHistory
   | .button .. => true
-  | .appendItemButton .. => false
 
 def Component.Invocation {ty : DataType} : Component ty → Type
   | .actionWidget _ _ actions => Action.Invocation (fun name => (actions name).presentation)
@@ -31,7 +31,6 @@ def Component.Invocation {ty : DataType} : Component ty → Type
   | .visibleWhen _ body => body.Invocation
   | .disabledWhen _ body => body.Invocation
   | .button .. => Action.Button
-  | .appendItemButton .. => Empty
 
 inductive Component.InvocationError where
   | hidden
@@ -65,7 +64,6 @@ def Component.applyInvocation {ty : DataType}
       if condition.eval value then .error .disabled else body.applyInvocation value invocation
   | .button _ action => fun
       | .press => .ok (action.eval value)
-  | .appendItemButton .. => fun invocation => Empty.elim invocation
 
 structure ComponentHistory {ty : DataType} (component : Component ty) where
   value : ⟦ty⟧

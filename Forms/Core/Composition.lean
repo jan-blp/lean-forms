@@ -71,12 +71,6 @@ inductive Component : (state : DataType) → Type 1 where
     (label : String)
     (action : Action state)
     : Component state
-  | appendItemButton
-      {state element : DataType}
-      (label : String)
-      (target : Path state (.list element))
-      (newItem : Expr state element)
-      : Component state
 
 def Component.weaken {outer inner : DataType}
   (path : Path outer inner)
@@ -94,7 +88,5 @@ def Component.weaken {outer inner : DataType}
   | .disabledWhen condition component => .disabledWhen (condition.weaken path) (component.weaken path)
   | .actionWidget target label actions => .actionWidget (path.trans target) label actions
   | .button label action => .button label (action.weaken path)
-  | .appendItemButton label target newItem =>
-      .appendItemButton label (path.trans target) (newItem.weaken path)
 
 end Forms.Composition
