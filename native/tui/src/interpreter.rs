@@ -234,6 +234,8 @@ pub enum Component {
         #[serde(default)]
         label: Option<String>,
         children: Vec<Component>,
+        #[serde(default, rename = "childIds")]
+        child_ids: Option<Vec<String>>,
     },
     AppendItemButton {
         label: String,
@@ -760,6 +762,19 @@ fn set(value: &mut Value, path: &[Step], replacement: Value) {
 }
 
 impl Component {
+    fn validate_history(&self) -> Result<(), String> {
+        match self {
+            Self::ActionWidget { .. } | Self::Computed { .. } | Self::Text { .. } | Self::Table { .. } => Ok(()),
+            Self::Stack { children, child_ids, .. } => {
+                if child_ids.is_none() {
+                    return Err("History stacks require child IDs".into());
+                }
+                children.iter().try_for_each(Self::validate_history)
+            }
+            _ => Err("Component history is not supported yet".into()),
+        }
+    }
+
     fn validate(&self, context: &Ty) -> Result<(), String> {
         match self {
             Self::ActionWidget { path, schema, .. } | Self::Field { path, schema, .. } | Self::List { path, schema, .. } | Self::Sum { path, schema, .. } => {
@@ -771,7 +786,12 @@ impl Component {
             _ => {}
         }
         match self {
-            Self::Stack { children, .. } => {
+            Self::Stack { children, child_ids, .. } => {
+                if let Some(ids) = child_ids {
+                    if ids.len() != children.len() || ids.iter().collect::<std::collections::BTreeSet<_>>().len() != ids.len() {
+                        return Err("Stack child IDs must be unique and match children".into());
+                    }
+                }
                 for child in children {
                     child.validate(context)?;
                 }
@@ -882,15 +902,21 @@ impl Component {
         tables: &mut Vec<ReportTable>,
     ) {
         match self {
-            Self::Stack { children, label } => {
+            Self::Stack { children, label, child_ids } => {
                 let mut labels = labels;
                 if let Some(label) = label {
                     if !(label == "Item" && labels.last().is_some_and(|parent| parent.starts_with("Item "))) {
                         labels.push(label.clone());
                     }
                 }
-                for child in children {
+                for (index, child) in children.iter().enumerate() {
+                    let start = out.len();
                     child.fields(ty, value, path.clone(), scope, labels.clone(), out, tables);
+                    if let Some(ids) = child_ids {
+                        for field in &mut out[start..] {
+                            field.target.insert(0, ids[index].clone());
+                        }
+                    }
                 }
             }
             Self::ActionWidget { path: relative, schema, label, actions } => {
@@ -912,12 +938,13 @@ impl Component {
                         label: format!("{}.{}", labels.join("."), title), path: target.clone(), widget,
                         options: match schema { Ty::Enum { options } => options.clone(), _ => vec![] },
                         default_item: replacement, computed_value: None, input_transform: transform,
-                        action_id: Some(id.clone()),
+                        action_id: Some(id.clone()), target: vec![],
                     });
                 }
             }
             Self::Button { label, action } => out.push(Field {
                     action_id: None,
+                    target: vec![],
                     input_transform: None,
                 presentation: Presentation { button: true, ..Presentation::default() },
                 title: label.clone(), section: labels.join(" › "), action: true,
@@ -927,6 +954,7 @@ impl Component {
             }),
             Self::AppendItemButton { label, path: relative, value: expression } => out.push(Field {
                     action_id: None,
+                    target: vec![],
                     input_transform: None,
                 presentation: Presentation { add: true, ..Presentation::default() },
                 title: label.clone(), section: labels.join(" › "), action: true,
@@ -936,6 +964,7 @@ impl Component {
             }),
             Self::Text { expression } => out.push(Field {
                     action_id: None,
+                    target: vec![],
                     input_transform: None,
                 presentation: Presentation {
                     computed: true,
@@ -993,6 +1022,7 @@ impl Component {
                 labels.push(label.clone());
                 out.push(Field {
                     action_id: None,
+                    target: vec![],
                     input_transform: None,
                     computed_value: None,
                     presentation: Presentation::default(),
@@ -1090,6 +1120,7 @@ impl Component {
                         .unwrap_or_else(|| item_labels.join(" › "));
                     out.push(Field {
                     action_id: None,
+                    target: vec![],
                     input_transform: None,
                         computed_value: None,
                         presentation: Presentation::default(),
@@ -1105,6 +1136,7 @@ impl Component {
                 }
                 out.push(Field {
                     action_id: None,
+                    target: vec![],
                     input_transform: None,
                     computed_value: None,
                     presentation: Presentation {
@@ -1131,6 +1163,7 @@ impl Component {
                 labels.push(label.clone());
                 out.push(Field {
                     action_id: None,
+                    target: vec![],
                     input_transform: None,
                     presentation: Presentation {
                         computed: true,
@@ -1154,6 +1187,7 @@ impl Component {
                 labels.push(label.clone());
                 out.push(Field {
                     action_id: None,
+                    target: vec![],
                     input_transform: None,
                     computed_value: None,
                     presentation: Presentation {
@@ -1217,6 +1251,7 @@ pub struct Field {
     computed_value: Option<String>,
     input_transform: Option<Expr>,
     action_id: Option<String>,
+    target: Vec<String>,
 }
 impl Field {
     fn apply(&self, state: &mut Value, history: &mut Vec<Value>, argument: Option<Value>) {
@@ -1227,8 +1262,8 @@ impl Field {
         set(state, &self.path, next);
         if let Some(id) = &self.action_id {
             history.push(match argument {
-                Some(argument) => serde_json::json!({"action": id, "argument": argument}),
-                None => Value::String(id.clone()),
+                Some(argument) => serde_json::json!({"target": self.target, "action": id, "argument": argument}),
+                None => serde_json::json!({"target": self.target, "action": id}),
             });
         }
     }
@@ -1275,11 +1310,11 @@ pub enum Key {
 impl Engine {
     pub fn parse(json: &str) -> Result<Self, String> {
         let spec: Specification = serde_json::from_str(json).map_err(|e| e.to_string())?;
-        if !matches!(spec.version, 4 | 5) {
+        if !matches!(spec.version, 4 | 6) {
             return Err("Unsupported component specification version".into());
         }
-        if spec.version == 5 && !matches!(&spec.form, Component::ActionWidget { path, .. } if path.is_empty()) {
-            return Err("Action history requires a root action widget".into());
+        if spec.version == 6 {
+            spec.form.validate_history()?;
         }
         spec.schema.validate()?;
         validate_value(&spec.schema, &spec.value)?;
@@ -1334,7 +1369,7 @@ impl Engine {
 
     pub fn result(&self) -> String {
         if self.submitted {
-            if self.spec.version == 5 {
+            if self.spec.version == 6 {
                 serde_json::json!({"value": self.spec.value, "actions": self.actions}).to_string()
             } else {
                 self.spec.value.to_string()

@@ -1470,7 +1470,8 @@ fn root_widget_returns_only_accepted_invocations() {
     engine.step(Key::Enter);
     assert!(!engine.step(Key::Character('q')));
     assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
-        "value":"41", "actions":["plusOne", "plusOne", {"action":"replace", "argument":"42"}, "minusOne"]
+        "value":"41", "actions":[{"target":[],"action":"plusOne"}, {"target":[],"action":"plusOne"},
+            {"target":[],"action":"replace", "argument":"42"}, {"target":[],"action":"minusOne"}]
     }));
 
     let mut engine = Engine::parse(source).unwrap();
@@ -1491,13 +1492,13 @@ fn root_editor_history_records_arguments_before_transformation() {
     edit(&mut engine, "3");
     engine.step(Key::Character('q'));
     assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(),
-        json!({"value":"8", "actions":[{"action":"add", "argument":"3"}]}));
+        json!({"value":"8", "actions":[{"target":[],"action":"add", "argument":"3"}]}));
 }
 
 #[test]
 fn history_protocol_rejects_unsupported_forms() {
     let mut spec: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
-    spec["version"] = json!(5);
+    spec["version"] = json!(6);
     assert!(Engine::parse(&spec.to_string()).is_err());
 }
 
@@ -1509,7 +1510,7 @@ fn root_widget_records_each_editor_input_kind() {
         (json!({"kind":"text"}), "textInput", json!("old"), json!("new")),
         (json!({"kind":"date"}), "dateInput", json!("2028-02-28"), json!("2028-02-29")),
     ] {
-        let spec = json!({"version":5,"schema":schema,"value":initial,"constraints":[],
+        let spec = json!({"version":6,"schema":schema,"value":initial,"constraints":[],
             "form":{"kind":"actionWidget","path":[],"schema":schema,"label":"Editor",
                 "actions":[{"id":"replace","label":"Value","kind":"editor","widget":widget,
                     "body":{"kind":"project","path":["argument"]}}]}});
@@ -1521,6 +1522,62 @@ fn root_widget_records_each_editor_input_kind() {
         }
         assert!(!engine.step(Key::Character('q')));
         assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(),
-            json!({"value":argument,"actions":[{"action":"replace","argument":argument}]}));
+            json!({"value":argument,"actions":[{"target":[],"action":"replace","argument":argument}]}));
     }
+}
+
+#[test]
+fn stacked_widgets_record_distinct_targets_and_editor_arguments() {
+    let mut engine = Engine::parse(include_str!("../../tests/counters.json")).unwrap();
+    engine.step(Key::Enter);
+    engine.selected = 5;
+    engine.step(Key::Enter);
+    engine.selected = 6;
+    edit(&mut engine, "42");
+    assert!(!engine.step(Key::Character('q')));
+    assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
+        "value":{"left":"1","right":"42"},
+        "actions":[{"target":["left"],"action":"plusOne"},
+            {"target":["right"],"action":"plusFive"},
+            {"target":["right"],"action":"replace","argument":"42"}]
+    }));
+}
+
+#[test]
+fn widget_targets_follow_child_ids_through_reordering_and_nesting() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/counters.json")).unwrap();
+    spec["form"]["children"].as_array_mut().unwrap().reverse();
+    spec["form"]["childIds"].as_array_mut().unwrap().reverse();
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    engine.step(Key::Enter);
+    engine.step(Key::Character('q'));
+    assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
+        "value":{"left":"0","right":"11"},
+        "actions":[{"target":["right"],"action":"plusOne"}]
+    }));
+    spec["form"] = json!({"kind":"stack","childIds":["outer"],"children":[spec["form"]]});
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    engine.step(Key::Enter);
+    engine.step(Key::Character('q'));
+    assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap()["actions"],
+        json!([{"target":["outer","right"],"action":"plusOne"}]));
+}
+
+#[test]
+fn history_stacks_reject_missing_duplicate_and_mismatched_ids() {
+    let spec: Value = serde_json::from_str(include_str!("../../tests/counters.json")).unwrap();
+    for ids in [json!(null), json!([]), json!(["left"]), json!(["same","same"])] {
+        let mut malformed = spec.clone();
+        malformed["form"]["childIds"] = ids;
+        assert!(Engine::parse(&malformed.to_string()).is_err());
+    }
+    let mut malformed = spec.clone();
+    malformed["form"].as_object_mut().unwrap().remove("childIds");
+    assert!(Engine::parse(&malformed.to_string()).is_err());
+    let mut mixed = spec;
+    mixed["form"]["children"][1] = json!({"kind":"field","path":["right"],
+        "schema":{"kind":"natural"},"label":"Right","widget":"naturalInput"});
+    assert!(Engine::parse(&mixed.to_string()).is_err());
+    mixed["version"] = json!(4);
+    assert!(Engine::parse(&mixed.to_string()).is_ok());
 }

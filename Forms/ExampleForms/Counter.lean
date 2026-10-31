@@ -1,5 +1,4 @@
 import Forms.Core.Composition
-import Forms.Core.ActionHistory
 
 namespace Forms.ExampleForms.Counter
 
@@ -42,12 +41,5 @@ def mkNatWidget {ids : Enum} (definitions : ids → WidgetAction .natural) : Com
   .actionWidget .self "Counter" definitions
 
 def form : Component .natural := mkNatWidget (ids := actionIds) actions
-
-def replayActions (id : CounterAction) : ActionPresentation .natural :=
-  (actions id).presentation
-
-def click (history : ActionHistory .natural CounterAction) (id : CounterAction)
-    : Except String (ActionHistory .natural CounterAction) :=
-  history.apply replayActions (.button id)
 
 end Forms.ExampleForms.Counter

@@ -1,4 +1,5 @@
 import Tests.Actions
+import Tests.ComponentHistory
 import Tests.Weakening
 import Tests.Basket
 import Tests.Composition
@@ -130,7 +131,7 @@ private def testNativeBoundary : IO Unit := do
     | .error _ => true
     | _ => false)
   check "LeanConstructsProofForNativeResult" (match run.run "{\"home\":\"16\",\"away\":\"16\"}" with
-    | .ok (some value) => JsonProtocol.valueToJson (RefinedDataType.erase ExampleForms.Thermostat.thermostatType value) == temperatureJson "16" "16"
+    | .ok (some value) => JsonProtocol.valueToJson (RefinedDataType.erase ExampleForms.Thermostat.thermostatType value.value) == temperatureJson "16" "16"
     | _ => false)
   check "NativeCancellationIsSeparate" (match run.run "null" with
     | .ok none => true
@@ -220,7 +221,7 @@ private def testSums : IO Unit := do
     | .error _ => true
     | _ => false)
   check "LeanAcceptsValidSumSubmission" (match run.run (JsonProtocol.valueToJson valid).compress with
-    | .ok (some value) => JsonProtocol.valueToJson (RefinedDataType.erase refined value) == JsonProtocol.valueToJson valid
+    | .ok (some value) => JsonProtocol.valueToJson (RefinedDataType.erase refined value.value) == JsonProtocol.valueToJson valid
     | _ => false)
   check "SumCancellation" (match run.run "null" with
     | .ok none => true
@@ -344,6 +345,7 @@ private def testProtocol : IO Unit := do
 
 def main : IO Unit := do
   Tests.Actions.run
+  Tests.ComponentHistory.run
   Tests.Weakening.run
   Tests.Basket.run
   Tests.Composition.run

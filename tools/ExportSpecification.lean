@@ -1,4 +1,5 @@
 import Forms.ExampleForms.Counter
+import Forms.ExampleForms.Counters
 import Forms.ExampleForms.Basket
 import Forms.ExampleForms.TestReport
 import Forms.Runtime.CompositionProtocol
@@ -14,6 +15,7 @@ open Forms ExampleForms Forms.Runtime
 
 def main (args : List String) : IO Unit :=
   IO.println (if args.contains "counter" then CompositionProtocol.encode (.base .natural) Counter.form 0
+    else if args.contains "counters" then CompositionProtocol.encode (.base Counters.state) Counters.form Counters.initial
     else if args.contains "basket" then CompositionProtocol.encode (.base Basket.basket) Basket.basketView Basket.initial
     else if args.contains "report" then CompositionProtocol.encode (.base TestReport.reportShape) TestReport.report TestReport.initial
     else if args.contains "booking" then CompositionProtocol.encode Booking.bookingType Booking.form Booking.draft

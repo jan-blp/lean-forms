@@ -1,4 +1,5 @@
 import Forms.ExampleForms.Counter
+import Forms.ExampleForms.Counters
 import Forms.ExampleForms.Basket
 import Forms.ExampleForms.TestReport
 import Forms.ExampleForms.Booking
@@ -36,23 +37,18 @@ private def runComponent (theme : NativeTerminal.Theme)
   let result ← Tui.run refined component draft
   match result with
   | none => IO.println "\nCancelled."
-  | some value =>
-    IO.println "\n  Final values\n  ------------"
-    IO.println (Lean.Json.pretty (valueToJson (RefinedDataType.erase refined value)))
-
-private def runCounter (theme : NativeTerminal.Theme) : IO Unit := do
-  let _ : MonadTui IO := NativeTerminal.interpreter theme
-  let result ← Tui.runWidget (.base .natural) Counter.actionIds "Counter" Counter.actions 0
-  match result with
-  | none => IO.println "\nCancelled."
   | some result =>
     IO.println "\n  Final values\n  ------------"
-    IO.println (ActionHistoryProtocol.encode Counter.actionIds ⟨result.value, result.actions⟩).pretty
+    let value := RefinedDataType.erase refined result.value
+    match result.actions with
+    | some actions => IO.println (ComponentHistoryProtocol.encode (component := component) ⟨value, actions⟩).pretty
+    | none => IO.println (Lean.Json.pretty (valueToJson value))
 
 private def cli : Cli NativeTerminal.Theme where
   examples := [
     ("person", fun theme => runComponent theme Person.personType Person.form Person.draft),
-    ("counter", runCounter),
+    ("counter", fun theme => runComponent theme (.base .natural) Counter.form 0),
+    ("counters", fun theme => runComponent theme (.base Counters.state) Counters.form Counters.initial),
     ("report", fun theme => runComponent theme (.base TestReport.reportShape) TestReport.report TestReport.initial),
     ("basket", fun theme => runComponent theme (.base Basket.basket) Basket.basketView Basket.initial),
     ("booking", fun theme => runComponent theme Booking.bookingType Booking.form Booking.draft),

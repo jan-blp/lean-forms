@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms'
 
 
-def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None, invoice=False, shapes=False, booking=False, report=False, basket=False, counter=False, actions=None):
+def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None, invoice=False, shapes=False, booking=False, report=False, basket=False, counter=False, counters=False, actions=None):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 100, 0, 0))
     before = termios.tcgetattr(slave)
@@ -24,7 +24,7 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
     if theme:
         env.update(TERM='xterm-256color', COLORTERM='truecolor')
         env.pop('NO_COLOR', None)
-    process = subprocess.Popen([str(BINARY)] + (["counter"] if counter else ["basket"] if basket else ["report"] if report else ["booking"] if booking else ["shapes"] if shapes else ["invoice"] if invoice else ["thermostat"] if thermostat else ["person"]) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
+    process = subprocess.Popen([str(BINARY)] + (["counters"] if counters else ["counter"] if counter else ["basket"] if basket else ["report"] if report else ["booking"] if booking else ["shapes"] if shapes else ["invoice"] if invoice else ["thermostat"] if thermostat else ["person"]) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
     output = bytearray()
 
     def read_until(predicate):
@@ -41,7 +41,7 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
                     break
 
     try:
-        read_until(lambda: (b'Counter' if counter else b'Basket total: EUR 16' if basket else b'Results' if report else b'Start date' if booking else b'Shape' if shapes else b'Description' if invoice else b'Home temperature (C)' if thermostat else b'Name') in output)
+        read_until(lambda: (b'Counters' if counters else b'Counter' if counter else b'Basket total: EUR 16' if basket else b'Results' if report else b'Start date' if booking else b'Shape' if shapes else b'Description' if invoice else b'Home temperature (C)' if thermostat else b'Name') in output)
         os.write(master, keys)
         if cancel:
             read_until(lambda: b'Other' in output)
@@ -66,7 +66,9 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
             result = (json.loads(tail.split(b'------------', 1)[1].strip()) if counter else
                       json.loads(tail[tail.index(b'[' if invoice else b'{'):].decode()))
             if counter:
-                assert result == {"value": str(expected), "actions": actions}, result
+                assert result == {"value": str(expected), "actions": [
+                    {"target": [], **({"action": action} if isinstance(action, str) else action)}
+                    for action in actions]}, result
             else:
                 assert result == expected, result
         if theme:
@@ -181,3 +183,13 @@ session(b"j\r\rq", 10, counter=True, actions=["plusFive", "plusFive"])
 
 session(b"q", 0, counter=True, actions=[])
 session(b"\rx", None, counter=True)
+
+# Widget targets distinguish repeated action names within the stack.
+session(b"\rjjjjj\rj\r\x1542\rq", {
+    "value": {"left": "1", "right": "42"},
+    "actions": [
+        {"target": ["left"], "action": "plusOne"},
+        {"target": ["right"], "action": "plusFive"},
+        {"target": ["right"], "action": "replace", "argument": "42"},
+    ],
+}, counters=True)
