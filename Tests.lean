@@ -14,14 +14,18 @@ import Forms.Runtime.Tui
 
 open Forms Forms.Composition Forms.Runtime
 
-private def fieldRefs {state : DataType} (component : Component state) (value : ⟦state⟧) :=
+private def fieldRefs {state : DataType}
+  (component : Component state)
+  (value : ⟦state⟧) :=
   (FormSnapshot.render component value).fieldRefs
 
 private def check (name : String) (passed : Bool) : IO Unit := do
   if passed then IO.println ("PASS " ++ name)
   else throw (IO.userError ("FAIL " ++ name))
 
-private def temperatures (home away : Nat) : ⟦ExampleForms.Thermostat.thermostat⟧
+private def temperatures
+  (home away : Nat)
+  : ⟦ExampleForms.Thermostat.thermostat⟧
   | .home => home
   | .away => away
 
@@ -47,7 +51,9 @@ private def wrap {t : DataType} (enabled : Bool) (value : ⟦t⟧) : ⟦wrapper 
   | .enabled => enabled
   | .content => value
 
-private def refineWrapper {t : DataType} (refined : RefinedDataType t) : RefinedDataType (wrapper t) :=
+private def refineWrapper {t : DataType}
+  (refined : RefinedDataType t)
+  : RefinedDataType (wrapper t) :=
   .record fun | .enabled => .base .boolean | .content => refined
 
 private def testRefinedTypes : IO Unit := do

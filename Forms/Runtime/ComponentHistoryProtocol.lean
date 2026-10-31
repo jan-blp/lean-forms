@@ -39,14 +39,17 @@ instance : ToString Error where
 private def readJson {α : Type} (result : Except String α) : Except Error α :=
   result.mapError Error.malformedJson
 
-private def argumentToJson {ty : DataType} (presentation : Action.Presentation ty)
-    : presentation.Argument → List (String × Json) :=
+private def argumentToJson {ty : DataType}
+  (presentation : Action.Presentation ty)
+  : presentation.Argument → List (String × Json) :=
   match presentation with
   | .button .. => fun () => []
   | .editor .. => fun argument => [("argument", JsonProtocol.valueToJson argument)]
 
-private def argumentFromJson {ty : DataType} (presentation : Action.Presentation ty)
-    (json : Json) : Except Error presentation.Argument :=
+private def argumentFromJson {ty : DataType}
+  (presentation : Action.Presentation ty)
+  (json : Json)
+  : Except Error presentation.Argument :=
   match presentation with
   | .button .. => do
       let fields ← readJson json.getObj?
@@ -59,8 +62,10 @@ private def argumentFromJson {ty : DataType} (presentation : Action.Presentation
       if fields.size != 3 then throw (.invalidFields ["target", "action", "argument"])
       (JsonProtocol.valueFromJson ty argument).mapError Error.invalidArgument
 
-private def invocationToJson {ty : DataType} (component : Component ty)
-    (target : List String) : component.Invocation → Json :=
+private def invocationToJson {ty : DataType}
+  (component : Component ty)
+  (target : List String)
+  : component.Invocation → Json :=
   match component with
   | .actionWidget (ids := ids) _ _ actions => fun invocation =>
       Json.mkObj ([("target", toJson target), ("action", toJson (ids.label invocation.name))] ++
@@ -78,8 +83,11 @@ private def invocationToJson {ty : DataType} (component : Component ty)
   | .button .. => fun invocation => Empty.elim invocation
   | .appendItemButton .. => fun invocation => Empty.elim invocation
 
-private def invocationFromJson {ty : DataType} (component : Component ty)
-    (target : List String) (json : Json) : Except Error component.Invocation :=
+private def invocationFromJson {ty : DataType}
+  (component : Component ty)
+  (target : List String)
+  (json : Json)
+  : Except Error component.Invocation :=
   match component with
   | .actionWidget (ids := ids) _ _ actions => do
       unless target.isEmpty do throw .targetBeyondWidget
@@ -104,12 +112,17 @@ private def invocationFromJson {ty : DataType} (component : Component ty)
   | .button .. => .error .targetNotWidget
   | .appendItemButton .. => .error .targetNotWidget
 
-def encode {ty : DataType} {component : Component ty} (history : ComponentHistory component) : Json :=
+def encode {ty : DataType} {component : Component ty}
+  (history : ComponentHistory component)
+  : Json :=
   Json.mkObj [("value", JsonProtocol.valueToJson history.value),
     ("actions", toJson (history.actions.map (invocationToJson component [])))]
 
-def verify {ty : DataType} (component : Component ty) (initial : ⟦ty⟧)
-    (submission : Json) : Except Error (ComponentHistory component) := do
+def verify {ty : DataType}
+  (component : Component ty)
+  (initial : ⟦ty⟧)
+  (submission : Json)
+  : Except Error (ComponentHistory component) := do
   unless component.supportsHistory do throw .unsupportedComponent
   let fields ← readJson submission.getObj?
   if fields.size != 2 then throw (.invalidFields ["value", "actions"])

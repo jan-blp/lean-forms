@@ -27,8 +27,10 @@ structure WidgetAction (ty : DataType) where
   label : String
   presentation : Action.Presentation ty
 
-def WidgetAction.eval {ty : DataType} (action : WidgetAction ty)
-    (inputs : ⟦ActionContext ty⟧) : ⟦ty⟧ :=
+def WidgetAction.eval {ty : DataType}
+  (action : WidgetAction ty)
+  (inputs : ⟦ActionContext ty⟧)
+  : ⟦ty⟧ :=
   match action.presentation with
   | .button body => body.eval (inputs .current)
   | .editor _ body => body.eval inputs

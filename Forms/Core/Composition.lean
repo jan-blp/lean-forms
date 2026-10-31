@@ -62,9 +62,15 @@ inductive Component : (state : DataType) → Type 1 where
       (condition : Expr state .boolean)
       (body : Component state)
       : Component state
-  | actionWidget {state value : DataType} {ids : Enum} (path : Path state value)
-      (label : String) (actions : ids → WidgetAction value) : Component state
-  | button {state : DataType} (label : String) (action : Action state) : Component state
+  | actionWidget {state value : DataType} {ids : Enum}
+    (path : Path state value)
+    (label : String)
+    (actions : ids → WidgetAction value)
+    : Component state
+  | button {state : DataType}
+    (label : String)
+    (action : Action state)
+    : Component state
   | appendItemButton
       {state element : DataType}
       (label : String)
@@ -72,11 +78,10 @@ inductive Component : (state : DataType) → Type 1 where
       (newItem : Expr state element)
       : Component state
 
-def Component.weaken
-    {outer inner : DataType}
-    (path : Path outer inner)
-    (body : Component inner)
-    : Component outer :=
+def Component.weaken {outer inner : DataType}
+  (path : Path outer inner)
+  (body : Component inner)
+  : Component outer :=
   match body with
   | .field target label widget => .field (path.trans target) label widget
   | .stack label children order => .stack label (fun index => (children index).weaken path) order

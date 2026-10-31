@@ -38,7 +38,8 @@ def valueToJson {t} (value : ⟦t⟧) : Json :=
       (fieldNames.label i, valueToJson (t := fieldTypes i) (value i)))
 
 private def sequenceFin {n : Nat} {α : Fin n → Type}
-    (values : (i : Fin n) → Except String (α i)) : Except String ((i : Fin n) → α i) :=
+  (values : (i : Fin n) → Except String (α i))
+  : Except String ((i : Fin n) → α i) :=
   match n with
   | 0 => pure (fun i => Fin.elim0 i)
   | _ + 1 => do
@@ -46,8 +47,11 @@ private def sequenceFin {n : Nat} {α : Fin n → Type}
     let tail ← sequenceFin (fun i => values i.succ)
     pure (Fin.cons head tail)
 
-private def sequence {ι : Type} [FinEnum ι] {α : ι → Type}
-    (values : (i : ι) → Except String (α i)) : Except String ((i : ι) → α i) := do
+private def sequence {ι : Type}
+  [FinEnum ι]
+  {α : ι → Type}
+  (values : (i : ι) → Except String (α i))
+  : Except String ((i : ι) → α i) := do
   let result ← sequenceFin (fun i => values (FinEnum.equiv.symm i))
   pure fun i => (FinEnum.equiv.symm_apply_apply i) ▸ result (FinEnum.equiv i)
 
@@ -87,8 +91,8 @@ def valueFromJson (t : DataType) (json : Json) : Except String ⟦t⟧ :=
     sequence (fun i => do valueFromJson (fieldTypes i) (← json.getObjVal? (fieldNames.label i)))
 
 theorem valueFromJson_date_sound {json : Json} {date : Date}
-    (h : valueFromJson .date json = .ok date) :
-    valueToJson (t := .date) date = json := by
+  (h : valueFromJson .date json = .ok date)
+  : valueToJson (t := .date) date = json := by
   cases json <;>
     simp_all [valueFromJson, Json.getStr?, bind, Except.bind, pure, Except.pure,
       valueToJson, toJson]
@@ -97,7 +101,9 @@ theorem valueFromJson_date_sound {json : Json} {date : Date}
 
 end Runtime.JsonProtocol
 
-def Path.toList {source target : DataType} (path : Path source target) : List String :=
+def Path.toList {source target : DataType}
+  (path : Path source target)
+  : List String :=
   match path with
   | .self => []
   | .field (fieldNames := fieldNames) fieldName rest => fieldNames.label fieldName :: Path.toList rest
@@ -159,7 +165,10 @@ def Constraint.toJson (constraint : Constraint root) : Json :=
 
 namespace Runtime.JsonProtocol
 
-def decodeResult (refined : RefinedDataType root) (json : Json) : Except String (Option (RefinedDataType.ValidatedValue refined)) := do
+def decodeResult
+  (refined : RefinedDataType root)
+  (json : Json)
+  : Except String (Option (RefinedDataType.ValidatedValue refined)) := do
   if json == Json.null then return none
   let draft ← valueFromJson root json
   match RefinedDataType.validate refined draft with

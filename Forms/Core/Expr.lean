@@ -37,19 +37,22 @@ inductive Expr : (input : DataType) → (result : DataType) → Type 1 where
       (whenTrue whenFalse : Expr input result) : Expr input result
   | natToText {input : DataType} (value : Expr input .natural) : Expr input .text
   | textAppend {input : DataType} (left right : Expr input .text) : Expr input .text
-  | natAdd {input : DataType} (l r : Expr input .natural) : Expr input .natural
-  | natSub {input : DataType} (l r : Expr input .natural) : Expr input .natural
+  | natAdd {input : DataType}
+    (l r : Expr input .natural)
+    : Expr input .natural
+  | natSub {input : DataType}
+    (l r : Expr input .natural)
+    : Expr input .natural
   | natMul {input : DataType} (l r : Expr input .natural) : Expr input .natural
   | not {input : DataType} (operand : Expr input .boolean) : Expr input .boolean
   | and {input : DataType} (l r : Expr input .boolean) : Expr input .boolean
   | dateLe {input : DataType} (l r : Expr input .date) : Expr input .boolean
   | natLe {input : DataType} (l r : Expr input .natural) : Expr input .boolean
 
-def Expr.eval
-    {input t : DataType}
-    (expression : Expr input t)
-    (value : ⟦input⟧)
-    : ⟦t⟧ :=
+def Expr.eval {input t : DataType}
+  (expression : Expr input t)
+  (value : ⟦input⟧)
+  : ⟦t⟧ :=
   match expression with
   | .value constant => constant
   | .project path => Path.get path value
@@ -90,7 +93,10 @@ section
 
 variable {outer input result : DataType}
 
-def Expr.weaken {outer input result} (path : Path outer input) (expression : Expr input result) : Expr outer result :=
+def Expr.weaken {outer input result}
+  (path : Path outer input)
+  (expression : Expr input result)
+  : Expr outer result :=
   match expression with
   | .value v => .value v
   | .project field => .project (Path.trans path field)

@@ -40,8 +40,10 @@ private def pathIndices {state value : DataType} : Path state value → List Nat
   | .self => []
   | .field name rest => (FinEnum.equiv name).val :: pathIndices rest
 
-def FormSnapshot.render {state : DataType} (component : Component state)
-    (value : ⟦state⟧) : FormSnapshot :=
+def FormSnapshot.render {state : DataType}
+  (component : Component state)
+  (value : ⟦state⟧)
+  : FormSnapshot :=
   match component with
   | .field path label widget =>
       .fields [{ content := .input widget, labels := [label], indices := pathIndices path }]

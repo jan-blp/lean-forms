@@ -8,15 +8,22 @@ class MonadTui (m : Type → Type) where
 
 namespace Tui
 
-structure ComponentResult {ty : DataType} (refined : RefinedDataType ty)
-    (component : Composition.Component ty) where
+structure ComponentResult {ty : DataType}
+  (refined : RefinedDataType ty)
+  (component : Composition.Component ty) where
   value : RefinedDataType.ValidatedValue refined
   /-- None until this component supports replay. -/
   actions : Option (Array component.Invocation)
 
-def run {m : Type → Type} [Monad m] [MonadExceptOf IO.Error m] [MonadTui m]
-    {ty : DataType} (refined : RefinedDataType ty) (component : Composition.Component ty)
-    (draft : ⟦ty⟧) : m (Option (ComponentResult refined component)) := do
+def run {m : Type → Type}
+  [Monad m]
+  [MonadExceptOf IO.Error m]
+  [MonadTui m]
+  {ty : DataType}
+  (refined : RefinedDataType ty)
+  (component : Composition.Component ty)
+  (draft : ⟦ty⟧)
+  : m (Option (ComponentResult refined component)) := do
   let result ← MonadTui.runSpecification (CompositionProtocol.encode refined component draft)
   let decoded : Except String (Option (ComponentResult refined component)) := do
     let json ← Lean.Json.parse result

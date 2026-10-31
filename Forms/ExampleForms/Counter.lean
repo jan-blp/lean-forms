@@ -37,7 +37,9 @@ def actions : CounterAction → WidgetAction .natural
   | .replace => replace
   | .minusOne => minusOne
 
-def mkNatWidget {ids : Enum} (definitions : ids → WidgetAction .natural) : Component .natural :=
+def mkNatWidget {ids : Enum}
+  (definitions : ids → WidgetAction .natural)
+  : Component .natural :=
   .actionWidget .self "Counter" definitions
 
 def form : Component .natural := mkNatWidget (ids := actionIds) actions

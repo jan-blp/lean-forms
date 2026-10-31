@@ -9,14 +9,20 @@ def actionToJson {state : DataType} : Action state → Json
       ("kind", toJson "set"), ("path", toJson (Path.toList target)),
       ("value", Expr.toJson replacement)]
 
-def widgetActionToJson {value : DataType} (id : String) (action : WidgetAction value) : Json :=
+def widgetActionToJson {value : DataType}
+  (id : String)
+  (action : WidgetAction value)
+  : Json :=
   Json.mkObj ([("id", toJson id), ("label", toJson action.label)] ++
     match action.presentation with
     | .button body => [("kind", toJson "button"), ("body", Expr.toJson body)]
     | .editor widget body => [("kind", toJson "editor"),
         ("widget", toJson (Widget.name widget)), ("body", Expr.toJson body)])
 
-def componentToJson {state : DataType} (component : Component state) (history : Bool := false) : Json :=
+def componentToJson {state : DataType}
+  (component : Component state)
+  (history : Bool := false)
+  : Json :=
   match component with
   | .field (value := value) path label widget => Json.mkObj [
       ("kind", toJson "field"), ("path", toJson (Path.toList path)),
@@ -56,8 +62,11 @@ def componentToJson {state : DataType} (component : Component state) (history : 
       ("children", toJson ((FinEnum.toList items).map fun index => componentToJson (children (order index)) history))] ++
       if history then [("childIds", toJson ((FinEnum.toList items).map fun index => items.label (order index)))] else [])
 
-def encode {state : DataType} (refined : RefinedDataType state) (component : Component state)
-    (draft : ⟦state⟧) : String :=
+def encode {state : DataType}
+  (refined : RefinedDataType state)
+  (component : Component state)
+  (draft : ⟦state⟧)
+  : String :=
   (Json.mkObj [
     ("version", toJson (if component.supportsHistory then (6 : Nat) else 4)), ("schema", DataType.toJson state),
     ("constraints", toJson ((RefinedDataType.constraints refined).map Constraint.toJson)),

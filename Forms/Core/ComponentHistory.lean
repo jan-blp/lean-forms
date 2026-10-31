@@ -58,14 +58,17 @@ structure ComponentHistory {ty : DataType} (component : Component ty) where
   actions : Array component.Invocation := #[]
 
 def ComponentHistory.apply {ty : DataType} {component : Component ty}
-    (history : ComponentHistory component) (invocation : component.Invocation)
-    : ComponentHistory component :=
+  (history : ComponentHistory component)
+  (invocation : component.Invocation)
+  : ComponentHistory component :=
   { value := component.applyInvocation history.value invocation
     actions := history.actions.push invocation }
 
-def ComponentHistory.replay {ty : DataType} (component : Component ty)
-    (initial : ⟦ty⟧) (actions : Array component.Invocation)
-    : ComponentHistory component :=
+def ComponentHistory.replay {ty : DataType}
+  (component : Component ty)
+  (initial : ⟦ty⟧)
+  (actions : Array component.Invocation)
+  : ComponentHistory component :=
   actions.foldl ComponentHistory.apply ⟨initial, #[]⟩
 
 end Forms.Composition

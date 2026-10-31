@@ -30,9 +30,13 @@ private def valueToJson {t : DataType} (value : ⟦t⟧) : Lean.Json :=
     .mkObj ((FinEnum.toList fieldNames).map fun i =>
       (fieldNames.label i, valueToJson (t := fieldTypes i) (value i)))
 
-private def runComponent (theme : NativeTerminal.Theme)
-    {state : DataType} (refined : RefinedDataType state)
-    (component : Composition.Component state) (draft : ⟦state⟧) : IO Unit := do
+private def runComponent
+  (theme : NativeTerminal.Theme)
+  {state : DataType}
+  (refined : RefinedDataType state)
+  (component : Composition.Component state)
+  (draft : ⟦state⟧)
+  : IO Unit := do
   let _ : MonadTui IO := NativeTerminal.interpreter theme
   let result ← Tui.run refined component draft
   match result with
