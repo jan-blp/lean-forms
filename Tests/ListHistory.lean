@@ -12,10 +12,42 @@ private def check (name : String) (passed : Bool) : IO Unit := do
 private def form : Component (.list .natural) :=
   .list .self "Numbers" (.field .self "Value" .naturalInput) 7
 
+example (invocation : form.ValidInvocation []) : invocation = .appendDefault := by
+  cases invocation with
+  | appendDefault => rfl
+  | remove index => exact Fin.elim0 index
+  | item index _ => exact Fin.elim0 index
+
+private def conditionalItems : Component (.list .natural) :=
+  .list .self "Numbers"
+    (.visibleWhen (.natLe (.project .self) (.value 0))
+      (.field .self "Value" .naturalInput)) 0
+
+private def testValidatedItems : IO Unit := do
+  let initial := [0, 1]
+  let allowed ← IO.ofExcept (conditionalItems.validateInvocation initial
+    (.item 0 ⟨.replace, (2 : Nat)⟩))
+  check "ValidatedItemUsesItsOwnState"
+    (conditionalItems.applyValidInvocation initial allowed == [2, 1])
+  check "OtherItemHasDifferentVisibility"
+    (match conditionalItems.validateInvocation initial (.item 1 ⟨.replace, (2 : Nat)⟩) with
+      | .error error => error == .hidden
+      | .ok _ => false)
+  let removed ← IO.ofExcept (conditionalItems.applyInvocation initial (.remove 0))
+  check "ShiftedItemRequiresItsOwnProof"
+    (match conditionalItems.validateInvocation removed (.item 0 ⟨.replace, (2 : Nat)⟩) with
+      | .error error => error == .hidden
+      | .ok _ => false)
+  check "BoundsCheckedBeforeItemVisibility"
+    (match conditionalItems.validateInvocation removed (.item 1 ⟨.replace, (2 : Nat)⟩) with
+      | .error error => error == .indexOutOfBounds 1 1
+      | .ok _ => false)
+
 private instance : MonadTui (ReaderT String (Except IO.Error)) where
   runSpecification _ := read
 
 def run : IO Unit := do
+  testValidatedItems
   let actions : Array form.Invocation := #[
     .appendDefault, .item 2 ⟨.replace, (30 : Nat)⟩, .remove 0, .item 0 ⟨.replace, (21 : Nat)⟩]
   let history ← IO.ofExcept (ComponentHistory.replay form [10, 20] actions)

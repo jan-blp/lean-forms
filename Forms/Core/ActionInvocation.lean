@@ -7,6 +7,13 @@ inductive List (itemInvocation : Type) where
   | remove (index : Nat)
   | item (index : Nat) (invocation : itemInvocation)
 
+inductive List.ValidInvocation
+  (length : Nat)
+  (itemInvocation : Fin length → Type) where
+  | appendDefault
+  | remove (index : Fin length)
+  | item (index : Fin length) (invocation : itemInvocation index)
+
 abbrev Presentation.Argument {ty : DataType} : Presentation ty → Type
   | .button .. => Unit
   | .editor .. => ⟦ty⟧

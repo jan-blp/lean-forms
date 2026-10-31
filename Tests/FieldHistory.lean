@@ -29,7 +29,47 @@ private def mixed : Component Counters.state :=
     | .left => Counters.widget .left
     | .right => .field (.field .right .self) "Right" .naturalInput)
 
+private def visibleField : Component .natural :=
+  .visibleWhen (.natLe (.project .self) (.value 0))
+    (.field .self "Value" .naturalInput)
+
+private def hideField : visibleField.ValidInvocation 0 :=
+  ⟨⟨.replace, (1 : Nat)⟩, by
+    change decide (0 ≤ 0) = true
+    decide⟩
+
+example : visibleField.applyValidInvocation 0 hideField = 1 := rfl
+
+example (invocation : visibleField.ValidInvocation 1) : False := by
+  have visible := invocation.property
+  change decide (1 ≤ 0) = true at visible
+  contradiction
+
+private def disabledField : Component .natural :=
+  .disabledWhen (.natLe (.value 1) (.project .self))
+    (.field .self "Value" .naturalInput)
+
+example (invocation : disabledField.ValidInvocation 1) : False := by
+  have enabled := invocation.property
+  change decide (1 ≤ 1) = false at enabled
+  contradiction
+
+private def testValidatedInvocation : IO Unit := do
+  let validated ← IO.ofExcept (visibleField.validateInvocation 0 ⟨.replace, (1 : Nat)⟩)
+  let current := visibleField.applyValidInvocation 0 validated
+  check "ValidatedEditCanHideItsField" (current == 1)
+  check "NextEditRequiresNewVisibilityProof"
+    (match visibleField.validateInvocation current ⟨.replace, (0 : Nat)⟩ with
+      | .error error => error == .hidden
+      | .ok _ => false)
+  let disabled := Component.disabledWhen (.value true) visibleField
+  check "OuterConditionCheckedBeforeInnerCondition"
+    (match disabled.validateInvocation current ⟨.replace, (0 : Nat)⟩ with
+      | .error error => error == .disabled
+      | .ok _ => false)
+
 def run : IO Unit := do
+  testValidatedInvocation
   checkWidget .textInput "old" "new"
   checkWidget .naturalInput 0 123456789012345678901234567890
   checkWidget .checkbox false true
