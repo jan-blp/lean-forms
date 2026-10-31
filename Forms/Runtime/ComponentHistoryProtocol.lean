@@ -17,6 +17,7 @@ inductive Error where
   | targetBeyondWidget
   | targetNotWidget
   | unsupportedComponent
+  | invocation (error : Component.InvocationError)
   | valueMismatch
   deriving DecidableEq, BEq, Repr
 
@@ -34,6 +35,7 @@ instance : ToString Error where
     | .targetBeyondWidget => "Target continues beyond action widget"
     | .targetNotWidget => "Target is not an action widget"
     | .unsupportedComponent => "Component history is not supported yet"
+    | .invocation error => toString error
     | .valueMismatch => "Submitted value does not match action replay"
 
 private def readJson {α : Type} (result : Except String α) : Except Error α :=
@@ -78,8 +80,8 @@ private def invocationToJson {ty : DataType}
   | .computed .. => fun invocation => Empty.elim invocation
   | .text .. => fun invocation => Empty.elim invocation
   | .table .. => fun invocation => Empty.elim invocation
-  | .visibleWhen .. => fun invocation => Empty.elim invocation
-  | .disabledWhen .. => fun invocation => Empty.elim invocation
+  | .visibleWhen _ body => invocationToJson body target
+  | .disabledWhen _ body => invocationToJson body target
   | .button .. => fun invocation => Empty.elim invocation
   | .appendItemButton .. => fun invocation => Empty.elim invocation
 
@@ -107,8 +109,8 @@ private def invocationFromJson {ty : DataType}
   | .computed .. => .error .targetNotWidget
   | .text .. => .error .targetNotWidget
   | .table .. => .error .targetNotWidget
-  | .visibleWhen .. => .error .targetNotWidget
-  | .disabledWhen .. => .error .targetNotWidget
+  | .visibleWhen _ body => invocationFromJson body target json
+  | .disabledWhen _ body => invocationFromJson body target json
   | .button .. => .error .targetNotWidget
   | .appendItemButton .. => .error .targetNotWidget
 
@@ -133,7 +135,7 @@ def verify {ty : DataType}
     let segments ← readJson ((json.getObjVal? "target") >>= Json.getArr?)
     let target ← readJson (segments.toList.mapM Json.getStr?)
     invocationFromJson component target json
-  let replayed := ComponentHistory.replay component initial actions
+  let replayed ← (ComponentHistory.replay component initial actions).mapError Error.invocation
   if JsonProtocol.valueToJson replayed.value != JsonProtocol.valueToJson claimed then
     throw .valueMismatch
   return replayed

@@ -1517,6 +1517,57 @@ fn history_protocol_rejects_unsupported_forms() {
 }
 
 #[test]
+fn conditional_history_checks_current_state_and_preserves_targets() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/counter.json")).unwrap();
+    for kind in ["visibleWhen", "disabledWhen"] {
+        let mut spec = source.clone();
+        let condition = if kind == "visibleWhen" {
+            json!({"kind":"natLe","left":{"kind":"project","path":[]},
+                "right":{"kind":"value","type":{"kind":"natural"},"value":"0"}})
+        } else {
+            json!({"kind":"natLe","left":{"kind":"value","type":{"kind":"natural"},"value":"1"},
+                "right":{"kind":"project","path":[]}})
+        };
+        spec["form"] = json!({"kind":kind,"condition":condition,"body":source["form"]});
+        let mut engine = Engine::parse(&spec.to_string()).unwrap();
+        keys(&mut engine, &[Key::Enter, Key::Enter]);
+        assert!(!engine.step(Key::Character('q')));
+        assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(),
+            json!({"value":"1","actions":[{"target":[],"action":"plusOne"}]}));
+
+        spec["form"] = json!({"kind":"disabledWhen",
+            "condition":{"kind":"value","type":{"kind":"boolean"},"value":false},
+            "body":{"kind":"stack","childIds":["guarded","restore"],
+                "children":[spec["form"],source["form"]]}});
+        let mut engine = Engine::parse(&spec.to_string()).unwrap();
+        engine.step(Key::Enter);
+        engine.selected = engine.fields().iter().rposition(|field| field.title == "−1").unwrap();
+        engine.step(Key::Enter);
+        engine.selected = 0;
+        engine.step(Key::Enter);
+        assert!(!engine.step(Key::Character('q')));
+        assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
+            "value":"1","actions":[
+                {"target":["guarded"],"action":"plusOne"},
+                {"target":["restore"],"action":"minusOne"},
+                {"target":["guarded"],"action":"plusOne"}]}));
+    }
+}
+
+#[test]
+fn conditional_history_rejects_unsupported_children() {
+    let source: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
+    for kind in ["visibleWhen", "disabledWhen"] {
+        let mut spec = source.clone();
+        spec["version"] = json!(6);
+        spec["form"] = json!({"kind":kind,
+            "condition":{"kind":"value","type":{"kind":"boolean"},"value":false},
+            "body":source["form"]});
+        assert!(Engine::parse(&spec.to_string()).is_err());
+    }
+}
+
+#[test]
 fn root_widget_records_each_editor_input_kind() {
     for (schema, widget, initial, argument) in [
         (json!({"kind":"boolean"}), "checkbox", json!(false), json!(true)),

@@ -32,35 +32,90 @@ private def mixed : Component mixedState :=
 private instance : MonadTui (ReaderT String (Except IO.Error)) where
   runSpecification _ := read
 
+private def visible : Component .natural :=
+  .visibleWhen (.natLe (.project .self) (.value 0)) Counter.form
+
+private def disabled : Component .natural :=
+  .disabledWhen (.natLe (.value 1) (.project .self)) Counter.form
+
+private def conditionalStack : Component .natural :=
+  .stack (items := Counters.sides) none (fun
+    | .left => .visibleWhen (.natLe (.project .self) (.value 0)) disabled
+    | .right => Counter.form)
+
+private def testConditions : IO Unit := do
+  check "ConditionalHistorySupported" (visible.supportsHistory && disabled.supportsHistory)
+  for result in [visible.applyInvocation 1 ⟨.plusOne, ()⟩,
+      visible.applyInvocation 1 ⟨.replace, (0 : Nat)⟩] do
+    check "HiddenActionRejected" (result == .error .hidden)
+  check "DisabledActionRejected" (disabled.applyInvocation 1 ⟨.plusOne, ()⟩ == .error .disabled)
+  let visibleResult ← IO.ofExcept (ComponentHistory.replay visible 0 #[⟨.plusOne, ()⟩])
+  let disabledResult ← IO.ofExcept (ComponentHistory.replay disabled 0 #[⟨.plusOne, ()⟩])
+  check "ActionCanHideItself" (visibleResult.value == 1)
+  check "ActionCanDisableItself" (disabledResult.value == 1)
+  let _ ← IO.ofExcept (ComponentHistoryProtocol.verify visible 0 (ComponentHistoryProtocol.encode visibleResult))
+  let _ ← IO.ofExcept (ComponentHistoryProtocol.verify disabled 0 (ComponentHistoryProtocol.encode disabledResult))
+  let forged ← IO.ofExcept (Lean.Json.parse
+    "{\"value\":\"2\",\"actions\":[{\"target\":[],\"action\":\"plusOne\"},{\"target\":[],\"action\":\"plusOne\"}]}")
+  check "ReplayChecksCurrentVisibility"
+    (match ComponentHistoryProtocol.verify visible 0 forged with
+      | .error error => error == .invocation .hidden
+      | .ok _ => false)
+  check "ReplayChecksCurrentEnabledState"
+    (match ComponentHistoryProtocol.verify disabled 0 forged with
+      | .error error => error == .invocation .disabled
+      | .ok _ => false)
+  let restored ← IO.ofExcept (ComponentHistory.replay conditionalStack 0 #[
+    ⟨.left, ⟨.plusOne, ()⟩⟩,
+    ⟨.right, ⟨.minusOne, ()⟩⟩,
+    ⟨.left, ⟨.plusOne, ()⟩⟩])
+  check "SiblingRestoresAvailability" (restored.value == 1 && restored.actions.size == 3)
+  let _ ← IO.ofExcept (ComponentHistoryProtocol.verify conditionalStack 0 (ComponentHistoryProtocol.encode restored))
+  let wrappedStack := Component.disabledWhen (Expr.value false) conditionalStack
+  let _ ← IO.ofExcept (ComponentHistoryProtocol.verify wrappedStack 0 (ComponentHistoryProtocol.encode restored))
+  let weakened := visible.weaken (Tests.Weakening.contentPath .natural)
+  let weakenedResult ← IO.ofExcept (ComponentHistory.replay weakened (Tests.Weakening.wrap 0) #[⟨.plusOne, ()⟩])
+  check "ConditionalWeakeningPreservesSibling" (weakenedResult.value .title == "Keep this title")
+  check "ConditionalWeakeningChecksLocalState"
+    ((weakened.applyInvocation (Tests.Weakening.wrap 1) ⟨.plusOne, ()⟩).toOption.isNone)
+  let legacy := Component.visibleWhen (Expr.value true) (Component.field Path.self "Value" Widget.naturalInput)
+  check "ConditionalLegacyRemainsUnsupported" (!legacy.supportsHistory)
+  let empty : ComponentHistory visible := ⟨1, #[]⟩
+  let _ ← IO.ofExcept (ComponentHistoryProtocol.verify visible 1 (ComponentHistoryProtocol.encode empty))
+  let result ← IO.ofExcept ((Tui.run (m := ReaderT String (Except IO.Error))
+    (.base .natural) visible 0).run (ComponentHistoryProtocol.encode visibleResult).compress)
+  check "ConditionalTuiReturnsHistory" (result.any fun result => result.actions.map Array.size == some 1)
+
 def run : IO Unit := do
+  testConditions
   let actions : Array Counters.form.Invocation := #[
     ⟨.left, ⟨.plusOne, ()⟩⟩,
     ⟨.right, ⟨.plusFive, ()⟩⟩,
     ⟨.left, ⟨.replace, (42 : Nat)⟩⟩,
     ⟨.right, ⟨.minusOne, ()⟩⟩]
-  let replayed := Composition.ComponentHistory.replay Counters.form Counters.initial actions
+  let replayed ← IO.ofExcept (Composition.ComponentHistory.replay Counters.form Counters.initial actions)
   check "IndependentWidgetTargets" (replayed.value .left == 42 && replayed.value .right == 14)
   let encoded := ComponentHistoryProtocol.encode replayed
   let checked ← IO.ofExcept (ComponentHistoryProtocol.verify Counters.form Counters.initial encoded)
   check "ComponentHistoryRoundTrip" (ComponentHistoryProtocol.encode checked == encoded)
   let reorderedResult ← IO.ofExcept (ComponentHistoryProtocol.verify reordered Counters.initial encoded)
   check "DisplayOrderPreservesTargets" (ComponentHistoryProtocol.encode reorderedResult == encoded)
-  let nestedResult := Composition.ComponentHistory.replay nested Counters.initial
-    #[⟨.right, ⟨.left, ⟨.plusOne, ()⟩⟩⟩]
+  let nestedResult ← IO.ofExcept (Composition.ComponentHistory.replay nested Counters.initial
+    #[⟨.right, ⟨.left, ⟨.plusOne, ()⟩⟩⟩])
   let nestedJson := ComponentHistoryProtocol.encode nestedResult
   let target ← IO.ofExcept (nestedJson.getObjVal? "actions" >>= fun actions =>
     actions.getArr? >>= fun actions => actions[0]!.getObjVal? "target")
   check "NestedTargetEncoding" (target == Lean.toJson (["right", "left"] : List String))
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify nested Counters.initial nestedJson)
-  let sharedResult := Composition.ComponentHistory.replay shared 0
-    #[⟨.left, ⟨.plusOne, ()⟩⟩, ⟨.right, ⟨.plusOne, ()⟩⟩]
+  let sharedResult ← IO.ofExcept (Composition.ComponentHistory.replay shared 0
+    #[⟨.left, ⟨.plusOne, ()⟩⟩, ⟨.right, ⟨.plusOne, ()⟩⟩])
   check "SamePathDifferentDefinitions" (sharedResult.value == 6)
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify shared 0 (ComponentHistoryProtocol.encode sharedResult))
   let mixedInitial : ⟦mixedState⟧ := fun
     | .left => 0
     | .right => "old"
-  let mixedResult := Composition.ComponentHistory.replay mixed mixedInitial
-    #[⟨.left, ⟨.plusOne, ()⟩⟩, ⟨.right, ⟨.replace, "new"⟩⟩]
+  let mixedResult ← IO.ofExcept (Composition.ComponentHistory.replay mixed mixedInitial
+    #[⟨.left, ⟨.plusOne, ()⟩⟩, ⟨.right, ⟨.replace, "new"⟩⟩])
   check "WidgetArgumentTypes" (mixedResult.value .left == 1 && mixedResult.value .right == "new")
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify mixed mixedInitial (ComponentHistoryProtocol.encode mixedResult))
   let weakened := Counters.form.weaken (Tests.Weakening.contentPath Counters.state)

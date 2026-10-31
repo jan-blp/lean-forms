@@ -771,6 +771,7 @@ impl Component {
                 }
                 children.iter().try_for_each(Self::validate_history)
             }
+            Self::VisibleWhen { body, .. } | Self::DisabledWhen { body, .. } => body.validate_history(),
             _ => Err("Component history is not supported yet".into()),
         }
     }

@@ -75,8 +75,8 @@ private def testDecodeErrors : IO Unit := do
 
 private def testHistory : IO Unit := do
   let initial : ComponentHistory form := ⟨10, #[]⟩
-  let first := initial.apply ⟨.plusOne, ()⟩
-  let final := first.apply ⟨.plusFive, ()⟩
+  let first ← IO.ofExcept (initial.apply ⟨.plusOne, ()⟩)
+  let final ← IO.ofExcept (first.apply ⟨.plusFive, ()⟩)
   unless final.value == 16 && final.actions.size == 2 do
     throw (IO.userError "Button application did not record the ordered history")
   let encoded := Runtime.ComponentHistoryProtocol.encode final
@@ -106,17 +106,17 @@ private def testHistory : IO Unit := do
       throw (IO.userError s!"Accepted forged submission: {forged}")
   unless (Runtime.ComponentHistoryProtocol.verify form 0 encoded).toOption.isNone do
     throw (IO.userError "Replay accepted the wrong initial draft")
-  let edited := initial.apply ⟨.replace, (42 : Nat)⟩
-  let edited := edited.apply ⟨.plusOne, ()⟩
+  let edited ← IO.ofExcept (initial.apply ⟨.replace, (42 : Nat)⟩)
+  let edited ← IO.ofExcept (edited.apply ⟨.plusOne, ()⟩)
   let checked ← IO.ofExcept (Runtime.ComponentHistoryProtocol.verify form 10
     (Runtime.ComponentHistoryProtocol.encode edited))
   unless checked.value == 43 && checked.actions.size == 2 do
     throw (IO.userError "Editor argument was not replayed")
   -- Order matters for these buttons.
-  let ordered := ComponentHistory.replay
-    form 0 #[⟨.minusOne, ()⟩, ⟨.plusFive, ()⟩]
+  let ordered ← IO.ofExcept (ComponentHistory.replay
+    form 0 #[⟨.minusOne, ()⟩, ⟨.plusFive, ()⟩])
   unless ordered.value == 5 do throw (IO.userError "Replay changed action order")
-  let repeated := ComponentHistory.replay form 0 #[⟨.plusOne, ()⟩, ⟨.plusOne, ()⟩]
+  let repeated ← IO.ofExcept (ComponentHistory.replay form 0 #[⟨.plusOne, ()⟩, ⟨.plusOne, ()⟩])
   unless repeated.value == 2 && repeated.actions.size == 2 do
     throw (IO.userError "Replay lost a repeated invocation")
 

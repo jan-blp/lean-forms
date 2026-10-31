@@ -13,8 +13,8 @@ def Component.supportsHistory {ty : DataType} : Component ty → Bool
   | .field .. => false
   | .list .. => false
   | .sum .. => false
-  | .visibleWhen .. => false
-  | .disabledWhen .. => false
+  | .visibleWhen _ body => body.supportsHistory
+  | .disabledWhen _ body => body.supportsHistory
   | .button .. => false
   | .appendItemButton .. => false
 
@@ -28,18 +28,28 @@ def Component.Invocation {ty : DataType} : Component ty → Type
   | .computed .. => Empty
   | .text .. => Empty
   | .table .. => Empty
-  | .visibleWhen .. => Empty
-  | .disabledWhen .. => Empty
+  | .visibleWhen _ body => body.Invocation
+  | .disabledWhen _ body => body.Invocation
   | .button .. => Empty
   | .appendItemButton .. => Empty
+
+inductive Component.InvocationError where
+  | hidden
+  | disabled
+  deriving DecidableEq, BEq, Repr
+
+instance : ToString Component.InvocationError where
+  toString
+    | .hidden => "Action target is hidden"
+    | .disabled => "Action target is disabled"
 
 def Component.applyInvocation {ty : DataType}
   (component : Component ty)
   (value : ⟦ty⟧)
-  : component.Invocation → ⟦ty⟧ :=
+  : component.Invocation → Except Component.InvocationError ⟦ty⟧ :=
   match component with
   | .actionWidget path _ _ => fun invocation =>
-      path.set (invocation.apply (path.get value)) value
+      .ok (path.set (invocation.apply (path.get value)) value)
   | .stack _ children _ => fun ⟨child, invocation⟩ =>
       (children child).applyInvocation value invocation
   | .field .. => fun invocation => Empty.elim invocation
@@ -48,8 +58,10 @@ def Component.applyInvocation {ty : DataType}
   | .computed .. => fun invocation => Empty.elim invocation
   | .text .. => fun invocation => Empty.elim invocation
   | .table .. => fun invocation => Empty.elim invocation
-  | .visibleWhen .. => fun invocation => Empty.elim invocation
-  | .disabledWhen .. => fun invocation => Empty.elim invocation
+  | .visibleWhen condition body => fun invocation =>
+      if condition.eval value then body.applyInvocation value invocation else .error .hidden
+  | .disabledWhen condition body => fun invocation =>
+      if condition.eval value then .error .disabled else body.applyInvocation value invocation
   | .button .. => fun invocation => Empty.elim invocation
   | .appendItemButton .. => fun invocation => Empty.elim invocation
 
@@ -60,15 +72,15 @@ structure ComponentHistory {ty : DataType} (component : Component ty) where
 def ComponentHistory.apply {ty : DataType} {component : Component ty}
   (history : ComponentHistory component)
   (invocation : component.Invocation)
-  : ComponentHistory component :=
-  { value := component.applyInvocation history.value invocation
-    actions := history.actions.push invocation }
+  : Except Component.InvocationError (ComponentHistory component) := do
+  let value ← component.applyInvocation history.value invocation
+  return { value, actions := history.actions.push invocation }
 
 def ComponentHistory.replay {ty : DataType}
   (component : Component ty)
   (initial : ⟦ty⟧)
   (actions : Array component.Invocation)
-  : ComponentHistory component :=
-  actions.foldl ComponentHistory.apply ⟨initial, #[]⟩
+  : Except Component.InvocationError (ComponentHistory component) :=
+  actions.foldlM ComponentHistory.apply ⟨initial, #[]⟩
 
 end Forms.Composition
