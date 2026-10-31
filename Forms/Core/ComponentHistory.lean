@@ -20,7 +20,7 @@ def Component.supportsHistory {ty : DataType} : Component ty → Bool
 
 /-- Targets use component identities, not display positions or state paths. -/
 def Component.Invocation {ty : DataType} : Component ty → Type
-  | .actionWidget (value := value) (ids := ids) .. => Action.Invocation value ids
+  | .actionWidget _ _ actions => Action.Invocation (fun name => (actions name).presentation)
   | .stack (items := items) _ children _ => (child : items) × (children child).Invocation
   | .field .. => Empty
   | .list .. => Empty
@@ -36,11 +36,10 @@ def Component.Invocation {ty : DataType} : Component ty → Type
 def Component.applyInvocation {ty : DataType}
   (component : Component ty)
   (value : ⟦ty⟧)
-  : component.Invocation → Except Action.InvocationError ⟦ty⟧ :=
+  : component.Invocation → ⟦ty⟧ :=
   match component with
-  | .actionWidget path _ actions => fun invocation => do
-      let updated ← Action.Invocation.apply (fun name => (actions name).presentation) (path.get value) invocation
-      return path.set updated value
+  | .actionWidget path _ _ => fun invocation =>
+      path.set (invocation.apply (path.get value)) value
   | .stack _ children _ => fun ⟨child, invocation⟩ =>
       (children child).applyInvocation value invocation
   | .field .. => fun invocation => Empty.elim invocation
@@ -60,13 +59,13 @@ structure ComponentHistory {ty : DataType} (component : Component ty) where
 
 def ComponentHistory.apply {ty : DataType} {component : Component ty}
     (history : ComponentHistory component) (invocation : component.Invocation)
-    : Except Action.InvocationError (ComponentHistory component) := do
-  let value ← component.applyInvocation history.value invocation
-  return { value, actions := history.actions.push invocation }
+    : ComponentHistory component :=
+  { value := component.applyInvocation history.value invocation
+    actions := history.actions.push invocation }
 
 def ComponentHistory.replay {ty : DataType} (component : Component ty)
     (initial : ⟦ty⟧) (actions : Array component.Invocation)
-    : Except Action.InvocationError (ComponentHistory component) :=
-  actions.foldlM ComponentHistory.apply ⟨initial, #[]⟩
+    : ComponentHistory component :=
+  actions.foldl ComponentHistory.apply ⟨initial, #[]⟩
 
 end Forms.Composition

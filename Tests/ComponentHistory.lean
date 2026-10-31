@@ -34,33 +34,33 @@ private instance : MonadTui (ReaderT String (Except IO.Error)) where
 
 def run : IO Unit := do
   let actions : Array Counters.form.Invocation := #[
-    ⟨.left, .button .plusOne⟩,
-    ⟨.right, .button .plusFive⟩,
-    ⟨.left, .editor .replace 42⟩,
-    ⟨.right, .button .minusOne⟩]
-  let replayed ← IO.ofExcept (Composition.ComponentHistory.replay Counters.form Counters.initial actions)
+    ⟨.left, ⟨.plusOne, ()⟩⟩,
+    ⟨.right, ⟨.plusFive, ()⟩⟩,
+    ⟨.left, ⟨.replace, (42 : Nat)⟩⟩,
+    ⟨.right, ⟨.minusOne, ()⟩⟩]
+  let replayed := Composition.ComponentHistory.replay Counters.form Counters.initial actions
   check "IndependentWidgetTargets" (replayed.value .left == 42 && replayed.value .right == 14)
   let encoded := ComponentHistoryProtocol.encode replayed
   let checked ← IO.ofExcept (ComponentHistoryProtocol.verify Counters.form Counters.initial encoded)
   check "ComponentHistoryRoundTrip" (ComponentHistoryProtocol.encode checked == encoded)
   let reorderedResult ← IO.ofExcept (ComponentHistoryProtocol.verify reordered Counters.initial encoded)
   check "DisplayOrderPreservesTargets" (ComponentHistoryProtocol.encode reorderedResult == encoded)
-  let nestedResult ← IO.ofExcept (Composition.ComponentHistory.replay nested Counters.initial
-    #[⟨.right, ⟨.left, .button .plusOne⟩⟩])
+  let nestedResult := Composition.ComponentHistory.replay nested Counters.initial
+    #[⟨.right, ⟨.left, ⟨.plusOne, ()⟩⟩⟩]
   let nestedJson := ComponentHistoryProtocol.encode nestedResult
   let target ← IO.ofExcept (nestedJson.getObjVal? "actions" >>= fun actions =>
     actions.getArr? >>= fun actions => actions[0]!.getObjVal? "target")
   check "NestedTargetEncoding" (target == Lean.toJson (["right", "left"] : List String))
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify nested Counters.initial nestedJson)
-  let sharedResult ← IO.ofExcept (Composition.ComponentHistory.replay shared 0
-    #[⟨.left, .button .plusOne⟩, ⟨.right, .button .plusOne⟩])
+  let sharedResult := Composition.ComponentHistory.replay shared 0
+    #[⟨.left, ⟨.plusOne, ()⟩⟩, ⟨.right, ⟨.plusOne, ()⟩⟩]
   check "SamePathDifferentDefinitions" (sharedResult.value == 6)
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify shared 0 (ComponentHistoryProtocol.encode sharedResult))
   let mixedInitial : ⟦mixedState⟧ := fun
     | .left => 0
     | .right => "old"
-  let mixedResult ← IO.ofExcept (Composition.ComponentHistory.replay mixed mixedInitial
-    #[⟨.left, .button .plusOne⟩, ⟨.right, .editor .replace "new"⟩])
+  let mixedResult := Composition.ComponentHistory.replay mixed mixedInitial
+    #[⟨.left, ⟨.plusOne, ()⟩⟩, ⟨.right, ⟨.replace, "new"⟩⟩]
   check "WidgetArgumentTypes" (mixedResult.value .left == 1 && mixedResult.value .right == "new")
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify mixed mixedInitial (ComponentHistoryProtocol.encode mixedResult))
   let weakened := Counters.form.weaken (Tests.Weakening.contentPath Counters.state)

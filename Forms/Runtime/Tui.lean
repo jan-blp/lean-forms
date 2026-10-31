@@ -22,7 +22,7 @@ def run {m : Type → Type} [Monad m] [MonadExceptOf IO.Error m] [MonadTui m]
     let json ← Lean.Json.parse result
     if json == .null then return none
     if component.supportsHistory then
-      let history ← ComponentHistoryProtocol.verify component draft json
+      let history ← (ComponentHistoryProtocol.verify component draft json).mapError toString
       let some value := RefinedDataType.validate refined history.value
         | throw "Invalid replayed value"
       return some { value, actions := some history.actions }

@@ -2,33 +2,26 @@ import Forms.Core.WidgetAction
 
 namespace Forms.Action
 
-inductive Invocation (ty : DataType) (actionName : Type) where
-  | button (name : actionName)
-  | editor (name : actionName) (argument : ⟦ty⟧)
+abbrev Presentation.Argument {ty : DataType} : Presentation ty → Type
+  | .button .. => Unit
+  | .editor .. => ⟦ty⟧
 
-inductive InvocationError where
-  | missingArgument
-  | unexpectedArgument
-  deriving DecidableEq, BEq, Repr
+structure Invocation {ty : DataType} {actionName : Type}
+    (definitions : actionName → Presentation ty) where
+  name : actionName
+  argument : (definitions name).Argument
 
-instance : ToString InvocationError where
-  toString
-    | .missingArgument => "Action requires an editor argument"
-    | .unexpectedArgument => "Button does not accept an argument"
+private def applyArgument {ty : DataType} (presentation : Presentation ty)
+    (current : ⟦ty⟧) : presentation.Argument → ⟦ty⟧ :=
+  match presentation with
+  | .button body => fun () => body.eval current
+  | .editor _ body => fun argument => body.eval (fun
+      | .current => current
+      | .argument => argument)
 
 def Invocation.apply {ty : DataType} {actionName : Type}
-    (definitions : actionName → Presentation ty)
-    (current : ⟦ty⟧)
-    (invocation : Invocation ty actionName)
-    : Except InvocationError ⟦ty⟧ :=
-  match invocation with
-  | .button name => match definitions name with
-    | .button body => .ok (body.eval current)
-    | .editor .. => .error .missingArgument
-  | .editor name argument => match definitions name with
-    | .button .. => .error .unexpectedArgument
-    | .editor _ body => .ok (body.eval (fun
-        | .current => current
-        | .argument => argument))
+    {definitions : actionName → Presentation ty} (current : ⟦ty⟧)
+    (invocation : Invocation definitions) : ⟦ty⟧ :=
+  applyArgument (definitions invocation.name) current invocation.argument
 
 end Forms.Action

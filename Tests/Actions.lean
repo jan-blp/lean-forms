@@ -46,10 +46,37 @@ namespace Tests.Actions
 
 open ExampleForms.Counter
 
+example : True := by
+  fail_if_success have : form.Invocation := ⟨.replace, ()⟩
+  fail_if_success have : form.Invocation := ⟨.plusOne, (42 : Nat)⟩
+  fail_if_success have : form.Invocation := ⟨.replace, "42"⟩
+  trivial
+
+private def addDefinitions : Unit → Action.Presentation .natural := fun _ => addArgument.presentation
+private def addInvocation : Action.Invocation addDefinitions := ⟨(), (3 : Nat)⟩
+#guard addInvocation.apply 5 == 8
+
+private def testDecodeErrors : IO Unit := do
+  let cases : List (Runtime.ComponentHistoryProtocol.Error × String) := [
+    (.missingArgument, "{\"target\":[],\"action\":\"replace\"}"),
+    (.unexpectedArgument, "{\"target\":[],\"action\":\"plusOne\",\"argument\":null}"),
+    (.unknownAction "missing", "{\"target\":[],\"action\":\"missing\"}"),
+    (.targetBeyondWidget, "{\"target\":[\"extra\"],\"action\":\"plusOne\"}"),
+    (.invalidFields ["target", "action"], "{\"target\":[],\"action\":\"plusOne\",\"extra\":true}"),
+    (.valueMismatch, "{\"target\":[],\"action\":\"plusOne\"}")]
+  for (expected, entry) in cases do
+    let invocation ← IO.ofExcept (Lean.Json.parse entry)
+    let submission := Lean.Json.mkObj [
+      ("value", Lean.toJson "10"), ("actions", Lean.Json.arr #[invocation])]
+    match Runtime.ComponentHistoryProtocol.verify form 10 submission with
+    | .error actual =>
+      unless actual == expected do throw (IO.userError s!"Expected {repr expected}, got {repr actual}")
+    | .ok _ => throw (IO.userError "Expected a typed decoding error")
+
 private def testHistory : IO Unit := do
   let initial : ComponentHistory form := ⟨10, #[]⟩
-  let first ← IO.ofExcept (initial.apply (.button .plusOne))
-  let final ← IO.ofExcept (first.apply (.button .plusFive))
+  let first := initial.apply ⟨.plusOne, ()⟩
+  let final := first.apply ⟨.plusFive, ()⟩
   unless final.value == 16 && final.actions.size == 2 do
     throw (IO.userError "Button application did not record the ordered history")
   let encoded := Runtime.ComponentHistoryProtocol.encode final
@@ -79,29 +106,17 @@ private def testHistory : IO Unit := do
       throw (IO.userError s!"Accepted forged submission: {forged}")
   unless (Runtime.ComponentHistoryProtocol.verify form 0 encoded).toOption.isNone do
     throw (IO.userError "Replay accepted the wrong initial draft")
-  unless (match initial.apply (.button .replace) with
-    | .error error => error == .missingArgument
-    | .ok _ => false : Bool) do
-    throw (IO.userError "Accepted an editor without its argument")
-  let edited ← IO.ofExcept (initial.apply (.editor .replace 42))
-  let edited ← IO.ofExcept (edited.apply (.button .plusOne))
+  let edited := initial.apply ⟨.replace, (42 : Nat)⟩
+  let edited := edited.apply ⟨.plusOne, ()⟩
   let checked ← IO.ofExcept (Runtime.ComponentHistoryProtocol.verify form 10
     (Runtime.ComponentHistoryProtocol.encode edited))
   unless checked.value == 43 && checked.actions.size == 2 do
     throw (IO.userError "Editor argument was not replayed")
-  unless (match initial.apply (.editor .plusOne 42) with
-    | .error error => error == .unexpectedArgument
-    | .ok _ => false : Bool) do
-    throw (IO.userError "Button accepted an argument")
-  unless (match ComponentHistory.replay form 0 #[.button .plusOne, .button .replace] with
-    | .error error => error == .missingArgument
-    | .ok _ => false : Bool) do
-    throw (IO.userError "Replay lost the invocation error")
   -- Order matters for these buttons.
-  let ordered ← IO.ofExcept (ComponentHistory.replay
-    form 0 #[.button .minusOne, .button .plusFive])
+  let ordered := ComponentHistory.replay
+    form 0 #[⟨.minusOne, ()⟩, ⟨.plusFive, ()⟩]
   unless ordered.value == 5 do throw (IO.userError "Replay changed action order")
-  let repeated ← IO.ofExcept (ComponentHistory.replay form 0 #[.button .plusOne, .button .plusOne])
+  let repeated := ComponentHistory.replay form 0 #[⟨.plusOne, ()⟩, ⟨.plusOne, ()⟩]
   unless repeated.value == 2 && repeated.actions.size == 2 do
     throw (IO.userError "Replay lost a repeated invocation")
 
@@ -135,6 +150,7 @@ private def testReturn : IO Unit := do
 
 def run : IO Unit := do
   testHistory
+  testDecodeErrors
   testReturn
   let encoded := Runtime.CompositionProtocol.encode (.base .natural) ExampleForms.Counter.form 0
   let expected ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "native/tui/tests/counter.json"))
