@@ -807,7 +807,7 @@ impl Component {
                             (id, body.ty(&action_context(schema))?)
                         }
                     };
-                    if id.is_empty() || !ids.insert(id) { return Err("Action IDs must be nonempty and unique within a widget".into()); }
+                    if !ids.insert(id) { return Err("Action IDs must be unique within a widget".into()); }
                     if result != *schema { return Err("Action body must return the widget value type".into()); }
                 }
                 Ok(())

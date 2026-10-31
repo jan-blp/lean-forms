@@ -1451,6 +1451,20 @@ fn widget_action_specs_reject_duplicate_ids_and_wrong_types() {
 }
 
 #[test]
+fn empty_action_ids_are_recorded_and_must_be_unique() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/counter.json")).unwrap();
+    spec["form"]["actions"][0]["id"] = json!("");
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    engine.step(Key::Enter);
+    engine.step(Key::Character('q'));
+    assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(),
+        json!({"value":"1", "actions":[{"target":[],"action":""}]}));
+
+    spec["form"]["actions"][1]["id"] = json!("");
+    assert!(Engine::parse(&spec.to_string()).is_err());
+}
+
+#[test]
 fn root_widget_returns_only_accepted_invocations() {
     let source = include_str!("../../tests/counter.json");
     let mut engine = Engine::parse(source).unwrap();
