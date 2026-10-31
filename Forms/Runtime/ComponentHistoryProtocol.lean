@@ -74,7 +74,9 @@ private def invocationToJson {ty : DataType}
         argumentToJson (actions invocation.name).presentation invocation.argument)
   | .stack (items := items) _ children _ => fun ⟨child, invocation⟩ =>
       invocationToJson (children child) (target ++ [items.label child]) invocation
-  | .field .. => fun invocation => Empty.elim invocation
+  | .field _ _ widget => fun invocation =>
+      Json.mkObj ([("target", toJson target), ("action", toJson "replace")] ++
+        argumentToJson (.replace widget) invocation.argument)
   | .list .. => fun invocation => Empty.elim invocation
   | .sum .. => fun invocation => Empty.elim invocation
   | .computed .. => fun invocation => Empty.elim invocation
@@ -103,7 +105,11 @@ private def invocationFromJson {ty : DataType}
       let some child := (FinEnum.toList items).find? (fun child => items.label child == name)
         | throw (.unknownComponent name)
       return ⟨child, ← invocationFromJson (children child) rest json⟩
-  | .field .. => .error .targetNotWidget
+  | .field _ _ widget => do
+      unless target.isEmpty do throw .targetBeyondWidget
+      let name ← readJson ((json.getObjVal? "action") >>= Json.getStr?)
+      unless name == "replace" do throw (.unknownAction name)
+      return ⟨.replace, ← argumentFromJson (.replace widget) json⟩
   | .list .. => .error .targetNotWidget
   | .sum .. => .error .targetNotWidget
   | .computed .. => .error .targetNotWidget

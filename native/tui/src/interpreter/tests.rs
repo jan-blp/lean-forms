@@ -124,7 +124,9 @@ fn invalid_drafts_are_editable_but_not_submittable() {
     assert!(!e.step(Key::Character('q')));
     assert_eq!(
         serde_json::from_str::<Value>(&e.result()).unwrap(),
-        json!({"home":"16", "away":"16"})
+        json!({"value":{"home":"16", "away":"16"},"actions":[
+            {"target":["home"],"action":"replace","argument":"16"},
+            {"target":["away"],"action":"replace","argument":"16"}]})
     );
 }
 #[test]
@@ -594,6 +596,7 @@ fn display_order_changes_navigation_without_changing_values_or_validation() {
     let mut spec: Value =
         serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
     spec["form"]["children"].as_array_mut().unwrap().reverse();
+    spec["form"]["childIds"].as_array_mut().unwrap().reverse();
     let mut e = Engine::parse(&spec.to_string()).unwrap();
     assert_eq!(
         e.fields()
@@ -612,7 +615,9 @@ fn display_order_changes_navigation_without_changing_values_or_validation() {
     assert!(!e.step(Key::Character('q')));
     assert_eq!(
         serde_json::from_str::<Value>(&e.result()).unwrap(),
-        json!({"home":"24","away":"23"})
+        json!({"value":{"home":"24","away":"23"},"actions":[
+            {"target":["away"],"action":"replace","argument":"23"},
+            {"target":["home"],"action":"replace","argument":"24"}]})
     );
 }
 
@@ -897,7 +902,10 @@ fn date_editor_and_comparisons_preserve_calendar_validity() {
     assert!(!e.step(Key::Character('q')));
     assert_eq!(
         serde_json::from_str::<Value>(&e.result()).unwrap(),
-        json!({"startDate":"2028-02-29", "endDate":"2028-02-29"})
+        json!({"value":{"startDate":"2028-02-29", "endDate":"2028-02-29"},"actions":[
+            {"target":["startDate"],"action":"replace","argument":"2028-02-29"},
+            {"target":["endDate"],"action":"replace","argument":"2028-02-28"},
+            {"target":["endDate"],"action":"replace","argument":"2028-02-29"}]})
     );
 }
 
@@ -915,7 +923,7 @@ fn date_expressions_and_widgets_are_type_checked() {
         json!({"kind":"value", "type":{"kind":"date"}, "value":"2028-02-30"});
     assert!(Engine::parse(&spec.to_string()).is_err());
     let mut spec = source;
-    spec["form"] = json!({"kind":"stack", "children":[spec["form"], {"kind":"computed", "label":"Start copy", "type":{"kind":"date"},
+    spec["form"] = json!({"kind":"stack", "childIds":["form","copy"], "children":[spec["form"], {"kind":"computed", "label":"Start copy", "type":{"kind":"date"},
         "expression":{"kind":"project", "path":["startDate"]}}]});
     let e = Engine::parse(&spec.to_string()).unwrap();
     assert_eq!(e.shown(e.fields().last().unwrap()), "2028-02-28");
@@ -1036,7 +1044,7 @@ fn report_filters_refresh_summary_and_rows_without_changing_source_results() {
     assert_eq!(engine.spec.value["results"], source);
     assert!(!engine.step(Key::Character('q')));
     let result: Value = serde_json::from_str(&engine.result()).unwrap();
-    assert_eq!(result["filters"], json!({"provider":1,"failuresOnly":true}));
+    assert_eq!(result["value"]["filters"], json!({"provider":1,"failuresOnly":true}));
 }
 
 #[test]
@@ -1511,7 +1519,7 @@ fn root_editor_history_records_arguments_before_transformation() {
 
 #[test]
 fn history_protocol_rejects_unsupported_forms() {
-    let mut spec: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
     spec["version"] = json!(6);
     assert!(Engine::parse(&spec.to_string()).is_err());
 }
@@ -1556,7 +1564,7 @@ fn conditional_history_checks_current_state_and_preserves_targets() {
 
 #[test]
 fn conditional_history_rejects_unsupported_children() {
-    let source: Value = serde_json::from_str(include_str!("../../tests/person.json")).unwrap();
+    let source: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
     for kind in ["visibleWhen", "disabledWhen"] {
         let mut spec = source.clone();
         spec["version"] = json!(6);
@@ -1568,27 +1576,57 @@ fn conditional_history_rejects_unsupported_children() {
 }
 
 #[test]
-fn root_widget_records_each_editor_input_kind() {
-    for (schema, widget, initial, argument) in [
-        (json!({"kind":"boolean"}), "checkbox", json!(false), json!(true)),
-        (json!({"kind":"enum","options":["A","B"]}), "select", json!(0), json!(1)),
-        (json!({"kind":"text"}), "textInput", json!("old"), json!("new")),
-        (json!({"kind":"date"}), "dateInput", json!("2028-02-28"), json!("2028-02-29")),
-    ] {
-        let spec = json!({"version":6,"schema":schema,"value":initial,"constraints":[],
-            "form":{"kind":"actionWidget","path":[],"schema":schema,"label":"Editor",
-                "actions":[{"id":"replace","label":"Value","kind":"editor","widget":widget,
-                    "body":{"kind":"project","path":["argument"]}}]}});
-        let mut engine = Engine::parse(&spec.to_string()).unwrap();
-        match widget {
-            "checkbox" => { engine.step(Key::Character(' ')); }
-            "select" => keys(&mut engine, &[Key::Enter, Key::Down, Key::Enter]),
-            _ => edit(&mut engine, argument.as_str().unwrap()),
+fn fields_and_action_widgets_record_each_editor_input_kind() {
+    for ordinary_field in [false, true] {
+        for (schema, widget, initial, argument) in [
+            (json!({"kind":"natural"}), "naturalInput", json!("0"), json!("123456789012345678901234567890")),
+            (json!({"kind":"boolean"}), "checkbox", json!(false), json!(true)),
+            (json!({"kind":"enum","options":["A","B"]}), "select", json!(0), json!(1)),
+            (json!({"kind":"text"}), "textInput", json!("old"), json!("new")),
+            (json!({"kind":"date"}), "dateInput", json!("2028-02-28"), json!("2028-02-29")),
+        ] {
+            let mut spec = json!({"version":6,"schema":schema,"value":initial,"constraints":[],
+                "form":{"kind":"actionWidget","path":[],"schema":schema,"label":"Editor",
+                    "actions":[{"id":"replace","label":"Value","kind":"editor","widget":widget,
+                        "body":{"kind":"project","path":["argument"]}}]}});
+            if ordinary_field {
+                spec["form"] = json!({"kind":"field","path":[],"schema":schema,
+                    "label":"Value","widget":widget});
+            }
+            let mut engine = Engine::parse(&spec.to_string()).unwrap();
+            match widget {
+                "checkbox" => { engine.step(Key::Character(' ')); }
+                "select" => keys(&mut engine, &[Key::Enter, Key::Down, Key::Enter]),
+                _ => edit(&mut engine, argument.as_str().unwrap()),
+            }
+            assert!(!engine.step(Key::Character('q')));
+            assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(),
+                json!({"value":argument,"actions":[{"target":[],"action":"replace","argument":argument}]}));
         }
-        assert!(!engine.step(Key::Character('q')));
-        assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(),
-            json!({"value":argument,"actions":[{"target":[],"action":"replace","argument":argument}]}));
     }
+}
+
+#[test]
+fn ordinary_fields_record_only_accepted_edits() {
+    let spec = json!({"version":6,"schema":{"kind":"natural"},"value":"0","constraints":[],
+        "form":{"kind":"field","path":[],"schema":{"kind":"natural"},
+            "label":"Value","widget":"naturalInput"}});
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    edit(&mut engine, "bad");
+    assert!(engine.editor.as_ref().unwrap().error.is_some());
+    engine.step(Key::Escape);
+    keys(&mut engine, &[Key::Enter, Key::Clear, Key::Character('9'), Key::Escape]);
+    edit(&mut engine, "0");
+    edit(&mut engine, "0");
+    assert!(!engine.step(Key::Character('q')));
+    assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
+        "value":"0","actions":[{"target":[],"action":"replace","argument":"0"},
+            {"target":[],"action":"replace","argument":"0"}]}));
+
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    edit(&mut engine, "1");
+    assert!(!engine.step(Key::Escape));
+    assert_eq!(engine.result(), "null");
 }
 
 #[test]
@@ -1640,8 +1678,9 @@ fn history_stacks_reject_missing_duplicate_and_mismatched_ids() {
     malformed["form"].as_object_mut().unwrap().remove("childIds");
     assert!(Engine::parse(&malformed.to_string()).is_err());
     let mut mixed = spec;
-    mixed["form"]["children"][1] = json!({"kind":"field","path":["right"],
-        "schema":{"kind":"natural"},"label":"Right","widget":"naturalInput"});
+    mixed["form"]["children"][1] = json!({"kind":"button","label":"Right",
+        "action":{"kind":"set","path":["right"],
+            "value":{"kind":"value","type":{"kind":"natural"},"value":"0"}}});
     assert!(Engine::parse(&mixed.to_string()).is_err());
     mixed["version"] = json!(4);
     assert!(Engine::parse(&mixed.to_string()).is_ok());

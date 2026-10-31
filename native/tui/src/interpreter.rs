@@ -764,7 +764,7 @@ fn set(value: &mut Value, path: &[Step], replacement: Value) {
 impl Component {
     fn validate_history(&self) -> Result<(), String> {
         match self {
-            Self::ActionWidget { .. } | Self::Computed { .. } | Self::Text { .. } | Self::Table { .. } => Ok(()),
+            Self::ActionWidget { .. } | Self::Field { .. } | Self::Computed { .. } | Self::Text { .. } | Self::Table { .. } => Ok(()),
             Self::Stack { children, child_ids, .. } => {
                 if child_ids.is_none() {
                     return Err("History stacks require child IDs".into());
@@ -1187,7 +1187,7 @@ impl Component {
                 let section = labels.join(" › ");
                 labels.push(label.clone());
                 out.push(Field {
-                    action_id: None,
+                    action_id: Some("replace".into()),
                     target: vec![],
                     input_transform: None,
                     computed_value: None,

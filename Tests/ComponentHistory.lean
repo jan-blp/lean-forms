@@ -78,7 +78,7 @@ private def testConditions : IO Unit := do
   check "ConditionalWeakeningPreservesSibling" (weakenedResult.value .title == "Keep this title")
   check "ConditionalWeakeningChecksLocalState"
     ((weakened.applyInvocation (Tests.Weakening.wrap 1) ⟨.plusOne, ()⟩).toOption.isNone)
-  let legacy := Component.visibleWhen (Expr.value true) (Component.field Path.self "Value" Widget.naturalInput)
+  let legacy := Component.visibleWhen (Expr.value true) (Component.button "Increment" (Action.increment Path.self))
   check "ConditionalLegacyRemainsUnsupported" (!legacy.supportsHistory)
   let empty : ComponentHistory visible := ⟨1, #[]⟩
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify visible 1 (ComponentHistoryProtocol.encode empty))
@@ -149,7 +149,7 @@ def run : IO Unit := do
     result.value .left == 42 && result.actions.map Array.size == some 4)
   let unsupported : Component Counters.state := .stack (items := Counters.sides) none (fun
     | .left => Counters.widget .left
-    | .right => .field (.field .right .self) "Right" .naturalInput)
+    | .right => .button "Right" (.increment (.field .right .self)))
   check "MixedLegacyFormIsExplicit" (!unsupported.supportsHistory)
   let result ← IO.ofExcept ((Tui.run (m := ReaderT String (Except IO.Error))
     (.base Counters.state) unsupported Counters.initial).run (JsonProtocol.valueToJson Counters.initial).compress)

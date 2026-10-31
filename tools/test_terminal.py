@@ -16,6 +16,20 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms'
 
 
+def wire_value(schema, value):
+    kind = schema['kind']
+    if kind == 'natural':
+        return str(value)
+    if kind == 'enum':
+        return schema['options'].index(value)
+    if kind == 'record':
+        return {field['name']: wire_value(field['type'], value[field['name']])
+                for field in schema['fields']}
+    if kind == 'list':
+        return [wire_value(schema['element'], item) for item in value]
+    return value
+
+
 def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None, invoice=False, shapes=False, booking=False, report=False, basket=False, counter=False, counters=False, actions=None):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 100, 0, 0))
@@ -69,6 +83,13 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
                 assert result == {"value": str(expected), "actions": [
                     {"target": [], **({"action": action} if isinstance(action, str) else action)}
                     for action in actions]}, result
+            elif not counters and isinstance(result, dict) and 'actions' in result:
+                name = 'thermostat' if thermostat else 'booking' if booking else 'report' if report else 'person'
+                spec = json.loads((ROOT / 'native/tui/tests' / f'{name}.json').read_text())
+                assert result['value'] == wire_value(spec['schema'], expected), result
+                assert isinstance(result['actions'], list), result
+                if actions is not None:
+                    assert result['actions'] == actions, result
             else:
                 assert result == expected, result
         if theme:
@@ -92,7 +113,7 @@ initial = {'name': 'Ada', 'age': 28, 'subscribed': False, 'address': {'street': 
 output = session(b'j\r\x15-1\r\x1542\rj j\r\x15Elm Street\rk  q', {'name': 'Ada', 'age': 42, 'subscribed': True, 'address': {'street': 'Elm Street', 'kind': 'Home'}})
 assert b'non-negative whole number' in output
 session('i\x15Ω'.encode(), None, interrupt=True)
-output = session(b'q', initial)
+output = session(b'q', initial, actions=[])
 assert b'Send me postal mail' in output
 assert b'Address' not in output
 for theme in ['frappe', 'macchiato', 'mocha', 'latte', 'ayu-light', 'ayu-dark', 'nord']:
@@ -102,7 +123,10 @@ output = session(b'j\r\x1517\rq\r\x15121\rq\r\x1518\rq', {'name': 'Ada', 'age': 
 assert b'Attendees must be between 18 and 120' in output
 session(b'jj jj\rj\rkk q', {'name': 'Ada', 'age': 28, 'subscribed': False, 'address': {'street': 'Lambda Lane', 'kind': 'Work'}})
 session(b'jj jj\rj', {**initial, 'subscribed': True}, cancel=True)
-output = session(b'\r\x1516\rqj\r\x1516\rq', {'home': 16, 'away': 16}, thermostat=True)
+output = session(b'\r\x1516\rqj\r\x1516\rq', {'home': 16, 'away': 16}, thermostat=True, actions=[
+    {'target': ['home'], 'action': 'replace', 'argument': '16'},
+    {'target': ['away'], 'action': 'replace', 'argument': '16'},
+])
 assert b'Away temperature must not exceed home temperature' in output
 session(b'\r\x1516\rx', None, thermostat=True)
 session(b'x', None)

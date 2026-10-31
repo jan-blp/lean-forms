@@ -105,6 +105,10 @@
     }
   ],
   "form": {
+    "childIds": [
+      "startDate",
+      "endDate"
+    ],
     "children": [
       {
         "kind": "field",
@@ -153,5 +157,5 @@
     "endDate": "2028-03-01",
     "startDate": "2028-02-28"
   },
-  "version": 4
+  "version": 6
 }

@@ -16,12 +16,19 @@ def actionInputs : Enum where
     | .current => "current"
     | .argument => "argument"
 
-/-- Editors supply an argument of the same type as the current widget value. -/
 abbrev ActionContext (ty : DataType) : DataType := .record actionInputs fun _ => ty
 
 inductive Action.Presentation (ty : DataType) where
   | button (body : Expr ty ty)
   | editor (widget : Widget ty) (body : Expr (ActionContext ty) ty)
+
+inductive Action.Field where
+  | replace
+
+def Action.Presentation.replace {ty : DataType}
+  (widget : Widget ty)
+  : Action.Presentation ty :=
+  .editor widget (.project (.field .argument .self))
 
 structure WidgetAction (ty : DataType) where
   label : String

@@ -10,7 +10,7 @@ def Component.supportsHistory {ty : DataType} : Component ty → Bool
   | .computed .. => true
   | .text .. => true
   | .table .. => true
-  | .field .. => false
+  | .field .. => true
   | .list .. => false
   | .sum .. => false
   | .visibleWhen _ body => body.supportsHistory
@@ -18,11 +18,11 @@ def Component.supportsHistory {ty : DataType} : Component ty → Bool
   | .button .. => false
   | .appendItemButton .. => false
 
-/-- Targets use component identities, not display positions or state paths. -/
 def Component.Invocation {ty : DataType} : Component ty → Type
   | .actionWidget _ _ actions => Action.Invocation (fun name => (actions name).presentation)
   | .stack (items := items) _ children _ => (child : items) × (children child).Invocation
-  | .field .. => Empty
+  | .field _ _ widget => Action.Invocation (fun
+      | Action.Field.replace => .replace widget)
   | .list .. => Empty
   | .sum .. => Empty
   | .computed .. => Empty
@@ -52,7 +52,8 @@ def Component.applyInvocation {ty : DataType}
       .ok (path.set (invocation.apply (path.get value)) value)
   | .stack _ children _ => fun ⟨child, invocation⟩ =>
       (children child).applyInvocation value invocation
-  | .field .. => fun invocation => Empty.elim invocation
+  | .field path _ _ => fun invocation =>
+      .ok (path.set (invocation.apply (path.get value)) value)
   | .list .. => fun invocation => Empty.elim invocation
   | .sum .. => fun invocation => Empty.elim invocation
   | .computed .. => fun invocation => Empty.elim invocation

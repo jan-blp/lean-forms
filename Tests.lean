@@ -1,4 +1,5 @@
 import Tests.Actions
+import Tests.FieldHistory
 import Tests.ComponentHistory
 import Tests.Weakening
 import Tests.Basket
@@ -133,10 +134,10 @@ private instance : MonadTui (ReaderT String (Except IO.Error)) where
 
 private def testNativeBoundary : IO Unit := do
   let run := Tui.run (m := ReaderT String (Except IO.Error)) ExampleForms.Thermostat.thermostatType ExampleForms.Thermostat.form ExampleForms.Thermostat.draft
-  check "LeanRejectsForgedNativeSuccess" (match run.run "{\"home\":\"16\",\"away\":\"18\"}" with
+  check "LeanRejectsForgedNativeSuccess" (match run.run "{\"value\":{\"home\":\"16\",\"away\":\"18\"},\"actions\":[{\"target\":[\"home\"],\"action\":\"replace\",\"argument\":\"16\"}]}" with
     | .error _ => true
     | _ => false)
-  check "LeanConstructsProofForNativeResult" (match run.run "{\"home\":\"16\",\"away\":\"16\"}" with
+  check "LeanConstructsProofForNativeResult" (match run.run "{\"value\":{\"home\":\"16\",\"away\":\"16\"},\"actions\":[{\"target\":[\"home\"],\"action\":\"replace\",\"argument\":\"16\"},{\"target\":[\"away\"],\"action\":\"replace\",\"argument\":\"16\"}]}" with
     | .ok (some value) => JsonProtocol.valueToJson (RefinedDataType.erase ExampleForms.Thermostat.thermostatType value.value) == temperatureJson "16" "16"
     | _ => false)
   check "NativeCancellationIsSeparate" (match run.run "null" with
@@ -352,6 +353,7 @@ private def testProtocol : IO Unit := do
 def main : IO Unit := do
   Tests.Actions.run
   Tests.ComponentHistory.run
+  Tests.FieldHistory.run
   Tests.Weakening.run
   Tests.Basket.run
   Tests.Composition.run
