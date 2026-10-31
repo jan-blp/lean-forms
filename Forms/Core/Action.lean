@@ -9,6 +9,9 @@ inductive Action : DataType → Type 1 where
     (replacement : Expr state value)
     : Action state
 
+inductive Action.Button where
+  | press
+
 def Action.increment {state : DataType}
   (target : Path state .natural)
   : Action state :=

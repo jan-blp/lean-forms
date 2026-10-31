@@ -1,3 +1,4 @@
+import Tests.ButtonHistory
 import Tests.Actions
 import Tests.FieldHistory
 import Tests.ComponentHistory
@@ -351,6 +352,7 @@ private def testProtocol : IO Unit := do
     (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (t := .natural) huge) == .ok huge)
 
 def main : IO Unit := do
+  Tests.ButtonHistory.run
   Tests.Actions.run
   Tests.ComponentHistory.run
   Tests.FieldHistory.run

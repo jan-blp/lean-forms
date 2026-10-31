@@ -15,7 +15,7 @@ def Component.supportsHistory {ty : DataType} : Component ty → Bool
   | .sum .. => false
   | .visibleWhen _ body => body.supportsHistory
   | .disabledWhen _ body => body.supportsHistory
-  | .button .. => false
+  | .button .. => true
   | .appendItemButton .. => false
 
 def Component.Invocation {ty : DataType} : Component ty → Type
@@ -30,7 +30,7 @@ def Component.Invocation {ty : DataType} : Component ty → Type
   | .table .. => Empty
   | .visibleWhen _ body => body.Invocation
   | .disabledWhen _ body => body.Invocation
-  | .button .. => Empty
+  | .button .. => Action.Button
   | .appendItemButton .. => Empty
 
 inductive Component.InvocationError where
@@ -63,7 +63,8 @@ def Component.applyInvocation {ty : DataType}
       if condition.eval value then body.applyInvocation value invocation else .error .hidden
   | .disabledWhen condition body => fun invocation =>
       if condition.eval value then .error .disabled else body.applyInvocation value invocation
-  | .button .. => fun invocation => Empty.elim invocation
+  | .button _ action => fun
+      | .press => .ok (action.eval value)
   | .appendItemButton .. => fun invocation => Empty.elim invocation
 
 structure ComponentHistory {ty : DataType} (component : Component ty) where

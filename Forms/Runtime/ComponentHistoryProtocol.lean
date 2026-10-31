@@ -48,16 +48,17 @@ private def argumentToJson {ty : DataType}
   | .button .. => fun () => []
   | .editor .. => fun argument => [("argument", JsonProtocol.valueToJson argument)]
 
+private def buttonArgumentFromJson (json : Json) : Except Error Unit := do
+  let fields ← readJson json.getObj?
+  if (json.getObjVal? "argument").isOk then throw .unexpectedArgument
+  if fields.size != 2 then throw (.invalidFields ["target", "action"])
+
 private def argumentFromJson {ty : DataType}
   (presentation : Action.Presentation ty)
   (json : Json)
   : Except Error presentation.Argument :=
   match presentation with
-  | .button .. => do
-      let fields ← readJson json.getObj?
-      if (json.getObjVal? "argument").isOk then throw .unexpectedArgument
-      if fields.size != 2 then throw (.invalidFields ["target", "action"])
-      return ()
+  | .button .. => buttonArgumentFromJson json
   | .editor .. => do
       let fields ← readJson json.getObj?
       let argument ← (json.getObjVal? "argument").mapError (fun _ => Error.missingArgument)
@@ -84,7 +85,8 @@ private def invocationToJson {ty : DataType}
   | .table .. => fun invocation => Empty.elim invocation
   | .visibleWhen _ body => invocationToJson body target
   | .disabledWhen _ body => invocationToJson body target
-  | .button .. => fun invocation => Empty.elim invocation
+  | .button .. => fun
+      | .press => Json.mkObj [("target", toJson target), ("action", toJson "press")]
   | .appendItemButton .. => fun invocation => Empty.elim invocation
 
 private def invocationFromJson {ty : DataType}
@@ -117,7 +119,12 @@ private def invocationFromJson {ty : DataType}
   | .table .. => .error .targetNotWidget
   | .visibleWhen _ body => invocationFromJson body target json
   | .disabledWhen _ body => invocationFromJson body target json
-  | .button .. => .error .targetNotWidget
+  | .button .. => do
+      unless target.isEmpty do throw .targetBeyondWidget
+      let name ← readJson ((json.getObjVal? "action") >>= Json.getStr?)
+      unless name == "press" do throw (.unknownAction name)
+      buttonArgumentFromJson json
+      return .press
   | .appendItemButton .. => .error .targetNotWidget
 
 def encode {ty : DataType} {component : Component ty}

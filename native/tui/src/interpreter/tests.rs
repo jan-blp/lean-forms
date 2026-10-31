@@ -1667,6 +1667,65 @@ fn widget_targets_follow_child_ids_through_reordering_and_nesting() {
 }
 
 #[test]
+fn standalone_buttons_record_presses_and_respect_conditions() {
+    let button = json!({"kind":"button","label":"Increment",
+        "action":{"kind":"set","path":[],"value":{"kind":"natAdd",
+            "left":{"kind":"project","path":[]},
+            "right":{"kind":"value","type":{"kind":"natural"},"value":"1"}}}});
+    let spec = json!({"version":6,"schema":{"kind":"natural"},"value":"0",
+        "constraints":[],"form":button});
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    keys(&mut engine, &[Key::Enter, Key::Enter]);
+    assert!(!engine.step(Key::Character('q')));
+    assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
+        "value":"2","actions":[{"target":[],"action":"press"},{"target":[],"action":"press"}]}));
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    engine.step(Key::Enter);
+    assert!(!engine.step(Key::Escape));
+    assert_eq!(engine.result(), "null");
+
+    for kind in ["visibleWhen", "disabledWhen"] {
+        let mut guarded = spec.clone();
+        let zero = json!({"kind":"natLe","left":{"kind":"project","path":[]},
+            "right":{"kind":"value","type":{"kind":"natural"},"value":"0"}});
+        let condition = if kind == "visibleWhen" { zero } else { json!({"kind":"not","operand":zero}) };
+        guarded["form"] = json!({"kind":kind,"condition":condition,"body":button});
+        let mut engine = Engine::parse(&guarded.to_string()).unwrap();
+        keys(&mut engine, &[Key::Enter, Key::Enter]);
+        assert!(!engine.step(Key::Character('q')));
+        assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
+            "value":"1","actions":[{"target":[],"action":"press"}]}));
+    }
+    let mut noop = spec;
+    noop["form"]["action"]["value"] = json!({"kind":"project","path":[]});
+    let mut engine = Engine::parse(&noop.to_string()).unwrap();
+    keys(&mut engine, &[Key::Enter, Key::Enter]);
+    assert!(!engine.step(Key::Character('q')));
+    assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
+        "value":"0","actions":[{"target":[],"action":"press"},{"target":[],"action":"press"}]}));
+}
+
+#[test]
+fn standalone_button_targets_follow_components_and_read_current_state() {
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/counters.json")).unwrap();
+    spec["form"]["children"][1] = json!({"kind":"button","label":"Copy left",
+        "action":{"kind":"set","path":["right"],"value":{"kind":"project","path":["left"]}}});
+    spec["form"]["children"].as_array_mut().unwrap().reverse();
+    spec["form"]["childIds"].as_array_mut().unwrap().reverse();
+    spec["form"] = json!({"kind":"stack","childIds":["outer"],"children":[spec["form"]]});
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    engine.selected = 1;
+    engine.step(Key::Enter);
+    engine.selected = 0;
+    engine.step(Key::Enter);
+    assert!(!engine.step(Key::Character('q')));
+    assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
+        "value":{"left":"1","right":"1"},"actions":[
+            {"target":["outer","left"],"action":"plusOne"},
+            {"target":["outer","right"],"action":"press"}]}));
+}
+
+#[test]
 fn history_stacks_reject_missing_duplicate_and_mismatched_ids() {
     let spec: Value = serde_json::from_str(include_str!("../../tests/counters.json")).unwrap();
     for ids in [json!(null), json!([]), json!(["left"]), json!(["same","same"])] {
@@ -1678,9 +1737,12 @@ fn history_stacks_reject_missing_duplicate_and_mismatched_ids() {
     malformed["form"].as_object_mut().unwrap().remove("childIds");
     assert!(Engine::parse(&malformed.to_string()).is_err());
     let mut mixed = spec;
-    mixed["form"]["children"][1] = json!({"kind":"button","label":"Right",
-        "action":{"kind":"set","path":["right"],
-            "value":{"kind":"value","type":{"kind":"natural"},"value":"0"}}});
+    mixed["schema"]["fields"][1]["type"] = json!({"kind":"list","element":{"kind":"natural"}});
+    mixed["value"]["right"] = json!([]);
+    mixed["form"]["children"][1] = json!({"kind":"list","label":"Right","path":["right"],
+        "schema":{"kind":"list","element":{"kind":"natural"}},"defaultItem":"0",
+        "item":{"kind":"field","label":"Value","path":[],
+            "schema":{"kind":"natural"},"widget":"naturalInput"}});
     assert!(Engine::parse(&mixed.to_string()).is_err());
     mixed["version"] = json!(4);
     assert!(Engine::parse(&mixed.to_string()).is_ok());
