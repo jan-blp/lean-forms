@@ -56,6 +56,10 @@
     }
   ],
   "form": {
+    "childIds": [
+      "body",
+      "extra"
+    ],
     "children": [
       {
         "defaultItem": {
@@ -64,8 +68,17 @@
           "unitPrice": "100"
         },
         "item": {
+          "childIds": [
+            "body",
+            "extra"
+          ],
           "children": [
             {
+              "childIds": [
+                "description",
+                "quantity",
+                "unitPrice"
+              ],
               "children": [
                 {
                   "kind": "field",
@@ -226,5 +239,5 @@
       "unitPrice": "100"
     }
   ],
-  "version": 4
+  "version": 6
 }

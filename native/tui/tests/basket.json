@@ -1,6 +1,17 @@
 {
   "constraints": [],
   "form": {
+    "childIds": [
+      "Total",
+      "Page",
+      "Filters",
+      "Matches",
+      "Catalogue",
+      "Selected product",
+      "Add",
+      "Items",
+      "Subtotals"
+    ],
     "children": [
       {
         "expression": {
@@ -102,6 +113,12 @@
       },
       {
         "body": {
+          "childIds": [
+            "search",
+            "category",
+            "budget",
+            "sort"
+          ],
           "children": [
             {
               "kind": "field",
@@ -9232,6 +9249,14 @@
             "quantity": "1"
           },
           "item": {
+            "childIds": [
+              "Product",
+              "Quantity",
+              "−1",
+              "+1",
+              "Reset",
+              "Price"
+            ],
             "children": [
               {
                 "kind": "field",
@@ -9705,5 +9730,5 @@
     "page": 0,
     "selected": 0
   },
-  "version": 4
+  "version": 6
 }

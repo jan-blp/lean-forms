@@ -625,6 +625,7 @@ fn display_order_changes_navigation_without_changing_values_or_validation() {
 fn display_order_applies_inside_lists_and_sum_payloads() {
     let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
     spec["form"]["children"][0]["item"]["children"][0]["children"].as_array_mut().unwrap().rotate_right(1);
+    spec["form"]["children"][0]["item"]["children"][0]["childIds"].as_array_mut().unwrap().rotate_right(1);
     let mut e = Engine::parse(&spec.to_string()).unwrap();
     assert_eq!(e.fields()[0].title, "Unit price (cents)");
     edit(&mut e, "250");
@@ -765,7 +766,7 @@ fn computed_total_updates_and_is_never_submitted_or_edited() {
     assert!(e.editor.is_none());
     assert_eq!(e.spec.value, value);
     assert!(!e.step(Key::Character('q')));
-    assert_eq!(serde_json::from_str::<Value>(&e.result()).unwrap(), value);
+    assert_eq!(serde_json::from_str::<Value>(&e.result()).unwrap()["value"], value);
     e.selected = 4;
     keys(&mut e, &[Key::Enter]);
     assert_eq!(total(&e), "0");
@@ -1203,7 +1204,7 @@ fn basket_add_edit_remove_and_switch_pages_keep_current_state() {
     assert_eq!(basket_total(&engine), "Basket total: EUR 12");
     assert!(!engine.step(Key::Character('q')));
     let result: Value = serde_json::from_str(&engine.result()).unwrap();
-    assert_eq!(result["items"], json!([{"product":2,"quantity":"1"}]));
+    assert_eq!(result["value"]["items"], json!([{"product":2,"quantity":"1"}]));
 }
 
 #[test]
@@ -1524,7 +1525,7 @@ fn root_editor_history_records_arguments_before_transformation() {
 
 #[test]
 fn history_protocol_rejects_unsupported_forms() {
-    let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
+    let mut spec: Value = serde_json::from_str(include_str!("../../tests/shapes.json")).unwrap();
     spec["version"] = json!(6);
     assert!(Engine::parse(&spec.to_string()).is_err());
 }
@@ -1569,7 +1570,7 @@ fn conditional_history_checks_current_state_and_preserves_targets() {
 
 #[test]
 fn conditional_history_rejects_unsupported_children() {
-    let source: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
+    let source: Value = serde_json::from_str(include_str!("../../tests/shapes.json")).unwrap();
     for kind in ["visibleWhen", "disabledWhen"] {
         let mut spec = source.clone();
         spec["version"] = json!(6);
@@ -1786,6 +1787,79 @@ fn append_targets_preserve_identity_and_read_edited_siblings() {
 }
 
 #[test]
+fn list_history_tracks_indices_after_addition_and_removal() {
+    let spec = json!({"version":6,"constraints":[],
+        "schema":{"kind":"list","element":{"kind":"natural"}},"value":["10","20"],
+        "form":{"kind":"list","label":"Numbers","path":[],
+            "schema":{"kind":"list","element":{"kind":"natural"}},"defaultItem":"7",
+            "item":{"kind":"field","label":"Value","path":[],"schema":{"kind":"natural"},"widget":"naturalInput"}}});
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    select_title(&mut engine, "+ Add item");
+    engine.step(Key::Enter);
+    engine.selected = 4;
+    edit(&mut engine, "30");
+    engine.selected = 1;
+    engine.step(Key::Enter);
+    engine.selected = 0;
+    edit(&mut engine, "21");
+    assert!(!engine.step(Key::Character('q')));
+    assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
+        "value":["21","30"],"actions":[
+            {"target":[],"action":"appendDefault"},
+            {"target":[2],"action":"replace","argument":"30"},
+            {"target":[],"action":"remove","index":0},
+            {"target":[0],"action":"replace","argument":"21"}]}));
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    select_title(&mut engine, "+ Add item");
+    engine.step(Key::Enter);
+    assert!(!engine.step(Key::Escape));
+    assert_eq!(engine.result(), "null");
+}
+
+#[test]
+fn nested_list_history_preserves_numeric_target_segments() {
+    let numbers = json!({"kind":"list","element":{"kind":"natural"}});
+    let groups = json!({"kind":"list","element":numbers});
+    let spec = json!({"version":6,"constraints":[],"schema":groups,"value":[["1"],["2"]],
+        "form":{"kind":"list","label":"Groups","path":[],"schema":groups,"defaultItem":[],
+            "item":{"kind":"list","label":"Numbers","path":[],"schema":numbers,"defaultItem":"7",
+                "item":{"kind":"field","label":"Value","path":[],"schema":{"kind":"natural"},"widget":"naturalInput"}}}});
+    let mut engine = Engine::parse(&spec.to_string()).unwrap();
+    engine.selected = 3;
+    engine.step(Key::Enter);
+    engine.selected = 2;
+    engine.step(Key::Enter);
+    engine.selected = 2;
+    edit(&mut engine, "9");
+    assert!(!engine.step(Key::Character('q')));
+    assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
+        "value":[["2","9"]],"actions":[
+            {"target":[],"action":"remove","index":0},
+            {"target":[0],"action":"appendDefault"},
+            {"target":[0,1],"action":"replace","argument":"9"}]}));
+}
+
+#[test]
+fn list_history_respects_wrappers_after_adding_an_item() {
+    let list = json!({"kind":"list","label":"Numbers","path":[],
+        "schema":{"kind":"list","element":{"kind":"natural"}},"defaultItem":"7",
+        "item":{"kind":"field","label":"Value","path":[],"schema":{"kind":"natural"},"widget":"naturalInput"}});
+    for kind in ["visibleWhen", "disabledWhen"] {
+        let empty = json!({"kind":"natLe","left":{"kind":"length","items":{"kind":"project","path":[]}},
+            "right":{"kind":"value","type":{"kind":"natural"},"value":"0"}});
+        let condition = if kind == "visibleWhen" { empty } else { json!({"kind":"not","operand":empty}) };
+        let spec = json!({"version":6,"constraints":[],"schema":{"kind":"list","element":{"kind":"natural"}},
+            "value":[],"form":{"kind":kind,"condition":condition,"body":list}});
+        let mut engine = Engine::parse(&spec.to_string()).unwrap();
+        keys(&mut engine, &[Key::Enter, Key::Enter]);
+        assert!(engine.editor.is_none());
+        assert!(!engine.step(Key::Character('q')));
+        assert_eq!(serde_json::from_str::<Value>(&engine.result()).unwrap(), json!({
+            "value":["7"],"actions":[{"target":[],"action":"appendDefault"}]}));
+    }
+}
+
+#[test]
 fn history_stacks_reject_missing_duplicate_and_mismatched_ids() {
     let spec: Value = serde_json::from_str(include_str!("../../tests/counters.json")).unwrap();
     for ids in [json!(null), json!([]), json!(["left"]), json!(["same","same"])] {
@@ -1797,12 +1871,12 @@ fn history_stacks_reject_missing_duplicate_and_mismatched_ids() {
     malformed["form"].as_object_mut().unwrap().remove("childIds");
     assert!(Engine::parse(&malformed.to_string()).is_err());
     let mut mixed = spec;
-    mixed["schema"]["fields"][1]["type"] = json!({"kind":"list","element":{"kind":"natural"}});
-    mixed["value"]["right"] = json!([]);
-    mixed["form"]["children"][1] = json!({"kind":"list","label":"Right","path":["right"],
-        "schema":{"kind":"list","element":{"kind":"natural"}},"defaultItem":"0",
-        "item":{"kind":"field","label":"Value","path":[],
-            "schema":{"kind":"natural"},"widget":"naturalInput"}});
+    mixed["schema"]["fields"][1]["type"] = json!({"kind":"sum","constructors":[{"name":"only","type":{"kind":"natural"}}]});
+    mixed["value"]["right"] = json!({"tag":"only","value":"0"});
+    mixed["form"]["children"][1] = json!({"kind":"sum","label":"Right","path":["right"],
+        "schema":mixed["schema"]["fields"][1]["type"],"defaults":{"only":"0"},
+        "branches":{"only":{"kind":"field","label":"Value","path":[],
+            "schema":{"kind":"natural"},"widget":"naturalInput"}}});
     assert!(Engine::parse(&mixed.to_string()).is_err());
     mixed["version"] = json!(4);
     assert!(Engine::parse(&mixed.to_string()).is_ok());

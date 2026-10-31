@@ -67,18 +67,21 @@ private def argumentFromJson {ty : DataType}
 
 private def invocationToJson {ty : DataType}
   (component : Component ty)
-  (target : List String)
+  (target : List Json)
   : component.Invocation → Json :=
   match component with
   | .actionWidget (ids := ids) _ _ actions => fun invocation =>
       Json.mkObj ([("target", toJson target), ("action", toJson (ids.label invocation.name))] ++
         argumentToJson (actions invocation.name).presentation invocation.argument)
   | .stack (items := items) _ children _ => fun ⟨child, invocation⟩ =>
-      invocationToJson (children child) (target ++ [items.label child]) invocation
+      invocationToJson (children child) (target ++ [toJson (items.label child)]) invocation
   | .field _ _ widget => fun invocation =>
       Json.mkObj ([("target", toJson target), ("action", toJson "replace")] ++
         argumentToJson (.replace widget) invocation.argument)
-  | .list .. => fun invocation => Empty.elim invocation
+  | .list _ _ item _ => fun
+      | .appendDefault => Json.mkObj [("target", toJson target), ("action", toJson "appendDefault")]
+      | .remove index => Json.mkObj [("target", toJson target), ("action", toJson "remove"), ("index", toJson index)]
+      | .item index invocation => invocationToJson item (target ++ [toJson index]) invocation
   | .sum .. => fun invocation => Empty.elim invocation
   | .computed .. => fun invocation => Empty.elim invocation
   | .text .. => fun invocation => Empty.elim invocation
@@ -90,7 +93,7 @@ private def invocationToJson {ty : DataType}
 
 private def invocationFromJson {ty : DataType}
   (component : Component ty)
-  (target : List String)
+  (target : List Json)
   (json : Json)
   : Except Error component.Invocation :=
   match component with
@@ -101,8 +104,9 @@ private def invocationFromJson {ty : DataType}
         | throw (.unknownAction name)
       return ⟨action, ← argumentFromJson (actions action).presentation json⟩
   | .stack (items := items) _ children _ => do
-      let name :: rest := target
+      let segment :: rest := target
         | throw .missingTarget
+      let name ← readJson segment.getStr?
       let some child := (FinEnum.toList items).find? (fun child => items.label child == name)
         | throw (.unknownComponent name)
       return ⟨child, ← invocationFromJson (children child) rest json⟩
@@ -111,7 +115,24 @@ private def invocationFromJson {ty : DataType}
       let name ← readJson ((json.getObjVal? "action") >>= Json.getStr?)
       unless name == "replace" do throw (.unknownAction name)
       return ⟨.replace, ← argumentFromJson (.replace widget) json⟩
-  | .list .. => .error .targetNotWidget
+  | .list _ _ item _ => do
+      match target with
+      | segment :: rest =>
+          let index ← readJson segment.getNat?
+          return .item index (← invocationFromJson item rest json)
+      | [] =>
+          let name ← readJson ((json.getObjVal? "action") >>= Json.getStr?)
+          if name == "appendDefault" then
+            let fields ← readJson json.getObj?
+            if fields.size != 2 then throw (.invalidFields ["target", "action"])
+            return .appendDefault
+          else if name == "remove" then
+            let index ← readJson ((json.getObjVal? "index") >>= Json.getNat?)
+            let fields ← readJson json.getObj?
+            if fields.size != 3 then throw (.invalidFields ["target", "action", "index"])
+            return .remove index
+          else
+            throw (.unknownAction name)
   | .sum .. => .error .targetNotWidget
   | .computed .. => .error .targetNotWidget
   | .text .. => .error .targetNotWidget
@@ -144,8 +165,7 @@ def verify {ty : DataType}
   let entries ← readJson ((submission.getObjVal? "actions") >>= Json.getArr?)
   let actions ← entries.mapM fun json => do
     let segments ← readJson ((json.getObjVal? "target") >>= Json.getArr?)
-    let target ← readJson (segments.toList.mapM Json.getStr?)
-    invocationFromJson component target json
+    invocationFromJson component segments.toList json
   let replayed ← (ComponentHistory.replay component initial actions).mapError Error.invocation
   if JsonProtocol.valueToJson replayed.value != JsonProtocol.valueToJson claimed then
     throw .valueMismatch

@@ -2,6 +2,11 @@ import Forms.Core.WidgetAction
 
 namespace Forms.Action
 
+inductive List (itemInvocation : Type) where
+  | appendDefault
+  | remove (index : Nat)
+  | item (index : Nat) (invocation : itemInvocation)
+
 abbrev Presentation.Argument {ty : DataType} : Presentation ty → Type
   | .button .. => Unit
   | .editor .. => ⟦ty⟧

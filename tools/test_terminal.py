@@ -77,14 +77,13 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
             assert b'Final values' not in output
         else:
             tail = output.split(b'Final values', 1)[1]
-            result = (json.loads(tail.split(b'------------', 1)[1].strip()) if counter else
-                      json.loads(tail[tail.index(b'[' if invoice else b'{'):].decode()))
+            result = json.loads(tail.split(b'------------', 1)[1].strip())
             if counter:
                 assert result == {"value": str(expected), "actions": [
                     {"target": [], **({"action": action} if isinstance(action, str) else action)}
                     for action in actions]}, result
             elif not counters and isinstance(result, dict) and 'actions' in result:
-                name = 'thermostat' if thermostat else 'booking' if booking else 'report' if report else 'person'
+                name = 'basket' if basket else 'invoice' if invoice else 'thermostat' if thermostat else 'booking' if booking else 'report' if report else 'person'
                 spec = json.loads((ROOT / 'native/tui/tests' / f'{name}.json').read_text())
                 assert result['value'] == wire_value(spec['schema'], expected), result
                 assert isinstance(result['actions'], list), result

@@ -12,7 +12,7 @@ def Component.supportsHistory {ty : DataType} : Component ty → Bool
   | .text .. => true
   | .table .. => true
   | .field .. => true
-  | .list .. => false
+  | .list _ _ item _ => item.supportsHistory
   | .sum .. => false
   | .visibleWhen _ body => body.supportsHistory
   | .disabledWhen _ body => body.supportsHistory
@@ -23,7 +23,7 @@ def Component.Invocation {ty : DataType} : Component ty → Type
   | .stack (items := items) _ children _ => (child : items) × (children child).Invocation
   | .field _ _ widget => Action.Invocation (fun
       | Action.Field.replace => .replace widget)
-  | .list .. => Empty
+  | .list _ _ item _ => Action.List item.Invocation
   | .sum .. => Empty
   | .computed .. => Empty
   | .text .. => Empty
@@ -35,12 +35,19 @@ def Component.Invocation {ty : DataType} : Component ty → Type
 inductive Component.InvocationError where
   | hidden
   | disabled
+  | indexOutOfBounds (index length : Nat)
   deriving DecidableEq, BEq, Repr
 
 instance : ToString Component.InvocationError where
   toString
     | .hidden => "Action target is hidden"
     | .disabled => "Action target is disabled"
+    | .indexOutOfBounds index length => s!"Index {index} is out of bounds for list of length {length}"
+
+private def checkedIndex
+  (index length : Nat)
+  : Except Component.InvocationError (Fin length) :=
+  if h : index < length then .ok ⟨index, h⟩ else .error (.indexOutOfBounds index length)
 
 def Component.applyInvocation {ty : DataType}
   (component : Component ty)
@@ -53,7 +60,17 @@ def Component.applyInvocation {ty : DataType}
       (children child).applyInvocation value invocation
   | .field path _ _ => fun invocation =>
       .ok (path.set (invocation.apply (path.get value)) value)
-  | .list .. => fun invocation => Empty.elim invocation
+  | .list path _ item defaultItem => fun invocation => do
+      let items := path.get value
+      match invocation with
+      | .appendDefault => return path.set (items ++ [defaultItem]) value
+      | .remove index =>
+          let index ← checkedIndex index items.length
+          return path.set (items.eraseIdx index.val) value
+      | .item index invocation =>
+          let index ← checkedIndex index items.length
+          let updated ← item.applyInvocation (items.get index) invocation
+          return path.set (items.set index.val updated) value
   | .sum .. => fun invocation => Empty.elim invocation
   | .computed .. => fun invocation => Empty.elim invocation
   | .text .. => fun invocation => Empty.elim invocation

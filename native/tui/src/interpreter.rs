@@ -1,6 +1,6 @@
 use chrono::{Datelike, Days, Months, NaiveDate};
 use num_bigint::BigUint;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -22,6 +22,13 @@ pub struct NamedType {
     name: String,
     #[serde(rename = "type")]
     ty: Ty,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(untagged)]
+enum TargetStep {
+    Child(String),
+    Item(usize),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
@@ -790,6 +797,7 @@ impl Component {
                 children.iter().try_for_each(Self::validate_history)
             }
             Self::VisibleWhen { body, .. } | Self::DisabledWhen { body, .. } => body.validate_history(),
+            Self::List { item, .. } => item.validate_history(),
             _ => Err("Component history is not supported yet".into()),
         }
     }
@@ -924,7 +932,7 @@ impl Component {
                     child.fields(ty, value, path.clone(), scope, labels.clone(), out, tables);
                     if let Some(ids) = child_ids {
                         for field in &mut out[start..] {
-                            field.target.insert(0, ids[index].clone());
+                            field.target.insert(0, TargetStep::Child(ids[index].clone()));
                         }
                     }
                 }
@@ -1104,6 +1112,7 @@ impl Component {
                     item_path.push(Step::Item(index));
                     let mut item_labels = labels.clone();
                     item_labels.push(format!("Item {}", index + 1));
+                    let start = out.len();
                     item.fields(
                         element,
                         value,
@@ -1113,13 +1122,16 @@ impl Component {
                         out,
                         tables,
                     );
+                    for field in &mut out[start..] {
+                        field.target.insert(0, TargetStep::Item(index));
+                    }
                     let section = out
                         .last()
                         .filter(|field| field.path.starts_with(&item_path))
                         .map(|field| field.section.clone())
                         .unwrap_or_else(|| item_labels.join(" › "));
                     out.push(Field {
-                    action_id: None,
+                    action_id: Some("remove".into()),
                     target: vec![],
                     input_transform: None,
                         computed_value: None,
@@ -1135,7 +1147,7 @@ impl Component {
                     });
                 }
                 out.push(Field {
-                    action_id: None,
+                    action_id: Some("appendDefault".into()),
                     target: vec![],
                     input_transform: None,
                     computed_value: None,
@@ -1251,7 +1263,7 @@ pub struct Field {
     computed_value: Option<String>,
     input_transform: Option<Expr>,
     action_id: Option<String>,
-    target: Vec<String>,
+    target: Vec<TargetStep>,
 }
 impl Field {
     fn apply(&self, state: &mut Value, history: &mut Vec<Value>, argument: Option<Value>) {
@@ -1650,6 +1662,7 @@ impl Engine {
                                     .clone();
                                 items.push(field.default_item.clone().unwrap());
                                 set(&mut self.spec.value, &field.path, Value::Array(items));
+                                self.actions.push(serde_json::json!({"target":field.target,"action":"appendDefault"}));
                             }
                             Widget::Remove => {
                                 let (Step::Item(index), parent) = field.path.split_last().unwrap()
@@ -1681,6 +1694,7 @@ impl Engine {
                                         })
                                         .collect();
                                 set(&mut self.spec.value, parent, Value::Array(items));
+                                self.actions.push(serde_json::json!({"target":field.target,"action":"remove","index":index}));
                             }
                             Widget::Checkbox => {
                                 let value = !get(&self.spec.value, &field.path).as_bool().unwrap();
