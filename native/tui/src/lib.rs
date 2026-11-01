@@ -504,6 +504,7 @@ fn render_with_viewports(frame: &mut Frame, screen: &Screen, table_state: &mut T
                         .sum::<usize>(),
                 )
                 + 5
+                + if field.action { 4 } else { 0 }
                 + field.presentation.depth.min(4) * 2
         })
         .max()
@@ -520,7 +521,7 @@ fn render_with_viewports(frame: &mut Frame, screen: &Screen, table_state: &mut T
             .fg(theme.text)
             .add_modifier(Modifier::BOLD);
         let label_style = if field.presentation.disabled {
-            (if selected {
+            (if selected && !field.action {
                 selection
             } else {
                 Style::default()
@@ -534,17 +535,15 @@ fn render_with_viewports(frame: &mut Frame, screen: &Screen, table_state: &mut T
             })
             .fg(theme.computed)
         } else if field.action {
-            (if selected {
-                selection
-            } else {
-                Style::default()
-            })
-            .fg(if field.presentation.add {
+            let color = if field.presentation.button {
+                theme.accent
+            } else if field.presentation.add {
                 theme.add
             } else {
                 theme.error
-            })
-            .add_modifier(Modifier::BOLD)
+            };
+            let style = Style::default().fg(color);
+            if selected { style.add_modifier(Modifier::BOLD) } else { style }
         } else if selected {
             selection
         } else {
@@ -554,7 +553,7 @@ fn render_with_viewports(frame: &mut Frame, screen: &Screen, table_state: &mut T
                 theme.text
             })
         };
-        let label = Line::from(vec![
+        let mut label_spans = vec![
             ratatui::text::Span::styled(
                 if selected { "› " } else { "  " },
                 Style::default().fg(theme.accent),
@@ -563,8 +562,16 @@ fn render_with_viewports(frame: &mut Frame, screen: &Screen, table_state: &mut T
                 "│ ".repeat(field.presentation.depth.min(4)),
                 Style::default().fg(theme.border),
             ),
-            ratatui::text::Span::styled(format!(" {} ", clean(field.label)), label_style),
-        ]);
+        ];
+        label_spans.push(ratatui::text::Span::styled(
+            if field.action {
+                format!(" [ {} ] ", clean(field.label))
+            } else {
+                format!(" {} ", clean(field.label))
+            },
+            label_style,
+        ));
+        let label = Line::from(label_spans);
         let value = if field.presentation.text {
             clean(field.value)
         } else if field.presentation.computed {
@@ -585,46 +592,48 @@ fn render_with_viewports(frame: &mut Frame, screen: &Screen, table_state: &mut T
                 if field.presentation.invalid { " !" } else { "" }
             )
         } else if field.action {
-            "Enter ↵".into()
+            if selected { "Enter ↵".into() } else { String::new() }
         } else if field.value.is_empty() {
             "—".into()
         } else {
             clean(field.value)
         };
         let value_style = if field.presentation.invalid {
-            (if selected {
+            (if selected && !field.action {
                 selection
             } else {
                 Style::default()
             })
             .fg(theme.error)
         } else if field.presentation.disabled {
-            (if selected {
+            (if selected && !field.action {
                 selection
             } else {
                 Style::default()
             })
             .fg(theme.subtext)
         } else if field.presentation.computed {
-            (if selected {
+            (if selected && !field.action {
                 selection
             } else {
                 Style::default()
             })
             .fg(theme.computed)
         } else if field.action {
-            (if selected {
+            (if selected && !field.action {
                 selection
             } else {
                 Style::default()
             })
-            .fg(if field.presentation.add {
+            .fg(if field.presentation.button {
+                theme.accent
+            } else if field.presentation.add {
                 theme.add
             } else {
                 theme.error
             })
             .add_modifier(Modifier::BOLD)
-        } else if selected {
+        } else if selected && !field.action {
             selection
         } else if field.presentation.constructor || field.presentation.choice {
             Style::default()

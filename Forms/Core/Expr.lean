@@ -27,6 +27,10 @@ inductive Expr : (input : DataType) → (result : DataType) → Type 1 where
   | sortNatBy {input element : DataType}
       (items : Expr input (.list element)) (key : Expr element .natural) (descending : Bool)
       : Expr input (.list element)
+  | snoc {input element : DataType}
+    (items : Expr input (.list element))
+    (value : Expr input element)
+    : Expr input (.list element)
   | length {input element : DataType} (items : Expr input (.list element)) : Expr input .natural
   | enumCases {input result : DataType} {domain : Enum}
       (subject : Expr input (.enum domain)) (branches : domain → Expr input result) : Expr input result
@@ -36,21 +40,25 @@ inductive Expr : (input : DataType) → (result : DataType) → Type 1 where
   | ifThenElse {input result : DataType} (condition : Expr input .boolean)
       (whenTrue whenFalse : Expr input result) : Expr input result
   | natToText {input : DataType} (value : Expr input .natural) : Expr input .text
+  | textEq {input : DataType} (left right : Expr input .text) : Expr input .boolean
   | textAppend {input : DataType} (left right : Expr input .text) : Expr input .text
+  | natAdd {input : DataType}
+    (l r : Expr input .natural)
+    : Expr input .natural
+  | natSub {input : DataType}
+    (l r : Expr input .natural)
+    : Expr input .natural
   | natMul {input : DataType} (l r : Expr input .natural) : Expr input .natural
   | not {input : DataType} (operand : Expr input .boolean) : Expr input .boolean
   | and {input : DataType} (l r : Expr input .boolean) : Expr input .boolean
   | dateLe {input : DataType} (l r : Expr input .date) : Expr input .boolean
   | natLe {input : DataType} (l r : Expr input .natural) : Expr input .boolean
-  | textEq {input : DataType} (left right : Expr input .text) : Expr input .boolean
 
-def Expr.eval
-    {input t : DataType}
-    (expression : Expr input t)
-    (value : ⟦input⟧)
-    : ⟦t⟧ :=
+def Expr.eval {input t : DataType}
+  (expression : Expr input t)
+  (value : ⟦input⟧)
+  : ⟦t⟧ :=
   match expression with
-  | .textEq left right => left.eval value == right.eval value
   | .value constant => constant
   | .project path => Path.get path value
   | .all items predicate => List.all (Expr.eval items value) (Expr.eval predicate)
@@ -70,6 +78,7 @@ def Expr.eval
     (Expr.eval items value).mergeSort fun left right =>
       if descending then Expr.eval key right ≤ Expr.eval key left
       else Expr.eval key left ≤ Expr.eval key right
+  | .snoc items expression => Expr.eval items value ++ [Expr.eval expression value]
   | .length items => (Expr.eval items value).length
   | .enumCases subject branches => Expr.eval (branches (Expr.eval subject value)) value
   | .enumEq left right => decide (Expr.eval left value = Expr.eval right value)
@@ -77,7 +86,10 @@ def Expr.eval
   | .ifThenElse condition whenTrue whenFalse =>
     if Expr.eval condition value then Expr.eval whenTrue value else Expr.eval whenFalse value
   | .natToText operand => toString (Expr.eval operand value)
+  | .textEq left right => Expr.eval left value == Expr.eval right value
   | .textAppend left right => Expr.eval left value ++ Expr.eval right value
+  | .natAdd left right => Expr.eval left value + Expr.eval right value
+  | .natSub left right => Expr.eval left value - Expr.eval right value
   | .natMul left right => Expr.eval left value * Expr.eval right value
   | .not operand => !Expr.eval operand value
   | .and left right => Expr.eval left value && Expr.eval right value
@@ -88,9 +100,11 @@ section
 
 variable {outer input result : DataType}
 
-def Expr.weaken {outer input result} (path : Path outer input) (expression : Expr input result) : Expr outer result :=
+def Expr.weaken {outer input result}
+  (path : Path outer input)
+  (expression : Expr input result)
+  : Expr outer result :=
   match expression with
-  | .textEq left right => .textEq (left.weaken path) (right.weaken path)
   | .value v => .value v
   | .project field => .project (Path.trans path field)
   | .all items predicate => .all (Expr.weaken path items) predicate
@@ -100,6 +114,7 @@ def Expr.weaken {outer input result} (path : Path outer input) (expression : Exp
   | .sortBy items key descending => .sortBy (Expr.weaken path items) key descending
   | .search items key query => .search (Expr.weaken path items) key (Expr.weaken path query)
   | .sortNatBy items key descending => .sortNatBy (Expr.weaken path items) key descending
+  | .snoc items expression => .snoc (Expr.weaken path items) (Expr.weaken path expression)
   | .length items => .length (Expr.weaken path items)
   | .enumCases subject branches =>
     .enumCases (Expr.weaken path subject) (fun choice => Expr.weaken path (branches choice))
@@ -108,7 +123,10 @@ def Expr.weaken {outer input result} (path : Path outer input) (expression : Exp
   | .ifThenElse condition whenTrue whenFalse =>
     .ifThenElse (Expr.weaken path condition) (Expr.weaken path whenTrue) (Expr.weaken path whenFalse)
   | .natToText operand => .natToText (Expr.weaken path operand)
+  | .textEq left right => .textEq (Expr.weaken path left) (Expr.weaken path right)
   | .textAppend left right => .textAppend (Expr.weaken path left) (Expr.weaken path right)
+  | .natAdd l r => .natAdd (Expr.weaken path l) (Expr.weaken path r)
+  | .natSub l r => .natSub (Expr.weaken path l) (Expr.weaken path r)
   | .natMul l r => .natMul (Expr.weaken path l) (Expr.weaken path r)
   | .not operand => .not (Expr.weaken path operand)
   | .and l r => .and (Expr.weaken path l) (Expr.weaken path r)
