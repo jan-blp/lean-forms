@@ -27,6 +27,10 @@ inductive Expr : (input : DataType) → (result : DataType) → Type 1 where
   | sortNatBy {input element : DataType}
       (items : Expr input (.list element)) (key : Expr element .natural) (descending : Bool)
       : Expr input (.list element)
+  | snoc {input element : DataType}
+    (items : Expr input (.list element))
+    (value : Expr input element)
+    : Expr input (.list element)
   | length {input element : DataType} (items : Expr input (.list element)) : Expr input .natural
   | enumCases {input result : DataType} {domain : Enum}
       (subject : Expr input (.enum domain)) (branches : domain → Expr input result) : Expr input result
@@ -73,6 +77,7 @@ def Expr.eval {input t : DataType}
     (Expr.eval items value).mergeSort fun left right =>
       if descending then Expr.eval key right ≤ Expr.eval key left
       else Expr.eval key left ≤ Expr.eval key right
+  | .snoc items expression => Expr.eval items value ++ [Expr.eval expression value]
   | .length items => (Expr.eval items value).length
   | .enumCases subject branches => Expr.eval (branches (Expr.eval subject value)) value
   | .enumEq left right => decide (Expr.eval left value = Expr.eval right value)
@@ -107,6 +112,7 @@ def Expr.weaken {outer input result}
   | .sortBy items key descending => .sortBy (Expr.weaken path items) key descending
   | .search items key query => .search (Expr.weaken path items) key (Expr.weaken path query)
   | .sortNatBy items key descending => .sortNatBy (Expr.weaken path items) key descending
+  | .snoc items expression => .snoc (Expr.weaken path items) (Expr.weaken path expression)
   | .length items => .length (Expr.weaken path items)
   | .enumCases subject branches =>
     .enumCases (Expr.weaken path subject) (fun choice => Expr.weaken path (branches choice))

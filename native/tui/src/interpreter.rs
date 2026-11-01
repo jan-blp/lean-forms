@@ -119,6 +119,7 @@ pub enum Expr {
         key: Box<Expr>,
         descending: bool,
     },
+    Snoc { items: Box<Expr>, value: Box<Expr> },
     Length {
         items: Box<Expr>,
     },
@@ -207,13 +208,11 @@ impl Widget {
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Action {
     Set { path: Vec<Step>, value: Expr },
-    Append { path: Vec<Step>, value: Expr },
 }
 impl Action {
     fn path(&self) -> &[Step] {
         match self {
             Self::Set { path, .. } => path,
-            Self::Append { path, .. } => path,
         }
     }
     fn validate(&self, context: &Ty) -> Result<(), String> {
@@ -224,25 +223,12 @@ impl Action {
                     return Err("Action value must match its target type".into());
                 }
             }
-            Self::Append { value, .. } => {
-                let Ty::List { element } = target else {
-                    return Err("Append action requires a list target".into());
-                };
-                if *element != value.ty(context)? {
-                    return Err("Append action value must match list element type".into());
-                }
-            }
         }
         Ok(())
     }
     fn replacement(&self, state: &Value) -> Value {
         match self {
             Self::Set { value, .. } => value.eval(state),
-            Self::Append { path, value } => {
-                let mut items = get(state, path).as_array().unwrap().clone();
-                items.push(value.eval(state));
-                Value::Array(items)
-            }
         }
     }
 }
@@ -545,6 +531,15 @@ impl Expr {
                 }
                 Ok(Ty::List { element })
             }
+            Self::Snoc { items, value } => {
+                let Ty::List { element } = items.ty(input)? else {
+                    return Err("snoc requires a list".into());
+                };
+                if *element != value.ty(input)? {
+                    return Err("snoc value must match list element type".into());
+                }
+                Ok(Ty::List { element })
+            }
             Self::Length { items } => {
                 if !matches!(items.ty(input)?, Ty::List { .. }) {
                     return Err("length requires a list".into());
@@ -712,6 +707,11 @@ impl Expr {
                     if *descending { order.reverse() } else { order }
                 });
                 Value::Array(rows)
+            }
+            Self::Snoc { items, value } => {
+                let mut items = items.eval(input).as_array().unwrap().clone();
+                items.push(value.eval(input));
+                Value::Array(items)
             }
             Self::Length { items } => {
                 Value::String(items.eval(input).as_array().unwrap().len().to_string())

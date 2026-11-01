@@ -11,6 +11,14 @@ private def check (name : String) (passed : Bool) : IO Unit := do
 private def append : Component (.list .natural) :=
   .button "Append length" (.append .self (.length (.project .self)))
 
+example {state element : DataType}
+  (target : Path state (.list element))
+  (value : Expr state element)
+  : Action.append target value = .set target (.snoc (.project target) value) := rfl
+
+#guard (Expr.snoc (.value ([] : List Nat)) (.value 7) : Expr .natural (.list .natural)).eval 0 == [7]
+#guard (Expr.snoc (.value [1, 2]) (.project .self) : Expr .natural (.list .natural)).eval 3 == [1, 2, 3]
+
 private def state : DataType := .record Counters.sides fun
   | .left => .natural
   | .right => .list .natural

@@ -1222,8 +1222,7 @@ fn shopping_operators_reject_invalid_types() {
     ] {
         assert!(serde_json::from_value::<Expr>(expr).unwrap().ty(&schema).is_err());
     }
-    let invalid = json!({"kind":"button","label":"Bad","action":{"kind":"append","path":["items"],
-        "value":{"kind":"value","type":{"kind":"text"},"value":"not an item"}}});
+    let invalid = json!({"kind":"button","label":"Bad","action":{"kind":"set","path":["items"],"value":{"kind":"snoc","items":{"kind":"project","path":["items"]},"value":{"kind":"value","type":{"kind":"text"},"value":"not an item"}}}});
     assert!(serde_json::from_value::<Component>(invalid).unwrap().validate(&schema).is_err());
 }
 
@@ -1286,8 +1285,7 @@ fn components_inside_lists_and_sums_use_local_state() {
         {"kind":"table", "rows":{"kind":"project","path":[]},
          "columns":[{"label":"Number", "expression":{"kind":"natToText",
              "operand":{"kind":"project","path":[]}}}]},
-        {"kind":"button", "label":"Append seven", "action":{"kind":"append","path":[],
-         "value":{"kind":"value","type":{"kind":"natural"},"value":"7"}}}
+        {"kind":"button", "label":"Append seven", "action":{"kind":"set","path":[],"value":{"kind":"snoc","items":{"kind":"project","path":[]},"value":{"kind":"value","type":{"kind":"natural"},"value":"7"}}}}
     ]});
     let list_schema = json!({"kind":"list","element":numbers});
     let sum_schema = json!({"kind":"sum","constructors":[{"name":"numbers","type":numbers}]});
@@ -1373,7 +1371,8 @@ fn typed_actions_validate_paths_and_replacements_and_respect_disabled() {
     engine.step(Key::Enter);
     assert_eq!(engine.spec.value, json!("4"));
     let mut append = spec.clone();
-    append["form"]["action"]["kind"] = json!("append");
+    append["form"]["action"]["value"] = json!({"kind":"snoc","items":{"kind":"project","path":[]},
+        "value":{"kind":"value","type":{"kind":"natural"},"value":"1"}});
     assert!(Engine::parse(&append.to_string()).is_err());
     append["form"]["action"]["path"] = json!(["missing"]);
     assert!(Engine::parse(&append.to_string()).is_err());
@@ -1736,8 +1735,7 @@ fn standalone_button_targets_follow_components_and_read_current_state() {
 
 #[test]
 fn append_buttons_record_presses_and_evaluate_current_state() {
-    let button = json!({"kind":"button","label":"Append length","action":{"kind":"append","path":[],
-        "value":{"kind":"length","items":{"kind":"project","path":[]}}}});
+    let button = json!({"kind":"button","label":"Append length","action":{"kind":"set","path":[],"value":{"kind":"snoc","items":{"kind":"project","path":[]},"value":{"kind":"length","items":{"kind":"project","path":[]}}}}});
     let spec = json!({"version":6,"schema":{"kind":"list","element":{"kind":"natural"}},
         "value":["7"],"constraints":[],"form":button});
     let mut engine = Engine::parse(&spec.to_string()).unwrap();
@@ -1773,8 +1771,7 @@ fn append_targets_preserve_identity_and_read_edited_siblings() {
         "value":{"value":"0","items":["7"]},
         "form":{"kind":"stack","childIds":["outer"],"children":[
             {"kind":"stack","childIds":["append","edit"],"children":[
-                {"kind":"button","label":"Append value","action":{"kind":"append","path":["items"],
-                    "value":{"kind":"project","path":["value"]}}},
+                {"kind":"button","label":"Append value","action":{"kind":"set","path":["items"],"value":{"kind":"snoc","items":{"kind":"project","path":["items"]},"value":{"kind":"project","path":["value"]}}}},
                 {"kind":"field","label":"Value","path":["value"],"schema":{"kind":"natural"},"widget":"naturalInput"}]}]}});
     let mut engine = Engine::parse(&spec.to_string()).unwrap();
     engine.selected = 1;
@@ -1940,4 +1937,19 @@ fn sum_history_targets_follow_list_removal_and_display_order() {
             {"target":[0,"rectangle","height"],"action":"replace","argument":"8"}
         ]
     }));
+}
+
+#[test]
+fn snoc_expressions_append_in_order_and_check_element_types() {
+    let expression = json!({"kind":"snoc",
+        "items":{"kind":"value","type":{"kind":"list","element":{"kind":"natural"}},"value":["1","2"]},
+        "value":{"kind":"project","path":[]}});
+    let expr: Expr = serde_json::from_value(expression.clone()).unwrap();
+    assert_eq!(expr.ty(&Ty::Natural).unwrap(), Ty::List { element: Box::new(Ty::Natural) });
+    assert_eq!(expr.eval(&json!("3")), json!(["1","2","3"]));
+    assert!(expr.ty(&Ty::Text).is_err());
+    let mut invalid = expression;
+    invalid["items"] = json!({"kind":"project","path":[]});
+    let expr: Expr = serde_json::from_value(invalid).unwrap();
+    assert!(expr.ty(&Ty::Natural).is_err());
 }

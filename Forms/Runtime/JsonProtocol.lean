@@ -127,6 +127,8 @@ def Expr.toJson {input t} (expression : Expr input t) : Json :=
       ("items", Expr.toJson items), ("key", Expr.toJson key), ("query", Expr.toJson query)]
   | .sortNatBy items key descending => Json.mkObj [("kind", Lean.toJson "sortNatBy"),
       ("items", Expr.toJson items), ("key", Expr.toJson key), ("descending", Lean.toJson descending)]
+  | .snoc items expression => Json.mkObj [("kind", Lean.toJson "snoc"),
+      ("items", Expr.toJson items), ("value", Expr.toJson expression)]
   | .length items => Json.mkObj [("kind", Lean.toJson "length"), ("items", Expr.toJson items)]
   | .enumCases (domain := domain) subject branches => Json.mkObj [("kind", Lean.toJson "enumCases"),
       ("type", DataType.toJson t), ("subject", Expr.toJson subject),

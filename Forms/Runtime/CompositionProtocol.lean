@@ -8,9 +8,6 @@ def actionToJson {state : DataType} : Action state → Json
   | .set target replacement => Json.mkObj [
       ("kind", toJson "set"), ("path", toJson (Path.toList target)),
       ("value", Expr.toJson replacement)]
-  | .append target expression => Json.mkObj [
-      ("kind", toJson "append"), ("path", toJson (Path.toList target)),
-      ("value", Expr.toJson expression)]
 
 def widgetActionToJson {value : DataType}
   (id : String)
