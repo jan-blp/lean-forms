@@ -302,3 +302,24 @@ test('buttons inside list items read and write only the item state', () => {
   press(model, 'press', [1]);
   assert.deepEqual(model.submission(), { value: ['1', '20'], actions: [{ target: [1], action: 'press' }] });
 });
+
+test('controls carry error locations with list indices and sum tags', () => {
+  const invoice = fixture('invoice');
+  invoice.value = [{ description: 'A', quantity: '1', unitPrice: '5' }, { description: 'B', quantity: '0', unitPrice: '5' }];
+  const model = createModel(invoice);
+  const locations = model.controls().filter(control => control.kind === 'editor').map(control => control.location);
+  assert.deepEqual(locations.filter(location => location[0]?.kind === 'item' && location[0].index === '1'),
+    ['description', 'quantity', 'unitPrice'].map(name => [{ kind: 'item', index: '1' }, { kind: 'field', name }]));
+  assert.deepEqual(model.view().children.find(child => child.kind === 'list').location, []);
+
+  const shapes = fixture('shapes');
+  shapes.value = { tag: 'rectangle', value: { width: '0', height: '2' } };
+  const shape = createModel(shapes);
+  assert.deepEqual(shape.controls().map(control => control.location), [[],
+    [{ kind: 'constructor', tag: 'rectangle' }, { kind: 'field', name: 'width' }],
+    [{ kind: 'constructor', tag: 'rectangle' }, { kind: 'field', name: 'height' }]]);
+});
+
+test('specifications require version 8', () => {
+  assert.throws(() => createModel({ ...fixture('invoice'), version: 7 }));
+});

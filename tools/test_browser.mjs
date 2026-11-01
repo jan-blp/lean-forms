@@ -245,6 +245,19 @@ try {
     }
     quantity(1, '1'); quantity(2, '1');
   `);
+  await example('invoice', `
+    const originalFetch = window.fetch;
+    try {
+      window.fetch = async () => new Response(JSON.stringify({ error: {
+        kind: 'validation', message: 'List error',
+        errors: [{ message: 'List error', targets: { kind: 'fields', locations: [[]] } }],
+      } }), { status: 422, headers: { 'Content-Type': 'application/json' } });
+      document.querySelector('#submit').click();
+      await wait(() => document.querySelector('#status').textContent === 'List error');
+      check(document.querySelectorAll('.validation-error').length === 1, 'Missing list feedback');
+      check(!document.querySelector('[aria-invalid]'), 'List error marked child fields invalid');
+    } finally { window.fetch = originalFetch; }
+  `);
   await example('shapes', `
     select('Shape', 'rectangle'); edit('Width', '8');
     select('Shape', 'dot'); check(!document.querySelector('input'), 'Inactive payload remains');
@@ -255,6 +268,9 @@ try {
     document.querySelector('#submit').click();
     await wait(() => document.querySelector('#status').textContent === 'Size must be at least 1.');
     const width = [...document.querySelectorAll('.editor')].find(form => form.querySelector('label').firstChild.textContent === 'Width');
+    const invalid = [...document.querySelectorAll('[aria-invalid="true"]')];
+    check(invalid.length === 1 && invalid[0] === width.querySelector('input'), 'Only the width input should be marked invalid');
+    check(!document.querySelector('select[aria-invalid]'), 'Constructor selector marked invalid');
     check(document.querySelectorAll('.validation-error').length === 1 && width.querySelector('.validation-error'),
       'Active constructor error did not attach to width');
     edit('Width', '8');

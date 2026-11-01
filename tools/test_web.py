@@ -77,15 +77,19 @@ import { readFileSync } from 'node:fs';
 const model = createModel(JSON.parse(readFileSync(0, 'utf8')));
 const edit = (widget, argument) => model.apply(model.controls().find(c => c.widget === widget).key, argument);
 const apply = (label, argument) => model.apply(model.controls().find(c => c.label === label).key, argument);
+const quantity = (index, argument) =>
+  model.apply(model.controls().find(c => c.label === 'Quantity' && c.target[1] === index).key, argument);
 switch (process.argv[1]) {
   case 'person':
     edit('textInput', 'Grace'); edit('checkbox', true); edit('select', 2); break;
   case 'booking': edit('dateInput', '2028-02-29'); break;
   case 'invoice':
     apply('Add item');
-    model.apply(model.controls().find(c => c.label === 'Quantity' && c.target[1] === 1).key, '7');
+    quantity(1, '7');
     apply('Remove item');
     break;
+  case 'invoice-invalid': apply('Add item'); quantity(1, '0'); break;
+  case 'shapes-invalid': apply('Shape', 'rectangle'); apply('Width', '0'); break;
   case 'location': apply('Country', 'Japan'); apply('City', 2); break;
   case 'shapes':
     apply('Shape', 'rectangle'); apply('Width', '8');
@@ -110,8 +114,11 @@ switch (process.argv[1]) {
 model.view();
 process.stdout.write(JSON.stringify(model.submission()));
 '''
-        submission = json.loads(subprocess.check_output(['node', '--input-type=module', '-e', script, example],
-                                                       input=json.dumps(spec).encode(), cwd=ROOT))
+
+        def run_client(scenario):
+            return json.loads(subprocess.check_output(['node', '--input-type=module', '-e', script, scenario],
+                                                      input=json.dumps(spec).encode(), cwd=ROOT))
+        submission = run_client(example)
         status, _, accepted = request('/api/submit', submission)
         assert status == 204 and accepted == '', (status, accepted)
         forged = {**submission, 'value': spec['value']}
@@ -132,6 +139,18 @@ process.stdout.write(JSON.stringify(model.submission()));
             assert error['kind'] == 'validation'
             assert error['errors'] == [{'message': 'Attendees must be between 18 and 120 years old.', 'targets': {'kind': 'fields', 'locations': [[{'kind': 'field', 'name': 'age'}]]}}]
             assert error['message'] == 'Attendees must be between 18 and 120 years old.'
+        for scenario, expected in [
+                ('invoice-invalid', [{'message': 'Quantity and unit price must be at least 1.',
+                                      'targets': {'kind': 'fields', 'locations': [[{'kind': 'item', 'index': '1'}, {'kind': 'field', 'name': 'quantity'}]]}}]),
+                ('shapes-invalid', [{'message': 'Size must be at least 1.',
+                                     'targets': {'kind': 'fields', 'locations': [[{'kind': 'constructor', 'tag': 'rectangle'}, {'kind': 'field', 'name': 'width'}]]}}])]:
+            if example != scenario.removesuffix('-invalid'):
+                continue
+            invalid = run_client(scenario)
+            status, _, body = request('/api/submit', invalid)
+            assert status == 422, (status, body)
+            error = json.loads(body)['error']
+            assert error['kind'] == 'validation' and error['errors'] == expected, error
         if example == 'booking':
             invalid = json.loads(json.dumps(initial))
             invalid['value']['endDate'] = '2027-01-01'

@@ -125,7 +125,8 @@ function mount(model: ReturnType<typeof createModel>) {
           const feedback = element('p', [...new Set(messages)].join('\n'), 'validation-error');
           feedback.id = `validation-error-${errorId++}`;
           rendered.append(feedback);
-          for (const input of rendered.querySelectorAll('input, select')) {
+          const inputs = node.kind === 'editor' || node.kind === 'choice' ? rendered.querySelectorAll('input, select') : [];
+          for (const input of inputs) {
             input.setAttribute('aria-invalid', 'true');
             const describedBy = input.getAttribute('aria-describedby');
             input.setAttribute('aria-describedby', [describedBy, feedback.id].filter(Boolean).join(' '));

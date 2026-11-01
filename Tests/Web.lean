@@ -1,6 +1,8 @@
 import Forms.Runtime.Web
 import Forms.ExampleForms.Counter
 import Forms.ExampleForms.Person
+import Forms.ExampleForms.Invoice
+import Forms.ExampleForms.Shapes
 
 namespace Tests.Web
 open Forms Forms.Runtime Forms.Composition Forms.ExampleForms
@@ -38,7 +40,36 @@ private def testTrafficLog : IO Unit := do
     (.text "outer " ++ TrafficLog.Style.key.tag (.text "inner") ++ .text " outer")
   check "TrafficRestoresOuterStyle" ((TrafficLog.render nested true).contains "inner\x1b[0m\x1b[1m\x1b[32m outer")
 
+private def errorsJson {ty : DataType}
+  (refined : RefinedDataType ty)
+  (draft : String)
+  : IO Lean.Json := do
+  let value ← IO.ofExcept (JsonProtocol.valueFromJson ty (← IO.ofExcept (Lean.Json.parse draft)))
+  return Lean.toJson ((RefinedDataType.errors refined value).map Validation.ResolvedError.toJson)
+
+private def located
+  (message : String)
+  (locations : List Validation.Location)
+  (nonempty : locations ≠ [] := by simp)
+  : Lean.Json :=
+  Validation.ResolvedError.toJson { message := message, targets := .fields locations nonempty }
+
+private def testPreciseErrors : IO Unit := do
+  let positive := "Quantity and unit price must be at least 1."
+  let invoice ← errorsJson Invoice.invoiceType
+    "[{\"description\":\"A\",\"quantity\":\"1\",\"unitPrice\":\"5\"},{\"description\":\"B\",\"quantity\":\"0\",\"unitPrice\":\"5\"}]"
+  check "ListErrorNamesItemField" (invoice == Lean.toJson [located positive [[.item 1, .field "quantity"]]])
+  let both ← errorsJson Invoice.invoiceType
+    "[{\"description\":\"A\",\"quantity\":\"0\",\"unitPrice\":\"0\"},{\"description\":\"B\",\"quantity\":\"0\",\"unitPrice\":\"5\"}]"
+  check "ListErrorsPerItemAndField" (both == Lean.toJson [located positive [[.item 0, .field "quantity"]],
+    located positive [[.item 0, .field "unitPrice"]], located positive [[.item 1, .field "quantity"]]])
+  let shapes ← errorsJson Shapes.shapeType "{\"tag\":\"rectangle\",\"value\":{\"width\":\"0\",\"height\":\"2\"}}"
+  check "SumErrorNamesTagAndPayloadField" (shapes == Lean.toJson [located "Size must be at least 1." [[.constructor "rectangle", .field "width"]]])
+  let circle ← errorsJson Shapes.shapeType "{\"tag\":\"circle\",\"value\":\"0\"}"
+  check "SumErrorNamesScalarPayload" (circle == Lean.toJson [located "Size must be at least 1." [[.constructor "circle"]]])
+
 def run : IO Unit := do
+  testPreciseErrors
   testTrafficLog
   let refined : RefinedDataType .natural := .refine (.base .natural)
     (.ofChecker <| .when (.not (.natLe (.project .self) (.value 5)))
