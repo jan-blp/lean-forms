@@ -1,3 +1,4 @@
+import Tests.Web
 import Tests.SumHistory
 import Tests.ListHistory
 import Tests.AppendHistory
@@ -352,6 +353,7 @@ private def testProtocol : IO Unit := do
     (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (t := .natural) huge) == .ok huge)
 
 def main : IO Unit := do
+  Tests.Web.run
   Tests.SumHistory.run
   Tests.ListHistory.run
   Tests.AppendHistory.run

@@ -1,0 +1,227 @@
+"""Exercise browser-generated histories against the Lean HTTP server."""
+import json
+import os
+import pty
+import threading
+from pathlib import Path
+import socket
+import sys
+import subprocess
+import time
+import tempfile
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+ROOT = Path(__file__).resolve().parents[1]
+BINARY = ROOT / '.lake/build/bin/forms-web'
+
+
+def session(example):
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0))
+        port = sock.getsockname()[1]
+    traffic_log = tempfile.TemporaryFile()
+    process = subprocess.Popen([str(BINARY), example, '--port', str(port)], cwd=ROOT,
+                               stdout=traffic_log, stderr=subprocess.PIPE)
+    base = f'http://127.0.0.1:{port}'
+
+    def request(path, value=None, raw=None, method=None):
+        data = raw if raw is not None else json.dumps(value).encode() if value is not None else None
+        req = Request(base + path, data=data, method=method,
+                      headers={'Content-Type': 'application/json'} if data is not None else {})
+        try:
+            response = urlopen(req, timeout=5)
+        except HTTPError as error:
+            response = error
+        with response:
+            return response.status, response.headers, response.read().decode()
+
+    try:
+        for _ in range(100):
+            if process.poll() is not None:
+                raise AssertionError(process.stderr.read().decode())
+            try:
+                status, _, body = request('/api/form')
+                break
+            except URLError:
+                time.sleep(.05)
+        else:
+            raise AssertionError('HTTP server did not start')
+        assert status == 200
+        spec = json.loads(body)
+        assert spec['version'] == 6
+        for path, mime in [('/', 'text/html'), ('/app.js', 'text/javascript'),
+                           ('/interpreter.js', 'text/javascript'), ('/style.css', 'text/css')]:
+            status, headers, body = request(path)
+            assert status == 200 and headers['Content-Type'].startswith(mime), (path, status, headers)
+            assert body and headers['Cache-Control'] == 'no-store'
+        assert request('/missing')[0] == 404
+        assert request('/api/form', method='DELETE')[0] == 405
+        assert request('/api/submit', raw=b'{')[0] == 400
+        assert request('/api/submit', raw=b'x' * (1024 * 1024 + 1))[0] == 413
+        initial = {'value': spec['value'], 'actions': []}
+        status, headers, body = request('/api/submit', initial)
+        assert status == 204 and body == ''
+        assert 'Content-Type' not in headers
+        script = '''
+import { createModel } from './web/dist/interpreter.js';
+import { readFileSync } from 'node:fs';
+const model = createModel(JSON.parse(readFileSync(0, 'utf8')));
+const edit = (widget, argument) => model.apply(model.controls().find(c => c.widget === widget).key, argument);
+if (model.controls().some(c => c.widget === 'checkbox')) {
+  edit('textInput', 'Grace');
+  edit('checkbox', true);
+  edit('select', 2);
+} else if (model.controls().some(c => c.widget === 'dateInput')) {
+  edit('dateInput', '2028-02-29');
+} else {
+const editor = model.controls().find(c => c.kind === 'editor');
+model.apply(editor.key, '123456789012345678901234567890');
+const button = model.controls().find(c => c.id === 'plusOne');
+model.apply(button.key);
+model.apply(button.key);
+}
+process.stdout.write(JSON.stringify(model.submission()));
+'''
+        submission = json.loads(subprocess.check_output(['node', '--input-type=module', '-e', script],
+                                                       input=json.dumps(spec).encode(), cwd=ROOT))
+        status, _, accepted = request('/api/submit', submission)
+        assert status == 204 and accepted == '', (status, accepted)
+        forged = {**submission, 'value': spec['value']}
+        assert request('/api/submit', forged)[0] == 422
+        assert request('/api/submit', {'value': submission['value'], 'actions': []})[0] == 422
+        unknown = {'value': spec['value'], 'actions': [{'target': [], 'action': 'unknown'}]}
+        assert request('/api/submit', unknown)[0] == 422
+        assert request('/api/submit', raw=json.dumps(spec['value']).encode())[0] == 422
+        assert request('/api/submit', initial)[0] == 204
+        traffic_log.seek(0)
+        traffic = traffic_log.read().decode()
+        assert '\x1b[' not in traffic
+        assert 'CLIENT → SERVER GET /api/form' in traffic
+        assert 'SERVER → CLIENT 200 GET /api/form' in traffic
+        assert 'CLIENT → SERVER POST /api/submit' in traffic
+        assert 'SERVER → CLIENT 204 POST /api/submit\n' in traffic
+        assert 'SERVER → CLIENT 422 POST /api/submit' in traffic
+        assert '"actions"' in traffic
+        if example in ['counter', 'counters']:
+            assert '123456789012345678901234567890' in traffic
+    finally:
+        process.terminate()
+        try:
+            process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+        traffic_log.close()
+
+
+def terminal_colors(no_color=False, term='xterm-256color'):
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0))
+        port = sock.getsockname()[1]
+    master, slave = pty.openpty()
+    environment = dict(os.environ, TERM=term)
+    environment.pop('NO_COLOR', None)
+    if no_color:
+        environment['NO_COLOR'] = ''
+    process = subprocess.Popen([str(BINARY), '--port', str(port)], cwd=ROOT,
+                               stdout=slave, stderr=subprocess.PIPE, env=environment)
+    os.close(slave)
+    output = bytearray()
+
+    def drain():
+        try:
+            while chunk := os.read(master, 65536):
+                output.extend(chunk)
+        except OSError:
+            pass
+
+    reader = threading.Thread(target=drain)
+    reader.start()
+    try:
+        for _ in range(100):
+            if process.poll() is not None:
+                raise AssertionError(process.stderr.read().decode())
+            try:
+                with urlopen(f'http://127.0.0.1:{port}/api/form', timeout=5) as response:
+                    assert response.status == 200
+                    response.read()
+                break
+            except URLError:
+                time.sleep(.05)
+        else:
+            raise AssertionError('HTTP server did not start')
+    finally:
+        process.terminate()
+        try:
+            process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+        reader.join(timeout=5)
+        os.close(master)
+    if no_color or term == 'dumb':
+        assert b'\x1b[' not in output, output
+    else:
+        assert b'\x1b[36m' in output and b'\x1b[32m' in output, output
+        assert b'\x1b[0m' in output, output
+        assert b'\x1b[34m"value"\x1b[0m' in output, output
+        assert b'\x1b[32m"0"\x1b[0m' in output, output
+
+
+def browser_flag(exit_code):
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0))
+        port = sock.getsockname()[1]
+    base = f'http://127.0.0.1:{port}'
+    with tempfile.TemporaryDirectory() as directory:
+        marker = Path(directory) / 'opened'
+        opener = Path(directory) / ('open' if sys.platform == 'darwin' else 'xdg-open')
+        opener.write_text(
+            f'#!{sys.executable}\n'
+            'import sys\n'
+            'from pathlib import Path\n'
+            'from urllib.request import urlopen\n'
+            'with urlopen(sys.argv[1] + "/api/form", timeout=5) as response:\n'
+            '    assert response.status == 200\n'
+            f'Path({str(marker)!r}).write_text(sys.argv[1])\n'
+            f'sys.exit({exit_code})\n')
+        opener.chmod(0o755)
+        environment = dict(os.environ, PATH=directory + os.pathsep + os.environ['PATH'])
+        with tempfile.TemporaryFile() as traffic:
+            process = subprocess.Popen(
+                [str(BINARY), '--open', 'counters', '--port', str(port)],
+                cwd=ROOT, env=environment, stdout=traffic, stderr=subprocess.PIPE)
+            try:
+                for _ in range(100):
+                    if marker.exists():
+                        break
+                    assert process.poll() is None, process.stderr.read().decode()
+                    time.sleep(.05)
+                else:
+                    raise AssertionError('Browser opener was not called')
+                assert marker.read_text() == base
+                with urlopen(base + '/api/form', timeout=5) as response:
+                    assert response.status == 200
+                if exit_code:
+                    assert b'Could not open browser' in process.stderr.readline()
+                    assert process.poll() is None
+            finally:
+                process.terminate()
+                process.communicate(timeout=5)
+
+
+for arguments in [['--port'], ['--port', '0'], ['--port', '65536'], ['--port', 'abc'],
+                  ['--unknown']]:
+    assert subprocess.run([str(BINARY), *arguments], capture_output=True).returncode != 0
+assert b'--open' in subprocess.check_output([str(BINARY), '--help'])
+browser_flag(0)
+browser_flag(1)
+
+
+for example in ['counter', 'counters', 'person', 'booking']:
+    session(example)
+terminal_colors()
+terminal_colors(no_color=True)
+terminal_colors(term='dumb')
+print('PASS: HTTP traffic, replay, request errors, terminal colors, NO_COLOR, and --open')
