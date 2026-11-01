@@ -3,6 +3,7 @@ import Forms.Core.RefinedDataType
 import Lean.Data.Json
 
 namespace Forms
+
 open Lean
 
 variable {root input context t : DataType}
@@ -38,7 +39,8 @@ def valueToJson {t} (value : ⟦t⟧) : Json :=
       (fieldNames.label i, valueToJson (t := fieldTypes i) (value i)))
 
 private def sequenceFin {n : Nat} {α : Fin n → Type}
-    (values : (i : Fin n) → Except String (α i)) : Except String ((i : Fin n) → α i) :=
+  (values : (i : Fin n) → Except String (α i))
+  : Except String ((i : Fin n) → α i) :=
   match n with
   | 0 => pure (fun i => Fin.elim0 i)
   | _ + 1 => do
@@ -46,8 +48,11 @@ private def sequenceFin {n : Nat} {α : Fin n → Type}
     let tail ← sequenceFin (fun i => values i.succ)
     pure (Fin.cons head tail)
 
-private def sequence {ι : Type} [FinEnum ι] {α : ι → Type}
-    (values : (i : ι) → Except String (α i)) : Except String ((i : ι) → α i) := do
+private def sequence {ι : Type}
+  [FinEnum ι]
+  {α : ι → Type}
+  (values : (i : ι) → Except String (α i))
+  : Except String ((i : ι) → α i) := do
   let result ← sequenceFin (fun i => values (FinEnum.equiv.symm i))
   pure fun i => (FinEnum.equiv.symm_apply_apply i) ▸ result (FinEnum.equiv i)
 
@@ -87,8 +92,8 @@ def valueFromJson (t : DataType) (json : Json) : Except String ⟦t⟧ :=
     sequence (fun i => do valueFromJson (fieldTypes i) (← json.getObjVal? (fieldNames.label i)))
 
 theorem valueFromJson_date_sound {json : Json} {date : Date}
-    (h : valueFromJson .date json = .ok date) :
-    valueToJson (t := .date) date = json := by
+  (h : valueFromJson .date json = .ok date)
+  : valueToJson (t := .date) date = json := by
   cases json <;>
     simp_all [valueFromJson, Json.getStr?, bind, Except.bind, pure, Except.pure,
       valueToJson, toJson]
@@ -97,7 +102,9 @@ theorem valueFromJson_date_sound {json : Json} {date : Date}
 
 end Runtime.JsonProtocol
 
-def Path.toList {source target : DataType} (path : Path source target) : List String :=
+def Path.toList {source target : DataType}
+  (path : Path source target)
+  : List String :=
   match path with
   | .self => []
   | .field (fieldNames := fieldNames) fieldName rest => fieldNames.label fieldName :: Path.toList rest
@@ -105,7 +112,6 @@ def Path.toList {source target : DataType} (path : Path source target) : List St
 def Expr.toJson {input t} (expression : Expr input t) : Json :=
   match expression with
   | .value v => Json.mkObj [("kind", Lean.toJson "value"), ("type", DataType.toJson t), ("value", Runtime.JsonProtocol.valueToJson v)]
-  | .textEq left right => Json.mkObj [("kind", Lean.toJson "textEq"), ("left", left.toJson), ("right", right.toJson)]
   | .project p => Json.mkObj [("kind", Lean.toJson "project"), ("path", Lean.toJson (Path.toList p))]
   | .all items predicate => Json.mkObj [("kind", Lean.toJson "all"),
       ("items", Expr.toJson items), ("predicate", Expr.toJson predicate)]
@@ -122,6 +128,8 @@ def Expr.toJson {input t} (expression : Expr input t) : Json :=
       ("items", Expr.toJson items), ("key", Expr.toJson key), ("query", Expr.toJson query)]
   | .sortNatBy items key descending => Json.mkObj [("kind", Lean.toJson "sortNatBy"),
       ("items", Expr.toJson items), ("key", Expr.toJson key), ("descending", Lean.toJson descending)]
+  | .snoc items expression => Json.mkObj [("kind", Lean.toJson "snoc"),
+      ("items", Expr.toJson items), ("value", Expr.toJson expression)]
   | .length items => Json.mkObj [("kind", Lean.toJson "length"), ("items", Expr.toJson items)]
   | .enumCases (domain := domain) subject branches => Json.mkObj [("kind", Lean.toJson "enumCases"),
       ("type", DataType.toJson t), ("subject", Expr.toJson subject),
@@ -132,7 +140,10 @@ def Expr.toJson {input t} (expression : Expr input t) : Json :=
   | .ifThenElse condition whenTrue whenFalse => Json.mkObj [("kind", Lean.toJson "ifThenElse"),
       ("condition", Expr.toJson condition), ("whenTrue", Expr.toJson whenTrue), ("whenFalse", Expr.toJson whenFalse)]
   | .natToText operand => Json.mkObj [("kind", Lean.toJson "natToText"), ("operand", Expr.toJson operand)]
+  | .textEq left right => binary "textEq" (Expr.toJson left) (Expr.toJson right)
   | .textAppend left right => binary "textAppend" (Expr.toJson left) (Expr.toJson right)
+  | .natAdd l r => binary "natAdd" (Expr.toJson l) (Expr.toJson r)
+  | .natSub l r => binary "natSub" (Expr.toJson l) (Expr.toJson r)
   | .natMul l r => binary "natMul" (Expr.toJson l) (Expr.toJson r)
   | .not operand => Json.mkObj [("kind", Lean.toJson "not"), ("operand", Expr.toJson operand)]
   | .and l r => binary "and" (Expr.toJson l) (Expr.toJson r)
@@ -149,18 +160,6 @@ def Widget.name (widget : Widget t) : String :=
   | .dateInput => "dateInput"
   | .naturalInput => "naturalInput"
   | .select => "select"
-
-namespace Runtime.JsonProtocol
-
-def decodeResult (refined : RefinedDataType root) (json : Json) : Except String (Option (RefinedDataType.ValidatedValue refined)) := do
-  if json == Json.null then return none
-  let draft ← valueFromJson root json
-  match RefinedDataType.validate refined draft with
-  | some value => return some value
-  | none => throw ("Invalid submitted value: " ++ String.intercalate "; "
-      ((RefinedDataType.errors refined draft).map (·.message)))
-
-end Runtime.JsonProtocol
 
 end Forms
 

@@ -1,7 +1,17 @@
 {
   "form": {
+    "childIds": [
+      "Filters",
+      "Sort",
+      "Summary",
+      "Results"
+    ],
     "children": [
       {
+        "childIds": [
+          "provider",
+          "failuresOnly"
+        ],
         "children": [
           {
             "kind": "field",
@@ -1313,5 +1323,5 @@
     },
     "title": "Keep this title"
   },
-  "version": 7
+  "version": 8
 }

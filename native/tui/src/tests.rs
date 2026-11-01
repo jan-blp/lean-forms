@@ -490,7 +490,7 @@ fn tables_without_columns_render_and_preserve_rows() {
         assert!(!engine.step(Key::Character('q')));
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&engine.result()).unwrap(),
-            spec["value"]
+            serde_json::json!({"value":spec["value"],"actions":[]})
         );
     }
 }
@@ -527,6 +527,7 @@ fn text_views_are_plain_summaries_and_skipped_by_navigation() {
     spec["form"]["children"] = serde_json::json!([
         children[2], children[0], children[2], children[1], children[2], children[3]
     ]);
+    spec["form"]["childIds"] = serde_json::json!(["summary1","filters","summary2","sort","summary3","table"]);
     let mut engine = Engine::parse(&spec.to_string()).unwrap();
     assert_eq!(engine.selected, 1);
     let text = draw_engine(&engine, 100, 24, Theme::FRAPPE);
@@ -644,6 +645,7 @@ fn multiple_tables_use_smallest_viewport_and_clamp_their_own_offsets() {
         "predicate":{"kind":"project", "path":["passed"]}
     });
     spec["form"]["children"].as_array_mut().unwrap().push(short_table);
+    spec["form"]["childIds"].as_array_mut().unwrap().push(serde_json::json!("shortTable"));
     let mut engine = Engine::parse(&spec.to_string()).unwrap();
     let (_, viewports) = draw_engine_with_viewports(&engine, 100, 16, Theme::FRAPPE);
     let page_size = *viewports.iter().min().unwrap();

@@ -1,4 +1,6 @@
 import Forms.Core.Widget
+import Forms.Core.Action
+import Forms.Core.WidgetAction
 
 namespace Forms.Composition
 
@@ -60,18 +62,20 @@ inductive Component : (state : DataType) → Type 1 where
       (condition : Expr state .boolean)
       (body : Component state)
       : Component state
-  | appendItemButton
-      {state element : DataType}
-      (label : String)
-      (target : Path state (.list element))
-      (newItem : Expr state element)
-      : Component state
+  | actionWidget {state value : DataType} {ids : Enum}
+    (path : Path state value)
+    (label : String)
+    (actions : ids → WidgetAction value)
+    : Component state
+  | button {state : DataType}
+    (label : String)
+    (action : Action state)
+    : Component state
 
-def Component.weaken
-    {outer inner : DataType}
-    (path : Path outer inner)
-    (body : Component inner)
-    : Component outer :=
+def Component.weaken {outer inner : DataType}
+  (path : Path outer inner)
+  (body : Component inner)
+  : Component outer :=
   match body with
   | .field target label widget => .field (path.trans target) label widget
   | .stack label children order => .stack label (fun index => (children index).weaken path) order
@@ -82,7 +86,7 @@ def Component.weaken
   | .table rows columns => .table (rows.weaken path) columns
   | .visibleWhen condition component => .visibleWhen (condition.weaken path) (component.weaken path)
   | .disabledWhen condition component => .disabledWhen (condition.weaken path) (component.weaken path)
-  | .appendItemButton label target newItem =>
-      .appendItemButton label (path.trans target) (newItem.weaken path)
+  | .actionWidget target label actions => .actionWidget (path.trans target) label actions
+  | .button label action => .button label (action.weaken path)
 
 end Forms.Composition
