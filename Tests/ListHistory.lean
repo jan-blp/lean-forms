@@ -108,8 +108,8 @@ def run : IO Unit := do
     | .error error => error == .hidden
     | .ok _ => false)
   let _ ← IO.ofExcept (hiddenChild.applyInvocation [1] (.remove 0))
-  let unsupported := Component.list Path.self "Shapes" Shapes.form Shapes.draft
-  check "ListWithSumRemainsLegacy" (!unsupported.supportsHistory)
+  let shapes := Component.list Path.self "Shapes" Shapes.form Shapes.draft
+  check "ListWithSumSupportsHistory" shapes.supportsHistory
   let result ← IO.ofExcept ((Tui.run (m := ReaderT String (Except IO.Error))
     (.base (.list .natural)) form [10, 20]).run encoded.compress)
   check "TuiReturnsListHistory" (result.any fun result => result.value == [21, 30] && result.actions.map Array.size == some 4)

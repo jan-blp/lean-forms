@@ -25,6 +25,9 @@ def wire_value(schema, value):
     if kind == 'record':
         return {field['name']: wire_value(field['type'], value[field['name']])
                 for field in schema['fields']}
+    if kind == 'sum':
+        constructor = next(c for c in schema['constructors'] if c['name'] == value['tag'])
+        return {'tag': value['tag'], 'value': wire_value(constructor['type'], value['value'])}
     if kind == 'list':
         return [wire_value(schema['element'], item) for item in value]
     return value
@@ -83,7 +86,7 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
                     {"target": [], **({"action": action} if isinstance(action, str) else action)}
                     for action in actions]}, result
             elif not counters and isinstance(result, dict) and 'actions' in result:
-                name = 'basket' if basket else 'invoice' if invoice else 'thermostat' if thermostat else 'booking' if booking else 'report' if report else 'person'
+                name = 'shapes' if shapes else 'basket' if basket else 'invoice' if invoice else 'thermostat' if thermostat else 'booking' if booking else 'report' if report else 'person'
                 spec = json.loads((ROOT / 'native/tui/tests' / f'{name}.json').read_text())
                 assert result['value'] == wire_value(spec['schema'], expected), result
                 assert isinstance(result['actions'], list), result
@@ -144,10 +147,14 @@ session(b"q", {"tag": "circle", "value": 3}, shapes=True)
 output = session(b"j\r\x150\rqk\rj\rj\r\x156\rq", {"tag": "rectangle", "value": {"width": 6, "height": 2}}, shapes=True)
 assert b'Size must be at least 1' in output
 session(b"\rk\rq", {"tag": "dot", "value": {}}, shapes=True)
-# Return to the circle to recover its edited radius.
-session(b"j\r\x155\rk\rj\r\rk\rq", {"tag": "circle", "value": 5}, shapes=True)
+# Returning to the circle restores its default radius.
+session(b"j\r\x155\rk\rj\r\rk\rq", {"tag": "circle", "value": 3}, shapes=True, actions=[
+    {"target": ["circle"], "action": "replace", "argument": "5"},
+    {"target": [], "action": "select", "constructor": "rectangle"},
+    {"target": [], "action": "select", "constructor": "circle"},
+])
 
-# An invalid cached circle does not block submission of the empty constructor.
+# Switching away discards an invalid circle.
 session(b"j\r\x150\rqk\rk\rq", {"tag": "dot", "value": {}}, shapes=True)
 
 output = session(b"j\r\x153\rjjjjj\ri q", [{"description": "New item", "quantity": 3, "unitPrice": 100}], invoice=True)

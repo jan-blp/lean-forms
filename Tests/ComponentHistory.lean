@@ -79,8 +79,8 @@ private def testConditions : IO Unit := do
   check "ConditionalWeakeningPreservesSibling" (weakenedResult.value .title == "Keep this title")
   check "ConditionalWeakeningChecksLocalState"
     ((weakened.applyInvocation (Tests.Weakening.wrap 1) ⟨.plusOne, ()⟩).toOption.isNone)
-  let legacy := Component.visibleWhen (Expr.value true) Shapes.form
-  check "ConditionalLegacyRemainsUnsupported" (!legacy.supportsHistory)
+  let sum := Component.visibleWhen (Expr.value true) Shapes.form
+  check "ConditionalSumSupportsHistory" sum.supportsHistory
   let empty : ComponentHistory visible := ⟨1, #[]⟩
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify visible 1 (ComponentHistoryProtocol.encode empty))
   let result ← IO.ofExcept ((Tui.run (m := ReaderT String (Except IO.Error))
@@ -148,16 +148,17 @@ def run : IO Unit := do
     (.base Counters.state) Counters.form Counters.initial).run encoded.compress)
   check "TuiReturnsComponentHistory" (result.any fun result =>
     result.value .left == 42 && result.actions.map Array.size == some 4)
-  let unsupported : Component Shapes.shape := .stack (items := Counters.sides) none (fun
+  let withSum : Component Shapes.shape := .stack (items := Counters.sides) none (fun
     | .left => .text (.value "Shape")
     | .right => Shapes.form)
-  check "MixedLegacyFormIsExplicit" (!unsupported.supportsHistory)
+  check "MixedSumSupportsHistory" withSum.supportsHistory
   let result ← IO.ofExcept ((Tui.run (m := ReaderT String (Except IO.Error))
-    (.base Shapes.shape) unsupported Shapes.draft).run (JsonProtocol.valueToJson Shapes.draft).compress)
-  check "LegacyHistoryIsUnavailable" (result.any fun result => result.actions.isNone)
+    (.base Shapes.shape) withSum Shapes.draft).run
+      (ComponentHistoryProtocol.encode (⟨Shapes.draft, #[]⟩ : ComponentHistory withSum)).compress)
+  check "SumHistoryIsAvailable" (result.any fun result => result.actions.map Array.size == some 0)
   let expected ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "native/tui/tests/counters.json"))
   let actual ← IO.ofExcept (Lean.Json.parse (CompositionProtocol.encode (.base Counters.state) Counters.form Counters.initial))
   check "CountersFixture" (actual == expected)
-  IO.println "PASS: component targets, replay, display order, weakening, and legacy results"
+  IO.println "PASS: component targets, replay, display order, weakening, and sum results"
 
 end Tests.ComponentHistory

@@ -12,6 +12,7 @@ inductive Error where
   | missingArgument
   | unexpectedArgument
   | unknownAction (name : String)
+  | unknownConstructor (name : String)
   | unknownComponent (name : String)
   | missingTarget
   | targetBeyondWidget
@@ -30,6 +31,7 @@ instance : ToString Error where
     | .missingArgument => "Action requires an editor argument"
     | .unexpectedArgument => "Button does not accept an argument"
     | .unknownAction name => s!"Unknown action: {name}"
+    | .unknownConstructor name => s!"Unknown constructor: {name}"
     | .unknownComponent name => s!"Unknown component: {name}"
     | .missingTarget => "Missing widget target"
     | .targetBeyondWidget => "Target continues beyond action widget"
@@ -82,7 +84,11 @@ private def invocationToJson {ty : DataType}
       | .appendDefault => Json.mkObj [("target", toJson target), ("action", toJson "appendDefault")]
       | .remove index => Json.mkObj [("target", toJson target), ("action", toJson "remove"), ("index", toJson index)]
       | .item index invocation => invocationToJson item (target ++ [toJson index]) invocation
-  | .sum .. => fun invocation => Empty.elim invocation
+  | .sum (tags := tags) _ _ branches _ => fun
+      | .select tag => Json.mkObj [("target", toJson target), ("action", toJson "select"),
+          ("constructor", toJson (tags.label tag))]
+      | .inPayload tag invocation =>
+          invocationToJson (branches tag) (target ++ [toJson (tags.label tag)]) invocation
   | .computed .. => fun invocation => Empty.elim invocation
   | .text .. => fun invocation => Empty.elim invocation
   | .table .. => fun invocation => Empty.elim invocation
@@ -133,7 +139,22 @@ private def invocationFromJson {ty : DataType}
             return .remove index
           else
             throw (.unknownAction name)
-  | .sum .. => .error .targetNotWidget
+  | .sum (tags := tags) _ _ branches _ => do
+      match target with
+      | segment :: rest =>
+          let name ← readJson segment.getStr?
+          let some tag := (FinEnum.toList tags).find? (fun tag => tags.label tag == name)
+            | throw (.unknownConstructor name)
+          return .inPayload tag (← invocationFromJson (branches tag) rest json)
+      | [] =>
+          let action ← readJson ((json.getObjVal? "action") >>= Json.getStr?)
+          unless action == "select" do throw (.unknownAction action)
+          let name ← readJson ((json.getObjVal? "constructor") >>= Json.getStr?)
+          let some tag := (FinEnum.toList tags).find? (fun tag => tags.label tag == name)
+            | throw (.unknownConstructor name)
+          let fields ← readJson json.getObj?
+          if fields.size != 3 then throw (.invalidFields ["target", "action", "constructor"])
+          return .select tag
   | .computed .. => .error .targetNotWidget
   | .text .. => .error .targetNotWidget
   | .table .. => .error .targetNotWidget

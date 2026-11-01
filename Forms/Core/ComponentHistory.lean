@@ -3,7 +3,6 @@ import Forms.Core.ActionInvocation
 
 namespace Forms.Composition
 
-/-- Temporary until all components support replay. -/
 def Component.supportsHistory {ty : DataType} : Component ty → Bool
   | .actionWidget .. => true
   | .stack (items := items) _ children _ =>
@@ -13,7 +12,8 @@ def Component.supportsHistory {ty : DataType} : Component ty → Bool
   | .table .. => true
   | .field .. => true
   | .list _ _ item _ => item.supportsHistory
-  | .sum .. => false
+  | .sum (tags := tags) _ _ branches _ =>
+      (FinEnum.toList tags).all fun tag => (branches tag).supportsHistory
   | .visibleWhen _ body => body.supportsHistory
   | .disabledWhen _ body => body.supportsHistory
   | .button .. => true
@@ -24,7 +24,7 @@ def Component.Invocation {ty : DataType} : Component ty → Type
   | .field _ _ widget => Action.Invocation (fun
       | Action.Field.replace => .replace widget)
   | .list _ _ item _ => Action.List item.Invocation
-  | .sum .. => Empty
+  | .sum (tags := tags) _ _ branches _ => Action.Sum tags fun tag => (branches tag).Invocation
   | .computed .. => Empty
   | .text .. => Empty
   | .table .. => Empty
@@ -34,12 +34,14 @@ def Component.Invocation {ty : DataType} : Component ty → Type
 
 inductive Component.InvocationError where
   | hidden
+  | inactiveConstructor
   | disabled
   | indexOutOfBounds (index length : Nat)
   deriving DecidableEq, BEq, Repr
 
 instance : ToString Component.InvocationError where
   toString
+    | .inactiveConstructor => "Action target is an inactive constructor"
     | .hidden => "Action target is hidden"
     | .disabled => "Action target is disabled"
     | .indexOutOfBounds index length => s!"Index {index} is out of bounds for list of length {length}"
@@ -62,7 +64,8 @@ def Component.ValidInvocation {ty : DataType}
       { _invocation : body.ValidInvocation current // condition.eval current = true }
   | .disabledWhen condition body =>
       { _invocation : body.ValidInvocation current // condition.eval current = false }
-  | .sum .. => Empty
+  | .sum (tags := tags) path _ branches _ =>
+      Action.Sum.ValidInvocation tags ((branches (path.get current).tag).ValidInvocation (path.get current).payload)
   | .computed .. => Empty
   | .text .. => Empty
   | .table .. => Empty
@@ -103,7 +106,15 @@ def Component.validateInvocation {ty : DataType}
         let validated ← body.validateInvocation current invocation
         return ⟨validated, h⟩
       else .error .disabled
-  | .sum .. => Empty.elim invocation
+  | .sum path _ branches _ =>
+      match invocation with
+      | .select target => .ok (.select target)
+      | .inPayload target invocation => do
+          if h : target = (path.get current).tag then
+            let invocation := h ▸ invocation
+            return .inPayload (← (branches (path.get current).tag).validateInvocation
+              (path.get current).payload invocation)
+          else .error .inactiveConstructor
   | .computed .. => Empty.elim invocation
   | .text .. => Empty.elim invocation
   | .table .. => Empty.elim invocation
@@ -132,7 +143,15 @@ def Component.applyValidInvocation {ty : DataType}
   | .button _ action =>
       match invocation with
       | .press => action.eval current
-  | .sum .. => Empty.elim invocation
+  | .sum path _ branches defaults =>
+      match invocation with
+      | .select target =>
+          if target = (path.get current).tag then current
+          else path.set ⟨target, defaults target⟩ current
+      | .inPayload invocation =>
+          let selected := path.get current
+          let updated := (branches selected.tag).applyValidInvocation selected.payload invocation
+          path.set ⟨selected.tag, updated⟩ current
   | .computed .. => Empty.elim invocation
   | .text .. => Empty.elim invocation
   | .table .. => Empty.elim invocation

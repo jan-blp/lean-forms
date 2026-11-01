@@ -296,7 +296,7 @@ fn select_constructor(e: &mut Engine, index: usize) {
 }
 
 #[test]
-fn constructors_validate_only_active_payload_and_preserve_drafts() {
+fn constructors_validate_active_payload_and_reset_defaults() {
     let mut e = Engine::parse(&shapes_spec().to_string()).unwrap();
     assert_eq!(e.fields().len(), 1);
     assert_eq!(e.shown(&e.fields()[0]), "dot");
@@ -317,16 +317,16 @@ fn constructors_validate_only_active_payload_and_preserve_drafts() {
     select_constructor(&mut e, 2);
     assert_eq!(
         e.spec.value,
-        json!({"tag":"rectangle","value":{"width":"7","height":"0"}})
+        json!({"tag":"rectangle","value":{"width":"4","height":"2"}})
     );
-    assert_eq!(e.errors().len(), 1);
+    assert!(e.errors().is_empty());
     e.selected = 2;
     edit(&mut e, "2");
     e.selected = 0;
     select_constructor(&mut e, 0);
     assert!(!e.step(Key::Character('q')));
     assert_eq!(
-        serde_json::from_str::<Value>(&e.result()).unwrap(),
+        serde_json::from_str::<Value>(&e.result()).unwrap()["value"],
         json!({"tag":"dot","value":{}})
     );
 }
@@ -373,7 +373,7 @@ fn malformed_sums_and_inactive_branch_forms_are_rejected() {
 }
 
 #[test]
-fn sums_in_lists_preserve_the_correct_cache_after_removal() {
+fn sums_in_lists_reset_defaults_after_removal() {
     let source = shapes_spec();
     let mut spec = source.clone();
     spec["schema"] = json!({"kind":"list","element":source["schema"]});
@@ -391,12 +391,12 @@ fn sums_in_lists_preserve_the_correct_cache_after_removal() {
         select_constructor(&mut e, 0);
     }
     e.selected = 1;
-    keys(&mut e, &[Key::Enter]); // Remove first shape; the second cache moves with it.
+    keys(&mut e, &[Key::Enter]); // Remove the first shape.
     e.selected = 0;
     select_constructor(&mut e, 2);
-    assert_eq!(e.spec.value[0]["value"]["width"], "9");
+    assert_eq!(e.spec.value[0]["value"]["width"], "4");
     e.selected = 4;
-    keys(&mut e, &[Key::Enter]); // A new item must not inherit an old cache.
+    keys(&mut e, &[Key::Enter]); // Append a new shape.
     select_constructor(&mut e, 2);
     assert_eq!(e.spec.value[1]["value"]["width"], "4");
 }
@@ -405,7 +405,6 @@ fn sums_in_lists_preserve_the_correct_cache_after_removal() {
 fn nested_sums_and_visibility_use_constructor_local_scope() {
     let source = shapes_spec();
     let mut spec = source.clone();
-    // The outer sum has two identical sum payload types. Their caches must stay separate.
     spec["schema"] = json!({"kind":"sum", "constructors":[{"name":"a","type":source["schema"]},{"name":"b","type":source["schema"]}]});
     spec["form"] = json!({"kind":"sum", "path":[], "schema":spec["schema"], "label":"Shape",
         "branches":{"a":source["form"],"b":source["form"]}, "defaults":{"a":source["value"],"b":source["value"]}});
@@ -422,6 +421,7 @@ fn nested_sums_and_visibility_use_constructor_local_scope() {
     select_constructor(&mut e, 2);
     e.selected = 2;
     edit(&mut e, "8");
+    assert_eq!(e.actions[1], json!({"target":["a","rectangle","width"],"action":"replace","argument":"8"}));
     e.selected = 1;
     select_constructor(&mut e, 0);
     e.selected = 0;
@@ -433,7 +433,7 @@ fn nested_sums_and_visibility_use_constructor_local_scope() {
     select_constructor(&mut e, 0);
     e.selected = 1;
     select_constructor(&mut e, 2);
-    assert_eq!(e.spec.value["value"]["value"]["width"], "8");
+    assert_eq!(e.spec.value["value"]["value"]["width"], "4");
     e.selected = 3;
     edit(&mut e, "0");
     assert_eq!(e.fields().len(), 2);
@@ -532,7 +532,7 @@ fn named_fields_and_constructors_survive_schema_reordering() {
     select_constructor(&mut e, 2);
     assert!(e.errors().is_empty());
     select_constructor(&mut e, 0);
-    assert_eq!(e.spec.value["value"]["width"], "0");
+    assert_eq!(e.spec.value["value"]["width"], "4");
 }
 
 #[test]
@@ -636,6 +636,7 @@ fn display_order_applies_inside_lists_and_sum_payloads() {
 
     let mut spec = shapes_spec();
     spec["form"]["branches"]["rectangle"]["children"].as_array_mut().unwrap().reverse();
+    spec["form"]["branches"]["rectangle"]["childIds"].as_array_mut().unwrap().reverse();
     let mut e = Engine::parse(&spec.to_string()).unwrap();
     select_constructor(&mut e, 2);
     assert_eq!(e.fields()[1].title, "Height");
@@ -645,7 +646,7 @@ fn display_order_applies_inside_lists_and_sum_payloads() {
     e.selected = 0;
     select_constructor(&mut e, 0);
     select_constructor(&mut e, 2);
-    assert_eq!(e.shown(&e.fields()[1]), "8");
+    assert_eq!(e.shown(&e.fields()[1]), "2");
 }
 
 #[test]
@@ -821,7 +822,7 @@ fn computed_values_use_item_and_constructor_scope() {
     assert_eq!(e.shown(&e.fields()[3]), "200");
     let mut spec = shapes_spec();
     spec["value"] = json!({"tag":"circle", "value":"7"});
-    spec["form"]["branches"]["circle"] = json!({"kind":"stack", "children":[spec["form"]["branches"]["circle"], {"kind":"computed", "label":"Radius copy", "type":{"kind":"natural"},
+    spec["form"]["branches"]["circle"] = json!({"kind":"stack", "childIds":["radius","copy"], "children":[spec["form"]["branches"]["circle"], {"kind":"computed", "label":"Radius copy", "type":{"kind":"natural"},
         "expression":{"kind":"project", "path":[]}}]});
     let mut e = Engine::parse(&spec.to_string()).unwrap();
     assert_eq!(e.shown(&e.fields()[2]), "7");
@@ -831,7 +832,7 @@ fn computed_values_use_item_and_constructor_scope() {
 }
 
 #[test]
-fn country_selects_city_type_and_preserves_each_selection() {
+fn country_selects_city_type_and_resets_to_default() {
     let mut e = Engine::parse(include_str!("../../tests/location.json")).unwrap();
     assert_eq!(e.fields()[0].title, "Country");
     assert_eq!(e.fields()[1].title, "City");
@@ -847,13 +848,13 @@ fn country_selects_city_type_and_preserves_each_selection() {
     keys(&mut e, &[Key::Enter, Key::Down, Key::Enter]);
     e.selected = 0;
     select_constructor(&mut e, 0);
-    assert_eq!(e.shown(&e.fields()[1]), "Lyon");
+    assert_eq!(e.shown(&e.fields()[1]), "Paris");
     select_constructor(&mut e, 1);
-    assert_eq!(e.shown(&e.fields()[1]), "Kyoto");
+    assert_eq!(e.shown(&e.fields()[1]), "Tokyo");
     assert!(!e.step(Key::Character('q')));
     assert_eq!(
-        serde_json::from_str::<Value>(&e.result()).unwrap(),
-        json!({"tag":"Japan", "value":1})
+        serde_json::from_str::<Value>(&e.result()).unwrap()["value"],
+        json!({"tag":"Japan", "value":0})
     );
 }
 
@@ -1524,10 +1525,10 @@ fn root_editor_history_records_arguments_before_transformation() {
 }
 
 #[test]
-fn history_protocol_rejects_unsupported_forms() {
+fn history_protocol_accepts_sums() {
     let mut spec: Value = serde_json::from_str(include_str!("../../tests/shapes.json")).unwrap();
     spec["version"] = json!(6);
-    assert!(Engine::parse(&spec.to_string()).is_err());
+    assert!(Engine::parse(&spec.to_string()).is_ok());
 }
 
 #[test]
@@ -1569,7 +1570,7 @@ fn conditional_history_checks_current_state_and_preserves_targets() {
 }
 
 #[test]
-fn conditional_history_rejects_unsupported_children() {
+fn conditional_history_accepts_sum_children() {
     let source: Value = serde_json::from_str(include_str!("../../tests/shapes.json")).unwrap();
     for kind in ["visibleWhen", "disabledWhen"] {
         let mut spec = source.clone();
@@ -1577,7 +1578,7 @@ fn conditional_history_rejects_unsupported_children() {
         spec["form"] = json!({"kind":kind,
             "condition":{"kind":"value","type":{"kind":"boolean"},"value":false},
             "body":source["form"]});
-        assert!(Engine::parse(&spec.to_string()).is_err());
+        assert!(Engine::parse(&spec.to_string()).is_ok());
     }
 }
 
@@ -1877,7 +1878,64 @@ fn history_stacks_reject_missing_duplicate_and_mismatched_ids() {
         "schema":mixed["schema"]["fields"][1]["type"],"defaults":{"only":"0"},
         "branches":{"only":{"kind":"field","label":"Value","path":[],
             "schema":{"kind":"natural"},"widget":"naturalInput"}}});
-    assert!(Engine::parse(&mixed.to_string()).is_err());
+    assert!(Engine::parse(&mixed.to_string()).is_ok());
     mixed["version"] = json!(4);
     assert!(Engine::parse(&mixed.to_string()).is_ok());
+}
+
+#[test]
+fn sum_history_records_selection_payloads_and_noop_selection() {
+    let mut e = Engine::parse(&shapes_spec().to_string()).unwrap();
+    select_constructor(&mut e, 1);
+    e.selected = 1;
+    edit(&mut e, "8");
+    e.selected = 0;
+    select_constructor(&mut e, 1);
+    assert_eq!(e.spec.value, json!({"tag":"circle","value":"8"}));
+    select_constructor(&mut e, 2);
+    e.selected = 1;
+    edit(&mut e, "9");
+    e.selected = 0;
+    select_constructor(&mut e, 1);
+    assert!(!e.step(Key::Character('q')));
+    assert_eq!(serde_json::from_str::<Value>(&e.result()).unwrap(), json!({
+        "value":{"tag":"circle","value":"3"},
+        "actions":[
+            {"target":[],"action":"select","constructor":"circle"},
+            {"target":["circle"],"action":"replace","argument":"8"},
+            {"target":[],"action":"select","constructor":"circle"},
+            {"target":[],"action":"select","constructor":"rectangle"},
+            {"target":["rectangle","width"],"action":"replace","argument":"9"},
+            {"target":[],"action":"select","constructor":"circle"}
+        ]
+    }));
+}
+
+#[test]
+fn sum_history_targets_follow_list_removal_and_display_order() {
+    let mut source = shapes_spec();
+    source["form"]["branches"]["rectangle"]["children"].as_array_mut().unwrap().reverse();
+    source["form"]["branches"]["rectangle"]["childIds"].as_array_mut().unwrap().reverse();
+    let spec = json!({"version":6,"constraints":[],
+        "schema":{"kind":"list","element":source["schema"]},
+        "value":[source["value"],source["value"]],
+        "form":{"kind":"list","path":[],"label":"Shapes",
+            "schema":{"kind":"list","element":source["schema"]},
+            "item":source["form"],"defaultItem":source["value"]}});
+    let mut e = Engine::parse(&spec.to_string()).unwrap();
+    e.selected = 1;
+    keys(&mut e, &[Key::Enter]);
+    e.selected = 0;
+    select_constructor(&mut e, 2);
+    e.selected = 1;
+    edit(&mut e, "8");
+    assert!(!e.step(Key::Character('q')));
+    assert_eq!(serde_json::from_str::<Value>(&e.result()).unwrap(), json!({
+        "value":[{"tag":"rectangle","value":{"width":"4","height":"8"}}],
+        "actions":[
+            {"target":[],"action":"remove","index":0},
+            {"target":[0],"action":"select","constructor":"rectangle"},
+            {"target":[0,"rectangle","height"],"action":"replace","argument":"8"}
+        ]
+    }));
 }

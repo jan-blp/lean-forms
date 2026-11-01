@@ -28,6 +28,7 @@ pub struct NamedType {
 #[serde(untagged)]
 enum TargetStep {
     Child(String),
+    Constructor(String),
     Item(usize),
 }
 
@@ -798,7 +799,7 @@ impl Component {
             }
             Self::VisibleWhen { body, .. } | Self::DisabledWhen { body, .. } => body.validate_history(),
             Self::List { item, .. } => item.validate_history(),
-            _ => Err("Component history is not supported yet".into()),
+            Self::Sum { branches, .. } => branches.values().try_for_each(Self::validate_history),
         }
     }
 
@@ -1029,7 +1030,7 @@ impl Component {
                 let mut labels = labels;
                 labels.push(label.clone());
                 out.push(Field {
-                    action_id: None,
+                    action_id: Some("select".into()),
                     target: vec![],
                     input_transform: None,
                     computed_value: None,
@@ -1080,6 +1081,7 @@ impl Component {
                     payload_section
                 };
                 for field in &mut out[selector + 1..] {
+                    field.target.insert(0, TargetStep::Constructor(tag.to_owned()));
                     field.presentation.depth += 1;
                     if field.section == prefix {
                         field.section = section.clone();
@@ -1298,7 +1300,6 @@ pub struct Engine {
     spec: Specification,
     submitted: bool,
     actions: Vec<Value>,
-    constructor_drafts: std::collections::HashMap<(Vec<Step>, String), Value>,
     pub selected: usize,
     pub table_offset: usize,
     table_viewports: Vec<usize>,
@@ -1343,7 +1344,6 @@ impl Engine {
             spec,
             submitted: false,
             actions: vec![],
-            constructor_drafts: std::collections::HashMap::new(),
             selected: 0,
             table_offset: 0,
             table_viewports: vec![],
@@ -1552,22 +1552,16 @@ impl Engine {
                                 let old_tag = old["tag"].as_str().unwrap();
                                 let tag = &field.options[*index];
                                 if old_tag != tag {
-                                    self.constructor_drafts.insert(
-                                        (field.path.clone(), old_tag.to_owned()),
-                                        old["value"].clone(),
-                                    );
-                                    let payload = self
-                                        .constructor_drafts
-                                        .remove(&(field.path.clone(), tag.clone()))
-                                        .unwrap_or_else(|| {
-                                            field.default_item.as_ref().unwrap()[*index].clone()
-                                        });
+                                    let payload = field.default_item.as_ref().unwrap()[*index].clone();
                                     set(
                                         &mut self.spec.value,
                                         &field.path,
                                         serde_json::json!({"tag": tag, "value": payload}),
                                     );
                                 }
+                                self.actions.push(serde_json::json!({
+                                    "target": field.target, "action": "select", "constructor": tag
+                                }));
                             } else {
                                 field.apply(&mut self.spec.value, &mut self.actions, Some(Value::from(*index)));
                             }
@@ -1672,27 +1666,6 @@ impl Engine {
                                 let mut items =
                                     get(&self.spec.value, parent).as_array().unwrap().clone();
                                 items.remove(*index);
-                                self.constructor_drafts =
-                                    std::mem::take(&mut self.constructor_drafts)
-                                        .into_iter()
-                                        .filter_map(|((mut path, tag), draft)| {
-                                            if path.starts_with(parent) && path.len() > parent.len()
-                                            {
-                                                let Step::Item(item_index) =
-                                                    &mut path[parent.len()]
-                                                else {
-                                                    unreachable!()
-                                                };
-                                                if *item_index == *index {
-                                                    return None;
-                                                }
-                                                if *item_index > *index {
-                                                    *item_index -= 1;
-                                                }
-                                            }
-                                            Some(((path, tag), draft))
-                                        })
-                                        .collect();
                                 set(&mut self.spec.value, parent, Value::Array(items));
                                 self.actions.push(serde_json::json!({"target":field.target,"action":"remove","index":index}));
                             }

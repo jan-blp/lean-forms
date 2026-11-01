@@ -14,6 +14,14 @@ inductive List.ValidInvocation
   | remove (index : Fin length)
   | item (index : Fin length) (invocation : itemInvocation index)
 
+inductive Sum (constructor : Type) (payloadInvocation : constructor → Type) where
+  | select (target : constructor)
+  | inPayload (target : constructor) (invocation : payloadInvocation target)
+
+inductive Sum.ValidInvocation (constructor : Type) (payloadInvocation : Type) where
+  | select (target : constructor)
+  | inPayload (invocation : payloadInvocation)
+
 abbrev Presentation.Argument {ty : DataType} : Presentation ty → Type
   | .button .. => Unit
   | .editor .. => ⟦ty⟧

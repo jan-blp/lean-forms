@@ -1,3 +1,4 @@
+import Tests.SumHistory
 import Tests.ListHistory
 import Tests.AppendHistory
 import Tests.ButtonHistory
@@ -230,7 +231,9 @@ private def testSums : IO Unit := do
   check "LeanRejectsForgedSumSuccess" (match run.run (JsonProtocol.valueToJson invalid).compress with
     | .error _ => true
     | _ => false)
-  check "LeanAcceptsValidSumSubmission" (match run.run (JsonProtocol.valueToJson valid).compress with
+  let history ← IO.ofExcept (ComponentHistory.replay ExampleForms.Shapes.form dot
+    #[.select .rectangle, .inPayload .rectangle ⟨.width, ⟨.replace, (7 : Nat)⟩⟩])
+  check "LeanAcceptsValidSumSubmission" (match run.run (ComponentHistoryProtocol.encode history).compress with
     | .ok (some value) => JsonProtocol.valueToJson (RefinedDataType.erase refined value.value) == JsonProtocol.valueToJson valid
     | _ => false)
   check "SumCancellation" (match run.run "null" with
@@ -354,6 +357,7 @@ private def testProtocol : IO Unit := do
     (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (t := .natural) huge) == .ok huge)
 
 def main : IO Unit := do
+  Tests.SumHistory.run
   Tests.ListHistory.run
   Tests.AppendHistory.run
   Tests.ButtonHistory.run
