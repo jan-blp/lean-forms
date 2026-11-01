@@ -16,20 +16,6 @@ namespace Forms.Application
 
 open ExampleForms Forms.Runtime
 
-private def valueToJson {t : DataType} (value : ⟦t⟧) : Lean.Json :=
-  match t with
-  | .sum tags constructors => .mkObj [("tag", Lean.toJson (tags.label value.tag)),
-      ("value", valueToJson (t := constructors value.tag) value.payload)]
-  | .list element => .arr ((value.map (valueToJson (t := element))).toArray)
-  | .text => Lean.toJson value
-  | .boolean => Lean.toJson value
-  | .natural => Lean.toJson value
-  | .date => Lean.toJson (Date.toString value)
-  | .enum domain => Lean.toJson (domain.label value)
-  | .record fieldNames fieldTypes =>
-    .mkObj ((FinEnum.toList fieldNames).map fun i =>
-      (fieldNames.label i, valueToJson (t := fieldTypes i) (value i)))
-
 private def runComponent
   (theme : NativeTerminal.Theme)
   {state : DataType}
@@ -44,9 +30,7 @@ private def runComponent
   | some result =>
     IO.println "\n  Final values\n  ------------"
     let value := RefinedDataType.erase refined result.value
-    match result.actions with
-    | some actions => IO.println (ComponentHistoryProtocol.encode (component := component) ⟨value, actions⟩).pretty
-    | none => IO.println (Lean.Json.pretty (valueToJson value))
+    IO.println (ComponentHistoryProtocol.encode (component := component) ⟨value, result.actions⟩).pretty
 
 private def cli : Cli NativeTerminal.Theme where
   examples := [

@@ -45,7 +45,6 @@ private def conditionalStack : Component .natural :=
     | .right => Counter.form)
 
 private def testConditions : IO Unit := do
-  check "ConditionalHistorySupported" (visible.supportsHistory && disabled.supportsHistory)
   for result in [visible.applyInvocation 1 ⟨.plusOne, ()⟩,
       visible.applyInvocation 1 ⟨.replace, (0 : Nat)⟩] do
     check "HiddenActionRejected" (result == .error .hidden)
@@ -79,13 +78,11 @@ private def testConditions : IO Unit := do
   check "ConditionalWeakeningPreservesSibling" (weakenedResult.value .title == "Keep this title")
   check "ConditionalWeakeningChecksLocalState"
     ((weakened.applyInvocation (Tests.Weakening.wrap 1) ⟨.plusOne, ()⟩).toOption.isNone)
-  let sum := Component.visibleWhen (Expr.value true) Shapes.form
-  check "ConditionalSumSupportsHistory" sum.supportsHistory
   let empty : ComponentHistory visible := ⟨1, #[]⟩
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify visible 1 (ComponentHistoryProtocol.encode empty))
   let result ← IO.ofExcept ((Tui.run (m := ReaderT String (Except IO.Error))
     (.base .natural) visible 0).run (ComponentHistoryProtocol.encode visibleResult).compress)
-  check "ConditionalTuiReturnsHistory" (result.any fun result => result.actions.map Array.size == some 1)
+  check "ConditionalTuiReturnsHistory" (result.any fun result => result.actions.size == 1)
 
 def run : IO Unit := do
   testConditions
@@ -147,15 +144,19 @@ def run : IO Unit := do
   let result ← IO.ofExcept ((Tui.run (m := ReaderT String (Except IO.Error))
     (.base Counters.state) Counters.form Counters.initial).run encoded.compress)
   check "TuiReturnsComponentHistory" (result.any fun result =>
-    result.value .left == 42 && result.actions.map Array.size == some 4)
+    result.value .left == 42 && result.actions.size == 4)
   let withSum : Component Shapes.shape := .stack (items := Counters.sides) none (fun
     | .left => .text (.value "Shape")
     | .right => Shapes.form)
-  check "MixedSumSupportsHistory" withSum.supportsHistory
+  check "RejectBareUnchangedValue" (match
+      ((Tui.run (m := ReaderT String (Except IO.Error))
+        (.base Shapes.shape) withSum Shapes.draft).run (JsonProtocol.valueToJson Shapes.draft).compress) with
+    | .error _ => true
+    | .ok _ => false)
   let result ← IO.ofExcept ((Tui.run (m := ReaderT String (Except IO.Error))
     (.base Shapes.shape) withSum Shapes.draft).run
       (ComponentHistoryProtocol.encode (⟨Shapes.draft, #[]⟩ : ComponentHistory withSum)).compress)
-  check "SumHistoryIsAvailable" (result.any fun result => result.actions.map Array.size == some 0)
+  check "SumHistoryIsAvailable" (result.any fun result => result.actions.size == 0)
   let expected ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "native/tui/tests/counters.json"))
   let actual ← IO.ofExcept (Lean.Json.parse (CompositionProtocol.encode (.base Counters.state) Counters.form Counters.initial))
   check "CountersFixture" (actual == expected)

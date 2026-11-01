@@ -573,10 +573,10 @@ fn duplicate_schema_names_are_rejected_even_in_inactive_payloads() {
 
 #[test]
 fn record_fields_named_tag_and_value_are_not_sum_payloads() {
-    let spec = json!({"version":4,"constraints":[],
+    let spec = json!({"version":6,"constraints":[],
         "schema":{"kind":"record","fields":[{"name":"tag","type":{"kind":"text"}},
             {"name":"value","type":{"kind":"natural"}}]},
-        "form":{"kind":"stack","label":"Record","children":[
+        "form":{"kind":"stack","label":"Record","childIds":["tag","value"],"children":[
             {"kind":"field","path":["tag"],"schema":{"kind":"text"},"label":"Tag","widget":"textInput"},
             {"kind":"field","path":["value"],"schema":{"kind":"natural"},"label":"Value","widget":"naturalInput"}]},
         "value":{"tag":"hello","value":"3"}});
@@ -587,7 +587,10 @@ fn record_fields_named_tag_and_value_are_not_sum_payloads() {
     assert!(!e.step(Key::Character('q')));
     assert_eq!(
         serde_json::from_str::<Value>(&e.result()).unwrap(),
-        json!({"tag":"world","value":"4"})
+        json!({"value":{"tag":"world","value":"4"},"actions":[
+            {"target":["tag"],"action":"replace","argument":"world"},
+            {"target":["value"],"action":"replace","argument":"4"}
+        ]})
     );
 }
 
@@ -1279,7 +1282,7 @@ fn basket_weakened_by_lean_preserves_outer_siblings() {
 #[test]
 fn components_inside_lists_and_sums_use_local_state() {
     let numbers = json!({"kind":"list", "element":{"kind":"natural"}});
-    let body = json!({"kind":"stack", "children":[
+    let body = json!({"kind":"stack", "childIds":["table","append"], "children":[
         {"kind":"table", "rows":{"kind":"project","path":[]},
          "columns":[{"label":"Number", "expression":{"kind":"natToText",
              "operand":{"kind":"project","path":[]}}}]},
@@ -1298,7 +1301,7 @@ fn components_inside_lists_and_sums_use_local_state() {
          json!({"tag":"numbers","value":["1","7"]})),
     ];
     for (schema, value, form, expected) in cases {
-        let spec = json!({"version":4,"schema":schema,"value":value,"constraints":[],"form":form});
+        let spec = json!({"version":6,"schema":schema,"value":value,"constraints":[],"form":form});
         let mut engine = Engine::parse(&spec.to_string()).unwrap();
         assert_eq!(engine.content().1[0].rows, vec![vec!["1"]]);
         select_title(&mut engine, "Append seven");
@@ -1353,7 +1356,7 @@ fn typed_natural_actions_update_live_values_and_preserve_local_scope() {
 
 #[test]
 fn typed_actions_validate_paths_and_replacements_and_respect_disabled() {
-    let mut spec = json!({"version":4, "schema":{"kind":"natural"}, "value":"4", "constraints":[],
+    let mut spec = json!({"version":6, "schema":{"kind":"natural"}, "value":"4", "constraints":[],
         "form":{"kind":"button","label":"Set","action":{"kind":"set","path":[],
             "value":{"kind":"project","path":[]}}}});
     let mut engine = Engine::parse(&spec.to_string()).unwrap();
@@ -1425,7 +1428,7 @@ fn expression_actions_support_open_definitions_and_editor_arguments() {
     // The same widget operates on each list item's local state.
     let natural = json!({"kind":"natural"});
     let list = json!({"kind":"list","element":natural});
-    let nested = json!({"version":4,"schema":list,"value":["5","20"],"constraints":[],
+    let nested = json!({"version":6,"schema":list,"value":["5","20"],"constraints":[],
         "form":{"kind":"list","path":[],"schema":list,"label":"Numbers",
             "item":spec["form"],"defaultItem":"0"}});
     let mut engine = Engine::parse(&nested.to_string()).unwrap();
@@ -1434,7 +1437,6 @@ fn expression_actions_support_open_definitions_and_editor_arguments() {
     assert_eq!(engine.spec.value, json!(["8","20"]));
 
     let mut disabled = source.clone();
-    disabled["version"] = json!(4);
     disabled["form"] = json!({"kind":"disabledWhen",
         "condition":{"kind":"value","type":{"kind":"boolean"},"value":true},"body":source["form"]});
     let mut engine = Engine::parse(&disabled.to_string()).unwrap();
@@ -1880,7 +1882,7 @@ fn history_stacks_reject_missing_duplicate_and_mismatched_ids() {
             "schema":{"kind":"natural"},"widget":"naturalInput"}}});
     assert!(Engine::parse(&mixed.to_string()).is_ok());
     mixed["version"] = json!(4);
-    assert!(Engine::parse(&mixed.to_string()).is_ok());
+    assert!(Engine::parse(&mixed.to_string()).is_err());
 }
 
 #[test]

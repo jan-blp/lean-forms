@@ -163,19 +163,4 @@ def Constraint.toJson (constraint : Constraint root) : Json :=
       | none => Json.null
       | some target => Lean.toJson (Path.toList target.path))]
 
-namespace Runtime.JsonProtocol
-
-def decodeResult
-  (refined : RefinedDataType root)
-  (json : Json)
-  : Except String (Option (RefinedDataType.ValidatedValue refined)) := do
-  if json == Json.null then return none
-  let draft ← valueFromJson root json
-  match RefinedDataType.validate refined draft with
-  | some value => return some value
-  | none => throw ("Invalid submitted value: " ++ String.intercalate "; "
-      ((RefinedDataType.errors refined draft).map (·.errorMessage)))
-
-end Runtime.JsonProtocol
-
 end Forms

@@ -17,7 +17,6 @@ inductive Error where
   | missingTarget
   | targetBeyondWidget
   | targetNotWidget
-  | unsupportedComponent
   | invocation (error : Component.InvocationError)
   | valueMismatch
   deriving DecidableEq, BEq, Repr
@@ -36,7 +35,6 @@ instance : ToString Error where
     | .missingTarget => "Missing widget target"
     | .targetBeyondWidget => "Target continues beyond action widget"
     | .targetNotWidget => "Target is not an action widget"
-    | .unsupportedComponent => "Component history is not supported yet"
     | .invocation error => toString error
     | .valueMismatch => "Submitted value does not match action replay"
 
@@ -178,7 +176,6 @@ def verify {ty : DataType}
   (initial : ⟦ty⟧)
   (submission : Json)
   : Except Error (ComponentHistory component) := do
-  unless component.supportsHistory do throw .unsupportedComponent
   let fields ← readJson submission.getObj?
   if fields.size != 2 then throw (.invalidFields ["value", "actions"])
   let value ← readJson (submission.getObjVal? "value")

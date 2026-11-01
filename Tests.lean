@@ -102,10 +102,9 @@ private def testRefinedTypes : IO Unit := do
   check "UnboundedBaseStillWorks" ((RefinedDataType.validate (.base .natural) huge).isSome)
   let invalidInitial := Path.set ExampleForms.Person.age 17 ExampleForms.Person.draft
   check "InitialDraftIsValidated" ((RefinedDataType.errors ExampleForms.Person.personType invalidInitial).length == 1)
-  check "RootDecodeCannotBypassAgeRule"
-    (match JsonProtocol.decodeResult ExampleForms.Person.personType (JsonProtocol.valueToJson invalidInitial) with
-      | .error _ => true
-      | _ => false)
+  let decoded ← IO.ofExcept (JsonProtocol.valueFromJson ExampleForms.Person.person
+    (JsonProtocol.valueToJson invalidInitial))
+  check "DecodedAgeStillRequiresValidation" (RefinedDataType.validate ExampleForms.Person.personType decoded).isNone
 
 private def testHiddenValidation : IO Unit := do
   let hidden : Component ExampleForms.Thermostat.thermostat :=
@@ -158,17 +157,14 @@ private def testLists : IO Unit := do
   check "ListRoundTrip" (match JsonProtocol.valueFromJson ExampleForms.Invoice.invoice encoded with
     | .ok value => JsonProtocol.valueToJson value == encoded
     | _ => false)
-  check "ListRefinementsRejectForgedResult" (match JsonProtocol.decodeResult refined
-      (← IO.ofExcept (Lean.Json.parse "[{\"description\":\"Bad\",\"quantity\":\"0\",\"unitPrice\":\"100\"}]")) with
-    | .error _ => true
-    | _ => false)
-  check "EmptyListValidates" (match JsonProtocol.decodeResult refined (.arr #[]) with
-    | .ok (some []) => true
-    | _ => false)
-  check "EveryItemValidated" (match JsonProtocol.decodeResult refined
-      (← IO.ofExcept (Lean.Json.parse "[{\"description\":\"Good\",\"quantity\":\"1\",\"unitPrice\":\"100\"},{\"description\":\"Bad\",\"quantity\":\"1\",\"unitPrice\":\"0\"}]")) with
-    | .error _ => true
-    | _ => false)
+  let invalid ← IO.ofExcept (JsonProtocol.valueFromJson ExampleForms.Invoice.invoice
+    (← IO.ofExcept (Lean.Json.parse "[{\"description\":\"Bad\",\"quantity\":\"0\",\"unitPrice\":\"100\"}]")))
+  check "DecodedListRequiresValidation" (RefinedDataType.validate refined invalid).isNone
+  let empty ← IO.ofExcept (JsonProtocol.valueFromJson ExampleForms.Invoice.invoice (.arr #[]))
+  check "EmptyListValidates" ((RefinedDataType.validate refined empty).any List.isEmpty)
+  let mixed ← IO.ofExcept (JsonProtocol.valueFromJson ExampleForms.Invoice.invoice
+    (← IO.ofExcept (Lean.Json.parse "[{\"description\":\"Good\",\"quantity\":\"1\",\"unitPrice\":\"100\"},{\"description\":\"Bad\",\"quantity\":\"1\",\"unitPrice\":\"0\"}]")))
+  check "EveryDecodedItemValidated" (RefinedDataType.validate refined mixed).isNone
   check "ListFieldIndices" ((fieldRefs ExampleForms.Invoice.form draft).map (·.indices) == [[0,0], [0,1], [0,2], [0], []])
   check "ListRequiresArray" (match JsonProtocol.valueFromJson (.list .natural) (Lean.toJson "1") with
     | .error _ => true
@@ -338,10 +334,9 @@ private def testDates : IO Unit := do
   check "DateComparisonWeakening" (Expr.eval (Expr.weaken ExampleForms.Booking.endDate condition) ExampleForms.Booking.draft)
   let invalidBooking := Path.set ExampleForms.Booking.endDate
     ⟨⟨2028, 2, 27, by decide⟩, by decide⟩ ExampleForms.Booking.draft
-  check "DateRefinementRejectsForgedResult" (match JsonProtocol.decodeResult ExampleForms.Booking.bookingType
-      (JsonProtocol.valueToJson invalidBooking) with
-    | .error _ => true
-    | _ => false)
+  let decoded ← IO.ofExcept (JsonProtocol.valueFromJson ExampleForms.Booking.booking
+    (JsonProtocol.valueToJson invalidBooking))
+  check "DecodedDateStillRequiresValidation" (RefinedDataType.validate ExampleForms.Booking.bookingType decoded).isNone
 
 private def testProtocol : IO Unit := do
   for (fixture, encoded) in [

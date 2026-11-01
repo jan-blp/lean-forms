@@ -265,8 +265,8 @@ pub enum Component {
         #[serde(default)]
         label: Option<String>,
         children: Vec<Component>,
-        #[serde(default, rename = "childIds")]
-        child_ids: Option<Vec<String>>,
+        #[serde(rename = "childIds")]
+        child_ids: Vec<String>,
     },
     Text {
         expression: Expr,
@@ -788,21 +788,6 @@ fn set(value: &mut Value, path: &[Step], replacement: Value) {
 }
 
 impl Component {
-    fn validate_history(&self) -> Result<(), String> {
-        match self {
-            Self::ActionWidget { .. } | Self::Field { .. } | Self::Button { .. } | Self::Computed { .. } | Self::Text { .. } | Self::Table { .. } => Ok(()),
-            Self::Stack { children, child_ids, .. } => {
-                if child_ids.is_none() {
-                    return Err("History stacks require child IDs".into());
-                }
-                children.iter().try_for_each(Self::validate_history)
-            }
-            Self::VisibleWhen { body, .. } | Self::DisabledWhen { body, .. } => body.validate_history(),
-            Self::List { item, .. } => item.validate_history(),
-            Self::Sum { branches, .. } => branches.values().try_for_each(Self::validate_history),
-        }
-    }
-
     fn validate(&self, context: &Ty) -> Result<(), String> {
         match self {
             Self::ActionWidget { path, schema, .. } | Self::Field { path, schema, .. } | Self::List { path, schema, .. } | Self::Sum { path, schema, .. } => {
@@ -815,10 +800,8 @@ impl Component {
         }
         match self {
             Self::Stack { children, child_ids, .. } => {
-                if let Some(ids) = child_ids {
-                    if ids.len() != children.len() || ids.iter().collect::<std::collections::BTreeSet<_>>().len() != ids.len() {
-                        return Err("Stack child IDs must be unique and match children".into());
-                    }
+                if child_ids.len() != children.len() || child_ids.iter().collect::<std::collections::BTreeSet<_>>().len() != child_ids.len() {
+                    return Err("Stack child IDs must be unique and match children".into());
                 }
                 for child in children {
                     child.validate(context)?;
@@ -931,10 +914,8 @@ impl Component {
                 for (index, child) in children.iter().enumerate() {
                     let start = out.len();
                     child.fields(ty, value, path.clone(), scope, labels.clone(), out, tables);
-                    if let Some(ids) = child_ids {
-                        for field in &mut out[start..] {
-                            field.target.insert(0, TargetStep::Child(ids[index].clone()));
-                        }
+                    for field in &mut out[start..] {
+                        field.target.insert(0, TargetStep::Child(child_ids[index].clone()));
                     }
                 }
             }
@@ -1323,11 +1304,8 @@ pub enum Key {
 impl Engine {
     pub fn parse(json: &str) -> Result<Self, String> {
         let spec: Specification = serde_json::from_str(json).map_err(|e| e.to_string())?;
-        if !matches!(spec.version, 4 | 6) {
+        if spec.version != 6 {
             return Err("Unsupported component specification version".into());
-        }
-        if spec.version == 6 {
-            spec.form.validate_history()?;
         }
         spec.schema.validate()?;
         validate_value(&spec.schema, &spec.value)?;
@@ -1381,11 +1359,7 @@ impl Engine {
 
     pub fn result(&self) -> String {
         if self.submitted {
-            if self.spec.version == 6 {
-                serde_json::json!({"value": self.spec.value, "actions": self.actions}).to_string()
-            } else {
-                self.spec.value.to_string()
-            }
+            serde_json::json!({"value": self.spec.value, "actions": self.actions}).to_string()
         } else {
             "null".into()
         }

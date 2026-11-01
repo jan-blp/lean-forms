@@ -65,7 +65,7 @@ def run : IO Unit := do
       | .ok _ => false)
   let result ← IO.ofExcept ((Tui.run (m := ReaderT String (Except IO.Error))
     (.base (.list .natural)) append [7]).run encoded.compress)
-  check "TuiReturnsAppendHistory" (result.any fun result => result.value == [7, 1, 2] && result.actions.map Array.size == some 2)
+  check "TuiReturnsAppendHistory" (result.any fun result => result.value == [7, 1, 2] && result.actions.size == 2)
   IO.println "PASS: append history, current state, targets, conditions, and decoding"
 
 end Tests.AppendHistory

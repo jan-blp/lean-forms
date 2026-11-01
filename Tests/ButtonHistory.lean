@@ -65,7 +65,7 @@ def run : IO Unit := do
       | .ok _ => false)
   let result ← IO.ofExcept ((Tui.run (m := ReaderT String (Except IO.Error))
     (.base .natural) increment 0).run encoded.compress)
-  check "TuiReturnsButtonHistory" (result.any fun result => result.value == 2 && result.actions.map Array.size == some 2)
+  check "TuiReturnsButtonHistory" (result.any fun result => result.value == 2 && result.actions.size == 2)
   IO.println "PASS: standalone button history, targets, conditions, and decoding"
 
 end Tests.ButtonHistory

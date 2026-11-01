@@ -129,7 +129,7 @@ private def testReturn : IO Unit := do
   let accepted := "{\"value\":\"43\",\"actions\":[{\"target\":[],\"action\":\"replace\",\"argument\":\"42\"},{\"target\":[],\"action\":\"plusOne\"}]}"
   match run.run accepted with
   | .ok (some result) =>
-    unless result.value == 43 && (result.actions.map Array.size) == some 2 do
+    unless result.value == 43 && result.actions.size == 2 do
       throw (IO.userError "Lost verified result or history")
   | .ok none => throw (IO.userError "Rejected valid terminal submission")
   | .error error => throw error

@@ -3,21 +3,6 @@ import Forms.Core.ActionInvocation
 
 namespace Forms.Composition
 
-def Component.supportsHistory {ty : DataType} : Component ty → Bool
-  | .actionWidget .. => true
-  | .stack (items := items) _ children _ =>
-      (FinEnum.toList items).all fun child => (children child).supportsHistory
-  | .computed .. => true
-  | .text .. => true
-  | .table .. => true
-  | .field .. => true
-  | .list _ _ item _ => item.supportsHistory
-  | .sum (tags := tags) _ _ branches _ =>
-      (FinEnum.toList tags).all fun tag => (branches tag).supportsHistory
-  | .visibleWhen _ body => body.supportsHistory
-  | .disabledWhen _ body => body.supportsHistory
-  | .button .. => true
-
 def Component.Invocation {ty : DataType} : Component ty → Type
   | .actionWidget _ _ actions => Action.Invocation (fun name => (actions name).presentation)
   | .stack (items := items) _ children _ => (child : items) × (children child).Invocation
