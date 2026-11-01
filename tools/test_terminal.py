@@ -16,7 +16,24 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms'
 
 
-def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None, invoice=False, shapes=False, booking=False, report=False, basket=False):
+def wire_value(schema, value):
+    kind = schema['kind']
+    if kind == 'natural':
+        return str(value)
+    if kind == 'enum':
+        return schema['options'].index(value)
+    if kind == 'record':
+        return {field['name']: wire_value(field['type'], value[field['name']])
+                for field in schema['fields']}
+    if kind == 'sum':
+        constructor = next(c for c in schema['constructors'] if c['name'] == value['tag'])
+        return {'tag': value['tag'], 'value': wire_value(constructor['type'], value['value'])}
+    if kind == 'list':
+        return [wire_value(schema['element'], item) for item in value]
+    return value
+
+
+def session(keys, expected, interrupt=False, cancel=False, thermostat=False, theme=None, invoice=False, shapes=False, booking=False, report=False, basket=False, counter=False, counters=False, actions=None):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 100, 0, 0))
     before = termios.tcgetattr(slave)
@@ -24,7 +41,7 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
     if theme:
         env.update(TERM='xterm-256color', COLORTERM='truecolor')
         env.pop('NO_COLOR', None)
-    process = subprocess.Popen([str(BINARY)] + (["basket"] if basket else ["report"] if report else ["booking"] if booking else ["shapes"] if shapes else ["invoice"] if invoice else ["thermostat"] if thermostat else ["person"]) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
+    process = subprocess.Popen([str(BINARY)] + (["counters"] if counters else ["counter"] if counter else ["basket"] if basket else ["report"] if report else ["booking"] if booking else ["shapes"] if shapes else ["invoice"] if invoice else ["thermostat"] if thermostat else ["person"]) + (["--theme", theme] if theme else []), stdin=slave, stdout=slave, stderr=slave, env=env)
     output = bytearray()
 
     def read_until(predicate):
@@ -41,7 +58,7 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
                     break
 
     try:
-        read_until(lambda: (b'Basket total: EUR 16' if basket else b'Results' if report else b'Start date' if booking else b'Shape' if shapes else b'Description' if invoice else b'Home temperature (C)' if thermostat else b'Name') in output)
+        read_until(lambda: (b'Counters' if counters else b'Counter' if counter else b'Basket total: EUR 16' if basket else b'Results' if report else b'Start date' if booking else b'Shape' if shapes else b'Description' if invoice else b'Home temperature (C)' if thermostat else b'Name') in output)
         os.write(master, keys)
         if cancel:
             read_until(lambda: b'Other' in output)
@@ -63,8 +80,20 @@ def session(keys, expected, interrupt=False, cancel=False, thermostat=False, the
             assert b'Final values' not in output
         else:
             tail = output.split(b'Final values', 1)[1]
-            result = json.loads(tail[tail.index(b'[' if invoice else b'{'):].decode())
-            assert result == expected, result
+            result = json.loads(tail.split(b'------------', 1)[1].strip())
+            if counter:
+                assert result == {"value": str(expected), "actions": [
+                    {"target": [], **({"action": action} if isinstance(action, str) else action)}
+                    for action in actions]}, result
+            elif not counters and isinstance(result, dict) and 'actions' in result:
+                name = 'shapes' if shapes else 'basket' if basket else 'invoice' if invoice else 'thermostat' if thermostat else 'booking' if booking else 'report' if report else 'person'
+                spec = json.loads((ROOT / 'native/tui/tests' / f'{name}.json').read_text())
+                assert result['value'] == wire_value(spec['schema'], expected), result
+                assert isinstance(result['actions'], list), result
+                if actions is not None:
+                    assert result['actions'] == actions, result
+            else:
+                assert result == expected, result
         if theme:
             backgrounds = {
                 'frappe': '48;2;48;52;70', 'macchiato': '48;2;36;39;58',
@@ -86,7 +115,7 @@ initial = {'name': 'Ada', 'age': 28, 'subscribed': False, 'address': {'street': 
 output = session(b'j\r\x15-1\r\x1542\rj j\r\x15Elm Street\rk  q', {'name': 'Ada', 'age': 42, 'subscribed': True, 'address': {'street': 'Elm Street', 'kind': 'Home'}})
 assert b'non-negative whole number' in output
 session('i\x15Ω'.encode(), None, interrupt=True)
-output = session(b'q', initial)
+output = session(b'q', initial, actions=[])
 assert b'Send me postal mail' in output
 assert b'Address' not in output
 for theme in ['frappe', 'macchiato', 'mocha', 'latte', 'ayu-light', 'ayu-dark', 'nord']:
@@ -96,7 +125,10 @@ output = session(b'j\r\x1517\rq\r\x15121\rq\r\x1518\rq', {'name': 'Ada', 'age': 
 assert b'Attendees must be between 18 and 120' in output
 session(b'jj jj\rj\rkk q', {'name': 'Ada', 'age': 28, 'subscribed': False, 'address': {'street': 'Lambda Lane', 'kind': 'Work'}})
 session(b'jj jj\rj', {**initial, 'subscribed': True}, cancel=True)
-output = session(b'\r\x1516\rqj\r\x1516\rq', {'home': 16, 'away': 16}, thermostat=True)
+output = session(b'\r\x1516\rqj\r\x1516\rq', {'home': 16, 'away': 16}, thermostat=True, actions=[
+    {'target': ['home'], 'action': 'replace', 'argument': '16'},
+    {'target': ['away'], 'action': 'replace', 'argument': '16'},
+])
 assert b'Away temperature must not exceed home temperature' in output
 session(b'\r\x1516\rx', None, thermostat=True)
 session(b'x', None)
@@ -115,10 +147,14 @@ session(b"q", {"tag": "circle", "value": 3}, shapes=True)
 output = session(b"j\r\x150\rqk\rj\rj\r\x156\rq", {"tag": "rectangle", "value": {"width": 6, "height": 2}}, shapes=True)
 assert b'Size must be at least 1' in output
 session(b"\rk\rq", {"tag": "dot", "value": {}}, shapes=True)
-# Return to the circle to recover its edited radius.
-session(b"j\r\x155\rk\rj\r\rk\rq", {"tag": "circle", "value": 5}, shapes=True)
+# Returning to the circle restores its default radius.
+session(b"j\r\x155\rk\rj\r\rk\rq", {"tag": "circle", "value": 3}, shapes=True, actions=[
+    {"target": ["circle"], "action": "replace", "argument": "5"},
+    {"target": [], "action": "select", "constructor": "rectangle"},
+    {"target": [], "action": "select", "constructor": "circle"},
+])
 
-# An invalid cached circle does not block submission of the empty constructor.
+# Switching away discards an invalid circle.
 session(b"j\r\x150\rqk\rk\rq", {"tag": "dot", "value": {}}, shapes=True)
 
 output = session(b"j\r\x153\rjjjjj\ri q", [{"description": "New item", "quantity": 3, "unitPrice": 100}], invoice=True)
@@ -168,3 +204,22 @@ output = session(b"jjjjj\rjj\rj\rkkkkkk\rj\rjj\r\x154\rq", {
 }, basket=True)
 assert b'Basket total: EUR 16' in output
 print('PASS: FFI editing, validation, catalogue search, basket actions, typed result, interruption, and terminal restoration')
+
+# Root-state typed actions, saturation, and ordinary input editing.
+session(b"\rj\rj\r\x157\rj\rq", 6, counter=True,
+        actions=["plusOne", "plusFive", {"action": "replace", "argument": "7"}, "minusOne"])
+session(b"jjj\r\rq", 0, counter=True, actions=["minusOne", "minusOne"])
+session(b"j\r\rq", 10, counter=True, actions=["plusFive", "plusFive"])
+
+session(b"q", 0, counter=True, actions=[])
+session(b"\rx", None, counter=True)
+
+# Widget targets distinguish repeated action names within the stack.
+session(b"\rjjjjj\rj\r\x1542\rq", {
+    "value": {"left": "1", "right": "42"},
+    "actions": [
+        {"target": ["left"], "action": "plusOne"},
+        {"target": ["right"], "action": "plusFive"},
+        {"target": ["right"], "action": "replace", "argument": "42"},
+    ],
+}, counters=True)

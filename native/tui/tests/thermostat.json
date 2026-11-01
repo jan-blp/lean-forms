@@ -1,5 +1,9 @@
 {
   "form": {
+    "childIds": [
+      "home",
+      "away"
+    ],
     "children": [
       {
         "kind": "field",
@@ -225,5 +229,5 @@
     "away": "18",
     "home": "22"
   },
-  "version": 7
+  "version": 8
 }

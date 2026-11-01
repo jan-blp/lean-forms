@@ -1,3 +1,5 @@
+import Forms.ExampleForms.Counter
+import Forms.ExampleForms.Counters
 import Forms.ExampleForms.Basket
 import Forms.ExampleForms.TestReport
 import Forms.ExampleForms.Booking
@@ -14,34 +16,27 @@ namespace Forms.Application
 
 open ExampleForms Forms.Runtime
 
-private def valueToJson {t : DataType} (value : ⟦t⟧) : Lean.Json :=
-  match t with
-  | .sum tags constructors => .mkObj [("tag", Lean.toJson (tags.label value.tag)),
-      ("value", valueToJson (t := constructors value.tag) value.payload)]
-  | .list element => .arr ((value.map (valueToJson (t := element))).toArray)
-  | .text => Lean.toJson value
-  | .boolean => Lean.toJson value
-  | .natural => Lean.toJson value
-  | .date => Lean.toJson (Date.toString value)
-  | .enum domain => Lean.toJson (domain.label value)
-  | .record fieldNames fieldTypes =>
-    .mkObj ((FinEnum.toList fieldNames).map fun i =>
-      (fieldNames.label i, valueToJson (t := fieldTypes i) (value i)))
-
-private def runComponent (theme : NativeTerminal.Theme)
-    {state : DataType} (refined : RefinedDataType state)
-    (component : Composition.Component state) (draft : ⟦state⟧) : IO Unit := do
+private def runComponent
+  (theme : NativeTerminal.Theme)
+  {state : DataType}
+  (refined : RefinedDataType state)
+  (component : Composition.Component state)
+  (draft : ⟦state⟧)
+  : IO Unit := do
   let _ : MonadTui IO := NativeTerminal.interpreter theme
   let result ← Tui.run refined component draft
   match result with
   | none => IO.println "\nCancelled."
-  | some value =>
+  | some result =>
     IO.println "\n  Final values\n  ------------"
-    IO.println (Lean.Json.pretty (valueToJson (RefinedDataType.erase refined value)))
+    let value := RefinedDataType.erase refined result.value
+    IO.println (ComponentHistoryProtocol.encode (component := component) ⟨value, result.actions⟩).pretty
 
 private def cli : Cli NativeTerminal.Theme where
   examples := [
     ("person", fun theme => runComponent theme Person.personType Person.form Person.draft),
+    ("counter", fun theme => runComponent theme (.base .natural) Counter.form 0),
+    ("counters", fun theme => runComponent theme (.base Counters.state) Counters.form Counters.initial),
     ("report", fun theme => runComponent theme (.base TestReport.reportShape) TestReport.report TestReport.initial),
     ("basket", fun theme => runComponent theme (.base Basket.basket) Basket.basketView Basket.initial),
     ("booking", fun theme => runComponent theme Booking.bookingType Booking.form Booking.draft),

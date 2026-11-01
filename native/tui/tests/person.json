@@ -1,5 +1,11 @@
 {
   "form": {
+    "childIds": [
+      "name",
+      "age",
+      "subscribed",
+      "address"
+    ],
     "children": [
       {
         "kind": "field",
@@ -36,6 +42,10 @@
       },
       {
         "body": {
+          "childIds": [
+            "street",
+            "kind"
+          ],
           "children": [
             {
               "kind": "field",
@@ -215,5 +225,5 @@
     "name": "Ada",
     "subscribed": false
   },
-  "version": 7
+  "version": 8
 }

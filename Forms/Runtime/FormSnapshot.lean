@@ -40,8 +40,10 @@ private def pathIndices {state value : DataType} : Path state value → List Nat
   | .self => []
   | .field name rest => (FinEnum.equiv name).val :: pathIndices rest
 
-def FormSnapshot.render {state : DataType} (component : Component state)
-    (value : ⟦state⟧) : FormSnapshot :=
+def FormSnapshot.render {state : DataType}
+  (component : Component state)
+  (value : ⟦state⟧)
+  : FormSnapshot :=
   match component with
   | .field path label widget =>
       .fields [{ content := .input widget, labels := [label], indices := pathIndices path }]
@@ -65,7 +67,12 @@ def FormSnapshot.render {state : DataType} (component : Component state)
       if condition.eval value then render body value else .stack []
   | .disabledWhen condition body =>
       if condition.eval value then disable (render body value) else render body value
-  | .appendItemButton label _ _ => .action label
+  | .actionWidget (ids := ids) path label actions => .stack ((FinEnum.toList ids).map fun id =>
+      let action := actions id
+      match action.presentation with
+      | .button _ => .action action.label
+      | .editor widget _ => .fields [{ content := .input widget, labels := [label, action.label], indices := pathIndices path }])
+  | .button label _ => .action label
   | .stack (items := items) label children order =>
       let snapshot := .stack ((FinEnum.toList items).map fun i => render (children (order i)) value)
       match label with
