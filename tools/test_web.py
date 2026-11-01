@@ -113,6 +113,22 @@ process.stdout.write(JSON.stringify(model.submission()));
         assert request('/api/submit', unknown)[0] == 422
         assert request('/api/submit', raw=json.dumps(spec['value']).encode())[0] == 422
         assert request('/api/submit', initial)[0] == 204
+        if example == 'person':
+            invalid = json.loads(json.dumps(initial))
+            invalid['value']['age'] = '17'
+            invalid['actions'] = [{'target': ['age'], 'action': 'replace', 'argument': '17'}]
+            status, _, body = request('/api/submit', invalid)
+            assert status == 422
+            assert json.loads(body)['error'] == 'Attendees must be between 18 and 120 years old.'
+        if example == 'booking':
+            invalid = json.loads(json.dumps(initial))
+            invalid['value']['endDate'] = '2027-01-01'
+            invalid['actions'] = [{'target': ['endDate'], 'action': 'replace', 'argument': '2027-01-01'}]
+            status, _, body = request('/api/submit', invalid)
+            assert status == 422
+            assert json.loads(body)['error'].splitlines() == [
+                'Date must be between 2028-01-01 and 2028-12-31.',
+                'End date must be on or after start date.']
         traffic_log.seek(0)
         traffic = traffic_log.read().decode()
         assert '\x1b[' not in traffic

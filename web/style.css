@@ -77,7 +77,7 @@ label:has(> input[type="checkbox"]) { display: flex; flex-direction: row-reverse
 input[type="checkbox"] { flex-shrink: 0; display: inline-block; width: 16px; height: 16px; min-height: 0; margin: 0; vertical-align: middle; accent-color: var(--primary); }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-s); margin-top: var(--space-xl); }
 #count { margin-left: auto; color: var(--text-secondary); }
-#status { min-height: 20px; overflow-wrap: anywhere; }
+#status { min-height: 20px; overflow-wrap: anywhere; white-space: pre-line; }
 .error { color: var(--error); }
 summary { cursor: pointer; overflow-wrap: anywhere; }
 pre { background: var(--surface); border: 1px solid var(--border); padding: var(--space-m); border-radius: var(--radius-s); overflow-wrap: anywhere; white-space: pre-wrap; }

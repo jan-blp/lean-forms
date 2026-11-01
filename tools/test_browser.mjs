@@ -117,7 +117,7 @@ try {
     check(!document.querySelector('#result img'), 'Value interpreted as HTML');
     edit('Age (18-120)', '17'); apply('Age (18-120)');
     document.querySelector('#submit').click();
-    await wait(() => status() === 'Invalid replayed value');
+    await wait(() => status() === 'Attendees must be between 18 and 120 years old.');
     check(!document.querySelector('#submit').disabled, 'Rejected submission left controls disabled');
     edit('Age (18-120)', '36'); apply('Age (18-120)');
     document.querySelector('#submit').click();

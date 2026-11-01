@@ -8,13 +8,14 @@ open Std Http Async
 
 inductive Error where
   | invocation (error : ComponentHistoryProtocol.Error)
-  | invalidValue
+  | invalidValue (messages : List String)
   deriving BEq
 
 instance : ToString Error where
   toString
     | .invocation error => toString error
-    | .invalidValue => "Invalid replayed value"
+    | .invalidValue [] => "Invalid form value"
+    | .invalidValue (message :: messages) => String.intercalate "\n" (message :: messages).eraseDups
 
 structure Form where
   specification : String
@@ -29,7 +30,7 @@ def Form.ofComponent {ty : DataType}
   submit submission := do
     let history ← (ComponentHistoryProtocol.verify component initial submission).mapError Error.invocation
     let some _ := RefinedDataType.validate refined history.value
-      | throw .invalidValue
+      | throw (.invalidValue ((RefinedDataType.errors refined history.value).map (·.errorMessage)))
     return ()
 
 private def errorJson (message : String) : String :=

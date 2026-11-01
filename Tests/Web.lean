@@ -45,8 +45,12 @@ def run : IO Unit := do
   discard <| IO.ofExcept (form.submit (ComponentHistoryProtocol.encode history))
   let invalid ← IO.ofExcept (history.apply ⟨.plusOne, ()⟩)
   check "WebChecksRefinementsAfterReplay" (match form.submit (ComponentHistoryProtocol.encode invalid) with
-    | .error error => error == .invalidValue
+    | .error error => error == .invalidValue ["At most five"]
     | .ok _ => false)
+  check "WebExplainsFailedRefinement"
+    (toString (Web.Error.invalidValue ["At most five"]) == "At most five")
+  check "WebReportsDistinctFailures"
+    (toString (Web.Error.invalidValue ["First rule", "Second rule", "First rule"]) == "First rule\nSecond rule")
   let forged : ComponentHistory Counter.form := { history with value := 4 }
   check "WebRejectsForgedFinalValue" (match form.submit (ComponentHistoryProtocol.encode forged) with
     | .error error => error == .invocation .valueMismatch
