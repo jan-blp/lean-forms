@@ -1,8 +1,18 @@
 {
   "constraints": [],
   "form": {
+    "childIds": [
+      "Filters",
+      "Sort",
+      "Summary",
+      "Results"
+    ],
     "children": [
       {
+        "childIds": [
+          "provider",
+          "failuresOnly"
+        ],
         "children": [
           {
             "kind": "field",
@@ -1255,5 +1265,5 @@
     ],
     "sort": 0
   },
-  "version": 4
+  "version": 6
 }

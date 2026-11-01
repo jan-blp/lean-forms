@@ -1,6 +1,17 @@
 {
   "constraints": [],
   "form": {
+    "childIds": [
+      "Total",
+      "Page",
+      "Filters",
+      "Matches",
+      "Catalogue",
+      "Selected product",
+      "Add",
+      "Items",
+      "Subtotals"
+    ],
     "children": [
       {
         "expression": {
@@ -102,6 +113,12 @@
       },
       {
         "body": {
+          "childIds": [
+            "search",
+            "category",
+            "budget",
+            "sort"
+          ],
           "children": [
             {
               "kind": "field",
@@ -9004,46 +9021,184 @@
       },
       {
         "body": {
-          "kind": "appendItemButton",
-          "label": "Add selected product",
-          "path": [
-            "items"
-          ],
-          "value": {
-            "branches": [
-              {
-                "kind": "value",
-                "type": {
-                  "fields": [
-                    {
-                      "name": "product",
-                      "type": {
-                        "kind": "enum",
-                        "options": [
-                          "Notebook",
-                          "Pen",
-                          "Mug",
-                          "Water bottle",
-                          "Backpack"
-                        ]
-                      }
-                    },
-                    {
-                      "name": "quantity",
-                      "type": {
-                        "kind": "natural"
-                      }
-                    }
-                  ],
-                  "kind": "record"
-                },
-                "value": {
-                  "product": 0,
-                  "quantity": "1"
-                }
+          "action": {
+            "kind": "set",
+            "path": [
+              "items"
+            ],
+            "value": {
+              "kind": "snoc",
+              "items": {
+                "kind": "project",
+                "path": [
+                  "items"
+                ]
               },
-              {
-                "kind": "value",
+              "value": {
+                "branches": [
+                  {
+                    "kind": "value",
+                    "type": {
+                      "fields": [
+                        {
+                          "name": "product",
+                          "type": {
+                            "kind": "enum",
+                            "options": [
+                              "Notebook",
+                              "Pen",
+                              "Mug",
+                              "Water bottle",
+                              "Backpack"
+                            ]
+                          }
+                        },
+                        {
+                          "name": "quantity",
+                          "type": {
+                            "kind": "natural"
+                          }
+                        }
+                      ],
+                      "kind": "record"
+                    },
+                    "value": {
+                      "product": 0,
+                      "quantity": "1"
+                    }
+                  },
+                  {
+                    "kind": "value",
+                    "type": {
+                      "fields": [
+                        {
+                          "name": "product",
+                          "type": {
+                            "kind": "enum",
+                            "options": [
+                              "Notebook",
+                              "Pen",
+                              "Mug",
+                              "Water bottle",
+                              "Backpack"
+                            ]
+                          }
+                        },
+                        {
+                          "name": "quantity",
+                          "type": {
+                            "kind": "natural"
+                          }
+                        }
+                      ],
+                      "kind": "record"
+                    },
+                    "value": {
+                      "product": 1,
+                      "quantity": "1"
+                    }
+                  },
+                  {
+                    "kind": "value",
+                    "type": {
+                      "fields": [
+                        {
+                          "name": "product",
+                          "type": {
+                            "kind": "enum",
+                            "options": [
+                              "Notebook",
+                              "Pen",
+                              "Mug",
+                              "Water bottle",
+                              "Backpack"
+                            ]
+                          }
+                        },
+                        {
+                          "name": "quantity",
+                          "type": {
+                            "kind": "natural"
+                          }
+                        }
+                      ],
+                      "kind": "record"
+                    },
+                    "value": {
+                      "product": 2,
+                      "quantity": "1"
+                    }
+                  },
+                  {
+                    "kind": "value",
+                    "type": {
+                      "fields": [
+                        {
+                          "name": "product",
+                          "type": {
+                            "kind": "enum",
+                            "options": [
+                              "Notebook",
+                              "Pen",
+                              "Mug",
+                              "Water bottle",
+                              "Backpack"
+                            ]
+                          }
+                        },
+                        {
+                          "name": "quantity",
+                          "type": {
+                            "kind": "natural"
+                          }
+                        }
+                      ],
+                      "kind": "record"
+                    },
+                    "value": {
+                      "product": 3,
+                      "quantity": "1"
+                    }
+                  },
+                  {
+                    "kind": "value",
+                    "type": {
+                      "fields": [
+                        {
+                          "name": "product",
+                          "type": {
+                            "kind": "enum",
+                            "options": [
+                              "Notebook",
+                              "Pen",
+                              "Mug",
+                              "Water bottle",
+                              "Backpack"
+                            ]
+                          }
+                        },
+                        {
+                          "name": "quantity",
+                          "type": {
+                            "kind": "natural"
+                          }
+                        }
+                      ],
+                      "kind": "record"
+                    },
+                    "value": {
+                      "product": 4,
+                      "quantity": "1"
+                    }
+                  }
+                ],
+                "kind": "enumCases",
+                "subject": {
+                  "kind": "project",
+                  "path": [
+                    "selected"
+                  ]
+                },
                 "type": {
                   "fields": [
                     {
@@ -9067,138 +9222,12 @@
                     }
                   ],
                   "kind": "record"
-                },
-                "value": {
-                  "product": 1,
-                  "quantity": "1"
-                }
-              },
-              {
-                "kind": "value",
-                "type": {
-                  "fields": [
-                    {
-                      "name": "product",
-                      "type": {
-                        "kind": "enum",
-                        "options": [
-                          "Notebook",
-                          "Pen",
-                          "Mug",
-                          "Water bottle",
-                          "Backpack"
-                        ]
-                      }
-                    },
-                    {
-                      "name": "quantity",
-                      "type": {
-                        "kind": "natural"
-                      }
-                    }
-                  ],
-                  "kind": "record"
-                },
-                "value": {
-                  "product": 2,
-                  "quantity": "1"
-                }
-              },
-              {
-                "kind": "value",
-                "type": {
-                  "fields": [
-                    {
-                      "name": "product",
-                      "type": {
-                        "kind": "enum",
-                        "options": [
-                          "Notebook",
-                          "Pen",
-                          "Mug",
-                          "Water bottle",
-                          "Backpack"
-                        ]
-                      }
-                    },
-                    {
-                      "name": "quantity",
-                      "type": {
-                        "kind": "natural"
-                      }
-                    }
-                  ],
-                  "kind": "record"
-                },
-                "value": {
-                  "product": 3,
-                  "quantity": "1"
-                }
-              },
-              {
-                "kind": "value",
-                "type": {
-                  "fields": [
-                    {
-                      "name": "product",
-                      "type": {
-                        "kind": "enum",
-                        "options": [
-                          "Notebook",
-                          "Pen",
-                          "Mug",
-                          "Water bottle",
-                          "Backpack"
-                        ]
-                      }
-                    },
-                    {
-                      "name": "quantity",
-                      "type": {
-                        "kind": "natural"
-                      }
-                    }
-                  ],
-                  "kind": "record"
-                },
-                "value": {
-                  "product": 4,
-                  "quantity": "1"
                 }
               }
-            ],
-            "kind": "enumCases",
-            "subject": {
-              "kind": "project",
-              "path": [
-                "selected"
-              ]
-            },
-            "type": {
-              "fields": [
-                {
-                  "name": "product",
-                  "type": {
-                    "kind": "enum",
-                    "options": [
-                      "Notebook",
-                      "Pen",
-                      "Mug",
-                      "Water bottle",
-                      "Backpack"
-                    ]
-                  }
-                },
-                {
-                  "name": "quantity",
-                  "type": {
-                    "kind": "natural"
-                  }
-                }
-              ],
-              "kind": "record"
             }
-          }
+          },
+          "kind": "button",
+          "label": "Add selected product"
         },
         "condition": {
           "kind": "enumEq",
@@ -9229,6 +9258,14 @@
             "quantity": "1"
           },
           "item": {
+            "childIds": [
+              "Product",
+              "Quantity",
+              "−1",
+              "+1",
+              "Reset",
+              "Price"
+            ],
             "children": [
               {
                 "kind": "field",
@@ -9258,6 +9295,75 @@
                   "kind": "natural"
                 },
                 "widget": "naturalInput"
+              },
+              {
+                "action": {
+                  "kind": "set",
+                  "path": [
+                    "quantity"
+                  ],
+                  "value": {
+                    "kind": "natSub",
+                    "left": {
+                      "kind": "project",
+                      "path": [
+                        "quantity"
+                      ]
+                    },
+                    "right": {
+                      "kind": "value",
+                      "type": {
+                        "kind": "natural"
+                      },
+                      "value": "1"
+                    }
+                  }
+                },
+                "kind": "button",
+                "label": "−1"
+              },
+              {
+                "action": {
+                  "kind": "set",
+                  "path": [
+                    "quantity"
+                  ],
+                  "value": {
+                    "kind": "natAdd",
+                    "left": {
+                      "kind": "project",
+                      "path": [
+                        "quantity"
+                      ]
+                    },
+                    "right": {
+                      "kind": "value",
+                      "type": {
+                        "kind": "natural"
+                      },
+                      "value": "1"
+                    }
+                  }
+                },
+                "kind": "button",
+                "label": "+1"
+              },
+              {
+                "action": {
+                  "kind": "set",
+                  "path": [
+                    "quantity"
+                  ],
+                  "value": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "natural"
+                    },
+                    "value": "0"
+                  }
+                },
+                "kind": "button",
+                "label": "Reset quantity"
               },
               {
                 "expression": {
@@ -9633,5 +9739,5 @@
     "page": 0,
     "selected": 0
   },
-  "version": 4
+  "version": 6
 }

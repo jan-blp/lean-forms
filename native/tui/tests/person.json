@@ -43,6 +43,12 @@
     }
   ],
   "form": {
+    "childIds": [
+      "name",
+      "age",
+      "subscribed",
+      "address"
+    ],
     "children": [
       {
         "kind": "field",
@@ -79,6 +85,10 @@
       },
       {
         "body": {
+          "childIds": [
+            "street",
+            "kind"
+          ],
           "children": [
             {
               "kind": "field",
@@ -182,5 +192,5 @@
     "name": "Ada",
     "subscribed": false
   },
-  "version": 4
+  "version": 6
 }

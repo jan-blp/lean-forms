@@ -1,3 +1,10 @@
+import Tests.SumHistory
+import Tests.ListHistory
+import Tests.AppendHistory
+import Tests.ButtonHistory
+import Tests.Actions
+import Tests.FieldHistory
+import Tests.ComponentHistory
 import Tests.Weakening
 import Tests.Basket
 import Tests.Composition
@@ -12,14 +19,18 @@ import Forms.Runtime.Tui
 
 open Forms Forms.Composition Forms.Runtime
 
-private def fieldRefs {state : DataType} (component : Component state) (value : ⟦state⟧) :=
+private def fieldRefs {state : DataType}
+  (component : Component state)
+  (value : ⟦state⟧) :=
   (FormSnapshot.render component value).fieldRefs
 
 private def check (name : String) (passed : Bool) : IO Unit := do
   if passed then IO.println ("PASS " ++ name)
   else throw (IO.userError ("FAIL " ++ name))
 
-private def temperatures (home away : Nat) : ⟦ExampleForms.Thermostat.thermostat⟧
+private def temperatures
+  (home away : Nat)
+  : ⟦ExampleForms.Thermostat.thermostat⟧
   | .home => home
   | .away => away
 
@@ -45,7 +56,9 @@ private def wrap {t : DataType} (enabled : Bool) (value : ⟦t⟧) : ⟦wrapper 
   | .enabled => enabled
   | .content => value
 
-private def refineWrapper {t : DataType} (refined : RefinedDataType t) : RefinedDataType (wrapper t) :=
+private def refineWrapper {t : DataType}
+  (refined : RefinedDataType t)
+  : RefinedDataType (wrapper t) :=
   .record fun | .enabled => .base .boolean | .content => refined
 
 private def testRefinedTypes : IO Unit := do
@@ -89,10 +102,9 @@ private def testRefinedTypes : IO Unit := do
   check "UnboundedBaseStillWorks" ((RefinedDataType.validate (.base .natural) huge).isSome)
   let invalidInitial := Path.set ExampleForms.Person.age 17 ExampleForms.Person.draft
   check "InitialDraftIsValidated" ((RefinedDataType.errors ExampleForms.Person.personType invalidInitial).length == 1)
-  check "RootDecodeCannotBypassAgeRule"
-    (match JsonProtocol.decodeResult ExampleForms.Person.personType (JsonProtocol.valueToJson invalidInitial) with
-      | .error _ => true
-      | _ => false)
+  let decoded ← IO.ofExcept (JsonProtocol.valueFromJson ExampleForms.Person.person
+    (JsonProtocol.valueToJson invalidInitial))
+  check "DecodedAgeStillRequiresValidation" (RefinedDataType.validate ExampleForms.Person.personType decoded).isNone
 
 private def testHiddenValidation : IO Unit := do
   let hidden : Component ExampleForms.Thermostat.thermostat :=
@@ -125,11 +137,11 @@ private instance : MonadTui (ReaderT String (Except IO.Error)) where
 
 private def testNativeBoundary : IO Unit := do
   let run := Tui.run (m := ReaderT String (Except IO.Error)) ExampleForms.Thermostat.thermostatType ExampleForms.Thermostat.form ExampleForms.Thermostat.draft
-  check "LeanRejectsForgedNativeSuccess" (match run.run "{\"home\":\"16\",\"away\":\"18\"}" with
+  check "LeanRejectsForgedNativeSuccess" (match run.run "{\"value\":{\"home\":\"16\",\"away\":\"18\"},\"actions\":[{\"target\":[\"home\"],\"action\":\"replace\",\"argument\":\"16\"}]}" with
     | .error _ => true
     | _ => false)
-  check "LeanConstructsProofForNativeResult" (match run.run "{\"home\":\"16\",\"away\":\"16\"}" with
-    | .ok (some value) => JsonProtocol.valueToJson (RefinedDataType.erase ExampleForms.Thermostat.thermostatType value) == temperatureJson "16" "16"
+  check "LeanConstructsProofForNativeResult" (match run.run "{\"value\":{\"home\":\"16\",\"away\":\"16\"},\"actions\":[{\"target\":[\"home\"],\"action\":\"replace\",\"argument\":\"16\"},{\"target\":[\"away\"],\"action\":\"replace\",\"argument\":\"16\"}]}" with
+    | .ok (some value) => JsonProtocol.valueToJson (RefinedDataType.erase ExampleForms.Thermostat.thermostatType value.value) == temperatureJson "16" "16"
     | _ => false)
   check "NativeCancellationIsSeparate" (match run.run "null" with
     | .ok none => true
@@ -145,17 +157,14 @@ private def testLists : IO Unit := do
   check "ListRoundTrip" (match JsonProtocol.valueFromJson ExampleForms.Invoice.invoice encoded with
     | .ok value => JsonProtocol.valueToJson value == encoded
     | _ => false)
-  check "ListRefinementsRejectForgedResult" (match JsonProtocol.decodeResult refined
-      (← IO.ofExcept (Lean.Json.parse "[{\"description\":\"Bad\",\"quantity\":\"0\",\"unitPrice\":\"100\"}]")) with
-    | .error _ => true
-    | _ => false)
-  check "EmptyListValidates" (match JsonProtocol.decodeResult refined (.arr #[]) with
-    | .ok (some []) => true
-    | _ => false)
-  check "EveryItemValidated" (match JsonProtocol.decodeResult refined
-      (← IO.ofExcept (Lean.Json.parse "[{\"description\":\"Good\",\"quantity\":\"1\",\"unitPrice\":\"100\"},{\"description\":\"Bad\",\"quantity\":\"1\",\"unitPrice\":\"0\"}]")) with
-    | .error _ => true
-    | _ => false)
+  let invalid ← IO.ofExcept (JsonProtocol.valueFromJson ExampleForms.Invoice.invoice
+    (← IO.ofExcept (Lean.Json.parse "[{\"description\":\"Bad\",\"quantity\":\"0\",\"unitPrice\":\"100\"}]")))
+  check "DecodedListRequiresValidation" (RefinedDataType.validate refined invalid).isNone
+  let empty ← IO.ofExcept (JsonProtocol.valueFromJson ExampleForms.Invoice.invoice (.arr #[]))
+  check "EmptyListValidates" ((RefinedDataType.validate refined empty).any List.isEmpty)
+  let mixed ← IO.ofExcept (JsonProtocol.valueFromJson ExampleForms.Invoice.invoice
+    (← IO.ofExcept (Lean.Json.parse "[{\"description\":\"Good\",\"quantity\":\"1\",\"unitPrice\":\"100\"},{\"description\":\"Bad\",\"quantity\":\"1\",\"unitPrice\":\"0\"}]")))
+  check "EveryDecodedItemValidated" (RefinedDataType.validate refined mixed).isNone
   check "ListFieldIndices" ((fieldRefs ExampleForms.Invoice.form draft).map (·.indices) == [[0,0], [0,1], [0,2], [0], []])
   check "ListRequiresArray" (match JsonProtocol.valueFromJson (.list .natural) (Lean.toJson "1") with
     | .error _ => true
@@ -218,8 +227,10 @@ private def testSums : IO Unit := do
   check "LeanRejectsForgedSumSuccess" (match run.run (JsonProtocol.valueToJson invalid).compress with
     | .error _ => true
     | _ => false)
-  check "LeanAcceptsValidSumSubmission" (match run.run (JsonProtocol.valueToJson valid).compress with
-    | .ok (some value) => JsonProtocol.valueToJson (RefinedDataType.erase refined value) == JsonProtocol.valueToJson valid
+  let history ← IO.ofExcept (ComponentHistory.replay ExampleForms.Shapes.form dot
+    #[.select .rectangle, .inPayload .rectangle ⟨.width, ⟨.replace, (7 : Nat)⟩⟩])
+  check "LeanAcceptsValidSumSubmission" (match run.run (ComponentHistoryProtocol.encode history).compress with
+    | .ok (some value) => JsonProtocol.valueToJson (RefinedDataType.erase refined value.value) == JsonProtocol.valueToJson valid
     | _ => false)
   check "SumCancellation" (match run.run "null" with
     | .ok none => true
@@ -323,10 +334,9 @@ private def testDates : IO Unit := do
   check "DateComparisonWeakening" (Expr.eval (Expr.weaken ExampleForms.Booking.endDate condition) ExampleForms.Booking.draft)
   let invalidBooking := Path.set ExampleForms.Booking.endDate
     ⟨⟨2028, 2, 27, by decide⟩, by decide⟩ ExampleForms.Booking.draft
-  check "DateRefinementRejectsForgedResult" (match JsonProtocol.decodeResult ExampleForms.Booking.bookingType
-      (JsonProtocol.valueToJson invalidBooking) with
-    | .error _ => true
-    | _ => false)
+  let decoded ← IO.ofExcept (JsonProtocol.valueFromJson ExampleForms.Booking.booking
+    (JsonProtocol.valueToJson invalidBooking))
+  check "DecodedDateStillRequiresValidation" (RefinedDataType.validate ExampleForms.Booking.bookingType decoded).isNone
 
 private def testProtocol : IO Unit := do
   for (fixture, encoded) in [
@@ -342,6 +352,13 @@ private def testProtocol : IO Unit := do
     (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (t := .natural) huge) == .ok huge)
 
 def main : IO Unit := do
+  Tests.SumHistory.run
+  Tests.ListHistory.run
+  Tests.AppendHistory.run
+  Tests.ButtonHistory.run
+  Tests.Actions.run
+  Tests.ComponentHistory.run
+  Tests.FieldHistory.run
   Tests.Weakening.run
   Tests.Basket.run
   Tests.Composition.run

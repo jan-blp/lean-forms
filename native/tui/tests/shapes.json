@@ -149,11 +149,16 @@
         "widget": "naturalInput"
       },
       "dot": {
+        "childIds": [],
         "children": [],
         "kind": "stack",
         "label": "Dot"
       },
       "rectangle": {
+        "childIds": [
+          "width",
+          "height"
+        ],
         "children": [
           {
             "kind": "field",
@@ -274,5 +279,5 @@
     "tag": "circle",
     "value": "3"
   },
-  "version": 4
+  "version": 6
 }

@@ -243,23 +243,32 @@ def filtersEditor {state : DataType} : Component.Builder state filters :=
 inductive ItemSection where
   | product
   | quantity
+  | decrement
+  | increment
+  | reset
   | price
   deriving DecidableEq
 
 instance : FinEnum ItemSection :=
-  FinEnum.ofList [.product, .quantity, .price] (by grind [ItemSection])
+  FinEnum.ofList [.product, .quantity, .decrement, .increment, .reset, .price] (by grind [ItemSection])
 
 def itemSections : Enum where
   type := ItemSection
   label
     | .product => "Product"
     | .quantity => "Quantity"
+    | .decrement => "−1"
+    | .increment => "+1"
+    | .reset => "Reset"
     | .price => "Price"
 
 def itemComponent : Component item :=
   .stack (some "Item") (items := itemSections) (fun
     | .product => .field (.field .product .self) "Product" .select
     | .quantity => .field (.field .quantity .self) "Quantity" .naturalInput
+    | .decrement => .button "−1" (.decrement (.field .quantity .self))
+    | .increment => .button "+1" (.increment (.field .quantity .self))
+    | .reset => .button "Reset quantity" (.set (.field .quantity .self) (.value 0))
     | .price => .computed "Unit price (EUR)" unitPrice)
 
 def boundItems : Component basket :=
@@ -268,7 +277,7 @@ def boundItems : Component basket :=
 def selectedItem : Expr basket item :=
   .enumCases (.project (.field .selected .self)) fun p => .value (line p 1)
 
-def addSelected : Component basket := .appendItemButton "Add selected product" itemsPath selectedItem
+def addSelected : Component basket := .button "Add selected product" (.append itemsPath selectedItem)
 
 def onPage (page : Page) : Expr basket .boolean :=
   .enumEq (.project (.field .page .self)) (.value page)
