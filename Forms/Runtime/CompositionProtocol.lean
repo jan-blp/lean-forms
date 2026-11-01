@@ -58,14 +58,21 @@ def componentToJson {state : DataType}
       ("children", toJson ((FinEnum.toList items).map fun index => componentToJson (children (order index)))),
       ("childIds", toJson ((FinEnum.toList items).map fun index => items.label (order index)))]
 
+def specificationToJson {state : DataType}
+  (refined : RefinedDataType state)
+  (component : Component state)
+  (draft : ⟦state⟧)
+  : Json :=
+  Json.mkObj [
+    ("version", toJson (6 : Nat)), ("schema", DataType.toJson state),
+    ("constraints", toJson ((RefinedDataType.constraints refined).map Constraint.toJson)),
+    ("form", componentToJson component), ("value", JsonProtocol.valueToJson draft)]
+
 def encode {state : DataType}
   (refined : RefinedDataType state)
   (component : Component state)
   (draft : ⟦state⟧)
   : String :=
-  (Json.mkObj [
-    ("version", toJson (6 : Nat)), ("schema", DataType.toJson state),
-    ("constraints", toJson ((RefinedDataType.constraints refined).map Constraint.toJson)),
-    ("form", componentToJson component), ("value", JsonProtocol.valueToJson draft)]).compress
+  (specificationToJson refined component draft).compress
 
 end Forms.Runtime.CompositionProtocol

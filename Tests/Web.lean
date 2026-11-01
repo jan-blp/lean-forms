@@ -40,7 +40,7 @@ def run : IO Unit := do
   testTrafficLog
   let refined : RefinedDataType .natural := .refine (.base .natural)
     { condition := .natLe (.project .self) (.value 5), errorMessage := "At most five" }
-  let form := Runtime.Web.Form.ofComponent refined Counter.form 0
+  let form := Runtime.Web.ComponentEndpoint.ofComponent refined Counter.form 0
   let history ← IO.ofExcept (ComponentHistory.replay Counter.form 0 #[⟨.plusFive, ()⟩])
   discard <| IO.ofExcept (form.submit (ComponentHistoryProtocol.encode history))
   let invalid ← IO.ofExcept (history.apply ⟨.plusOne, ()⟩)

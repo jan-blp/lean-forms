@@ -17,16 +17,16 @@ instance : ToString Error where
     | .invalidValue [] => "Invalid form value"
     | .invalidValue (message :: messages) => String.intercalate "\n" (message :: messages).eraseDups
 
-structure Form where
-  specification : String
+structure ComponentEndpoint where
+  specification : Lean.Json
   submit : Lean.Json → Except Error Unit
 
-def Form.ofComponent {ty : DataType}
+def ComponentEndpoint.ofComponent {ty : DataType}
   (refined : RefinedDataType ty)
   (component : Composition.Component ty)
   (initial : ⟦ty⟧)
-  : Form where
-  specification := CompositionProtocol.encode refined component initial
+  : ComponentEndpoint where
+  specification := CompositionProtocol.specificationToJson refined component initial
   submit submission := do
     let history ← (ComponentHistoryProtocol.verify component initial submission).mapError Error.invocation
     let some _ := RefinedDataType.validate refined history.value
@@ -50,7 +50,7 @@ private def respond
 
 private structure Application where
   logger : TrafficLog.Logger
-  form : Form
+  form : ComponentEndpoint
   html : String
   script : String
   interpreter : String
@@ -69,7 +69,7 @@ private instance : Server.Handler Application where
       else if path == "/app.js" then respond label .ok "text/javascript; charset=utf-8" app.script
       else if path == "/interpreter.js" then respond label .ok "text/javascript; charset=utf-8" app.interpreter
       else if path == "/style.css" then respond label .ok "text/css; charset=utf-8" app.style
-      else if path == "/api/form" then respond label .ok "application/json" app.form.specification
+      else if path == "/api/form" then respond label .ok "application/json" app.form.specification.compress
       else respond label .notFound "text/plain; charset=utf-8" "Not found"
     else if submissionRequest then
       let body ← try request.body.readAll (maximumSize := some (1024 * 1024))
