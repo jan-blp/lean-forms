@@ -58,7 +58,9 @@ function render(focusKey?: string) {
   function renderNode(node: View | null): HTMLElement | DocumentFragment {
     if (!node) return document.createDocumentFragment();
     if (node.kind === 'stack' || node.kind === 'actionWidget') {
-      const group = element('fieldset', undefined, 'component');
+      const group = node.label
+        ? element('fieldset', undefined, 'component')
+        : element('div', undefined, 'stack');
       if (node.label) group.append(element('legend', node.label));
       if (node.kind === 'actionWidget') {
         const display = formatValue(node.schema, node.value);
@@ -70,6 +72,7 @@ function render(focusKey?: string) {
     if (node.kind === 'list') {
       const group = element('fieldset', undefined, 'component');
       group.append(element('legend', node.label));
+      if (node.items.length === 0) group.append(element('p', 'No items.', 'empty'));
       node.items.forEach((item, index) => {
         const row = element('fieldset', undefined, 'list-item');
         row.append(element('legend', `Item ${index + 1}`), renderNode(item.body), renderNode(item.remove));
@@ -100,6 +103,9 @@ function render(focusKey?: string) {
     }
     if (node.kind === 'table') {
       const wrapper = element('div', undefined, 'table-scroll');
+      wrapper.tabIndex = 0;
+      wrapper.setAttribute('role', 'region');
+      wrapper.setAttribute('aria-label', 'Table');
       const table = element('table');
       const head = element('thead');
       const headings = element('tr');
@@ -110,6 +116,13 @@ function render(focusKey?: string) {
       }
       head.append(headings);
       const body = element('tbody');
+      if (node.rows.length === 0 && node.columns.length > 0) {
+        const row = element('tr');
+        const cell = element('td', 'No rows.', 'empty');
+        cell.colSpan = node.columns.length;
+        row.append(cell);
+        body.append(row);
+      }
       for (const cells of node.rows) {
         const row = element('tr');
         for (const text of cells) row.append(element('td', text));

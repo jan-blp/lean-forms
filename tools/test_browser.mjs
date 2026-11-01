@@ -64,6 +64,14 @@ try {
   });
   await call('session.new', { capabilities: {} });
   const { context } = await call('browsingContext.create', { type: 'tab' });
+  async function checkLayout() {
+    for (const width of [900, 375, 320]) {
+      await call('browsingContext.setViewport', { context, viewport: { width, height: 1000 } });
+      const result = await call('script.evaluate', { target: { context }, awaitPromise: false,
+        expression: 'document.documentElement.scrollWidth <= innerWidth' });
+      assert.equal(result.result.value, true, `Horizontal page overflow at ${width}px`);
+    }
+  }
   await call('browsingContext.navigate', { context, url: `http://127.0.0.1:${port}`, wait: 'complete' });
   const result = await call('script.evaluate', { target: { context }, awaitPromise: true, expression: `(async () => {
     const check = (condition, message) => { if (!condition) throw Error(message); };
@@ -125,6 +133,7 @@ try {
   })()` });
   assert.notEqual(result.type, 'exception', JSON.stringify(result.exceptionDetails));
   console.log(result.result.value);
+  await checkLayout();
   async function example(name, body) {
     const examplePort = await freePort();
     const process = spawn('.lake/build/bin/forms-web', [name, '--port', String(examplePort)], { cwd, stdio: 'ignore' });
@@ -159,9 +168,11 @@ try {
         return JSON.parse(document.querySelector('#result pre').textContent);
       })()` });
       assert.notEqual(result.type, 'exception', JSON.stringify(result.exceptionDetails));
-      console.log(`PASS: ${name} browser controls and server replay`);
+      await checkLayout();
+      console.log(`PASS: ${name} browser controls, layout, and server replay`);
     } finally { await stop(process); }
   }
+  for (const name of ['counter', 'counters', 'booking', 'thermostat']) await example(name, '');
   await example('invoice', `
     button('Add item').click();
     check(document.querySelectorAll('.list-item').length === 2, 'Append failed');
@@ -175,6 +186,9 @@ try {
     check(document.querySelectorAll('.list-item').length === 1, 'Remove failed');
     check([...document.querySelectorAll('.computed output')].at(-1).textContent === '700', 'Total did not update');
     edit('Description', '<b>literal</b>');
+    button('Remove item').click();
+    check(document.querySelector('.empty').textContent === 'No items.', 'Empty list has no explanation');
+    button('Add item').click();
   `);
   await example('shapes', `
     select('Shape', 'rectangle'); edit('Width', '8');
@@ -192,6 +206,9 @@ try {
   `);
   await example('basket', `
     check(document.querySelector('table'), 'Missing catalogue');
+    edit('Search', 'no-such-product');
+    check(document.querySelector('tbody .empty').textContent === 'No rows.', 'Empty table has no explanation');
+    document.querySelector('#reset').click();
     const search = [...document.querySelectorAll('.editor')].find(form => form.querySelector('label').firstChild.textContent === 'Search');
     search.querySelector('input').value = 'pen'; search.querySelector('input').dispatchEvent(new Event('input'));
     button('Add selected product').click();
