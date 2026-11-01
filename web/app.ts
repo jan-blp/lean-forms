@@ -19,6 +19,7 @@ const status = required<HTMLElement>('#status');
 const result = required<HTMLDetailsElement>('#result');
 let model: ReturnType<typeof createModel>;
 let pending = false;
+const drafts = new Map<string, string>();
 
 function announce(message: string, error = false) {
   status.textContent = message;
@@ -35,6 +36,7 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, c
 function act(control: Control, argument?: unknown) {
   try {
     model.apply(control.key, argument);
+    drafts.delete(control.key);
     result.hidden = true;
     announce('');
     render(control.key);
@@ -46,6 +48,7 @@ function act(control: Control, argument?: unknown) {
 function render(focusKey?: string) {
   container.replaceChildren();
   let focus: HTMLElement | undefined;
+  const editable = new Set<string>();
   function renderNode(node: View | null): HTMLElement | DocumentFragment {
     if (!node) return document.createDocumentFragment();
     if (node.kind === 'stack' || node.kind === 'actionWidget') {
@@ -122,6 +125,15 @@ function render(focusKey?: string) {
     if (node.widget === 'checkbox' || node.widget === 'select') {
       input.addEventListener('change', () => act(node, argument()));
     } else {
+      if (!input.disabled) {
+        editable.add(node.key);
+        const initial = input.value;
+        input.value = drafts.get(node.key) ?? initial;
+        input.addEventListener('input', () => {
+          if (input.value === initial) drafts.delete(node.key);
+          else drafts.set(node.key, input.value);
+        });
+      }
       const button = element('button', 'Apply');
       button.disabled = input.disabled;
       form.append(button);
@@ -131,6 +143,7 @@ function render(focusKey?: string) {
     return form;
   }
   container.append(renderNode(model.view()));
+  for (const key of drafts.keys()) if (!editable.has(key)) drafts.delete(key);
   focus?.focus();
   const total = model.submission().actions.length;
   count.textContent = `${total} ${total === 1 ? 'action' : 'actions'}`;
@@ -140,6 +153,11 @@ function render(focusKey?: string) {
 }
 
 submit.addEventListener('click', async () => {
+  if (drafts.size > 0) {
+    announce('Apply your edits before submitting.', true);
+    render(drafts.keys().next().value);
+    return;
+  }
   pending = true;
   const submission = model.submission();
   render();
@@ -164,6 +182,7 @@ submit.addEventListener('click', async () => {
 });
 
 reset.addEventListener('click', () => {
+  drafts.clear();
   model.reset();
   result.hidden = true;
   announce('Started over.');
