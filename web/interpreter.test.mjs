@@ -190,3 +190,115 @@ test('computed values format recursively using their schema', () => {
   assert.equal(formatValue({ kind: 'sum', constructors: [{ name: 'date', type: { kind: 'date' } }] }, { tag: 'date', value: '2028-02-29' }), 'date: 2028-02-29');
   assert.equal(formatValue({ kind: 'text' }, '<img src=x>'), '<img src=x>');
 });
+
+test('all component fixtures render including weakened queries', () => {
+  for (const name of ['counter', 'counters', 'person', 'booking', 'invoice', 'location', 'shapes', 'basket', 'report', 'thermostat', 'weakened-basket', 'weakened-report']) {
+    const model = createModel(fixture(name));
+    assert.ok(model.view(), name);
+    assert.deepEqual(model.submission().actions, [], name);
+  }
+});
+
+test('list actions use current indices and isolate default items', () => {
+  const model = createModel(fixture('invoice'));
+  press(model, 'appendDefault', ['body']);
+  const quantity = model.controls().find(c => c.label === 'Quantity' && c.target[1] === 1);
+  model.apply(quantity.key, '7');
+  assert.equal(model.submission().value[0].quantity, '1');
+  assert.equal(model.submission().value[1].quantity, '7');
+  const remove = model.controls().find(c => c.id === 'remove' && c.effect.index === 0);
+  model.apply(remove.key);
+  assert.equal(model.submission().value[0].quantity, '7');
+  assert.deepEqual(model.submission().actions.at(-1), { target: ['body'], action: 'remove', index: 0 });
+  assert.throws(() => model.apply(quantity.key, '9'));
+  model.apply(model.controls().find(c => c.label === 'Quantity').key, '8');
+  press(model, 'appendDefault', ['body']);
+  assert.equal(model.submission().value[1].quantity, '1');
+  assert.equal(model.view().children[1].value, '900');
+  while (model.submission().value.length) model.apply(model.controls().find(c => c.id === 'remove').key);
+  assert.equal(model.view().children[1].value, '0');
+});
+
+test('sum selection resets payload only when changing constructor', () => {
+  const model = createModel(fixture('location'));
+  const choose = tag => model.apply(model.controls().find(c => c.kind === 'choice').key, tag);
+  const city = model.controls().find(c => c.kind === 'editor');
+  model.apply(city.key, 1);
+  choose('France');
+  assert.equal(model.submission().value.value, 1);
+  choose('Japan');
+  assert.throws(() => model.apply(city.key, 0));
+  assert.deepEqual(model.submission().value, { tag: 'Japan', value: 0 });
+  assert.deepEqual(model.submission().actions.at(-1), { target: [], action: 'select', constructor: 'Japan' });
+  choose('France');
+  assert.equal(model.submission().value.value, 0);
+  assert.throws(() => choose('unknown'));
+});
+
+test('nested lists and sums evaluate guards and actions in local state', () => {
+  const field = { kind: 'field', path: [], label: 'Value', widget: 'naturalInput', schema: { kind: 'natural' } };
+  const choice = { kind: 'sum', path: [], label: 'Choice', schema: { kind: 'sum', constructors: [{ name: 'number', type: { kind: 'natural' } }] },
+    defaults: { number: '1' }, branches: { number: { kind: 'disabledWhen', condition: { kind: 'natLe', left: constant('5'), right: project() }, body: field } } };
+  const model = createModel({ version: 6, value: [[{ tag: 'number', value: '1' }]], form: {
+    kind: 'list', path: [], label: 'Outer', defaultItem: [], item: {
+      kind: 'list', path: [], label: 'Inner', defaultItem: { tag: 'number', value: '1' }, item: choice,
+    },
+  } });
+  const editor = model.controls().find(c => c.kind === 'editor');
+  model.apply(editor.key, '5');
+  assert.deepEqual(model.submission().actions[0], { target: [0, 0, 'number'], action: 'replace', argument: '5' });
+  assert.equal(model.submission().value[0][0].value, '5');
+  assert.throws(() => model.apply(editor.key, '2'));
+});
+
+test('tables update from filtered and sorted rows without reordering stored data', () => {
+  const rows = [{ name: 'B', n: '2' }, { name: 'A', n: '1' }, { name: 'C', n: '2' }];
+  const sort = { kind: 'sortNatBy', items: project(), key: project('n'), descending: true };
+  const model = createModel({ version: 6, value: rows, form: { kind: 'table', rows: sort,
+    columns: [{ label: 'Name', expression: project('name') }] } });
+  assert.deepEqual(model.view().rows, [['B'], ['C'], ['A']]);
+  assert.deepEqual(model.submission().value, rows);
+  assert.deepEqual(model.controls(), []);
+  assert.deepEqual(evaluate({ kind: 'filter', items: project(), predicate: { kind: 'natLe', left: project('n'), right: constant('1') } }, rows), [rows[1]]);
+  assert.equal(evaluate({ kind: 'all', items: constant([]), predicate: constant(false) }, rows), true);
+});
+
+test('query ordering and search match Lean Unicode and ASCII semantics', () => {
+  assert.deepEqual(evaluate({ kind: 'sortBy', items: project(), key: project(), descending: false }, ['\u{10000}', '\ue000', 'a']), ['a', '\ue000', '\u{10000}']);
+  const search = query => evaluate({ kind: 'search', items: project(), key: project(), query: constant(query) }, ['Alpha', 'ALP', 'Ä', 'ä']);
+  assert.deepEqual(search('alp'), ['Alpha', 'ALP']);
+  assert.deepEqual(search('ä'), ['ä']);
+  assert.equal(evaluate({ kind: 'cases', subject: project(), branches: { number: { kind: 'natAdd', left: project(), right: constant('2') } } }, { tag: 'number', value: '3' }), '5');
+  const values = ['1'];
+  assert.deepEqual(evaluate({ kind: 'snoc', items: project(), value: constant('2') }, values), ['1', '2']);
+  assert.deepEqual(values, ['1']);
+});
+
+test('hidden and disabled containers prevent structural actions', () => {
+  for (const name of ['invoice', 'location']) {
+    for (const kind of ['visibleWhen', 'disabledWhen']) {
+      const spec = fixture(name);
+      spec.form = { kind, condition: constant(kind === 'disabledWhen'), body: spec.form };
+      const model = createModel(spec);
+      if (kind === 'visibleWhen') assert.deepEqual(model.controls(), []);
+      else for (const control of model.controls()) {
+        assert.equal(control.disabled, true);
+        assert.throws(() => model.apply(control.key));
+      }
+      assert.deepEqual(model.submission(), { value: spec.value, actions: [] });
+    }
+  }
+});
+
+test('buttons inside list items read and write only the item state', () => {
+  const spec = fixture('counter');
+  spec.value = ['1', '10'];
+  spec.form = { kind: 'list', path: [], label: 'Counters', defaultItem: '0', item: {
+    kind: 'button', label: 'Double', action: { kind: 'set', path: [], value: {
+      kind: 'natMul', left: project(), right: constant('2'),
+    } },
+  } };
+  const model = createModel(spec);
+  press(model, 'press', [1]);
+  assert.deepEqual(model.submission(), { value: ['1', '20'], actions: [{ target: [1], action: 'press' }] });
+});

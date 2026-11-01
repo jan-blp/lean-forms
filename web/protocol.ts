@@ -1,5 +1,5 @@
 export type Value = string | number | boolean | Value[] | { [name: string]: Value };
-export type Path = string[];
+export type Path = (string | number)[];
 export type Schema =
   | { kind: 'text' | 'natural' | 'date' | 'boolean' }
   | { kind: 'enum'; options: string[] }
@@ -15,6 +15,11 @@ export type Expr =
   | { kind: 'enumLabel'; subject: Expr; options: string[] }
   | { kind: 'enumCases'; subject: Expr; branches: Expr[] }
   | { kind: 'length'; items: Expr }
+  | { kind: 'all' | 'filter'; items: Expr; predicate: Expr }
+  | { kind: 'sortBy' | 'sortNatBy'; items: Expr; key: Expr; descending: boolean }
+  | { kind: 'search'; items: Expr; key: Expr; query: Expr }
+  | { kind: 'snoc'; items: Expr; value: Expr }
+  | { kind: 'cases'; subject: Expr; branches: Record<string, Expr> }
   | { kind: 'sum'; items: Expr; expression: Expr }
   | { kind: 'ifThenElse'; condition: Expr; whenTrue: Expr; whenFalse: Expr };
 
@@ -29,6 +34,9 @@ export type Component =
   | { kind: 'visibleWhen' | 'disabledWhen'; condition: Expr; body: Component }
   | { kind: 'computed'; label: string; type: Schema; expression: Expr }
   | { kind: 'text'; expression: Expr }
+  | { kind: 'table'; rows: Expr; columns: { label: string; expression: Expr }[] }
+  | { kind: 'list'; path: Path; label: string; item: Component; defaultItem: Value }
+  | { kind: 'sum'; path: Path; label: string; schema: Extract<Schema, { kind: 'sum' }>; branches: Record<string, Component>; defaults: Record<string, Value> }
   | { kind: 'field'; path: Path; schema: Schema; label: string; widget: Widget }
   | { kind: 'button'; label: string; action: Action }
   | { kind: 'actionWidget'; path: Path; schema: Schema; label: string; actions: Presentation[] };
@@ -38,21 +46,28 @@ export interface Specification {
   value: Value;
   form: Component;
 }
-export interface Invocation {
-  target: string[];
+interface InvocationBase {
+  target: Path;
   action: string;
   argument?: Value;
+  index?: number;
 }
+
+export type Invocation = InvocationBase | (InvocationBase & { constructor: string });
 
 interface ControlIdentity {
   id: string;
   label: string;
-  target: string[];
+  target: Path;
   key: string;
   disabled: boolean;
+  scope: Path;
 }
 export type Control = ControlIdentity & (
-  | { kind: 'button'; effect: Action | { kind: 'transform'; path: Path; body: Expr } }
+  | { kind: 'button'; effect: Action | { kind: 'transform'; path: Path; body: Expr }
+      | { kind: 'appendDefault'; path: Path; defaultItem: Value }
+      | { kind: 'remove'; path: Path; index: number } }
+  | { kind: 'choice'; path: Path; value: string; options: string[]; defaults: Record<string, Value> }
   | { kind: 'editor'; path: Path; schema: Schema; value: Value; widget: Widget; body: Expr }
 );
 export type View =
@@ -60,4 +75,7 @@ export type View =
   | { kind: 'actionWidget'; label: string; schema: Schema; value: Value; children: Control[] }
   | { kind: 'computed'; label: string; schema: Schema; value: Value }
   | { kind: 'text'; value: string }
+  | { kind: 'table'; columns: string[]; rows: string[][] }
+  | { kind: 'list'; label: string; items: { body: View | null; remove: Control }[]; append: Control }
+  | { kind: 'sum'; selector: Control; body: View | null }
   | Control;

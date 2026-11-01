@@ -92,7 +92,7 @@ assert result.returncode == 0
 print('PASS: CLI parsing, registry-derived completion, Bash and Fish (direct and lake exe forms)')
 
 BINARY = ROOT / '.lake/build/bin/forms-web'
-assert candidates(['b']) == ['booking']
+assert candidates(['b']) == ['booking', 'basket']
 assert candidates(['--port', '']) == []
 assert candidates(['--port', 'invalid', '']) == []
 assert candidates(['booking', '']) == ['--open', '--port', '--help']

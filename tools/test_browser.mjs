@@ -125,6 +125,84 @@ try {
   })()` });
   assert.notEqual(result.type, 'exception', JSON.stringify(result.exceptionDetails));
   console.log(result.result.value);
+  async function example(name, body) {
+    const examplePort = await freePort();
+    const process = spawn('.lake/build/bin/forms-web', [name, '--port', String(examplePort)], { cwd, stdio: 'ignore' });
+    try {
+      let ready = false;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        try { await fetch(`http://127.0.0.1:${examplePort}/api/form`); ready = true; break; }
+        catch { await delay(50); }
+      }
+      assert.ok(ready, `Server did not start: ${name}`);
+      await call('browsingContext.navigate', { context, url: `http://127.0.0.1:${examplePort}`, wait: 'complete' });
+      const result = await call('script.evaluate', { target: { context }, awaitPromise: true, expression: `(async () => {
+        const check = (condition, message) => { if (!condition) throw Error(message); };
+        const wait = async predicate => {
+          for (let i = 0; i < 100; i++) { if (predicate()) return; await new Promise(resolve => setTimeout(resolve, 50)); }
+          throw Error(document.querySelector('#status').textContent || 'Timeout');
+        };
+        const button = label => [...document.querySelectorAll('button')].find(button => button.textContent === label);
+        const edit = (label, value) => {
+          const form = [...document.querySelectorAll('.editor')].find(form => form.querySelector('label').firstChild.textContent === label);
+          const input = form.querySelector('input');
+          input.value = value; input.dispatchEvent(new Event('input')); form.requestSubmit();
+        };
+        const select = (label, value) => {
+          const input = [...document.querySelectorAll('label')].find(node => node.firstChild.textContent === label).querySelector('select');
+          input.value = value; input.dispatchEvent(new Event('change'));
+        };
+        await wait(() => !document.querySelector('#submit').disabled);
+        ${body}
+        document.querySelector('#submit').click();
+        await wait(() => document.querySelector('#status').textContent === 'Submitted successfully.');
+        return JSON.parse(document.querySelector('#result pre').textContent);
+      })()` });
+      assert.notEqual(result.type, 'exception', JSON.stringify(result.exceptionDetails));
+      console.log(`PASS: ${name} browser controls and server replay`);
+    } finally { await stop(process); }
+  }
+  await example('invoice', `
+    button('Add item').click();
+    check(document.querySelectorAll('.list-item').length === 2, 'Append failed');
+    const quantity = [...document.querySelectorAll('.editor')].filter(form => form.querySelector('label').firstChild.textContent === 'Quantity')[1];
+    const input = quantity.querySelector('input'); input.value = '7'; input.dispatchEvent(new Event('input'));
+    button('Remove item').click();
+    check(document.querySelectorAll('.list-item').length === 2, 'Removal accepted pending draft');
+    const pending = [...document.querySelectorAll('.editor')].filter(form => form.querySelector('label').firstChild.textContent === 'Quantity')[1];
+    pending.requestSubmit();
+    button('Remove item').click();
+    check(document.querySelectorAll('.list-item').length === 1, 'Remove failed');
+    check([...document.querySelectorAll('.computed output')].at(-1).textContent === '700', 'Total did not update');
+    edit('Description', '<b>literal</b>');
+  `);
+  await example('shapes', `
+    select('Shape', 'rectangle'); edit('Width', '8');
+    select('Shape', 'dot'); check(!document.querySelector('input'), 'Inactive payload remains');
+    select('Shape', 'rectangle');
+    check(document.querySelector('input').value === '4', 'Old payload was restored');
+    edit('Height', '7');
+  `);
+  await example('location', `select('Country', 'Japan'); select('City', '2');`);
+  await example('report', `
+    check(document.querySelectorAll('tbody tr').length === 4, 'Missing table rows');
+    document.querySelector('input[type=checkbox]').click();
+    check(document.querySelectorAll('tbody tr').length === 2, 'Filter did not update table');
+    select('Sort', '1');
+  `);
+  await example('basket', `
+    check(document.querySelector('table'), 'Missing catalogue');
+    const search = [...document.querySelectorAll('.editor')].find(form => form.querySelector('label').firstChild.textContent === 'Search');
+    search.querySelector('input').value = 'pen'; search.querySelector('input').dispatchEvent(new Event('input'));
+    button('Add selected product').click();
+    check(document.querySelector('#count').textContent === '0 actions', 'Action accepted pending draft');
+    edit('Search', 'pen');
+    button('Add selected product').click();
+    select('Page', '1');
+    check(document.querySelector('table'), 'Missing basket table');
+    check(document.querySelectorAll('tbody tr').length === 3, 'Append did not update basket');
+  `);
+
 } finally {
   socket?.close();
   await Promise.all([stop(firefox), stop(server)]);

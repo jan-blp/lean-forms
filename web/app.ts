@@ -35,6 +35,12 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, c
 
 function act(control: Control, argument?: unknown) {
   try {
+    if (drafts.size > 0 && (control.kind === 'choice' ||
+      (control.kind === 'button' && control.effect.kind !== 'appendDefault'))) {
+      announce('Apply your edits before using this control.', true);
+      render(drafts.keys().next().value);
+      return;
+    }
     model.apply(control.key, argument);
     drafts.delete(control.key);
     result.hidden = true;
@@ -60,6 +66,58 @@ function render(focusKey?: string) {
       }
       for (const child of node.children) group.append(renderNode(child));
       return group;
+    }
+    if (node.kind === 'list') {
+      const group = element('fieldset', undefined, 'component');
+      group.append(element('legend', node.label));
+      node.items.forEach((item, index) => {
+        const row = element('fieldset', undefined, 'list-item');
+        row.append(element('legend', `Item ${index + 1}`), renderNode(item.body), renderNode(item.remove));
+        group.append(row);
+      });
+      group.append(renderNode(node.append));
+      return group;
+    }
+    if (node.kind === 'sum') {
+      const group = element('div', undefined, 'sum');
+      group.append(renderNode(node.selector), renderNode(node.body));
+      return group;
+    }
+    if (node.kind === 'choice') {
+      const label = element('label', node.label, 'choice');
+      const select = element('select');
+      for (const name of node.options) {
+        const option = element('option', name);
+        option.value = name;
+        select.append(option);
+      }
+      select.value = node.value;
+      select.disabled = pending || node.disabled;
+      select.addEventListener('change', () => act(node, select.value));
+      label.append(select);
+      if (focusKey === node.key) focus = select;
+      return label;
+    }
+    if (node.kind === 'table') {
+      const wrapper = element('div', undefined, 'table-scroll');
+      const table = element('table');
+      const head = element('thead');
+      const headings = element('tr');
+      for (const title of node.columns) {
+        const cell = element('th', title);
+        cell.scope = 'col';
+        headings.append(cell);
+      }
+      head.append(headings);
+      const body = element('tbody');
+      for (const cells of node.rows) {
+        const row = element('tr');
+        for (const text of cells) row.append(element('td', text));
+        body.append(row);
+      }
+      table.append(head, body);
+      wrapper.append(table);
+      return wrapper;
     }
     if (node.kind === 'text') return element('p', node.value, 'text');
     if (node.kind === 'computed') {

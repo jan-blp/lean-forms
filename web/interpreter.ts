@@ -8,7 +8,7 @@ function natural(value: unknown) {
 }
 
 export function get(value: Value, path: Path): Value {
-  return path.reduce((current, name) => record(current)[name], value);
+  return path.reduce((current, name) => typeof name === 'number' ? array(current)[name] : record(current)[name], value);
 }
 
 export function textValue(value: unknown): string {
@@ -38,12 +38,51 @@ function unsupported(value: never): never {
 function set(value: Value, path: Path, replacement: Value): Value {
   if (path.length === 0) return structuredClone(replacement);
   const result = structuredClone(value);
-  record(get(result, path.slice(0, -1)))[path[path.length - 1]] = structuredClone(replacement);
+  const parent = get(result, path.slice(0, -1));
+  const last = path[path.length - 1];
+  if (typeof last === 'number') array(parent)[last] = structuredClone(replacement);
+  else record(parent)[last] = structuredClone(replacement);
   return result;
+}
+
+// Lean compares Unicode scalar values and lowercases ASCII only.
+function compareText(left: string, right: string): number {
+  const a = Array.from(left, char => char.codePointAt(0)!);
+  const b = Array.from(right, char => char.codePointAt(0)!);
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return a.length - b.length;
+}
+
+function lower(text: string): string {
+  return text.replace(/[A-Z]/g, char => char.toLowerCase());
 }
 
 export function evaluate(expression: Expr, current: Value): Value {
   switch (expression.kind) {
+    case 'all': return array(evaluate(expression.items, current)).every(item => evaluate(expression.predicate, item));
+    case 'filter': return array(evaluate(expression.items, current)).filter(item => evaluate(expression.predicate, item));
+    case 'snoc': return [...array(evaluate(expression.items, current)), evaluate(expression.value, current)];
+    case 'cases': {
+      const selected = record(evaluate(expression.subject, current));
+      return evaluate(expression.branches[textValue(selected.tag)], selected.value);
+    }
+    case 'search': {
+      const query = lower(textValue(evaluate(expression.query, current)));
+      return array(evaluate(expression.items, current)).filter(item => lower(textValue(evaluate(expression.key, item))).includes(query));
+    }
+    case 'sortBy':
+    case 'sortNatBy': {
+      const rows = [...array(evaluate(expression.items, current))];
+      return rows.sort((left, right) => {
+        const a = evaluate(expression.key, left);
+        const b = evaluate(expression.key, right);
+        const order = expression.kind === 'sortBy' ? compareText(textValue(a), textValue(b))
+          : natural(a) < natural(b) ? -1 : natural(a) > natural(b) ? 1 : 0;
+        return expression.descending ? -order : order;
+      });
+    }
     case 'value': return structuredClone(expression.value);
     case 'project': return get(current, expression.path);
     case 'natAdd': return (natural(evaluate(expression.left, current)) + natural(evaluate(expression.right, current))).toString();
@@ -120,39 +159,62 @@ export function createModel(specification: Specification) {
   let actions: Invocation[] = [];
 
   function view(): View | null {
-    function visit(component: Component, target: string[] = [], disabled = false): View | null {
-      function identity(id: string, label: string) {
-        return { id, label, target, disabled, key: JSON.stringify([target, id]) };
+    function visit(component: Component, target: Path = [], disabled = false, scope: Path = []): View | null {
+      const current = get(value, scope);
+      function identity(id: string, label: string, index?: number) {
+        return { id, label, target, disabled, scope, key: JSON.stringify(index === undefined ? [target, id] : [target, id, index]) };
       }
       function control(action: Presentation, path: Path, schema: Schema): Control {
         const common = identity(action.id, action.label);
         switch (action.kind) {
           case 'button': return { ...common, kind: 'button', effect: { kind: 'transform', path, body: action.body } };
-          case 'editor': return { ...action, ...common, path, schema, value: get(value, path) };
+          case 'editor': return { ...action, ...common, path, schema, value: get(current, path) };
           default: return unsupported(action);
         }
       }
       switch (component.kind) {
         case 'stack':
           return { kind: 'stack', label: component.label,
-            children: component.children.map((child, index) => visit(child, [...target, component.childIds[index]], disabled))
+            children: component.children.map((child, index) => visit(child, [...target, component.childIds[index]], disabled, scope))
               .filter((child): child is View => child !== null) };
         case 'visibleWhen':
-          return evaluate(component.condition, value) ? visit(component.body, target, disabled) : null;
+          return evaluate(component.condition, current) ? visit(component.body, target, disabled, scope) : null;
         case 'disabledWhen':
-          return visit(component.body, target, disabled || Boolean(evaluate(component.condition, value)));
+          return visit(component.body, target, disabled || Boolean(evaluate(component.condition, current)), scope);
+        case 'list': {
+          const items = array(get(current, component.path));
+          return { kind: 'list', label: component.label,
+            append: { ...identity('appendDefault', 'Add item'), kind: 'button',
+              effect: { kind: 'appendDefault', path: component.path, defaultItem: component.defaultItem } },
+            items: items.map((_, index) => ({
+              body: visit(component.item, [...target, index], disabled, [...scope, ...component.path, index]),
+              remove: { ...identity('remove', 'Remove item', index), kind: 'button',
+                effect: { kind: 'remove', path: component.path, index } },
+            })) };
+        }
+        case 'sum': {
+          const selected = record(get(current, component.path));
+          const tag = textValue(selected.tag);
+          return { kind: 'sum', selector: { ...identity('select', component.label), kind: 'choice',
+            path: component.path, value: tag, options: component.schema.constructors.map(branch => branch.name), defaults: component.defaults },
+            body: visit(component.branches[tag], [...target, tag], disabled, [...scope, ...component.path, 'value']) };
+        }
+        case 'table':
+          return { kind: 'table', columns: component.columns.map(column => column.label),
+            rows: array(evaluate(component.rows, current)).map(row =>
+              component.columns.map(column => textValue(evaluate(column.expression, row)))) };
         case 'computed':
           return { kind: 'computed', label: component.label, schema: component.type,
-            value: evaluate(component.expression, value) };
+            value: evaluate(component.expression, current) };
         case 'text':
-          return { kind: 'text', value: textValue(evaluate(component.expression, value)) };
+          return { kind: 'text', value: textValue(evaluate(component.expression, current)) };
         case 'field':
           return control({ kind: 'editor', id: 'replace', label: component.label, widget: component.widget,
             body: { kind: 'project', path: ['argument'] } }, component.path, component.schema);
         case 'button':
           return { ...identity('press', component.label), kind: 'button', effect: component.action };
         case 'actionWidget':
-          return { kind: 'actionWidget', label: component.label, value: get(value, component.path),
+          return { kind: 'actionWidget', label: component.label, value: get(current, component.path),
             schema: component.schema, children: component.actions.map(action => control(action, component.path, component.schema)) };
         default: return unsupported(component);
       }
@@ -166,9 +228,13 @@ export function createModel(specification: Specification) {
       switch (node.kind) {
         case 'stack':
         case 'actionWidget': return node.children.flatMap(collect);
+        case 'list': return [node.append, ...node.items.flatMap(item => [...collect(item.body), item.remove])];
+        case 'sum': return [node.selector, ...collect(node.body)];
         case 'button':
+        case 'choice':
         case 'editor': return [node];
         case 'computed':
+        case 'table':
         case 'text': return [];
         default: return unsupported(node);
       }
@@ -179,7 +245,8 @@ export function createModel(specification: Specification) {
   function apply(key: string, argument?: unknown) {
     const control = controls().find(control => control.key === key);
     if (!control || control.disabled) throw new Error('This action is unavailable.');
-    const invocation: Invocation = { target: control.target, action: control.id };
+    let invocation: Invocation = { target: control.target, action: control.id };
+    const current = get(value, control.scope);
     let next: Value;
     let path: Path;
     switch (control.kind) {
@@ -188,22 +255,36 @@ export function createModel(specification: Specification) {
         const effect = control.effect;
         path = effect.path;
         switch (effect.kind) {
-          case 'set': next = evaluate(effect.value, value); break;
-          case 'transform': next = evaluate(effect.body, get(value, path)); break;
+          case 'set': next = evaluate(effect.value, current); break;
+          case 'transform': next = evaluate(effect.body, get(current, path)); break;
+          case 'appendDefault': next = [...array(get(current, path)), structuredClone(effect.defaultItem)]; break;
+          case 'remove':
+            invocation.index = effect.index;
+            next = array(get(current, path)).filter((_, index) => index !== effect.index);
+            break;
           default: return unsupported(effect);
         }
+        break;
+      }
+      case 'choice': {
+        path = control.path;
+        const tag = textValue(argument);
+        if (!control.options.includes(tag)) throw new Error('Unknown constructor.');
+        invocation = { ...invocation, constructor: tag };
+        const selected = record(get(current, path));
+        next = selected.tag === tag ? selected : { tag, value: structuredClone(control.defaults[tag]) };
         break;
       }
       case 'editor': {
         path = control.path;
         const normalized = normalize(control.schema, argument);
         invocation.argument = normalized;
-        next = evaluate(control.body, { current: get(value, path), argument: normalized });
+        next = evaluate(control.body, { current: get(current, path), argument: normalized });
         break;
       }
       default: return unsupported(control);
     }
-    value = set(value, path, next);
+    value = set(value, [...control.scope, ...path], next);
     actions.push(invocation);
   }
 

@@ -68,22 +68,41 @@ import { createModel } from './web/dist/interpreter.js';
 import { readFileSync } from 'node:fs';
 const model = createModel(JSON.parse(readFileSync(0, 'utf8')));
 const edit = (widget, argument) => model.apply(model.controls().find(c => c.widget === widget).key, argument);
-if (model.controls().some(c => c.widget === 'checkbox')) {
-  edit('textInput', 'Grace');
-  edit('checkbox', true);
-  edit('select', 2);
-} else if (model.controls().some(c => c.widget === 'dateInput')) {
-  edit('dateInput', '2028-02-29');
-} else {
-const editor = model.controls().find(c => c.kind === 'editor');
-model.apply(editor.key, '123456789012345678901234567890');
-const button = model.controls().find(c => c.id === 'plusOne');
-model.apply(button.key);
-model.apply(button.key);
+const apply = (label, argument) => model.apply(model.controls().find(c => c.label === label).key, argument);
+switch (process.argv[1]) {
+  case 'person':
+    edit('textInput', 'Grace'); edit('checkbox', true); edit('select', 2); break;
+  case 'booking': edit('dateInput', '2028-02-29'); break;
+  case 'invoice':
+    apply('Add item');
+    model.apply(model.controls().find(c => c.label === 'Quantity' && c.target[1] === 1).key, '7');
+    apply('Remove item');
+    break;
+  case 'location': apply('Country', 'Japan'); apply('City', 2); break;
+  case 'shapes':
+    apply('Shape', 'rectangle'); apply('Width', '8');
+    apply('Shape', 'dot'); apply('Shape', 'rectangle'); apply('Height', '7');
+    break;
+  case 'basket':
+    apply('Search', 'pen'); apply('Sort', 1); apply('Product to add', 1);
+    apply('Add selected product'); apply('Add selected product');
+    break;
+  case 'report': apply('Provider', 1); apply('Failures only', true); apply('Sort', 1); break;
+  case 'thermostat': apply('Home temperature (C)', '23'); break;
+  case 'counter':
+  case 'counters': {
+    const editor = model.controls().find(c => c.kind === 'editor');
+    model.apply(editor.key, '123456789012345678901234567890');
+    const button = model.controls().find(c => c.id === 'plusOne');
+    model.apply(button.key); model.apply(button.key);
+    break;
+  }
+  default: throw new Error('Missing example test');
 }
+model.view();
 process.stdout.write(JSON.stringify(model.submission()));
 '''
-        submission = json.loads(subprocess.check_output(['node', '--input-type=module', '-e', script],
+        submission = json.loads(subprocess.check_output(['node', '--input-type=module', '-e', script, example],
                                                        input=json.dumps(spec).encode(), cwd=ROOT))
         status, _, accepted = request('/api/submit', submission)
         assert status == 204 and accepted == '', (status, accepted)
@@ -219,7 +238,7 @@ browser_flag(0)
 browser_flag(1)
 
 
-for example in ['counter', 'counters', 'person', 'booking']:
+for example in ['counter', 'counters', 'person', 'booking', 'invoice', 'location', 'shapes', 'basket', 'report', 'thermostat']:
     session(example)
 terminal_colors()
 terminal_colors(no_color=True)
