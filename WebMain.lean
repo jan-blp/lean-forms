@@ -1,25 +1,12 @@
+import Forms.ExampleForms.Example
 import Forms.Runtime.Web
-import Forms.ExampleForms.Counter
-import Forms.ExampleForms.Counters
-import Forms.ExampleForms.Person
-import Forms.ExampleForms.Booking
-import Forms.ExampleForms.Basket
-import Forms.ExampleForms.TestReport
-import Forms.ExampleForms.Location
-import Forms.ExampleForms.Shapes
-import Forms.ExampleForms.Invoice
-import Forms.ExampleForms.Thermostat
 
 open Forms Forms.Runtime Forms.ExampleForms
 
-private def examples :=
-  ["counter", "counters", "person", "booking", "basket", "report",
-   "location", "shapes", "invoice", "thermostat"]
-
-private def usage := "Usage: forms-web [" ++ String.intercalate "|" examples ++ "] [--port PORT] [--open]"
+private def usage := "Usage: forms-web [" ++ String.intercalate "|" Example.names ++ "] [--port PORT] [--open]"
 
 private structure Options where
-  exampleName : Option String := none
+  selected : Option Example := none
   port : UInt16 := 8080
   openBrowser : Bool := false
 
@@ -41,9 +28,12 @@ private def parseOptions
                   parseOptions rest { options with port := port.toUInt16 }
                 else .error "Port must be between 1 and 65535"
             | none => .error "Expected a port number"
-      else if (examples.contains arg) && options.exampleName.isNone then
-        parseOptions rest { options with exampleName := some arg }
-      else .error usage
+      else
+        match Example.ofName arg, options.selected with
+        | some selected, none => parseOptions rest { options with selected := some selected }
+        | none, none => .error usage
+        | none, some _ => .error usage
+        | some _, some _ => .error usage
 
 private def complete (words : List String) : List String :=
   let previous := words.dropLast
@@ -52,7 +42,7 @@ private def complete (words : List String) : List String :=
     match parseOptions previous with
     | .error _ => []
     | .ok options =>
-        let candidates := (if options.exampleName.isNone then examples else []) ++
+        let candidates := (if options.selected.isNone then Example.names else []) ++
           (if options.openBrowser then [] else ["--open"]) ++ ["--port", "--help"]
         candidates.filter (fun candidate => candidate.startsWith (words.getLast?.getD ""))
 
@@ -64,23 +54,5 @@ def main (args : List String) : IO Unit := do
     IO.println usage
     return
   let options ← IO.ofExcept (parseOptions args)
-  if options.exampleName == some "counters" then
-    Web.run (.base Counters.state) Counters.form Counters.initial options.port options.openBrowser
-  else if options.exampleName == some "person" then
-    Web.run Person.personType Person.form Person.draft options.port options.openBrowser
-  else if options.exampleName == some "booking" then
-    Web.run Booking.bookingType Booking.form Booking.draft options.port options.openBrowser
-  else if options.exampleName == some "basket" then
-    Web.run (.base Basket.basket) Basket.basketView Basket.initial options.port options.openBrowser
-  else if options.exampleName == some "report" then
-    Web.run (.base TestReport.reportShape) TestReport.report TestReport.initial options.port options.openBrowser
-  else if options.exampleName == some "location" then
-    Web.run Location.locationType Location.form Location.draft options.port options.openBrowser
-  else if options.exampleName == some "shapes" then
-    Web.run Shapes.shapeType Shapes.form Shapes.draft options.port options.openBrowser
-  else if options.exampleName == some "invoice" then
-    Web.run Invoice.invoiceType Invoice.form Invoice.draft options.port options.openBrowser
-  else if options.exampleName == some "thermostat" then
-    Web.run Thermostat.thermostatType Thermostat.form Thermostat.draft options.port options.openBrowser
-  else
-    Web.run (.base .natural) Counter.form 0 options.port options.openBrowser
+  let definition := (options.selected.getD .counter).definition
+  Web.run definition.refined definition.component definition.initial options.port options.openBrowser

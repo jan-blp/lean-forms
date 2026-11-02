@@ -92,6 +92,12 @@ assert result.returncode == 0
 print('PASS: CLI parsing, registry-derived completion, Bash and Fish (direct and lake exe forms)')
 
 BINARY = ROOT / '.lake/build/bin/forms-web'
+assert [name for name in candidates(['']) if not name.startswith('-')] == examples
+assert invoke(['not-an-example']).returncode != 0
+for name in examples:
+    assert name in invoke(['--help']).stdout
+    assert candidates([name, '']) == ['--open', '--port', '--help']
+    assert invoke([name, name]).returncode != 0
 assert candidates(['b']) == ['booking', 'basket']
 assert candidates(['--port', '']) == []
 assert candidates(['--port', 'invalid', '']) == []
