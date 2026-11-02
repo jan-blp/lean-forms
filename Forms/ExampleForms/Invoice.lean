@@ -25,9 +25,8 @@ abbrev invoice : DataType := .list item
 
 def positive : RefinedDataType .natural :=
   .refine (.base .natural)
-    { condition := .natLe (.value 1) (.project .self)
-      errorMessage := "Quantity and unit price must be at least 1."
-      errorTargets := .fields [⟨.self⟩] }
+    (.require (fun n => 0 < n) (.natLe (.value 1) (.project .self))
+      (.value "Quantity and unit price must be at least 1.") (.locations [.self]))
 
 def itemType : RefinedDataType item :=
   .record fun

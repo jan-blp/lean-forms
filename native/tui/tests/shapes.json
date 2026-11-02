@@ -1,144 +1,47 @@
 {
-  "constraints": [
-    {
-      "condition": {
-        "kind": "natLe",
-        "left": {
-          "kind": "value",
-          "type": {
-            "kind": "natural"
-          },
-          "value": "1"
-        },
-        "right": {
-          "kind": "project",
-          "path": []
-        }
-      },
-      "errorMessage": "Size must be at least 1.",
-      "errorTargets": {
-        "kind": "fields",
-        "locations": [
-          []
-        ]
-      },
-      "focus": [
-        {
-          "kind": "constructor",
-          "tag": "circle"
-        }
-      ]
-    },
-    {
-      "condition": {
-        "kind": "natLe",
-        "left": {
-          "kind": "value",
-          "type": {
-            "kind": "natural"
-          },
-          "value": "1"
-        },
-        "right": {
-          "kind": "project",
-          "path": []
-        }
-      },
-      "errorMessage": "Size must be at least 1.",
-      "errorTargets": {
-        "kind": "fields",
-        "locations": [
-          []
-        ]
-      },
-      "focus": [
-        {
-          "kind": "constructor",
-          "tag": "rectangle"
-        },
-        {
-          "kind": "field",
-          "name": "width"
-        }
-      ]
-    },
-    {
-      "condition": {
-        "kind": "natLe",
-        "left": {
-          "kind": "value",
-          "type": {
-            "kind": "natural"
-          },
-          "value": "1"
-        },
-        "right": {
-          "kind": "project",
-          "path": []
-        }
-      },
-      "errorMessage": "Size must be at least 1.",
-      "errorTargets": {
-        "kind": "fields",
-        "locations": [
-          []
-        ]
-      },
-      "focus": [
-        {
-          "kind": "constructor",
-          "tag": "rectangle"
-        },
-        {
-          "kind": "field",
-          "name": "height"
-        }
-      ]
-    }
-  ],
   "form": {
     "branches": {
       "circle": {
         "kind": "field",
         "label": "Radius",
-        "widget": "naturalInput",
         "path": [],
         "schema": {
           "kind": "natural"
-        }
+        },
+        "widget": "naturalInput"
       },
       "dot": {
+        "children": [],
         "kind": "stack",
-        "label": "Dot",
-        "children": []
+        "label": "Dot"
       },
       "rectangle": {
-        "kind": "stack",
-        "label": "Dimensions",
         "children": [
           {
             "kind": "field",
             "label": "Width",
-            "widget": "naturalInput",
             "path": [
               "width"
             ],
             "schema": {
               "kind": "natural"
-            }
+            },
+            "widget": "naturalInput"
           },
           {
             "kind": "field",
             "label": "Height",
-            "widget": "naturalInput",
             "path": [
               "height"
             ],
             "schema": {
               "kind": "natural"
-            }
+            },
+            "widget": "naturalInput"
           }
-        ]
+        ],
+        "kind": "stack",
+        "label": "Dimensions"
       }
     },
     "defaults": {
@@ -229,9 +132,158 @@
     ],
     "kind": "sum"
   },
+  "validation": {
+    "branches": {
+      "circle": {
+        "checker": {
+          "condition": {
+            "kind": "not",
+            "operand": {
+              "kind": "natLe",
+              "left": {
+                "kind": "value",
+                "type": {
+                  "kind": "natural"
+                },
+                "value": "1"
+              },
+              "right": {
+                "kind": "project",
+                "path": []
+              }
+            }
+          },
+          "kind": "ite",
+          "thenBranch": {
+            "kind": "report",
+            "message": {
+              "kind": "value",
+              "type": {
+                "kind": "text"
+              },
+              "value": "Size must be at least 1."
+            },
+            "targets": {
+              "kind": "locations",
+              "locations": [
+                []
+              ]
+            }
+          },
+          "elseBranch": {
+            "kind": "pass"
+          }
+        },
+        "inner": {
+          "kind": "base"
+        },
+        "kind": "refine"
+      },
+      "dot": {
+        "fields": {},
+        "kind": "record"
+      },
+      "rectangle": {
+        "fields": {
+          "height": {
+            "checker": {
+              "condition": {
+                "kind": "not",
+                "operand": {
+                  "kind": "natLe",
+                  "left": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "natural"
+                    },
+                    "value": "1"
+                  },
+                  "right": {
+                    "kind": "project",
+                    "path": []
+                  }
+                }
+              },
+              "kind": "ite",
+              "thenBranch": {
+                "kind": "report",
+                "message": {
+                  "kind": "value",
+                  "type": {
+                    "kind": "text"
+                  },
+                  "value": "Size must be at least 1."
+                },
+                "targets": {
+                  "kind": "locations",
+                  "locations": [
+                    []
+                  ]
+                }
+              },
+              "elseBranch": {
+                "kind": "pass"
+              }
+            },
+            "inner": {
+              "kind": "base"
+            },
+            "kind": "refine"
+          },
+          "width": {
+            "checker": {
+              "condition": {
+                "kind": "not",
+                "operand": {
+                  "kind": "natLe",
+                  "left": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "natural"
+                    },
+                    "value": "1"
+                  },
+                  "right": {
+                    "kind": "project",
+                    "path": []
+                  }
+                }
+              },
+              "kind": "ite",
+              "thenBranch": {
+                "kind": "report",
+                "message": {
+                  "kind": "value",
+                  "type": {
+                    "kind": "text"
+                  },
+                  "value": "Size must be at least 1."
+                },
+                "targets": {
+                  "kind": "locations",
+                  "locations": [
+                    []
+                  ]
+                }
+              },
+              "elseBranch": {
+                "kind": "pass"
+              }
+            },
+            "inner": {
+              "kind": "base"
+            },
+            "kind": "refine"
+          }
+        },
+        "kind": "record"
+      }
+    },
+    "kind": "sum"
+  },
   "value": {
     "tag": "circle",
     "value": "3"
   },
-  "version": 6
+  "version": 7
 }

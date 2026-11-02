@@ -1,3 +1,5 @@
+import Forms.Core.RefinedDataType.Theorems
+import Tests.Validation
 import Forms.Runtime.FormSnapshot
 import Forms.ExampleForms.Location
 import Forms.ExampleForms.Booking
@@ -12,25 +14,6 @@ open Forms Forms.Composition Forms.Runtime
 
 private def fieldRefs {state : DataType} (component : Component state) (value : ⟦state⟧) :=
   (FormSnapshot.render component value).fieldRefs
-
-/-- Compares two traversals from the same source whose targets may differ. -/
-private def Forms.AffineTraversal.beq {source a b}
-  (p1 : AffineTraversal source a)
-  (p2 : AffineTraversal source b)
-  : Bool :=
-  match p1, p2 with
-  | .self, .self => true
-  | .field fieldName rest, .field fieldName' rest' =>
-      if h : fieldName = fieldName' then AffineTraversal.beq rest (h ▸ rest') else false
-  | .item index rest, .item index' rest' => index == index' && AffineTraversal.beq rest rest'
-  | .constructor tag rest, .constructor tag' rest' =>
-      if h : tag = tag' then AffineTraversal.beq rest (h ▸ rest') else false
-  | .self, .field .. | .field .., .self => false
-  | .self, .item .. | .item .., .self => false
-  | .self, .constructor .. | .constructor .., .self => false
-
-private instance {root : DataType} : BEq (ValueLocation root) where
-  beq location location' := location.path.beq location'.path
 
 private def check (name : String) (passed : Bool) : IO Unit := do
   if passed then IO.println ("PASS " ++ name)
@@ -92,24 +75,25 @@ private def testRefinedTypes : IO Unit := do
   check "NestedRulesPreserveValidation" ((RefinedDataType.validate nested valid).map (fun value => JsonProtocol.valueToJson (RefinedDataType.erase nested value)) == some (JsonProtocol.valueToJson valid))
   let some constraint := (RefinedDataType.errors nested invalid)[0]?
     | throw (IO.userError "Expected away temperature error")
-  check "ErrorLocationIsLifted" (match constraint.targets with
-    | .fields locations _ => locations == [⟨.field .content (.field .away .self)⟩]
-    | .global => false)
-  let atLeastTen : Constraint .natural :=
-    { condition := .natLe (.value 10) (.project .self), errorMessage := "At least ten" }
-  let atMostTwenty : Constraint .natural :=
-    { condition := .natLe (.project .self) (.value 20), errorMessage := "At most twenty" }
-  let stacked := RefinedDataType.refine (.refine (.base .natural) atLeastTen) atMostTwenty
+  let lifted : Validation.Location (wrapper ExampleForms.Thermostat.thermostat) := .field .content (.field .away .self)
+  check "ErrorLocationIsLifted"
+    (constraint.targets.toJson == (Validation.TargetResolution.locations [lifted]).toJson)
+  let atLeastTen : Validation.Checker .natural :=
+    (.when (.not (.natLe (.value 10) (.project .self)))
+      (.report (.value "At least ten") (.global)))
+  let atMostTwenty : Validation.Checker .natural :=
+    (.when (.not (.natLe (.project .self) (.value 20)))
+      (.report (.value "At most twenty") (.global)))
+  let stacked := RefinedDataType.refine (.refine (.base .natural) (.ofChecker atLeastTen)) (.ofChecker atMostTwenty)
   check "StackedRefinementsAccumulate"
     ((RefinedDataType.validate stacked 9).isNone && (RefinedDataType.validate stacked 21).isNone && (RefinedDataType.validate stacked 15).isSome)
   let huge := 12345678901234567890123456789012345678901234567890
   check "UnboundedBaseStillWorks" ((RefinedDataType.validate (.base .natural) huge).isSome)
   let invalidInitial := Path.set ExampleForms.Person.age 17 ExampleForms.Person.draft
   check "InitialDraftIsValidated" ((RefinedDataType.errors ExampleForms.Person.personType invalidInitial).length == 1)
-  check "RootDecodeCannotBypassAgeRule"
-    (match JsonProtocol.decodeResult ExampleForms.Person.personType (JsonProtocol.valueToJson invalidInitial) with
-      | .error _ => true
-      | _ => false)
+  let decoded ← IO.ofExcept (JsonProtocol.valueFromJson ExampleForms.Person.person
+    (JsonProtocol.valueToJson invalidInitial))
+  check "DecodedAgeStillRequiresValidation" (RefinedDataType.validate ExampleForms.Person.personType decoded).isNone
 
 private def testHiddenValidation : IO Unit := do
   let hidden : Component ExampleForms.Thermostat.thermostat :=
@@ -222,11 +206,6 @@ private def testSums : IO Unit := do
   let repeated := RefinedDataType.list refined
   check "SumConstraintsComposeWithLists" ((RefinedDataType.errors repeated [dot, valid]).isEmpty &&
     (RefinedDataType.errors repeated [dot, invalid]).length == 1 && (RefinedDataType.validate repeated [dot, invalid]).isNone)
-  check "ListOfSumsLocatesItemTagAndField" (match (RefinedDataType.errors repeated [dot, invalid]).map (·.targets) with
-    | [LocatedTargets.fields locations _] => locations == [⟨.item 1 (.constructor ExampleForms.Shapes.Shape.rectangle (.field ExampleForms.Shapes.RectangleField.height .self))⟩]
-    | _ => false)
-  check "ErrorsVanishExactlyWhenValid" ([dot, valid, invalid].all fun draft =>
-    (RefinedDataType.errors refined draft).isEmpty == (RefinedDataType.validate refined draft).isSome)
   for malformed in ["{}", "[0,[]]", "{\"tag\":3,\"value\":[]}",
       "{\"tag\":-1,\"value\":[]}", "{\"tag\":\"0\",\"value\":[]}",
       "{\"tag\":\"dot\",\"value\":false}", "{\"tag\":\"circle\",\"value\":false}",
@@ -290,6 +269,7 @@ private def testDates : IO Unit := do
   check "DateComparisonReversed" (!Expr.eval (input := .date) (.dateLe (.value late) (.project .self)) early)
 
 def main : IO Unit := do
+  Forms.Tests.ValidationExperiment.run
   testDates
   testRefinedTypes
   testPathsAndChoices
@@ -308,10 +288,23 @@ example {tags : Enum} {constructors : tags → DataType}
 
 example : RefinedDataType.ValidatedValue ExampleForms.Invoice.invoiceType = List (RefinedDataType.ValidatedValue ExampleForms.Invoice.itemType) := rfl
 
--- These equalities check the actual carriers, including nested local proofs.
-example : RefinedDataType.ValidatedValue ExampleForms.Person.ageType = { n : Nat // (decide (18 ≤ n) && decide (n ≤ 120)) = true } := rfl
+-- Recursive refinements retain ordinary Lean properties.
+example : RefinedDataType.ValidatedValue ExampleForms.Person.ageType =
+    { n : Nat // 18 ≤ n ∧ n ≤ 120 } := rfl
+
+example : RefinedDataType.ValidatedValue ExampleForms.Invoice.positive =
+    { n : Nat // 0 < n } := rfl
+
 example : RefinedDataType.ValidatedValue ExampleForms.Thermostat.thermostatType =
-    { p : (i : ExampleForms.Thermostat.TemperatureField) → { n : Nat // (decide (5 ≤ n) && decide (n ≤ 30)) = true } //
-      decide ((p .away).val ≤ (p .home).val) = true } := rfl
+    { value : ExampleForms.Thermostat.TemperatureField → { n : Nat // 5 ≤ n ∧ n ≤ 30 } //
+      (value .away).val ≤ (value .home).val } := rfl
+
+example : ExampleForms.Thermostat.thermostatType.Complete := by
+  simp [RefinedDataType.Complete, ExampleForms.Thermostat.thermostatType, ExampleForms.Thermostat.temperatureType]
+
+example : RefinedDataType.validate ExampleForms.Thermostat.thermostatType ExampleForms.Thermostat.draft =
+    some ExampleForms.Thermostat.initial :=
+  RefinedDataType.validate_erase _ (by
+    simp [RefinedDataType.Complete, ExampleForms.Thermostat.thermostatType, ExampleForms.Thermostat.temperatureType]) _
 
 end Theorems

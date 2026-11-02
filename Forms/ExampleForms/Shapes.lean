@@ -47,9 +47,8 @@ abbrev shape : DataType := .sum shapeTags constructors
 def size : RefinedDataType .natural :=
   let minimum : Nat := 1
   .refine (.base .natural)
-    { condition := .natLe (.value minimum) (.project .self)
-      errorMessage := s!"Size must be at least {minimum}."
-      errorTargets := .fields [⟨.self⟩] }
+    (.require (fun n => minimum ≤ n) (.natLe (.value minimum) (.project .self))
+      (.value s!"Size must be at least {minimum}.") (.locations [.self]))
 
 def shapeType : RefinedDataType shape :=
   .sum fun

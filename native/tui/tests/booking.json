@@ -1,155 +1,31 @@
 {
-  "constraints": [
-    {
-      "condition": {
-        "kind": "and",
-        "left": {
-          "kind": "dateLe",
-          "left": {
-            "kind": "value",
-            "type": {
-              "kind": "date"
-            },
-            "value": "2028-01-01"
-          },
-          "right": {
-            "kind": "project",
-            "path": []
-          }
-        },
-        "right": {
-          "kind": "dateLe",
-          "left": {
-            "kind": "project",
-            "path": []
-          },
-          "right": {
-            "kind": "value",
-            "type": {
-              "kind": "date"
-            },
-            "value": "2028-12-31"
-          }
-        }
-      },
-      "errorMessage": "Date must be between 2028-01-01 and 2028-12-31.",
-      "errorTargets": {
-        "kind": "fields",
-        "locations": [
-          []
-        ]
-      },
-      "focus": [
-        {
-          "kind": "field",
-          "name": "startDate"
-        }
-      ]
-    },
-    {
-      "condition": {
-        "kind": "and",
-        "left": {
-          "kind": "dateLe",
-          "left": {
-            "kind": "value",
-            "type": {
-              "kind": "date"
-            },
-            "value": "2028-01-01"
-          },
-          "right": {
-            "kind": "project",
-            "path": []
-          }
-        },
-        "right": {
-          "kind": "dateLe",
-          "left": {
-            "kind": "project",
-            "path": []
-          },
-          "right": {
-            "kind": "value",
-            "type": {
-              "kind": "date"
-            },
-            "value": "2028-12-31"
-          }
-        }
-      },
-      "errorMessage": "Date must be between 2028-01-01 and 2028-12-31.",
-      "errorTargets": {
-        "kind": "fields",
-        "locations": [
-          []
-        ]
-      },
-      "focus": [
-        {
-          "kind": "field",
-          "name": "endDate"
-        }
-      ]
-    },
-    {
-      "condition": {
-        "kind": "dateLe",
-        "left": {
-          "kind": "project",
-          "path": [
-            "startDate"
-          ]
-        },
-        "right": {
-          "kind": "project",
-          "path": [
-            "endDate"
-          ]
-        }
-      },
-      "errorMessage": "End date must be on or after start date.",
-      "errorTargets": {
-        "kind": "fields",
-        "locations": [
-          [
-            "startDate"
-          ],
-          [
-            "endDate"
-          ]
-        ]
-      },
-      "focus": []
-    }
-  ],
   "form": {
-    "kind": "stack",
-    "label": "Booking",
     "children": [
       {
         "kind": "field",
         "label": "Start date (YYYY-MM-DD)",
-        "widget": "dateInput",
         "path": [
           "startDate"
         ],
         "schema": {
           "kind": "date"
-        }
+        },
+        "widget": "dateInput"
       },
       {
         "kind": "field",
         "label": "End date (YYYY-MM-DD)",
-        "widget": "dateInput",
         "path": [
           "endDate"
         ],
         "schema": {
           "kind": "date"
-        }
+        },
+        "widget": "dateInput"
       }
-    ]
+    ],
+    "kind": "stack",
+    "label": "Booking"
   },
   "schema": {
     "fields": [
@@ -168,9 +44,192 @@
     ],
     "kind": "record"
   },
+  "validation": {
+    "checker": {
+      "condition": {
+        "kind": "not",
+        "operand": {
+          "kind": "dateLe",
+          "left": {
+            "kind": "project",
+            "path": [
+              "startDate"
+            ]
+          },
+          "right": {
+            "kind": "project",
+            "path": [
+              "endDate"
+            ]
+          }
+        }
+      },
+      "kind": "ite",
+      "thenBranch": {
+        "kind": "report",
+        "message": {
+          "kind": "value",
+          "type": {
+            "kind": "text"
+          },
+          "value": "End date must be on or after start date."
+        },
+        "targets": {
+          "kind": "locations",
+          "locations": [
+            [
+              {
+                "kind": "field",
+                "name": "startDate"
+              }
+            ],
+            [
+              {
+                "kind": "field",
+                "name": "endDate"
+              }
+            ]
+          ]
+        }
+      },
+      "elseBranch": {
+        "kind": "pass"
+      }
+    },
+    "inner": {
+      "fields": {
+        "endDate": {
+          "checker": {
+            "condition": {
+              "kind": "not",
+              "operand": {
+                "kind": "and",
+                "left": {
+                  "kind": "dateLe",
+                  "left": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "date"
+                    },
+                    "value": "2028-01-01"
+                  },
+                  "right": {
+                    "kind": "project",
+                    "path": []
+                  }
+                },
+                "right": {
+                  "kind": "dateLe",
+                  "left": {
+                    "kind": "project",
+                    "path": []
+                  },
+                  "right": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "date"
+                    },
+                    "value": "2028-12-31"
+                  }
+                }
+              }
+            },
+            "kind": "ite",
+            "thenBranch": {
+              "kind": "report",
+              "message": {
+                "kind": "value",
+                "type": {
+                  "kind": "text"
+                },
+                "value": "Date must be between 2028-01-01 and 2028-12-31."
+              },
+              "targets": {
+                "kind": "locations",
+                "locations": [
+                  []
+                ]
+              }
+            },
+            "elseBranch": {
+              "kind": "pass"
+            }
+          },
+          "inner": {
+            "kind": "base"
+          },
+          "kind": "refine"
+        },
+        "startDate": {
+          "checker": {
+            "condition": {
+              "kind": "not",
+              "operand": {
+                "kind": "and",
+                "left": {
+                  "kind": "dateLe",
+                  "left": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "date"
+                    },
+                    "value": "2028-01-01"
+                  },
+                  "right": {
+                    "kind": "project",
+                    "path": []
+                  }
+                },
+                "right": {
+                  "kind": "dateLe",
+                  "left": {
+                    "kind": "project",
+                    "path": []
+                  },
+                  "right": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "date"
+                    },
+                    "value": "2028-12-31"
+                  }
+                }
+              }
+            },
+            "kind": "ite",
+            "thenBranch": {
+              "kind": "report",
+              "message": {
+                "kind": "value",
+                "type": {
+                  "kind": "text"
+                },
+                "value": "Date must be between 2028-01-01 and 2028-12-31."
+              },
+              "targets": {
+                "kind": "locations",
+                "locations": [
+                  []
+                ]
+              }
+            },
+            "elseBranch": {
+              "kind": "pass"
+            }
+          },
+          "inner": {
+            "kind": "base"
+          },
+          "kind": "refine"
+        }
+      },
+      "kind": "record"
+    },
+    "kind": "refine"
+  },
   "value": {
     "endDate": "2028-03-01",
     "startDate": "2028-02-28"
   },
-  "version": 6
+  "version": 7
 }

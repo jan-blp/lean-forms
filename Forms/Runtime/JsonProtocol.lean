@@ -105,6 +105,9 @@ def Path.toList {source target : DataType} (path : Path source target) : List St
 def Expr.toJson {input t} (expression : Expr input t) : Json :=
   match expression with
   | .value v => Json.mkObj [("kind", Lean.toJson "value"), ("type", DataType.toJson t), ("value", Runtime.JsonProtocol.valueToJson v)]
+  | .not operand => Json.mkObj [("kind", Lean.toJson "not"), ("operand", operand.toJson)]
+  | .textEq left right => Json.mkObj [("kind", Lean.toJson "textEq"), ("left", left.toJson), ("right", right.toJson)]
+  | .textAppend left right => Json.mkObj [("kind", Lean.toJson "textAppend"), ("left", left.toJson), ("right", right.toJson)]
   | .project p => Json.mkObj [("kind", Lean.toJson "project"), ("path", Lean.toJson (Path.toList p))]
   | .all items predicate context => Json.mkObj [("kind", Lean.toJson "all"),
       ("items", Expr.toJson items), ("predicate", Expr.toJson predicate),
@@ -147,52 +150,95 @@ def Component.toJson {state : DataType} (component : Component state) : Json :=
       ("kind", Lean.toJson "stack"), ("label", Lean.toJson label),
       ("children", Lean.toJson ((FinEnum.toList items).map fun index => Component.toJson (children index)))]
 
-def ErrorTargets.toJson {ty : DataType} (targets : ErrorTargets ty) : Json :=
-  match targets with
-  | .global => Json.mkObj [("kind", Lean.toJson "global")]
-  | .fields locations _ => Json.mkObj [
-      ("kind", Lean.toJson "fields"),
-      ("locations", Lean.toJson (locations.map fun location => Path.toList location.path))]
+end Forms
 
-def Constraint.toJson (constraint : Constraint root) : Json :=
-  Json.mkObj [("condition", Expr.toJson constraint.condition), ("errorMessage", Lean.toJson constraint.errorMessage),
-    ("errorTargets", constraint.errorTargets.toJson)]
+namespace Forms.Validation
 
-def Traversal.toList {source target : DataType} (traversal : Traversal source target) : List Json :=
-  match traversal with
+open Lean
+
+def Location.toList {root : DataType} : Location root → List Json
   | .self => []
-  | .field (fieldNames := fieldNames) fieldName rest =>
-    Json.mkObj [("kind", Lean.toJson "field"), ("name", Lean.toJson (fieldNames.label fieldName))] :: Traversal.toList rest
-  | .each rest => Json.mkObj [("kind", Lean.toJson "each")] :: Traversal.toList rest
+  | .field (fieldNames := names) name rest =>
+      Json.mkObj [("kind", Lean.toJson "field"), ("name", Lean.toJson (names.label name))] :: rest.toList
+  | .item index rest =>
+      Json.mkObj [("kind", Lean.toJson "item"), ("index", Lean.toJson (toString index))] :: rest.toList
   | .constructor (tags := tags) tag rest =>
-    Json.mkObj [("kind", Lean.toJson "constructor"), ("tag", Lean.toJson (tags.label tag))] :: Traversal.toList rest
+      Json.mkObj [("kind", Lean.toJson "constructor"), ("tag", Lean.toJson (tags.label tag))] :: rest.toList
 
-def FocusedConstraint.toJson (rule : FocusedConstraint root) : Json :=
-  Json.mkObj [("focus", Lean.toJson rule.focus.toList), ("condition", Expr.toJson rule.constraint.condition),
-    ("errorMessage", Lean.toJson rule.constraint.errorMessage), ("errorTargets", rule.constraint.errorTargets.toJson)]
+def Location.toJson {root : DataType} (location : Location root) : Json :=
+  Lean.toJson location.toList
 
-def AffineTraversal.toList {root ty : DataType} (path : AffineTraversal root ty) : List Json :=
-  match path with
-  | .self => []
-  | .field (fieldNames := fieldNames) fieldName rest =>
-      Lean.toJson (fieldNames.label fieldName) :: AffineTraversal.toList rest
-  | .item index rest => Lean.toJson index :: AffineTraversal.toList rest
-  | .constructor (tags := tags) tag rest => Lean.toJson (tags.label tag) :: AffineTraversal.toList rest
-
-def LocatedTargets.toJson {root : DataType} : LocatedTargets root → Json
+def TargetResolution.toJson {root : DataType} : TargetResolution root → Json
   | .global => Json.mkObj [("kind", Lean.toJson "global")]
-  | .fields locations _ => Json.mkObj [
-      ("kind", Lean.toJson "fields"),
-      ("locations", Lean.toJson (locations.map fun location => location.path.toList))]
+  | .locations locs _ => Json.mkObj [
+      ("kind", Lean.toJson "locations"), ("locations", Lean.toJson (locs.map Location.toJson))]
+  | .invalidTarget location => Json.mkObj [
+      ("kind", Lean.toJson "invalidTarget"), ("location", Location.toJson location)]
 
-def ValidationError.toJson {root : DataType} (error : ValidationError root) : Json :=
+def ResolvedError.toJson {root : DataType} (error : ResolvedError root) : Json :=
   Json.mkObj [("message", Lean.toJson error.message), ("targets", error.targets.toJson)]
+
+def LocationExpr.toJson {input root : DataType} : LocationExpr input root → List Json
+  | .self => []
+  | .field (fieldNames := names) name rest =>
+      Json.mkObj [("kind", Lean.toJson "field"), ("name", Lean.toJson (names.label name))] :: rest.toJson
+  | .item index rest => Json.mkObj [("kind", Lean.toJson "item"), ("index", index.toJson)] :: rest.toJson
+  | .constructor (tags := tags) tag rest =>
+      Json.mkObj [("kind", Lean.toJson "constructor"), ("tag", Lean.toJson (tags.label tag))] :: rest.toJson
+
+def TargetsExpr.toJson {root input : DataType} : TargetsExpr root input → Json
+  | .global => Json.mkObj [("kind", Lean.toJson "global")]
+  | .locations locs _ => Json.mkObj [
+      ("kind", Lean.toJson "locations"),
+      ("locations", Lean.toJson (locs.map LocationExpr.toJson))]
+
+def ScopedChecker.toJson {root input : DataType} : ScopedChecker root input → Json
+  | .pass => Json.mkObj [("kind", Lean.toJson "pass")]
+  | .report message targets => Json.mkObj [
+      ("kind", Lean.toJson "report"), ("message", message.toJson), ("targets", targets.toJson)]
+  | .ite condition thenBranch elseBranch => Json.mkObj [
+      ("kind", Lean.toJson "ite"), ("condition", condition.toJson),
+      ("thenBranch", thenBranch.toJson), ("elseBranch", elseBranch.toJson)]
+  | .cases (tags := tags) subject branches => Json.mkObj [
+      ("kind", Lean.toJson "cases"), ("subject", subject.toJson),
+      ("branches", Json.mkObj ((FinEnum.toList tags).map fun tag =>
+        (tags.label tag, (branches tag).toJson)))]
+  | .seq left right => Json.mkObj [
+      ("kind", Lean.toJson "seq"), ("left", left.toJson), ("right", right.toJson)]
+  | .each items body => Json.mkObj [
+      ("kind", Lean.toJson "each"), ("items", items.toJson), ("body", body.toJson)]
+
+end Forms.Validation
+
+namespace Forms
+
+def RefinedDataType.toJson {ty : DataType}
+  (refined : RefinedDataType ty)
+  : Lean.Json :=
+  match refined with
+  | .base _ => Lean.Json.mkObj [("kind", Lean.toJson "base")]
+  | .serverRefine inner _ => inner.toJson
+  | .refine inner checked => Lean.Json.mkObj [
+      ("kind", Lean.toJson "refine"), ("inner", inner.toJson), ("checker", checked.checker.toJson)]
+  | .list item => Lean.Json.mkObj [("kind", Lean.toJson "list"), ("item", item.toJson)]
+  | .record (fieldNames := names) fields => Lean.Json.mkObj [
+      ("kind", Lean.toJson "record"),
+      ("fields", Lean.Json.mkObj ((FinEnum.toList names).map fun name => (names.label name, (fields name).toJson)))]
+  | .sum (tags := tags) branches => Lean.Json.mkObj [
+      ("kind", Lean.toJson "sum"),
+      ("branches", Lean.Json.mkObj ((FinEnum.toList tags).map fun tag => (tags.label tag, (branches tag).toJson)))]
+
+end Forms
+
+namespace Forms
+open Lean Composition
+variable {root context : DataType}
 
 namespace Runtime.JsonProtocol
 
 def encode (refined : RefinedDataType context) (form : Component context) (draft : ⟦context⟧) : String :=
-  (Json.mkObj [("version", Lean.toJson (6 : Nat)), ("schema", DataType.toJson context),
-    ("constraints", Lean.toJson ((RefinedDataType.constraints refined).map FocusedConstraint.toJson)),
+  (Json.mkObj [("version", Lean.toJson (7 : Nat)), ("schema", DataType.toJson context),
+    ("validation", refined.toJson),
     ("form", Component.toJson form), ("value", valueToJson draft)]).compress
 
 def decodeResult (refined : RefinedDataType root) (json : Json) : Except String (Option (RefinedDataType.ValidatedValue refined)) := do

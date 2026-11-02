@@ -1,110 +1,57 @@
 {
-  "constraints": [
-    {
-      "condition": {
-        "kind": "and",
-        "left": {
-          "kind": "natLe",
-          "left": {
-            "kind": "value",
-            "type": {
-              "kind": "natural"
-            },
-            "value": "18"
-          },
-          "right": {
-            "kind": "project",
-            "path": []
-          }
-        },
-        "right": {
-          "kind": "natLe",
-          "left": {
-            "kind": "project",
-            "path": []
-          },
-          "right": {
-            "kind": "value",
-            "type": {
-              "kind": "natural"
-            },
-            "value": "120"
-          }
-        }
-      },
-      "errorMessage": "Attendees must be between 18 and 120 years old.",
-      "errorTargets": {
-        "kind": "fields",
-        "locations": [
-          []
-        ]
-      },
-      "focus": [
-        {
-          "kind": "field",
-          "name": "age"
-        }
-      ]
-    }
-  ],
   "form": {
-    "kind": "stack",
-    "label": "Registration",
     "children": [
       {
         "kind": "field",
         "label": "Name",
-        "widget": "textInput",
         "path": [
           "name"
         ],
         "schema": {
           "kind": "text"
-        }
+        },
+        "widget": "textInput"
       },
       {
         "kind": "field",
         "label": "Age (18-120)",
-        "widget": "naturalInput",
         "path": [
           "age"
         ],
         "schema": {
           "kind": "natural"
-        }
+        },
+        "widget": "naturalInput"
       },
       {
         "kind": "field",
         "label": "Send me postal mail",
-        "widget": "checkbox",
         "path": [
           "subscribed"
         ],
         "schema": {
           "kind": "boolean"
-        }
+        },
+        "widget": "checkbox"
       },
       {
         "body": {
-          "kind": "stack",
-          "label": "Address",
           "children": [
             {
               "kind": "field",
               "label": "Street",
-              "widget": "textInput",
               "path": [
                 "address",
                 "street"
               ],
               "schema": {
                 "kind": "text"
-              }
+              },
+              "widget": "textInput"
             },
             {
               "kind": "field",
               "label": "Kind",
-              "widget": "select",
               "path": [
                 "address",
                 "kind"
@@ -116,9 +63,12 @@
                   "Work",
                   "Other"
                 ]
-              }
+              },
+              "widget": "select"
             }
-          ]
+          ],
+          "kind": "stack",
+          "label": "Address"
         },
         "condition": {
           "kind": "project",
@@ -128,7 +78,9 @@
         },
         "kind": "visibleWhen"
       }
-    ]
+    ],
+    "kind": "stack",
+    "label": "Registration"
   },
   "schema": {
     "fields": [
@@ -178,6 +130,82 @@
     ],
     "kind": "record"
   },
+  "validation": {
+    "fields": {
+      "address": {
+        "kind": "base"
+      },
+      "age": {
+        "checker": {
+          "condition": {
+            "kind": "not",
+            "operand": {
+              "kind": "and",
+              "left": {
+                "kind": "natLe",
+                "left": {
+                  "kind": "value",
+                  "type": {
+                    "kind": "natural"
+                  },
+                  "value": "18"
+                },
+                "right": {
+                  "kind": "project",
+                  "path": []
+                }
+              },
+              "right": {
+                "kind": "natLe",
+                "left": {
+                  "kind": "project",
+                  "path": []
+                },
+                "right": {
+                  "kind": "value",
+                  "type": {
+                    "kind": "natural"
+                  },
+                  "value": "120"
+                }
+              }
+            }
+          },
+          "kind": "ite",
+          "thenBranch": {
+            "kind": "report",
+            "message": {
+              "kind": "value",
+              "type": {
+                "kind": "text"
+              },
+              "value": "Attendees must be between 18 and 120 years old."
+            },
+            "targets": {
+              "kind": "locations",
+              "locations": [
+                []
+              ]
+            }
+          },
+          "elseBranch": {
+            "kind": "pass"
+          }
+        },
+        "inner": {
+          "kind": "base"
+        },
+        "kind": "refine"
+      },
+      "name": {
+        "kind": "base"
+      },
+      "subscribed": {
+        "kind": "base"
+      }
+    },
+    "kind": "record"
+  },
   "value": {
     "address": {
       "kind": 0,
@@ -187,5 +215,5 @@
     "name": "Ada",
     "subscribed": false
   },
-  "version": 6
+  "version": 7
 }

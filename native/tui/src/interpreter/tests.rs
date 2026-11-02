@@ -54,62 +54,6 @@ fn repeated_items_add_remove_edit_and_validate() {
     assert!(!e.step(Key::Character('q')));
 }
 
-fn invalid_paths(e: &Engine) -> Vec<Vec<Step>> {
-    e.fields()
-        .into_iter()
-        .filter(|field| field.presentation.invalid)
-        .map(|field| field.path)
-        .collect()
-}
-
-#[test]
-fn list_errors_flag_only_the_failing_item_field() {
-    let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
-    spec["value"] = json!([{"description":"A", "quantity":"1", "unitPrice":"5"},
-        {"description":"B", "quantity":"0", "unitPrice":"5"}]);
-    let e = Engine::parse(&spec.to_string()).unwrap();
-    assert_eq!(
-        invalid_paths(&e),
-        vec![vec![Step::Item(1), Step::Field("quantity".into())]]
-    );
-    assert_eq!(
-        e.errors(),
-        vec!["Quantity: Quantity and unit price must be at least 1."]
-    );
-    spec["value"][0]["unitPrice"] = json!("0");
-    let e = Engine::parse(&spec.to_string()).unwrap();
-    assert_eq!(
-        invalid_paths(&e),
-        vec![
-            vec![Step::Item(0), Step::Field("unitPrice".into())],
-            vec![Step::Item(1), Step::Field("quantity".into())],
-        ]
-    );
-    assert_eq!(e.errors().len(), 2);
-}
-
-#[test]
-fn sum_errors_flag_the_failing_payload_field() {
-    let mut spec = shapes_spec();
-    spec["value"] = json!({"tag":"rectangle","value":{"width":"0","height":"2"}});
-    let e = Engine::parse(&spec.to_string()).unwrap();
-    assert_eq!(
-        invalid_paths(&e),
-        vec![vec![
-            Step::Payload("rectangle".into()),
-            Step::Field("width".into())
-        ]]
-    );
-    assert_eq!(e.errors(), vec!["Width: Size must be at least 1."]);
-    spec["value"] = json!({"tag":"circle","value":"0"});
-    let e = Engine::parse(&spec.to_string()).unwrap();
-    assert_eq!(
-        invalid_paths(&e),
-        vec![vec![Step::Payload("circle".into())]]
-    );
-    assert_eq!(e.errors(), vec!["Radius: Size must be at least 1."]);
-}
-
 #[test]
 fn nested_lists_and_item_visibility_use_local_scope() {
     let mut spec: Value = serde_json::from_str(include_str!("../../tests/invoice.json")).unwrap();
@@ -123,7 +67,7 @@ fn nested_lists_and_item_visibility_use_local_scope() {
     spec["schema"] = json!({"kind":"list", "element":inner_schema});
     spec["form"] = json!({"kind":"list","path":[],"schema":spec["schema"],"label":"Invoices", "item":inner_form, "defaultItem":[]});
     spec["value"] = json!([inner_value]);
-    spec["constraints"] = json!([]);
+    spec["validation"] = json!({"kind":"base"});
     let mut e = Engine::parse(&spec.to_string()).unwrap();
     assert_eq!(e.fields().len(), 7);
     e.selected = 1;
@@ -240,26 +184,14 @@ fn schema_constraints_and_error_locations_are_type_checked() {
         ("/version", json!(2)),
         ("/version", json!(3)),
         (
-            "/constraints/0/condition",
+            "/validation/inner/fields/home/checker/condition",
             json!({"kind":"project", "path":["home"]}),
         ),
-        ("/constraints/2/condition/left/path", json!(["missing"])),
-        ("/constraints/2/errorTargets/locations", json!([])),
-        ("/constraints/2/errorTargets/locations/0", json!(["home", "home"])),
-        ("/constraints/2/errorTargets", json!({"kind":"global", "locations":[]})),
-        ("/constraints/2/errorTargets", json!({"kind":"global", "unknown":true})),
-        ("/constraints/0/focus/0/name", json!("missing")),
-        (
-            "/constraints/0/focus/0",
-            json!({"kind":"field", "name":"home", "extra":true}),
-        ),
-        ("/constraints/0/focus/0", json!({"kind":"each"})),
-        (
-            "/constraints/2/focus",
-            json!([{"kind":"each", "unknown":true}]),
-        ),
-        ("/constraints/2/focus", json!([{"kind":"wildcard"}])),
-        ("/constraints/2/focus", json!(["home"])),
+        ("/validation/checker/condition/operand/left/path", json!(["missing"])),
+        ("/validation/checker/thenBranch/targets/locations", json!([])),
+        ("/validation/checker/thenBranch/targets/locations/0", json!([{"kind":"item","index":{"kind":"value","type":{"kind":"text"},"value":"0"}}])),
+        ("/validation/checker/thenBranch/targets", json!({"kind":"global", "locations":[]})),
+        ("/validation/checker/thenBranch/targets", json!({"kind":"global", "unknown":true})),
         ("/value/home", json!(-1)),
         ("/form/children/0/widget", json!("checkbox")),
     ] {
@@ -268,14 +200,8 @@ fn schema_constraints_and_error_locations_are_type_checked() {
         assert!(Engine::parse(&spec.to_string()).is_err(), "{path}");
     }
     assert!(Engine::parse("{}").is_err());
-    let mut spec = source.clone();
-    spec["constraints"][0]["unknown"] = json!(true);
-    assert!(Engine::parse(&spec.to_string()).is_err());
     let mut spec = source;
-    spec["constraints"][0]
-        .as_object_mut()
-        .unwrap()
-        .remove("focus");
+    spec["validation"]["checker"]["unknown"] = json!(true);
     assert!(Engine::parse(&spec.to_string()).is_err());
 }
 #[test]
@@ -315,7 +241,7 @@ fn arbitrary_precision_constraints_and_all_predicates() {
     let mut spec: Value =
         serde_json::from_str(include_str!("../../tests/thermostat.json")).unwrap();
     // Keep only the cross-field constraint to exercise unrestricted naturals.
-    spec["constraints"] = json!([spec["constraints"][2].clone()]);
+    spec["validation"]["inner"] = json!({"kind":"base"});
     let mut e = Engine::parse(&spec.to_string()).unwrap();
     let huge = "12345678901234567890123456789012345678901234567890";
     edit(&mut e, huge);
@@ -421,23 +347,16 @@ fn malformed_sums_and_inactive_branch_forms_are_rejected() {
             json!("checkbox"),
         ),
         ("/form/branches", json!([])),
-        ("/constraints/0/focus/0/tag", json!("square")),
-        ("/constraints/0/focus/0", json!({"kind":"each"})),
+        ("/validation/branches", json!([])),
         (
-            "/constraints/0/focus/0",
-            json!({"kind":"constructor","tag":"circle","extra":true}),
+            "/validation/branches/circle/checker/condition",
+            json!({"kind":"project","path":[0]}),
         ),
         (
-            "/constraints/1/focus",
-            json!([{"kind":"constructor","tag":"rectangle"}]),
+            "/validation/branches/circle/checker/condition/operand/left",
+            json!({"kind":"value","type":{"kind":"boolean"},"value":true}),
         ),
-        (
-            "/constraints/1/focus/1",
-            json!({"kind":"field","name":"depth"}),
-        ),
-        ("/constraints/0/condition/right/path", json!([0])),
-        ("/constraints/0/errorTargets/locations/0", json!([0])),
-        ("/constraints/1/errorTargets/locations/0", json!(["width"])),
+        ("/validation/branches/circle/checker/thenBranch/targets/locations/0", json!([0])),
     ] {
         let mut spec = source.clone();
         *spec.pointer_mut(path).unwrap() = invalid;
@@ -452,7 +371,7 @@ fn sums_in_lists_preserve_the_correct_cache_after_removal() {
     spec["schema"] = json!({"kind":"list","element":source["schema"]});
     spec["form"] = json!({"kind":"list","path":[],"schema":spec["schema"],"label":"Shapes","item":source["form"],"defaultItem":source["value"]});
     spec["value"] = json!([source["value"], source["value"]]);
-    spec["constraints"] = json!([]);
+    spec["validation"] = json!({"kind":"base"});
     let mut e = Engine::parse(&spec.to_string()).unwrap();
     for (selector, width) in [(0, "6"), (2, "9")] {
         e.selected = selector;
@@ -482,7 +401,7 @@ fn nested_sums_and_visibility_use_constructor_local_scope() {
     spec["form"] = json!({"kind":"sum","path":[],"schema":spec["schema"],"label":"Shape",
         "branches":{"a":source["form"],"b":source["form"]}, "defaults":{"a":source["value"],"b":source["value"]}});
     spec["value"] = json!({"tag":"a","value":source["value"]});
-    spec["constraints"] = json!([]);
+    spec["validation"] = json!({"kind":"base"});
     // Visibility sees the selected inner payload, not the outer sum.
     for index in ["a", "b"] {
         let branch = spec["form"]["branches"][index]["branches"]["rectangle"].clone();
@@ -645,7 +564,7 @@ fn duplicate_schema_names_are_rejected_even_in_inactive_payloads() {
 
 #[test]
 fn record_fields_named_tag_and_value_are_not_sum_payloads() {
-    let spec = json!({"version":6,"constraints":[],
+    let spec = json!({"version":7,"validation":{"kind":"base"},
         "schema":{"kind":"record","fields":[{"name":"tag","type":{"kind":"text"}},
             {"name":"value","type":{"kind":"natural"}}]},
         "form":{"kind":"stack","label":"Record","children":[
@@ -675,7 +594,7 @@ fn date_calendar_rules_and_picker_modes() {
     for value in cases["invalid"].as_array().unwrap() {
         assert!(date(value.as_str().unwrap()).is_none());
     }
-    let spec = serde_json::json!({"version":6,"constraints":[],  "schema":{"kind":"date"}, "form":{"kind":"field","path":[],"schema":{"kind":"date"},"label":"Date","widget":"dateInput"}, "value":"2028-02-28"});
+    let spec = serde_json::json!({"version":7,"validation":{"kind":"base"},  "schema":{"kind":"date"}, "form":{"kind":"field","path":[],"schema":{"kind":"date"},"label":"Date","widget":"dateInput"}, "value":"2028-02-28"});
     let mut e = Engine::parse(&spec.to_string()).unwrap();
     e.step(Key::Enter);
     e.step(Key::Character('l'));
@@ -715,14 +634,104 @@ fn country_selects_city_type_and_preserves_each_selection() {
 }
 
 #[test]
-fn validation_can_target_multiple_fields_or_be_global() {
-    let mut spec: Value = serde_json::from_str(include_str!("../../tests/booking.json")).unwrap();
-    spec["value"]["endDate"] = json!("2028-01-01");
-    let engine = Engine::parse(&spec.to_string()).unwrap();
-    assert_eq!(engine.errors(), vec!["Start date (YYYY-MM-DD), End date (YYYY-MM-DD): End date must be on or after start date."]);
-    spec["constraints"][2]["errorTargets"] = json!({"kind":"global"});
-    let engine = Engine::parse(&spec.to_string()).unwrap();
-    assert_eq!(engine.errors(), vec!["End date must be on or after start date."]);
+fn text_equality_is_typed_and_exact() {
+    let expression: Expr = serde_json::from_value(json!({
+        "kind": "textEq",
+        "left": {"kind": "project", "path": []},
+        "right": {"kind": "value", "type": {"kind": "text"}, "value": "ä"}
+    }))
+    .unwrap();
+    assert_eq!(expression.ty(&Ty::Text).unwrap(), Ty::Boolean);
+    assert_eq!(expression.eval(&json!("ä")), true);
+    assert_eq!(expression.eval(&json!("a")), false);
+    assert!(expression.ty(&Ty::Natural).is_err());
+}
+
+#[test]
+fn validation_rules_iterate_with_context_and_accumulate_errors() {
+    let checker: Checker = serde_json::from_value(json!({
+        "kind":"seq", "left":{"kind":"pass"}, "right":{
+            "kind":"each", "items":{"kind":"project","path":[]}, "body":{
+                "kind":"when", "condition":{"kind":"natLe",
+                    "left":{"kind":"project","path":["item"]},
+                    "right":{"kind":"value","type":{"kind":"natural"},"value":"0"}},
+                "body":{"kind":"report",
+                    "message":{"kind":"value","type":{"kind":"text"},"value":"Invalid item"},
+                    "targets":{"kind":"fields","locations":[[
+                        {"kind":"item","index":{"kind":"project","path":["index"]}}
+                    ]]}}
+            }
+        }
+    })).unwrap();
+    let schema = Ty::List { element: Box::new(Ty::Natural) };
+    checker.validate(&schema, &schema).unwrap();
+    let value = json!(["0", "2", "0"]);
+    let errors = checker.eval(&value, &schema, &value);
+    assert_eq!(errors.iter().map(|error| error.message.as_str()).collect::<Vec<_>>(), ["Invalid item", "Invalid item"]);
+    assert_eq!(errors[0].locations, vec![vec![Step::Item(0)]]);
+    assert_eq!(errors[1].locations, vec![vec![Step::Item(2)]]);
+    assert!(checker.validate(&Ty::Natural, &Ty::Natural).is_err());
+    let texts = Ty::List { element: Box::new(Ty::Text) };
+    assert!(checker.validate(&texts, &texts).is_err());
+}
+
+#[test]
+fn invalid_rule_targets_are_reported_without_marking_other_fields() {
+    let schema = Ty::List { element: Box::new(Ty::Natural) };
+    for index in ["1", "123456789012345678901234567890"] {
+        let checker: Checker = serde_json::from_value(json!({
+            "kind":"report", "message":{"kind":"value","type":{"kind":"text"},"value":"Bad target"},
+            "targets":{"kind":"fields","locations":[
+                [{"kind":"item","index":{"kind":"value","type":{"kind":"natural"},"value":"0"}}],
+                [{"kind":"item","index":{"kind":"value","type":{"kind":"natural"},"value":index}}]
+            ]}
+        })).unwrap();
+        checker.validate(&schema, &schema).unwrap();
+        let value = json!(["1"]);
+        let errors = checker.eval(&value, &schema, &value);
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].message, "Invalid validation target: Bad target");
+        assert!(errors[0].locations.is_empty());
+    }
+}
+
+#[test]
+fn rule_targets_require_the_active_constructor_and_the_right_step_kind() {
+    let schema = Ty::Sum { constructors: vec![
+        NamedType { name: "value".into(), ty: Ty::Natural },
+        NamedType { name: "other".into(), ty: Ty::Natural },
+    ] };
+    let value = json!({"tag":"value","value":"0"});
+    assert!(location_exists(&[Step::Payload("value".into())], &schema, &value));
+    assert!(!location_exists(&[Step::Field("value".into())], &schema, &value));
+    assert!(!location_exists(&[Step::Payload("other".into())], &schema, &value));
+}
+
+#[test]
+fn rule_targets_are_checked_against_the_root_schema() {
+    let schema = Ty::List { element: Box::new(Ty::Sum { constructors: vec![
+        NamedType { name: "box".into(), ty: Ty::Record { fields: vec![
+            NamedType { name: "size".into(), ty: Ty::Natural },
+        ] } },
+    ] }) };
+    let report = |location: serde_json::Value| -> Checker {
+        serde_json::from_value(json!({
+            "kind":"report", "message":{"kind":"value","type":{"kind":"text"},"value":"Bad"},
+            "targets":{"kind":"fields","locations":[location]}
+        })).unwrap()
+    };
+    let index = json!({"kind":"item","index":{"kind":"value","type":{"kind":"natural"},"value":"0"}});
+    let valid = report(json!([index, {"kind":"constructor","tag":"box"}, {"kind":"field","name":"size"}]));
+    assert!(valid.validate(&schema, &schema).is_ok());
+    for location in [
+        json!([index, {"kind":"constructor","tag":"missing"}]),
+        json!([index, {"kind":"constructor","tag":"box"}, {"kind":"field","name":"missing"}]),
+        json!([index, {"kind":"field","name":"box"}]),
+        json!([{"kind":"field","name":"size"}]),
+        json!([index, {"kind":"constructor","tag":"box"}, {"kind":"field","name":"size"}, index]),
+    ] {
+        assert!(report(location).validate(&schema, &schema).is_err());
+    }
 }
 
 #[test]
@@ -744,4 +753,28 @@ fn all_predicates_receive_the_outer_value_and_index() {
     assert_eq!(expression.eval(&json!({"limit":"4","items":["2","5"]})), false);
     assert_eq!(expression.eval(&json!({"limit":"5","items":["2","0"]})), false);
     assert_eq!(expression.eval(&json!({"limit":"0","items":[]})), true);
+}
+
+#[test]
+fn checker_cases_select_the_active_payload() {
+    let source = shapes_spec();
+    let schema: Ty = serde_json::from_value(source["schema"].clone()).unwrap();
+    let checker: Checker = serde_json::from_value(json!({
+        "kind":"cases", "subject":{"kind":"project","path":[]}, "branches":{
+            "dot":{"kind":"pass"}, "rectangle":{"kind":"pass"},
+            "circle":{"kind":"ite", "condition":{"kind":"natLe",
+                "left":{"kind":"project","path":["payload"]},
+                "right":{"kind":"value","type":{"kind":"natural"},"value":"1"}},
+                "thenBranch":{"kind":"report", "message":{"kind":"value","type":{"kind":"text"},"value":"Small circle"},
+                    "targets":{"kind":"locations","locations":[[{"kind":"constructor","tag":"circle"}]]}},
+                "elseBranch":{"kind":"pass"}}
+        }
+    })).unwrap();
+    checker.validate(&schema, &schema).unwrap();
+    let small = json!({"tag":"circle","value":"0"});
+    assert_eq!(checker.eval(&small, &schema, &small)[0].message, "Small circle");
+    let large = json!({"tag":"circle","value":"2"});
+    assert!(checker.eval(&large, &schema, &large).is_empty());
+    let dot = json!({"tag":"dot","value":{}});
+    assert!(checker.eval(&dot, &schema, &dot).is_empty());
 }

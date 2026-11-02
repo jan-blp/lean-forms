@@ -1,11 +1,9 @@
 {
-  "constraints": [],
   "form": {
     "branches": {
       "Catalonia": {
         "kind": "field",
         "label": "City",
-        "widget": "select",
         "path": [],
         "schema": {
           "kind": "enum",
@@ -14,12 +12,12 @@
             "Barcelona",
             "Girona"
           ]
-        }
+        },
+        "widget": "select"
       },
       "France": {
         "kind": "field",
         "label": "City",
-        "widget": "select",
         "path": [],
         "schema": {
           "kind": "enum",
@@ -28,12 +26,12 @@
             "Lyon",
             "Marseille"
           ]
-        }
+        },
+        "widget": "select"
       },
       "Japan": {
         "kind": "field",
         "label": "City",
-        "widget": "select",
         "path": [],
         "schema": {
           "kind": "enum",
@@ -42,7 +40,8 @@
             "Kyoto",
             "Osaka"
           ]
-        }
+        },
+        "widget": "select"
       }
     },
     "defaults": {
@@ -130,9 +129,23 @@
     ],
     "kind": "sum"
   },
+  "validation": {
+    "branches": {
+      "Catalonia": {
+        "kind": "base"
+      },
+      "France": {
+        "kind": "base"
+      },
+      "Japan": {
+        "kind": "base"
+      }
+    },
+    "kind": "sum"
+  },
   "value": {
     "tag": "France",
     "value": 0
   },
-  "version": 6
+  "version": 7
 }
