@@ -1,5 +1,7 @@
 import Forms.Core.RefinedDataType.Theorems
 import Tests.Validation
+import Tests.ServerRefinements
+import Tests.Web
 import Tests.SumHistory
 import Tests.ListHistory
 import Tests.AppendHistory
@@ -168,6 +170,14 @@ private def testLists : IO Unit := do
   check "EmptyListValidates" ((RefinedDataType.validate refined empty).any List.isEmpty)
   let mixed ← IO.ofExcept (JsonProtocol.valueFromJson ExampleForms.Invoice.invoice
     (← IO.ofExcept (Lean.Json.parse "[{\"description\":\"Good\",\"quantity\":\"1\",\"unitPrice\":\"100\"},{\"description\":\"Bad\",\"quantity\":\"1\",\"unitPrice\":\"0\"}]")))
+  let good := RefinedDataType.erase ExampleForms.Invoice.itemType ExampleForms.Invoice.newItem
+  let bad := Path.set (source := ExampleForms.Invoice.item) (.field .quantity .self) 0 good
+  let repeated := [good, bad, bad]
+  let errors := RefinedDataType.errors refined repeated
+  check "InvoiceReportsEachInvalidQuantity"
+    (errors.map (fun error => error.targets.toJson) ==
+      [ (Validation.TargetResolution.fields (root := ExampleForms.Invoice.invoice) [.item 1 (.field .quantity .self)]).toJson,
+        (Validation.TargetResolution.fields (root := ExampleForms.Invoice.invoice) [.item 2 (.field .quantity .self)]).toJson])
   check "EveryDecodedItemValidated" (RefinedDataType.validate refined mixed).isNone
   check "ListFieldIndices" ((fieldRefs ExampleForms.Invoice.form draft).map (·.indices) == [[0,0], [0,1], [0,2], [0], []])
   check "ListRequiresArray" (match JsonProtocol.valueFromJson (.list .natural) (Lean.toJson "1") with
@@ -208,6 +218,9 @@ private def testSums : IO Unit := do
   check "InactiveConstructorDoesNotValidate" ((RefinedDataType.validate refined dot).isSome && (RefinedDataType.errors refined dot).isEmpty)
   check "SelectedConstructorConstructsProof" ((RefinedDataType.validate refined valid).isSome)
   check "SelectedConstructorRejectsInvalidDraft" ((RefinedDataType.validate refined invalid).isNone && (RefinedDataType.errors refined invalid).length == 1)
+  check "SumErrorLocatesPayloadField"
+    ((RefinedDataType.errors refined invalid).map (fun error => error.targets.toJson) ==
+      [(Validation.TargetResolution.fields (root := ExampleForms.Shapes.shape) [.constructor .rectangle (.field .height .self)]).toJson])
   check "SumProofErasesToOriginal" ((RefinedDataType.validate refined valid).map (fun v => JsonProtocol.valueToJson (RefinedDataType.erase refined v)) == some (JsonProtocol.valueToJson valid))
   check "SumOnlyShowsActivePayload" ((fieldRefs ExampleForms.Shapes.form dot).isEmpty &&
     (fieldRefs ExampleForms.Shapes.form valid).map (·.indices) == [[2,0], [2,1]])
@@ -356,7 +369,8 @@ private def testProtocol : IO Unit := do
     (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (t := .natural) huge) == .ok huge)
 
 def main : IO Unit := do
-  Forms.Tests.ValidationExperiment.run
+  Tests.ServerRefinements.run
+  Tests.Web.run
   Tests.SumHistory.run
   Tests.ListHistory.run
   Tests.AppendHistory.run
@@ -368,6 +382,7 @@ def main : IO Unit := do
   Tests.Basket.run
   Tests.Composition.run
   testRefinedTypes
+  Forms.Tests.ValidationExperiment.run
   testPathsAndChoices
   testHiddenValidation
   testNativeBoundary

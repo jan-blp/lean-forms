@@ -49,6 +49,130 @@
     "kind": "record"
   },
   "validation": {
+    "inner": {
+      "fields": {
+        "endDate": {
+          "inner": {
+            "kind": "base"
+          },
+          "kind": "refine",
+          "checker": {
+            "body": {
+              "kind": "report",
+              "message": {
+                "kind": "value",
+                "type": {
+                  "kind": "text"
+                },
+                "value": "Date must be between 2028-01-01 and 2028-12-31."
+              },
+              "targets": {
+                "kind": "fields",
+                "locations": [
+                  []
+                ]
+              }
+            },
+            "condition": {
+              "kind": "not",
+              "operand": {
+                "kind": "and",
+                "left": {
+                  "kind": "dateLe",
+                  "left": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "date"
+                    },
+                    "value": "2028-01-01"
+                  },
+                  "right": {
+                    "kind": "project",
+                    "path": []
+                  }
+                },
+                "right": {
+                  "kind": "dateLe",
+                  "left": {
+                    "kind": "project",
+                    "path": []
+                  },
+                  "right": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "date"
+                    },
+                    "value": "2028-12-31"
+                  }
+                }
+              }
+            },
+            "kind": "when"
+          }
+        },
+        "startDate": {
+          "inner": {
+            "kind": "base"
+          },
+          "kind": "refine",
+          "checker": {
+            "body": {
+              "kind": "report",
+              "message": {
+                "kind": "value",
+                "type": {
+                  "kind": "text"
+                },
+                "value": "Date must be between 2028-01-01 and 2028-12-31."
+              },
+              "targets": {
+                "kind": "fields",
+                "locations": [
+                  []
+                ]
+              }
+            },
+            "condition": {
+              "kind": "not",
+              "operand": {
+                "kind": "and",
+                "left": {
+                  "kind": "dateLe",
+                  "left": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "date"
+                    },
+                    "value": "2028-01-01"
+                  },
+                  "right": {
+                    "kind": "project",
+                    "path": []
+                  }
+                },
+                "right": {
+                  "kind": "dateLe",
+                  "left": {
+                    "kind": "project",
+                    "path": []
+                  },
+                  "right": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "date"
+                    },
+                    "value": "2028-12-31"
+                  }
+                }
+              }
+            },
+            "kind": "when"
+          }
+        }
+      },
+      "kind": "record"
+    },
+    "kind": "refine",
     "checker": {
       "body": {
         "kind": "report",
@@ -96,131 +220,7 @@
         }
       },
       "kind": "when"
-    },
-    "inner": {
-      "fields": {
-        "endDate": {
-          "checker": {
-            "body": {
-              "kind": "report",
-              "message": {
-                "kind": "value",
-                "type": {
-                  "kind": "text"
-                },
-                "value": "Date must be between 2028-01-01 and 2028-12-31."
-              },
-              "targets": {
-                "kind": "fields",
-                "locations": [
-                  []
-                ]
-              }
-            },
-            "condition": {
-              "kind": "not",
-              "operand": {
-                "kind": "and",
-                "left": {
-                  "kind": "dateLe",
-                  "left": {
-                    "kind": "value",
-                    "type": {
-                      "kind": "date"
-                    },
-                    "value": "2028-01-01"
-                  },
-                  "right": {
-                    "kind": "project",
-                    "path": []
-                  }
-                },
-                "right": {
-                  "kind": "dateLe",
-                  "left": {
-                    "kind": "project",
-                    "path": []
-                  },
-                  "right": {
-                    "kind": "value",
-                    "type": {
-                      "kind": "date"
-                    },
-                    "value": "2028-12-31"
-                  }
-                }
-              }
-            },
-            "kind": "when"
-          },
-          "inner": {
-            "kind": "base"
-          },
-          "kind": "refine"
-        },
-        "startDate": {
-          "checker": {
-            "body": {
-              "kind": "report",
-              "message": {
-                "kind": "value",
-                "type": {
-                  "kind": "text"
-                },
-                "value": "Date must be between 2028-01-01 and 2028-12-31."
-              },
-              "targets": {
-                "kind": "fields",
-                "locations": [
-                  []
-                ]
-              }
-            },
-            "condition": {
-              "kind": "not",
-              "operand": {
-                "kind": "and",
-                "left": {
-                  "kind": "dateLe",
-                  "left": {
-                    "kind": "value",
-                    "type": {
-                      "kind": "date"
-                    },
-                    "value": "2028-01-01"
-                  },
-                  "right": {
-                    "kind": "project",
-                    "path": []
-                  }
-                },
-                "right": {
-                  "kind": "dateLe",
-                  "left": {
-                    "kind": "project",
-                    "path": []
-                  },
-                  "right": {
-                    "kind": "value",
-                    "type": {
-                      "kind": "date"
-                    },
-                    "value": "2028-12-31"
-                  }
-                }
-              }
-            },
-            "kind": "when"
-          },
-          "inner": {
-            "kind": "base"
-          },
-          "kind": "refine"
-        }
-      },
-      "kind": "record"
-    },
-    "kind": "refine"
+    }
   },
   "value": {
     "endDate": "2028-03-01",

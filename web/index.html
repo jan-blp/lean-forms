@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lean Forms</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap">
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <main>
+    <header><span class="brand">LEAN FORMS</span></header>
+    <h1 id="title">Form</h1>
+    <section id="controls" aria-label="Form controls" aria-busy="true"></section>
+    <div class="toolbar">
+      <button id="submit" class="primary" disabled>Submit</button>
+      <button id="reset" disabled>Start over</button>
+      <span id="count">Loading…</span>
+    </div>
+    <p id="status" role="status" aria-live="polite"></p>
+    <details id="result" hidden><summary>Submitted value</summary><pre></pre></details>
+    <noscript>This form needs JavaScript enabled.</noscript>
+  </main>
+</body>
+</html>

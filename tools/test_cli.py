@@ -19,8 +19,8 @@ def candidates(words):
     return result.stdout.splitlines()
 
 
-def bash_candidates(words, lake=False):
-    prefix = ['lake', '-q', 'exe', 'forms'] if lake else ['forms']
+def bash_candidates(words, lake=False, executable="forms"):
+    prefix = ['lake', '-q', 'exe', executable] if lake else [executable]
     tokens = prefix + words
     script = 'source completions/forms.bash\n'
     script += 'COMP_WORDS=(' + ' '.join(map(shlex.quote, tokens)) + ')\n'
@@ -32,8 +32,8 @@ def bash_candidates(words, lake=False):
     return result.stdout.splitlines()
 
 
-def fish_candidates(words, lake=False):
-    prefix = ['lake', '-q', 'exe', 'forms'] if lake else ['forms']
+def fish_candidates(words, lake=False, executable="forms"):
+    prefix = ['lake', '-q', 'exe', executable] if lake else [executable]
     line = ' '.join(map(shlex.quote, prefix + words[:-1])) + ' ' + words[-1]
     script = 'source completions/forms.fish\ncomplete -C ' + shlex.quote(line)
     result = subprocess.run(['fish', '--no-config', '-c', script], cwd=ROOT,
@@ -90,3 +90,25 @@ _forms_complete
 '''], cwd=ROOT, env=ENV)
 assert result.returncode == 0
 print('PASS: CLI parsing, registry-derived completion, Bash and Fish (direct and lake exe forms)')
+
+BINARY = ROOT / '.lake/build/bin/forms-web'
+assert [name for name in candidates(['']) if not name.startswith('-')] == examples
+assert invoke(['not-an-example']).returncode != 0
+for name in examples:
+    assert name in invoke(['--help']).stdout
+    assert candidates([name, '']) == ['--open', '--port', '--help']
+    assert invoke([name, name]).returncode != 0
+assert candidates(['b']) == ['booking', 'basket']
+assert candidates(['--port', '']) == []
+assert candidates(['--port', 'invalid', '']) == []
+assert candidates(['booking', '']) == ['--open', '--port', '--help']
+assert '--open' not in candidates(['--open', ''])
+assert candidates(['--help', '']) == []
+for words in [[''], ['b'], ['--'], ['booking', ''], ['--port', ''],
+              ['--port', '8081', ''], ['--open', 'b'], ['booking', '--open', '']]:
+    expected = sorted(candidates(words))
+    for adapter in [bash_candidates, fish_candidates]:
+        for lake in [False, True]:
+            actual = sorted(adapter(words, lake=lake, executable='forms-web'))
+            assert actual == expected, (adapter.__name__, words, lake, actual, expected)
+print('PASS: web CLI completion, Bash and Fish (direct and lake exe forms-web)')
