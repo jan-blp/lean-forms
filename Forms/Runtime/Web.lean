@@ -33,19 +33,73 @@ def ComponentEndpoint.ofComponent {ty : DataType}
       | throw (.invalidValue ((RefinedDataType.errors refined history.value).map (·.errorMessage)))
     return ()
 
-private def errorJson (message : String) : String :=
-  (Lean.Json.mkObj [("error", Lean.toJson message)]).compress
+inductive GetRoute where
+  | index
+  | script
+  | interpreter
+  | stylesheet
+  | specification
+
+def GetRoute.ofPath (path : String) : Option GetRoute :=
+  if path == "/" then some .index
+  else if path == "/app.js" then some .script
+  else if path == "/interpreter.js" then some .interpreter
+  else if path == "/style.css" then some .stylesheet
+  else if path == "/api/form" then some .specification
+  else none
+
+inductive Route where
+  | get (route : GetRoute)
+  | submit
+
+def Route.ofPath (path : String) : Option Route :=
+  if path == "/api/submit" then some .submit
+  else (GetRoute.ofPath path).map .get
+
+def Route.method : Route → Method
+  | .get _ => .get
+  | .submit => .post
+
+inductive ResponseBody where
+  | empty
+  | html (content : String)
+  | javascript (content : String)
+  | css (content : String)
+  | json (content : Lean.Json)
+  | text (content : String)
+
+private def ResponseBody.contentType : ResponseBody → Option String
+  | .empty => none
+  | .html _ => some "text/html; charset=utf-8"
+  | .javascript _ => some "text/javascript; charset=utf-8"
+  | .css _ => some "text/css; charset=utf-8"
+  | .json _ => some "application/json"
+  | .text _ => some "text/plain; charset=utf-8"
+
+private def ResponseBody.serialize : ResponseBody → String
+  | .empty => ""
+  | .html content => content
+  | .javascript content => content
+  | .css content => content
+  | .json content => content.compress
+  | .text content => content
+
+private def errorJson (message : String) : Lean.Json :=
+  Lean.Json.mkObj [("error", Lean.toJson message)]
 
 private def respond
   (logger : TrafficLog.Logger)
   (request : String)
   (status : Status)
-  (contentType : String)
-  (body : String)
+  (body : ResponseBody)
   : Async (Response Body.Full) := do
-  logger.write (TrafficLog.response request status.toCode.toNat contentType body)
+  let contentType := body.contentType
+  let body := body.serialize
+  logger.write (TrafficLog.response request status.toCode.toNat (contentType.getD "") body)
   let response := Response.new.status status |>.header! "Cache-Control" "no-store"
-  let response := if contentType.isEmpty then response else response.header! "Content-Type" contentType
+  let response := match contentType with
+    | none => response
+    | some contentType => response.header! "Content-Type" contentType
   response.fromBytes body.toUTF8
 
 private structure Application where
@@ -56,37 +110,54 @@ private structure Application where
   interpreter : String
   style : String
 
+private def Application.get
+  (app : Application)
+  (route : GetRoute)
+  : ResponseBody :=
+  match route with
+  | .index => .html app.html
+  | .script => .javascript app.script
+  | .interpreter => .javascript app.interpreter
+  | .stylesheet => .css app.style
+  | .specification => .json app.form.specification
+
+private def Application.submit
+  (app : Application)
+  (label : String)
+  (request : Request Body.Stream)
+  : Async (Response Body.Full) := do
+  let respond := respond app.logger label
+  let body ← try request.body.readAll (maximumSize := some (1024 * 1024))
+    catch _ =>
+      app.logger.write (TrafficLog.request label (some (.text "Body could not be read within the 1 MiB limit")))
+      return ← respond .payloadTooLarge
+        (.json (errorJson "Request body could not be read within the 1 MiB limit"))
+  app.logger.write (TrafficLog.request label (some (TrafficLog.json body)))
+  match Lean.Json.parse body with
+  | .error error => respond .badRequest (.json (errorJson error))
+  | .ok submission =>
+      match app.form.submit submission with
+      | .error error => respond .unprocessableEntity (.json (errorJson (toString error)))
+      | .ok () => respond .noContent .empty
+
 private instance : Server.Handler Application where
   ResponseBody := Body.Full
   onRequest app request := do
-    let respond := respond app.logger
-    let path := toString request.line.uri.path
     let label := s!"{request.line.method} {request.line.uri}"
-    let submissionRequest := request.line.method == .post && path == "/api/submit"
-    unless submissionRequest do app.logger.write (TrafficLog.request label)
-    if request.line.method == .get then
-      if path == "/" then respond label .ok "text/html; charset=utf-8" app.html
-      else if path == "/app.js" then respond label .ok "text/javascript; charset=utf-8" app.script
-      else if path == "/interpreter.js" then respond label .ok "text/javascript; charset=utf-8" app.interpreter
-      else if path == "/style.css" then respond label .ok "text/css; charset=utf-8" app.style
-      else if path == "/api/form" then respond label .ok "application/json" app.form.specification.compress
-      else respond label .notFound "text/plain; charset=utf-8" "Not found"
-    else if submissionRequest then
-      let body ← try request.body.readAll (maximumSize := some (1024 * 1024))
-        catch _ =>
-          app.logger.write (TrafficLog.request label (some (.text "Body could not be read within the 1 MiB limit")))
-          return ← respond label .payloadTooLarge "application/json"
-            (errorJson "Request body could not be read within the 1 MiB limit")
-      app.logger.write (TrafficLog.request label (some (TrafficLog.json body)))
-      match Lean.Json.parse body with
-      | .error error => respond label .badRequest "application/json" (errorJson error)
-      | .ok submission =>
-          match app.form.submit submission with
-          | .error error => respond label .unprocessableEntity "application/json" (errorJson (toString error))
-          | .ok () => respond label .noContent "" ""
-    else
-      let response ← respond label .methodNotAllowed "text/plain; charset=utf-8" "Method not allowed"
-      return { response with line.headers := response.line.headers.insert (.mk "allow") (.ofString! "GET, POST") }
+    let respond := respond app.logger label
+    let some route := Route.ofPath (toString request.line.uri.path)
+      | app.logger.write (TrafficLog.request label)
+        respond .notFound (.text "Not found")
+    if request.line.method != route.method then
+      app.logger.write (TrafficLog.request label)
+      let response ← respond .methodNotAllowed (.text "Method not allowed")
+      return { response with line.headers :=
+        response.line.headers.insert (.mk "allow") (.ofString! (toString route.method)) }
+    match route with
+    | .get route =>
+        app.logger.write (TrafficLog.request label)
+        respond .ok (app.get route)
+    | .submit => app.submit label request
 
 private def openDefaultBrowser (url : String) : IO Unit := do
   let command := if System.Platform.isOSX then "open" else "xdg-open"

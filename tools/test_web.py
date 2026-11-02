@@ -55,8 +55,16 @@ def session(example):
             status, headers, body = request(path)
             assert status == 200 and headers['Content-Type'].startswith(mime), (path, status, headers)
             assert body and headers['Cache-Control'] == 'no-store'
-        assert request('/missing')[0] == 404
-        assert request('/api/form', method='DELETE')[0] == 405
+        for method in ['GET', 'POST', 'DELETE']:
+            status, headers, _ = request('/missing', method=method)
+            assert status == 404 and 'Allow' not in headers
+        for path in ['/', '/app.js', '/interpreter.js', '/style.css', '/api/form']:
+            for method in ['POST', 'DELETE']:
+                status, headers, _ = request(path, method=method)
+                assert status == 405 and headers['Allow'] == 'GET', (path, method, status, headers)
+        for method in ['GET', 'DELETE']:
+            status, headers, _ = request('/api/submit', method=method)
+            assert status == 405 and headers['Allow'] == 'POST', (method, status, headers)
         assert request('/api/submit', raw=b'{')[0] == 400
         assert request('/api/submit', raw=b'x' * (1024 * 1024 + 1))[0] == 413
         initial = {'value': spec['value'], 'actions': []}
