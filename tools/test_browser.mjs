@@ -129,7 +129,28 @@ try {
     document.querySelector('#submit').click();
     await wait(() => status() === 'Submitted successfully.');
     check(posts === 4, 'Wrong number of submissions');
-    return 'PASS: Apply/Enter, drafts, validation, typed submission, reset';
+    for (const body of ['null', '{"error": {"message": "wrong shape"}}', '<html>Unavailable</html>']) {
+      window.fetch = async () => new Response(body, { status: 503 });
+      document.querySelector('#submit').click();
+      await wait(() => !document.querySelector('#submit').disabled);
+      check(status() === 'Submission failed (HTTP 503).', 'Malformed error response was not handled');
+    }
+    edit('Name', 'Retain me'); apply('Name');
+    let finish;
+    let pendingPosts = 0;
+    window.fetch = () => { pendingPosts++; return new Promise(resolve => { finish = resolve; }); };
+    document.querySelector('#submit').click();
+    document.querySelector('#submit').dispatchEvent(new Event('click'));
+    document.querySelector('#reset').dispatchEvent(new Event('click'));
+    const checkbox = document.querySelector('input[type=checkbox]');
+    checkbox.dispatchEvent(new Event('change'));
+    check(pendingPosts === 1, 'Duplicate submission while pending');
+    check(document.querySelector('#count').textContent === '1 action', 'History changed while pending');
+    finish(new Response(null, { status: 204 }));
+    await wait(() => !document.querySelector('#submit').disabled);
+    check(field('Name').querySelector('input').value === 'Retain me', 'Reset ran while pending');
+    window.fetch = originalFetch;
+    return 'PASS: Apply/Enter, drafts, validation, typed submission, reset, malformed errors, pending guards';
   })()` });
   assert.notEqual(result.type, 'exception', JSON.stringify(result.exceptionDetails));
   console.log(result.result.value);
