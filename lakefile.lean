@@ -43,6 +43,9 @@ extern_lib tui pkg := do
 @[default_target]
 lean_lib Forms
 
+lean_lib FormTests where
+  globs := #[.submodules `Tests]
+
 @[default_target]
 lean_exe forms where
   root := `Main
