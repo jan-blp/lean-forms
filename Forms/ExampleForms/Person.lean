@@ -68,10 +68,14 @@ def street : Path person .text := .field .address (.field .street .self)
 
 def ageType : RefinedDataType .natural :=
   .refine (.base .natural)
-    { condition := .and (.natLe (.value 18) (.project .self))
-        (.natLe (.project .self) (.value 120))
-      errorMessage := "Attendees must be between 18 and 120 years old."
-      errorTargets := .fields [⟨.self⟩] }
+    { property := fun n => 18 ≤ n ∧ n ≤ 120
+      checker := .when (.not (.and (.natLe (.value 18) (.project .self))
+        (.natLe (.project .self) (.value 120))))
+        (.report (.value "Attendees must be between 18 and 120 years old.") (.fields [[]]))
+      sound := by
+        intro value h
+        simp [Validation.Checker.run, Validation.Checker.eval, Expr.eval, Path.get] at h
+        exact ⟨of_decide_eq_true h.1, of_decide_eq_true h.2⟩ }
 
 def personType : RefinedDataType person :=
   .record fun

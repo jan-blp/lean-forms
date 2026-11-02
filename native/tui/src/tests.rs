@@ -315,27 +315,21 @@ fn sum_selector_groups_payload_and_explains_empty_constructors() {
 }
 
 #[test]
-fn sum_validation_marks_payload_field_and_preserves_nested_grouping() {
+fn sum_validation_marks_selector_and_preserves_nested_grouping() {
     let source: serde_json::Value =
         serde_json::from_str(include_str!("../tests/shapes.json")).unwrap();
     let mut spec = source.clone();
     spec["value"] = serde_json::json!({"tag":"rectangle","value":{"width":"7","height":"0"}});
     let engine = Engine::parse(&spec.to_string()).unwrap();
-    let invalid: Vec<_> = engine
-        .fields()
-        .iter()
-        .map(|field| field.presentation.invalid)
-        .collect();
-    assert_eq!(invalid, [false, false, true]);
+    assert!(engine.fields()[0].presentation.invalid);
     let text = draw_engine(&engine, 80, 24, Theme::FRAPPE);
-    assert!(text.contains("rectangle ▾"));
-    assert!(!text.contains("rectangle ▾ !"));
-    assert!(text.contains("Height: Size must be at least 1"));
+    assert!(text.contains("rectangle ▾ !"));
+    assert!(text.contains("Size must be at least 1"));
     spec["schema"] = serde_json::json!({"kind":"sum","constructors":[{"name":"standard","type":source["schema"]}]});
     spec["form"] = serde_json::json!({"kind":"sum","path":[],"schema":spec["schema"],"label":"Order",
         "branches":{"standard":source["form"]},"defaults":{"standard":source["value"]}});
     spec["value"] = serde_json::json!({"tag":"standard","value":{"tag":"rectangle","value":{"width":"7","height":"1"}}});
-    spec["constraints"] = serde_json::json!([]);
+    spec["validation"] = serde_json::json!({"kind":"base"});
     let mut engine = Engine::parse(&spec.to_string()).unwrap();
     let fields = engine.fields();
     assert_eq!(

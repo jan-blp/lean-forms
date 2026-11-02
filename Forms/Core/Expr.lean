@@ -15,6 +15,9 @@ inductive Expr : (input : DataType) → (result : DataType) → Type 1 where
   | and {input : DataType} (l r : Expr input .boolean) : Expr input .boolean
   | dateLe {input : DataType} (l r : Expr input .date) : Expr input .boolean
   | natLe {input : DataType} (l r : Expr input .natural) : Expr input .boolean
+  | not {input : DataType} (operand : Expr input .boolean) : Expr input .boolean
+  | textEq {input : DataType} (left right : Expr input .text) : Expr input .boolean
+  | textAppend {input : DataType} (left right : Expr input .text) : Expr input .text
 
 def Expr.eval
     {input t : DataType}
@@ -22,6 +25,9 @@ def Expr.eval
     (value : ⟦input⟧)
     : ⟦t⟧ :=
   match expression with
+  | .textAppend left right => left.eval value ++ right.eval value
+  | .textEq left right => left.eval value == right.eval value
+  | .not operand => !(operand.eval value)
   | .value constant => constant
   | .project path => Path.get path value
   | .all items predicate => List.all (Expr.eval items value) (Expr.eval predicate)
@@ -38,6 +44,9 @@ variable {outer input result : DataType}
 
 def Expr.weaken {outer input result} (path : Path outer input) (expression : Expr input result) : Expr outer result :=
   match expression with
+  | .textAppend left right => .textAppend (left.weaken path) (right.weaken path)
+  | .textEq left right => .textEq (left.weaken path) (right.weaken path)
+  | .not operand => .not (operand.weaken path)
   | .value v => .value v
   | .project field => .project (Path.trans path field)
   | .all items predicate => .all (Expr.weaken path items) predicate

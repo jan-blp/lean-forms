@@ -1,70 +1,4 @@
 {
-  "constraints": [
-    {
-      "condition": {
-        "kind": "natLe",
-        "left": {
-          "kind": "value",
-          "type": {
-            "kind": "natural"
-          },
-          "value": "1"
-        },
-        "right": {
-          "kind": "project",
-          "path": []
-        }
-      },
-      "errorMessage": "Quantity and unit price must be at least 1.",
-      "errorTargets": {
-        "kind": "fields",
-        "locations": [
-          []
-        ]
-      },
-      "focus": [
-        {
-          "kind": "each"
-        },
-        {
-          "kind": "field",
-          "name": "quantity"
-        }
-      ]
-    },
-    {
-      "condition": {
-        "kind": "natLe",
-        "left": {
-          "kind": "value",
-          "type": {
-            "kind": "natural"
-          },
-          "value": "1"
-        },
-        "right": {
-          "kind": "project",
-          "path": []
-        }
-      },
-      "errorMessage": "Quantity and unit price must be at least 1.",
-      "errorTargets": {
-        "kind": "fields",
-        "locations": [
-          []
-        ]
-      },
-      "focus": [
-        {
-          "kind": "each"
-        },
-        {
-          "kind": "field",
-          "name": "unitPrice"
-        }
-      ]
-    }
-  ],
   "form": {
     "defaultItem": {
       "description": "New item",
@@ -72,43 +6,43 @@
       "unitPrice": "100"
     },
     "item": {
-      "kind": "stack",
-      "label": "Item",
       "children": [
         {
           "kind": "field",
           "label": "Description",
-          "widget": "textInput",
           "path": [
             "description"
           ],
           "schema": {
             "kind": "text"
-          }
+          },
+          "widget": "textInput"
         },
         {
           "kind": "field",
           "label": "Quantity",
-          "widget": "naturalInput",
           "path": [
             "quantity"
           ],
           "schema": {
             "kind": "natural"
-          }
+          },
+          "widget": "naturalInput"
         },
         {
           "kind": "field",
           "label": "Unit price (cents)",
-          "widget": "naturalInput",
           "path": [
             "unitPrice"
           ],
           "schema": {
             "kind": "natural"
-          }
+          },
+          "widget": "naturalInput"
         }
-      ]
+      ],
+      "kind": "stack",
+      "label": "Item"
     },
     "kind": "list",
     "label": "Invoice",
@@ -166,6 +100,101 @@
     },
     "kind": "list"
   },
+  "validation": {
+    "item": {
+      "fields": {
+        "description": {
+          "kind": "base"
+        },
+        "quantity": {
+          "checker": {
+            "body": {
+              "kind": "report",
+              "message": {
+                "kind": "value",
+                "type": {
+                  "kind": "text"
+                },
+                "value": "Quantity and unit price must be at least 1."
+              },
+              "targets": {
+                "kind": "fields",
+                "locations": [
+                  []
+                ]
+              }
+            },
+            "condition": {
+              "kind": "not",
+              "operand": {
+                "kind": "natLe",
+                "left": {
+                  "kind": "value",
+                  "type": {
+                    "kind": "natural"
+                  },
+                  "value": "1"
+                },
+                "right": {
+                  "kind": "project",
+                  "path": []
+                }
+              }
+            },
+            "kind": "when"
+          },
+          "inner": {
+            "kind": "base"
+          },
+          "kind": "refine"
+        },
+        "unitPrice": {
+          "checker": {
+            "body": {
+              "kind": "report",
+              "message": {
+                "kind": "value",
+                "type": {
+                  "kind": "text"
+                },
+                "value": "Quantity and unit price must be at least 1."
+              },
+              "targets": {
+                "kind": "fields",
+                "locations": [
+                  []
+                ]
+              }
+            },
+            "condition": {
+              "kind": "not",
+              "operand": {
+                "kind": "natLe",
+                "left": {
+                  "kind": "value",
+                  "type": {
+                    "kind": "natural"
+                  },
+                  "value": "1"
+                },
+                "right": {
+                  "kind": "project",
+                  "path": []
+                }
+              }
+            },
+            "kind": "when"
+          },
+          "inner": {
+            "kind": "base"
+          },
+          "kind": "refine"
+        }
+      },
+      "kind": "record"
+    },
+    "kind": "list"
+  },
   "value": [
     {
       "description": "New item",
@@ -173,5 +202,5 @@
       "unitPrice": "100"
     }
   ],
-  "version": 6
+  "version": 7
 }

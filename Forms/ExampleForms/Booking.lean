@@ -27,9 +27,13 @@ def bookingDate : RefinedDataType .date :=
 
 def bookingType : RefinedDataType booking :=
   .refine (.record fun _ => bookingDate)
-    { condition := .dateLe (.project startDate) (.project endDate)
-      errorMessage := "End date must be on or after start date."
-      errorTargets := .fields [⟨startDate⟩, ⟨endDate⟩] }
+    { property := fun value => value .startDate ≤ value .endDate
+      checker := .when (.not (.dateLe (.project startDate) (.project endDate)))
+        (.report (.value "End date must be on or after start date.") (.fields [startDate.locationExpr, endDate.locationExpr]))
+      sound := by
+        intro value h
+        simp [Validation.Checker.run, Validation.Checker.eval, Expr.eval, Path.get, startDate, endDate] at h
+        exact of_decide_eq_true h }
 
 def initial : RefinedDataType.ValidatedValue bookingType :=
   ⟨(fun

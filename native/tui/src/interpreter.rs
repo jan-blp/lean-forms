@@ -69,6 +69,9 @@ impl Ty {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Expr {
+    TextAppend { left: Box<Expr>, right: Box<Expr> },
+    TextEq { left: Box<Expr>, right: Box<Expr> },
+    Not { operand: Box<Expr> },
     Value {
         #[serde(rename = "type")]
         ty: Ty,
@@ -162,112 +165,211 @@ pub enum Component {
 }
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
-enum ErrorTargets {
-    Global {},
-    Fields { locations: Vec<Vec<Step>> },
-}
-
-impl ErrorTargets {
-    fn locations(&self) -> &[Vec<Step>] {
-        match self {
-            Self::Global {} => &[],
-            Self::Fields { locations } => locations,
-        }
-    }
+enum LocationStepExpr {
+    Field { name: String },
+    Item { index: Expr },
+    Constructor { tag: Expr },
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
-enum TraversalStep {
-    Field { name: String },
-    Each {},
-    Constructor { tag: String },
-}
-
-fn traversal_type<'a>(mut ty: &'a Ty, traversal: &[TraversalStep]) -> Result<&'a Ty, String> {
-    for step in traversal {
-        ty = match (ty, step) {
-            (Ty::Record { fields }, TraversalStep::Field { name })
-            | (
-                Ty::Sum {
-                    constructors: fields,
-                },
-                TraversalStep::Constructor { tag: name },
-            ) => {
-                &fields
-                    .iter()
-                    .find(|field| &field.name == name)
-                    .ok_or("Invalid constraint focus")?
-                    .ty
-            }
-            (Ty::List { element }, TraversalStep::Each {}) => element,
-            _ => return Err("Invalid constraint focus".into()),
-        };
-    }
-    Ok(ty)
-}
-
-fn traversal_targets<'a>(
-    traversal: &[TraversalStep],
-    value: &'a Value,
-    location: Vec<Step>,
-    out: &mut Vec<(Vec<Step>, &'a Value)>,
-) {
-    let Some((first, rest)) = traversal.split_first() else {
-        out.push((location, value));
-        return;
-    };
-    let mut within = |step: Step, value: &'a Value| {
-        let mut location = location.clone();
-        location.push(step);
-        traversal_targets(rest, value, location, out);
-    };
-    match first {
-        TraversalStep::Field { name } => within(Step::Field(name.clone()), &value[name]),
-        TraversalStep::Each {} => {
-            for (index, item) in value.as_array().unwrap().iter().enumerate() {
-                within(Step::Item(index), item);
-            }
-        }
-        TraversalStep::Constructor { tag } => {
-            if value["tag"] == *tag {
-                within(Step::Payload(tag.clone()), &value["value"]);
-            }
-        }
-    }
-}
-
-fn markable(field: &Field) -> bool {
-    !matches!(field.widget, Widget::Remove)
-}
-
-/// The longest prefix of an error location that a shown field edits, so hidden targets fall back to their container.
-fn anchor<'a>(fields: &[Field], path: &'a [Step]) -> Option<&'a [Step]> {
-    (0..=path.len())
-        .rev()
-        .map(|length| &path[..length])
-        .find(|prefix| {
-            fields
-                .iter()
-                .any(|field| markable(field) && field.path == *prefix)
-        })
+enum CheckerTargets {
+    Global {},
+    Fields { locations: Vec<Vec<LocationStepExpr>> },
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Constraint {
-    focus: Vec<TraversalStep>,
-    condition: Expr,
-    #[serde(rename = "errorMessage")]
-    error_message: String,
-    #[serde(rename = "errorTargets")]
-    error_targets: ErrorTargets,
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+enum Checker {
+    Pass {},
+    Report { message: Expr, targets: CheckerTargets },
+    When { condition: Expr, body: Box<Checker> },
+    Seq { left: Box<Checker>, right: Box<Checker> },
+    Each { items: Expr, body: Box<Checker> },
 }
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+enum Refinement {
+    Base {},
+    Refine { inner: Box<Refinement>, checker: Checker },
+    List { item: Box<Refinement> },
+    Record { fields: BTreeMap<String, Refinement> },
+    Sum { branches: BTreeMap<String, Refinement> },
+}
+
+struct ValidationError {
+    message: String,
+    locations: Vec<Vec<Step>>,
+}
+
+impl Checker {
+    fn validate(&self, input: &Ty) -> Result<(), String> {
+        match self {
+            Self::Pass {} => {}
+            Self::Report { message, targets } => {
+                if message.ty(input)? != Ty::Text { return Err("Validation message requires text".into()); }
+                match targets {
+                    CheckerTargets::Global {} => {}
+                    CheckerTargets::Fields { locations } => {
+                        if locations.is_empty() { return Err("Field error targets must be nonempty".into()); }
+                        for location in locations {
+                            for step in location {
+                                match step {
+                                    LocationStepExpr::Field { .. } => {}
+                                    LocationStepExpr::Item { index } => {
+                                        if index.ty(input)? != Ty::Natural { return Err("Location index requires a natural".into()); }
+                                    }
+                                    LocationStepExpr::Constructor { tag } => {
+                                        if tag.ty(input)? != Ty::Text { return Err("Constructor tag requires text".into()); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Self::When { condition, body } => {
+                if condition.ty(input)? != Ty::Boolean { return Err("Validation condition requires a boolean".into()); }
+                body.validate(input)?;
+            }
+            Self::Seq { left, right } => { left.validate(input)?; right.validate(input)?; }
+            Self::Each { items, body } => {
+                let Ty::List { element } = items.ty(input)? else { return Err("Validation iteration requires a list".into()); };
+                body.validate(&Ty::Record { fields: vec![
+                    NamedType { name: "outer".into(), ty: input.clone() },
+                    NamedType { name: "item".into(), ty: *element },
+                    NamedType { name: "index".into(), ty: Ty::Natural },
+                ] })?;
+            }
+        }
+        Ok(())
+    }
+
+    fn eval(&self, input: &Value, root: &Ty, value: &Value) -> Vec<ValidationError> {
+        match self {
+            Self::Pass {} => vec![],
+            Self::Report { message, targets } => {
+                let mut invalid = false;
+                let locations = match targets {
+                    CheckerTargets::Global {} => vec![],
+                    CheckerTargets::Fields { locations } => locations.iter().filter_map(|location| {
+                        let path: Option<Vec<Step>> = location.iter().map(|step| match step {
+                            LocationStepExpr::Field { name } => Some(Step::Field(name.clone())),
+                            LocationStepExpr::Item { index } => index.eval(input).as_str().unwrap().parse::<usize>().ok().map(Step::Item),
+                            LocationStepExpr::Constructor { tag } => Some(Step::Payload(tag.eval(input).as_str().unwrap().into())),
+                        }).collect();
+                        match path {
+                            Some(path) if location_exists(&path, root, value) => Some(path),
+                            Some(_) | None => { invalid = true; None }
+                        }
+                    }).collect(),
+                };
+                let message = message.eval(input).as_str().unwrap().to_owned();
+                vec![ValidationError {
+                    message: if invalid { format!("Invalid validation target: {message}") } else { message },
+                    locations: if invalid { vec![] } else { locations },
+                }]
+            }
+            Self::When { condition, body } => {
+                if condition.eval(input).as_bool().unwrap() { body.eval(input, root, value) } else { vec![] }
+            }
+            Self::Seq { left, right } => {
+                let mut errors = left.eval(input, root, value);
+                errors.extend(right.eval(input, root, value));
+                errors
+            }
+            Self::Each { items, body } => items.eval(input).as_array().unwrap().iter().enumerate().flat_map(|(index, item)| {
+                body.eval(&serde_json::json!({"outer":input,"item":item,"index":index.to_string()}), root, value)
+            }).collect(),
+        }
+    }
+}
+
+fn location_exists(path: &[Step], schema: &Ty, value: &Value) -> bool {
+    let Some((step, rest)) = path.split_first() else { return true; };
+    match step {
+        Step::Field(name) => {
+            let Ty::Record { fields } = schema else { return false; };
+            fields.iter().find(|field| &field.name == name).zip(value.get(name))
+                .is_some_and(|(field, value)| location_exists(rest, &field.ty, value))
+        }
+        Step::Item(index) => {
+            let Ty::List { element } = schema else { return false; };
+            value.get(*index).is_some_and(|value| location_exists(rest, element, value))
+        }
+        Step::Payload(tag) => {
+            let Ty::Sum { constructors } = schema else { return false; };
+            value.get("tag").and_then(Value::as_str) == Some(tag)
+                && constructors.iter().find(|branch| &branch.name == tag).zip(value.get("value"))
+                    .is_some_and(|(branch, value)| location_exists(rest, &branch.ty, value))
+        }
+    }
+}
+
+impl Refinement {
+    fn validate(&self, schema: &Ty) -> Result<(), String> {
+        match self {
+            Self::Base {} => Ok(()),
+            Self::Refine { inner, checker } => { inner.validate(schema)?; checker.validate(schema) }
+            Self::List { item } => {
+                let Ty::List { element } = schema else { return Err("List refinement requires a list".into()); };
+                item.validate(element)
+            }
+            Self::Record { fields } => {
+                let Ty::Record { fields: types } = schema else { return Err("Record refinement requires a record".into()); };
+                if !matches_names(fields, types) { return Err("Refinement fields do not match schema".into()); }
+                for field in types { fields[&field.name].validate(&field.ty)?; }
+                Ok(())
+            }
+            Self::Sum { branches } => {
+                let Ty::Sum { constructors } = schema else { return Err("Sum refinement requires a sum".into()); };
+                if !matches_names(branches, constructors) { return Err("Refinement branches do not match schema".into()); }
+                for branch in constructors { branches[&branch.name].validate(&branch.ty)?; }
+                Ok(())
+            }
+        }
+    }
+
+    fn errors(&self, schema: &Ty, value: &Value) -> Vec<ValidationError> {
+        fn prefix(mut errors: Vec<ValidationError>, step: Step) -> Vec<ValidationError> {
+            for error in &mut errors {
+                for location in &mut error.locations { location.insert(0, step.clone()); }
+            }
+            errors
+        }
+        match self {
+            Self::Base {} => vec![],
+            Self::Refine { inner, checker } => {
+                let mut errors = inner.errors(schema, value);
+                errors.extend(checker.eval(value, schema, value));
+                errors
+            }
+            Self::List { item } => {
+                let Ty::List { element } = schema else { unreachable!("validated refinement") };
+                value.as_array().unwrap().iter().enumerate()
+                    .flat_map(|(index, value)| prefix(item.errors(element, value), Step::Item(index))).collect()
+            }
+            Self::Record { fields } => {
+                let Ty::Record { fields: types } = schema else { unreachable!("validated refinement") };
+                types.iter().flat_map(|field| prefix(fields[&field.name].errors(&field.ty, &value[&field.name]),
+                    Step::Field(field.name.clone()))).collect()
+            }
+            Self::Sum { branches } => {
+                let Ty::Sum { constructors } = schema else { unreachable!("validated refinement") };
+                let tag = value["tag"].as_str().unwrap();
+                let branch = constructors.iter().find(|branch| branch.name == tag).unwrap();
+                prefix(branches[tag].errors(&branch.ty, &value["value"]), Step::Payload(tag.into()))
+            }
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Specification {
     version: u32,
-    constraints: Vec<Constraint>,
+    validation: Refinement,
     schema: Ty,
     form: Component,
     value: Value,
@@ -342,6 +444,18 @@ fn validate_value(ty: &Ty, value: &Value) -> Result<(), String> {
 impl Expr {
     fn ty(&self, input: &Ty) -> Result<Ty, String> {
         match self {
+            Self::TextAppend { left, right } => {
+                if left.ty(input)? != Ty::Text || right.ty(input)? != Ty::Text { return Err("textAppend requires text".into()); }
+                Ok(Ty::Text)
+            }
+            Self::TextEq { left, right } => {
+                if left.ty(input)? != Ty::Text || right.ty(input)? != Ty::Text { return Err("textEq requires text".into()); }
+                Ok(Ty::Boolean)
+            }
+            Self::Not { operand } => {
+                if operand.ty(input)? != Ty::Boolean { return Err("not requires a boolean".into()); }
+                Ok(Ty::Boolean)
+            }
             Self::Value { ty, value } => {
                 ty.validate()?;
                 validate_value(ty, value)?;
@@ -408,6 +522,9 @@ impl Expr {
     }
     fn eval(&self, input: &Value) -> Value {
         match self {
+            Self::TextAppend { left, right } => Value::String(format!("{}{}", left.eval(input).as_str().unwrap(), right.eval(input).as_str().unwrap())),
+            Self::TextEq { left, right } => Value::Bool(left.eval(input).as_str().unwrap() == right.eval(input).as_str().unwrap()),
+            Self::Not { operand } => Value::Bool(!operand.eval(input).as_bool().unwrap()),
             Self::Value { value, .. } => value.clone(),
             Self::Project { path } => get(input, path).clone(),
             Self::Cases {
@@ -797,24 +914,13 @@ pub enum Key {
 impl Engine {
     pub fn parse(json: &str) -> Result<Self, String> {
         let spec: Specification = serde_json::from_str(json).map_err(|e| e.to_string())?;
-        if spec.version != 6 {
+        if spec.version != 7 {
             return Err("Unsupported form specification version".into());
         }
         spec.schema.validate()?;
         validate_value(&spec.schema, &spec.value)?;
         spec.form.validate(&spec.schema, &spec.schema)?;
-        for constraint in &spec.constraints {
-            let focused = traversal_type(&spec.schema, &constraint.focus)?;
-            if constraint.condition.ty(focused)? != Ty::Boolean {
-                return Err("Validation constraint requires a boolean".into());
-            }
-            if matches!(&constraint.error_targets, ErrorTargets::Fields { locations } if locations.is_empty()) {
-                return Err("Field error targets must be nonempty".into());
-            }
-            for path in constraint.error_targets.locations() {
-                Expr::Project { path: path.clone() }.ty(focused)?;
-            }
-        }
+        spec.validation.validate(&spec.schema)?;
         Ok(Self {
             spec,
             submitted: false,
@@ -830,51 +936,23 @@ impl Engine {
             "null".into()
         }
     }
-    /// Every failing constraint instance with its message and concrete target locations.
-    fn failures(&self) -> Vec<(&str, Vec<Vec<Step>>)> {
-        let mut out = Vec::new();
-        for constraint in &self.spec.constraints {
-            let mut found = Vec::new();
-            traversal_targets(&constraint.focus, &self.spec.value, vec![], &mut found);
-            for (location, value) in found {
-                if !constraint.condition.eval(value).as_bool().unwrap() {
-                    let targets = constraint
-                        .error_targets
-                        .locations()
-                        .iter()
-                        .map(|path| location.iter().chain(path).cloned().collect())
-                        .collect();
-                    out.push((constraint.error_message.as_str(), targets));
-                }
-            }
-        }
-        out
-    }
     pub fn errors(&self) -> Vec<String> {
         let fields = self.fields();
-        self.failures()
-            .into_iter()
-            .map(|(message, targets)| {
-                let labels: Vec<_> = targets
-                    .iter()
-                    .filter_map(|path| {
-                        let path = anchor(&fields, path)?;
-                        fields
-                            .iter()
-                            .find(|field| markable(field) && field.path == path)
-                            .map(|field| {
-                                if matches!(field.widget, Widget::Add) {
-                                    field.label.trim_end_matches(".Add item")
-                                } else {
-                                    field.label.rsplit('.').next().unwrap()
-                                }
-                            })
-                    })
-                    .collect();
+        self.spec.validation.errors(&self.spec.schema, &self.spec.value)
+            .iter()
+            .map(|constraint| {
+                let labels: Vec<_> = constraint.locations.iter().filter_map(|path| {
+                    fields.iter().find(|field| &field.path == path)
+                        .map(|field| if matches!(field.widget, Widget::Add) {
+                            field.label.trim_end_matches(".Add item")
+                        } else {
+                            field.label.rsplit('.').next().unwrap()
+                        })
+                }).collect();
                 if labels.is_empty() {
-                    message.to_owned()
+                    constraint.message.clone()
                 } else {
-                    format!("{}: {}", labels.join(", "), message)
+                    format!("{}: {}", labels.join(", "), constraint.message)
                 }
             })
             .collect()
@@ -889,14 +967,12 @@ impl Engine {
             vec![],
             &mut out,
         );
-        let invalid: Vec<_> = self
-            .failures()
-            .into_iter()
-            .flat_map(|(_, targets)| targets)
-            .filter_map(|path| anchor(&out, &path).map(<[Step]>::to_vec))
-            .collect();
+        let errors = self.spec.validation.errors(&self.spec.schema, &self.spec.value);
         for field in &mut out {
-            field.presentation.invalid = markable(field) && invalid.contains(&field.path);
+            field.presentation.invalid = errors.iter().any(|error| error.locations.iter().any(|location| {
+                location == &field.path || (field.presentation.constructor && location.starts_with(&field.path)
+                    && matches!(location.get(field.path.len()), Some(Step::Payload(_))))
+            }));
         }
         out
     }
