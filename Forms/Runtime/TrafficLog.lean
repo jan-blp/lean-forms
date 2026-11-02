@@ -1,4 +1,5 @@
 import Lean.Data.Json
+import Mathlib.Data.FinEnum
 
 namespace Forms.Runtime.TrafficLog
 open Std
@@ -13,24 +14,69 @@ inductive Style where
   | string
   | number
   | literal
+  deriving DecidableEq
 
-private def Style.code : Style → Nat
-  | .request => 36
-  | .success => 32
-  | .rejection => 33
-  | .failure => 31
-  | .detail => 2
-  | .key => 34
-  | .string => 32
-  | .number => 35
-  | .literal => 33
+instance : FinEnum Style :=
+  FinEnum.ofList [.request, .success, .rejection, .failure, .detail, .key, .string, .number, .literal]
+    (by intro style; cases style <;> simp)
 
-private def escape (code : Nat) : String := s!"\x1b[{code}m"
+inductive AnsiCode where
+  | reset
+  | bold
+  | dim
+  | red
+  | green
+  | yellow
+  | blue
+  | magenta
+  | cyan
+
+private def AnsiCode.toNat : AnsiCode → Nat
+  | .reset => 0
+  | .bold => 1
+  | .dim => 2
+  | .red => 31
+  | .green => 32
+  | .yellow => 33
+  | .blue => 34
+  | .magenta => 35
+  | .cyan => 36
+
+private def Style.toTag (style : Style) : Nat :=
+  (FinEnum.equiv style).val
+
+private def Style.ofTag (tag : Nat) : Option Style :=
+  if h : tag < FinEnum.card Style then
+    some (FinEnum.equiv.symm ⟨tag, h⟩)
+  else none
+
+def Style.tag (style : Style) (document : Format) : Format :=
+  .tag style.toTag document
+
+private def Style.codes : Style → List AnsiCode
+  | .request => [.bold, .cyan]
+  | .success => [.bold, .green]
+  | .rejection => [.bold, .yellow]
+  | .failure => [.bold, .red]
+  | .detail => [.dim]
+  | .key => [.blue]
+  | .string => [.green]
+  | .number => [.magenta]
+  | .literal => [.yellow]
+
+private def AnsiCode.escape (code : AnsiCode) : String := s!"\x1b[{code.toNat}m"
+
+private def Style.escape (style : Style) : String :=
+  String.join (style.codes.map AnsiCode.escape)
+
+private def escapeStyle : Option Style → String
+  | none => ""
+  | some style => style.escape
 
 private structure RenderState where
   output : String := ""
   column : Nat := 0
-  styles : List Nat := []
+  styles : List (Option Style) := []
 
 private instance : Format.MonadPrettyFormat (StateM RenderState) where
   pushOutput text := modify fun state =>
@@ -38,14 +84,15 @@ private instance : Format.MonadPrettyFormat (StateM RenderState) where
   pushNewline indent := modify fun state =>
     { state with output := state.output ++ "\n" ++ String.ofList (List.replicate indent ' '), column := indent }
   currColumn := return (← get).column
-  startTag code := modify fun state =>
-    { state with output := state.output ++ escape code, styles := code :: state.styles }
+  startTag tag := modify fun state =>
+    let style := Style.ofTag tag
+    { state with output := state.output ++ escapeStyle style, styles := style :: state.styles }
   endTags count := do
     if count > 0 then
       modify fun state =>
         let styles := state.styles.drop count
-        let restore := String.join (styles.reverse.map escape)
-        { state with output := state.output ++ escape 0 ++ restore, styles }
+        let restore := String.join (styles.reverse.map escapeStyle)
+        { state with output := state.output ++ AnsiCode.reset.escape ++ restore, styles }
 
 def render (document : Format) (color : Bool) (width : Nat := 80) : String :=
   if color then
@@ -54,19 +101,19 @@ def render (document : Format) (color : Bool) (width : Nat := 80) : String :=
   else document.pretty width
 
 private def heading (style : Style) (text : String) : Format :=
-  .tag 1 (.tag style.code (.text text))
+  style.tag (.text text)
 
 private partial def jsonDocument : Lean.Json → Format
-  | .null => .tag Style.literal.code (.text "null")
-  | .bool value => .tag Style.literal.code (Lean.Json.bool value).render
-  | .num value => .tag Style.number.code (Lean.Json.num value).render
-  | .str value => .tag Style.string.code (Lean.Json.str value).render
+  | .null => Style.literal.tag (.text "null")
+  | .bool value => Style.literal.tag (Lean.Json.bool value).render
+  | .num value => Style.number.tag (Lean.Json.num value).render
+  | .str value => Style.string.tag (Lean.Json.str value).render
   | .arr values =>
       Format.bracket "[" (Format.joinSep (values.map jsonDocument).toList ("," ++ Format.line)) "]"
   | .obj fields =>
       let entries := fields.foldl (fun entries key value =>
         let entry := Format.group (
-          .tag Style.key.code (Lean.Json.str key).render ++ ":" ++ Format.line ++ jsonDocument value)
+          Style.key.tag (Lean.Json.str key).render ++ ":" ++ Format.line ++ jsonDocument value)
         entry :: entries) []
       Format.bracket "{" (Format.joinSep entries ("," ++ Format.line)) "}"
 
@@ -93,7 +140,7 @@ def response
   else if contentType == "application/json" then
     title ++ .nest 2 (.line ++ json body) ++ .line
   else
-    title ++ .tag Style.detail.code (.text s!" ({contentType}, {body.toUTF8.size} bytes)") ++ .line
+    title ++ Style.detail.tag (.text s!" ({contentType}, {body.toUTF8.size} bytes)") ++ .line
 
 structure Logger where
   output : IO.FS.Stream

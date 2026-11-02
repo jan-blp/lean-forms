@@ -33,8 +33,9 @@ private def testTrafficLog : IO Unit := do
   for literal in ["true", "false", "null"] do
     check "TrafficJsonLiteralsYellow" (highlighted.contains s!"\x1b[33m{literal}\x1b[0m")
   check "TrafficJsonKeepsLeanLayout" (TrafficLog.render (TrafficLog.json sample) false 20 == value.pretty 20)
-  let nested : Std.Format := .tag 1 (.text "outer " ++ .tag 36 (.text "inner") ++ .text " outer")
-  check "TrafficRestoresOuterStyle" ((TrafficLog.render nested true).contains "inner\x1b[0m\x1b[1m outer")
+  let nested := TrafficLog.Style.success.tag
+    (.text "outer " ++ TrafficLog.Style.key.tag (.text "inner") ++ .text " outer")
+  check "TrafficRestoresOuterStyle" ((TrafficLog.render nested true).contains "inner\x1b[0m\x1b[1m\x1b[32m outer")
 
 def run : IO Unit := do
   testTrafficLog
