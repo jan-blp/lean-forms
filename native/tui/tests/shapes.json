@@ -140,6 +140,10 @@
   "validation": {
     "branches": {
       "circle": {
+        "inner": {
+          "kind": "base"
+        },
+        "kind": "refine",
         "checker": {
           "body": {
             "kind": "report",
@@ -175,11 +179,7 @@
             }
           },
           "kind": "when"
-        },
-        "inner": {
-          "kind": "base"
-        },
-        "kind": "refine"
+        }
       },
       "dot": {
         "fields": {},
@@ -188,6 +188,10 @@
       "rectangle": {
         "fields": {
           "height": {
+            "inner": {
+              "kind": "base"
+            },
+            "kind": "refine",
             "checker": {
               "body": {
                 "kind": "report",
@@ -223,13 +227,13 @@
                 }
               },
               "kind": "when"
-            },
-            "inner": {
-              "kind": "base"
-            },
-            "kind": "refine"
+            }
           },
           "width": {
+            "inner": {
+              "kind": "base"
+            },
+            "kind": "refine",
             "checker": {
               "body": {
                 "kind": "report",
@@ -265,11 +269,7 @@
                 }
               },
               "kind": "when"
-            },
-            "inner": {
-              "kind": "base"
-            },
-            "kind": "refine"
+            }
           }
         },
         "kind": "record"

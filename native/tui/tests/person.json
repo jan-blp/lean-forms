@@ -146,6 +146,10 @@
         "kind": "base"
       },
       "age": {
+        "inner": {
+          "kind": "base"
+        },
+        "kind": "refine",
         "checker": {
           "body": {
             "kind": "report",
@@ -198,11 +202,7 @@
             }
           },
           "kind": "when"
-        },
-        "inner": {
-          "kind": "base"
-        },
-        "kind": "refine"
+        }
       },
       "name": {
         "kind": "base"
