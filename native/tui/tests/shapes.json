@@ -140,6 +140,10 @@
   "validation": {
     "branches": {
       "circle": {
+        "inner": {
+          "kind": "base"
+        },
+        "kind": "refine",
         "checker": {
           "condition": {
             "kind": "not",
@@ -178,11 +182,7 @@
           "elseBranch": {
             "kind": "pass"
           }
-        },
-        "inner": {
-          "kind": "base"
-        },
-        "kind": "refine"
+        }
       },
       "dot": {
         "fields": {},
@@ -191,6 +191,10 @@
       "rectangle": {
         "fields": {
           "height": {
+            "inner": {
+              "kind": "base"
+            },
+            "kind": "refine",
             "checker": {
               "condition": {
                 "kind": "not",
@@ -229,13 +233,13 @@
               "elseBranch": {
                 "kind": "pass"
               }
-            },
-            "inner": {
-              "kind": "base"
-            },
-            "kind": "refine"
+            }
           },
           "width": {
+            "inner": {
+              "kind": "base"
+            },
+            "kind": "refine",
             "checker": {
               "condition": {
                 "kind": "not",
@@ -274,11 +278,7 @@
               "elseBranch": {
                 "kind": "pass"
               }
-            },
-            "inner": {
-              "kind": "base"
-            },
-            "kind": "refine"
+            }
           }
         },
         "kind": "record"

@@ -49,6 +49,136 @@
     "kind": "record"
   },
   "validation": {
+    "inner": {
+      "fields": {
+        "endDate": {
+          "inner": {
+            "kind": "base"
+          },
+          "kind": "refine",
+          "checker": {
+            "condition": {
+              "kind": "not",
+              "operand": {
+                "kind": "and",
+                "left": {
+                  "kind": "dateLe",
+                  "left": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "date"
+                    },
+                    "value": "2028-01-01"
+                  },
+                  "right": {
+                    "kind": "project",
+                    "path": []
+                  }
+                },
+                "right": {
+                  "kind": "dateLe",
+                  "left": {
+                    "kind": "project",
+                    "path": []
+                  },
+                  "right": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "date"
+                    },
+                    "value": "2028-12-31"
+                  }
+                }
+              }
+            },
+            "kind": "ite",
+            "thenBranch": {
+              "kind": "report",
+              "message": {
+                "kind": "value",
+                "type": {
+                  "kind": "text"
+                },
+                "value": "Date must be between 2028-01-01 and 2028-12-31."
+              },
+              "targets": {
+                "kind": "locations",
+                "locations": [
+                  []
+                ]
+              }
+            },
+            "elseBranch": {
+              "kind": "pass"
+            }
+          }
+        },
+        "startDate": {
+          "inner": {
+            "kind": "base"
+          },
+          "kind": "refine",
+          "checker": {
+            "condition": {
+              "kind": "not",
+              "operand": {
+                "kind": "and",
+                "left": {
+                  "kind": "dateLe",
+                  "left": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "date"
+                    },
+                    "value": "2028-01-01"
+                  },
+                  "right": {
+                    "kind": "project",
+                    "path": []
+                  }
+                },
+                "right": {
+                  "kind": "dateLe",
+                  "left": {
+                    "kind": "project",
+                    "path": []
+                  },
+                  "right": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "date"
+                    },
+                    "value": "2028-12-31"
+                  }
+                }
+              }
+            },
+            "kind": "ite",
+            "thenBranch": {
+              "kind": "report",
+              "message": {
+                "kind": "value",
+                "type": {
+                  "kind": "text"
+                },
+                "value": "Date must be between 2028-01-01 and 2028-12-31."
+              },
+              "targets": {
+                "kind": "locations",
+                "locations": [
+                  []
+                ]
+              }
+            },
+            "elseBranch": {
+              "kind": "pass"
+            }
+          }
+        }
+      },
+      "kind": "record"
+    },
+    "kind": "refine",
     "checker": {
       "condition": {
         "kind": "not",
@@ -99,137 +229,7 @@
       "elseBranch": {
         "kind": "pass"
       }
-    },
-    "inner": {
-      "fields": {
-        "endDate": {
-          "checker": {
-            "condition": {
-              "kind": "not",
-              "operand": {
-                "kind": "and",
-                "left": {
-                  "kind": "dateLe",
-                  "left": {
-                    "kind": "value",
-                    "type": {
-                      "kind": "date"
-                    },
-                    "value": "2028-01-01"
-                  },
-                  "right": {
-                    "kind": "project",
-                    "path": []
-                  }
-                },
-                "right": {
-                  "kind": "dateLe",
-                  "left": {
-                    "kind": "project",
-                    "path": []
-                  },
-                  "right": {
-                    "kind": "value",
-                    "type": {
-                      "kind": "date"
-                    },
-                    "value": "2028-12-31"
-                  }
-                }
-              }
-            },
-            "kind": "ite",
-            "thenBranch": {
-              "kind": "report",
-              "message": {
-                "kind": "value",
-                "type": {
-                  "kind": "text"
-                },
-                "value": "Date must be between 2028-01-01 and 2028-12-31."
-              },
-              "targets": {
-                "kind": "locations",
-                "locations": [
-                  []
-                ]
-              }
-            },
-            "elseBranch": {
-              "kind": "pass"
-            }
-          },
-          "inner": {
-            "kind": "base"
-          },
-          "kind": "refine"
-        },
-        "startDate": {
-          "checker": {
-            "condition": {
-              "kind": "not",
-              "operand": {
-                "kind": "and",
-                "left": {
-                  "kind": "dateLe",
-                  "left": {
-                    "kind": "value",
-                    "type": {
-                      "kind": "date"
-                    },
-                    "value": "2028-01-01"
-                  },
-                  "right": {
-                    "kind": "project",
-                    "path": []
-                  }
-                },
-                "right": {
-                  "kind": "dateLe",
-                  "left": {
-                    "kind": "project",
-                    "path": []
-                  },
-                  "right": {
-                    "kind": "value",
-                    "type": {
-                      "kind": "date"
-                    },
-                    "value": "2028-12-31"
-                  }
-                }
-              }
-            },
-            "kind": "ite",
-            "thenBranch": {
-              "kind": "report",
-              "message": {
-                "kind": "value",
-                "type": {
-                  "kind": "text"
-                },
-                "value": "Date must be between 2028-01-01 and 2028-12-31."
-              },
-              "targets": {
-                "kind": "locations",
-                "locations": [
-                  []
-                ]
-              }
-            },
-            "elseBranch": {
-              "kind": "pass"
-            }
-          },
-          "inner": {
-            "kind": "base"
-          },
-          "kind": "refine"
-        }
-      },
-      "kind": "record"
-    },
-    "kind": "refine"
+    }
   },
   "value": {
     "endDate": "2028-03-01",

@@ -183,6 +183,10 @@
           "kind": "base"
         },
         "quantity": {
+          "inner": {
+            "kind": "base"
+          },
+          "kind": "refine",
           "checker": {
             "condition": {
               "kind": "not",
@@ -221,13 +225,13 @@
             "elseBranch": {
               "kind": "pass"
             }
-          },
-          "inner": {
-            "kind": "base"
-          },
-          "kind": "refine"
+          }
         },
         "unitPrice": {
+          "inner": {
+            "kind": "base"
+          },
+          "kind": "refine",
           "checker": {
             "condition": {
               "kind": "not",
@@ -266,11 +270,7 @@
             "elseBranch": {
               "kind": "pass"
             }
-          },
-          "inner": {
-            "kind": "base"
-          },
-          "kind": "refine"
+          }
         }
       },
       "kind": "record"

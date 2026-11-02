@@ -143,7 +143,7 @@ private def testReturn : IO Unit := do
   | .error error => throw error
   let refined : RefinedDataType .natural := .refine (.base .natural)
     (.ofChecker <| .when (.not (.natLe (.project .self) (.value 10)))
-      (.report (.value "Too large") .global))
+      (.report (.value "Too large") (.global)))
   let restricted := Runtime.Tui.run (m := ReaderT String (Except IO.Error))
     refined form 0
   unless (restricted.run accepted).toOption.isNone do

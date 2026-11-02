@@ -53,3 +53,13 @@ lean_exe forms where
 @[default_target]
 lean_exe tests where
   root := `Tests
+
+target webAssets pkg : Unit := Job.async do
+  proc {
+    cmd := "npm"
+    args := #["--prefix", (pkg.dir / "web").toString, "run", "build", "--silent"]
+  }
+
+lean_exe «forms-web» where
+  root := `WebMain
+  extraDepTargets := #[`webAssets]

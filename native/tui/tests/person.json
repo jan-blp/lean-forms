@@ -146,6 +146,10 @@
         "kind": "base"
       },
       "age": {
+        "inner": {
+          "kind": "base"
+        },
+        "kind": "refine",
         "checker": {
           "condition": {
             "kind": "not",
@@ -201,11 +205,7 @@
           "elseBranch": {
             "kind": "pass"
           }
-        },
-        "inner": {
-          "kind": "base"
-        },
-        "kind": "refine"
+        }
       },
       "name": {
         "kind": "base"

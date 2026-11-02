@@ -1,20 +1,21 @@
-# Source this file to complete forms and lake [-q|--quiet] exe forms.
+# Complete forms and forms-web, directly or through Lake.
 _forms_complete() {
-    local start=1 cursor=$COMP_CWORD word
+    local start=1 cursor=$COMP_CWORD word executable
     local -a invoke
     COMPREPLY=()
     if [[ ${COMP_WORDS[0]##*/} == lake ]]; then
         while [[ ${COMP_WORDS[start]} == -q || ${COMP_WORDS[start]} == --quiet ]]; do
             ((start += 1))
         done
-        if [[ ${COMP_WORDS[start]} != exe || ${COMP_WORDS[start+1]} != forms ]] || ((cursor < start + 2)); then
+        executable=${COMP_WORDS[start+1]}
+        if [[ ${COMP_WORDS[start]} != exe || ( $executable != forms && $executable != forms-web ) ]] || ((cursor < start + 2)); then
             if [[ -n ${_forms_previous_lake_completion:-} ]]; then
                 "$_forms_previous_lake_completion" "$@"
             fi
             return 0
         fi
         ((start += 2))
-        invoke=("${COMP_WORDS[0]}" -q exe forms)
+        invoke=("${COMP_WORDS[0]}" -q exe "$executable")
     else
         invoke=("${COMP_WORDS[0]}")
     fi
@@ -30,5 +31,5 @@ if [[ $_forms_existing_completion =~ -F[[:space:]]+([^[:space:]]+) ]] && [[ ${BA
     _forms_previous_lake_completion=${BASH_REMATCH[1]}
 fi
 unset _forms_existing_completion
-complete -F _forms_complete forms .lake/build/bin/forms
+complete -F _forms_complete forms forms-web .lake/build/bin/forms .lake/build/bin/forms-web
 complete -o default -F _forms_complete lake

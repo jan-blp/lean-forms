@@ -49,6 +49,136 @@
     "kind": "record"
   },
   "validation": {
+    "inner": {
+      "fields": {
+        "away": {
+          "inner": {
+            "kind": "base"
+          },
+          "kind": "refine",
+          "checker": {
+            "condition": {
+              "kind": "not",
+              "operand": {
+                "kind": "and",
+                "left": {
+                  "kind": "natLe",
+                  "left": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "natural"
+                    },
+                    "value": "5"
+                  },
+                  "right": {
+                    "kind": "project",
+                    "path": []
+                  }
+                },
+                "right": {
+                  "kind": "natLe",
+                  "left": {
+                    "kind": "project",
+                    "path": []
+                  },
+                  "right": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "natural"
+                    },
+                    "value": "30"
+                  }
+                }
+              }
+            },
+            "kind": "ite",
+            "thenBranch": {
+              "kind": "report",
+              "message": {
+                "kind": "value",
+                "type": {
+                  "kind": "text"
+                },
+                "value": "Temperature must be between 5 and 30 C."
+              },
+              "targets": {
+                "kind": "locations",
+                "locations": [
+                  []
+                ]
+              }
+            },
+            "elseBranch": {
+              "kind": "pass"
+            }
+          }
+        },
+        "home": {
+          "inner": {
+            "kind": "base"
+          },
+          "kind": "refine",
+          "checker": {
+            "condition": {
+              "kind": "not",
+              "operand": {
+                "kind": "and",
+                "left": {
+                  "kind": "natLe",
+                  "left": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "natural"
+                    },
+                    "value": "5"
+                  },
+                  "right": {
+                    "kind": "project",
+                    "path": []
+                  }
+                },
+                "right": {
+                  "kind": "natLe",
+                  "left": {
+                    "kind": "project",
+                    "path": []
+                  },
+                  "right": {
+                    "kind": "value",
+                    "type": {
+                      "kind": "natural"
+                    },
+                    "value": "30"
+                  }
+                }
+              }
+            },
+            "kind": "ite",
+            "thenBranch": {
+              "kind": "report",
+              "message": {
+                "kind": "value",
+                "type": {
+                  "kind": "text"
+                },
+                "value": "Temperature must be between 5 and 30 C."
+              },
+              "targets": {
+                "kind": "locations",
+                "locations": [
+                  []
+                ]
+              }
+            },
+            "elseBranch": {
+              "kind": "pass"
+            }
+          }
+        }
+      },
+      "kind": "record"
+    },
+    "kind": "refine",
     "checker": {
       "condition": {
         "kind": "not",
@@ -93,137 +223,7 @@
       "elseBranch": {
         "kind": "pass"
       }
-    },
-    "inner": {
-      "fields": {
-        "away": {
-          "checker": {
-            "condition": {
-              "kind": "not",
-              "operand": {
-                "kind": "and",
-                "left": {
-                  "kind": "natLe",
-                  "left": {
-                    "kind": "value",
-                    "type": {
-                      "kind": "natural"
-                    },
-                    "value": "5"
-                  },
-                  "right": {
-                    "kind": "project",
-                    "path": []
-                  }
-                },
-                "right": {
-                  "kind": "natLe",
-                  "left": {
-                    "kind": "project",
-                    "path": []
-                  },
-                  "right": {
-                    "kind": "value",
-                    "type": {
-                      "kind": "natural"
-                    },
-                    "value": "30"
-                  }
-                }
-              }
-            },
-            "kind": "ite",
-            "thenBranch": {
-              "kind": "report",
-              "message": {
-                "kind": "value",
-                "type": {
-                  "kind": "text"
-                },
-                "value": "Temperature must be between 5 and 30 C."
-              },
-              "targets": {
-                "kind": "locations",
-                "locations": [
-                  []
-                ]
-              }
-            },
-            "elseBranch": {
-              "kind": "pass"
-            }
-          },
-          "inner": {
-            "kind": "base"
-          },
-          "kind": "refine"
-        },
-        "home": {
-          "checker": {
-            "condition": {
-              "kind": "not",
-              "operand": {
-                "kind": "and",
-                "left": {
-                  "kind": "natLe",
-                  "left": {
-                    "kind": "value",
-                    "type": {
-                      "kind": "natural"
-                    },
-                    "value": "5"
-                  },
-                  "right": {
-                    "kind": "project",
-                    "path": []
-                  }
-                },
-                "right": {
-                  "kind": "natLe",
-                  "left": {
-                    "kind": "project",
-                    "path": []
-                  },
-                  "right": {
-                    "kind": "value",
-                    "type": {
-                      "kind": "natural"
-                    },
-                    "value": "30"
-                  }
-                }
-              }
-            },
-            "kind": "ite",
-            "thenBranch": {
-              "kind": "report",
-              "message": {
-                "kind": "value",
-                "type": {
-                  "kind": "text"
-                },
-                "value": "Temperature must be between 5 and 30 C."
-              },
-              "targets": {
-                "kind": "locations",
-                "locations": [
-                  []
-                ]
-              }
-            },
-            "elseBranch": {
-              "kind": "pass"
-            }
-          },
-          "inner": {
-            "kind": "base"
-          },
-          "kind": "refine"
-        }
-      },
-      "kind": "record"
-    },
-    "kind": "refine"
+    }
   },
   "value": {
     "away": "18",
