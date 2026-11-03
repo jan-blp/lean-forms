@@ -8,20 +8,22 @@ export type Schema =
   | { kind: 'record'; fields: { name: string; type: Schema }[] }
   | { kind: 'sum'; constructors: { name: string; type: Schema }[] };
 
+// Lean serializes result types for literals and case expressions. Hand-built
+// TypeScript-only expressions may omit them; the Wasm decoder requires them.
 export type Expr =
-  | { kind: 'value'; value: Value }
+  | { kind: 'value'; value: Value; type?: Schema }
   | { kind: 'project'; path: Path }
   | { kind: 'natAdd' | 'natSub' | 'natMul' | 'natLe' | 'textAppend' | 'textEq' | 'enumEq' | 'dateLe' | 'and'; left: Expr; right: Expr }
   | { kind: 'natToText' | 'not'; operand: Expr }
   | { kind: 'enumLabel'; subject: Expr; options: string[] }
-  | { kind: 'enumCases'; subject: Expr; branches: Expr[] }
+  | { kind: 'enumCases'; subject: Expr; branches: Expr[]; type?: Schema }
   | { kind: 'length'; items: Expr }
   | { kind: 'all'; items: Expr; predicate: Expr; context: Path }
   | { kind: 'filter'; items: Expr; predicate: Expr }
   | { kind: 'sortBy' | 'sortNatBy'; items: Expr; key: Expr; descending: boolean }
   | { kind: 'search'; items: Expr; key: Expr; query: Expr }
   | { kind: 'snoc'; items: Expr; value: Expr }
-  | { kind: 'cases'; subject: Expr; branches: Record<string, Expr> }
+  | { kind: 'cases'; subject: Expr; branches: Record<string, Expr>; type?: Schema }
   | { kind: 'sum'; items: Expr; expression: Expr }
   | { kind: 'ifThenElse'; condition: Expr; whenTrue: Expr; whenFalse: Expr };
 
@@ -89,3 +91,8 @@ export type ValidationError = ResolvedError;
 export type SubmissionError =
   | { kind: 'validation'; message: string; errors: ValidationError[] }
   | { kind: 'replay' | 'request'; message: string };
+
+// Typed backends return a schema for results that introduce a new scope (table
+// rows and checker iteration). The TypeScript evaluator only needs the values.
+export interface Evaluation { value: Value; schema?: Schema }
+export type Evaluator = (expression: Expr, value: Value, schema?: Schema) => Evaluation;

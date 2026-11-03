@@ -1,5 +1,5 @@
-import { evaluate, textValue } from './interpreter.js';
-import type { Expr, Schema, Value } from './protocol.js';
+import { typescriptEvaluator, textValue } from './interpreter.js';
+import type { Evaluator, Expr, Schema, Value } from './protocol.js';
 
 export type LocationStep =
   | { kind: 'field'; name: string }
@@ -71,14 +71,14 @@ function locationTargets(locations: Location[]): Targets {
   return { kind: 'locations', locations: [locations[0], ...locations.slice(1)] };
 }
 
-function evaluateTargets(targets: TargetsExpr, value: Value): Targets {
+function evaluateTargets(targets: TargetsExpr, value: Value, schema: Schema | undefined, evaluator: Evaluator): Targets {
   switch (targets.kind) {
     case 'global': return targets;
     case 'locations': return locationTargets(targets.locations.map(location => location.map(step => {
       switch (step.kind) {
         case 'field': return step;
         case 'item': {
-          const index = textValue(evaluate(step.index, value));
+          const index = textValue(evaluator(step.index, value, schema).value);
           if (!/^[0-9]+$/.test(index)) throw new Error('Location index must be a natural number.');
           return { kind: 'item', index: BigInt(index).toString() };
         }
@@ -90,35 +90,50 @@ function evaluateTargets(targets: TargetsExpr, value: Value): Targets {
   }
 }
 
-function evaluateChecker(checker: Checker, value: Value): ValidationError[] {
+function evaluateChecker(checker: Checker, value: Value, schema: Schema | undefined, evaluator: Evaluator): ValidationError[] {
   switch (checker.kind) {
     case 'pass': return [];
-    case 'report': return [{ message: textValue(evaluate(checker.message, value)), targets: evaluateTargets(checker.targets, value) }];
+    case 'report': return [{ message: textValue(evaluator(checker.message, value, schema).value), targets: evaluateTargets(checker.targets, value, schema, evaluator) }];
     case 'ite': {
-      const condition = evaluate(checker.condition, value);
+      const condition = evaluator(checker.condition, value, schema).value;
       if (typeof condition !== 'boolean') throw new Error('Validation condition must be boolean.');
-      return evaluateChecker(condition ? checker.thenBranch : checker.elseBranch, value);
+      return evaluateChecker(condition ? checker.thenBranch : checker.elseBranch, value, schema, evaluator);
     }
     case 'cases': {
-      const selected = evaluate(checker.subject, value);
+      const subject = evaluator(checker.subject, value, schema);
+      const selected = subject.value;
       if (!object(selected) || typeof selected.tag !== 'string' || !Object.hasOwn(selected, 'value'))
         throw new Error('Validation cases requires a sum value.');
       if (!Object.hasOwn(checker.branches, selected.tag))
         throw new Error(`Missing validation branch: ${selected.tag}`);
-      return evaluateChecker(checker.branches[selected.tag], { outer: value, payload: selected.value });
+      const payload = subject.schema?.kind === 'sum'
+        ? subject.schema.constructors.find(branch => branch.name === selected.tag)?.type : undefined;
+      const context: Schema | undefined = schema && payload ? {
+        kind: 'record', fields: [{ name: 'outer', type: schema }, { name: 'payload', type: payload }],
+      } : undefined;
+      return evaluateChecker(checker.branches[selected.tag], { outer: value, payload: selected.value }, context, evaluator);
     }
-    case 'seq': return [...evaluateChecker(checker.left, value), ...evaluateChecker(checker.right, value)];
+    case 'seq': return [...evaluateChecker(checker.left, value, schema, evaluator), ...evaluateChecker(checker.right, value, schema, evaluator)];
     case 'each': {
-      const items = evaluate(checker.items, value);
-      if (!Array.isArray(items)) throw new Error('Validation iteration requires a list.');
-      return items.flatMap((item, index) => evaluateChecker(checker.body, { outer: value, item, index: index.toString() }));
+      const items = evaluator(checker.items, value, schema);
+      if (!Array.isArray(items.value) || (items.schema && items.schema.kind !== 'list')) {
+        throw new Error('Validation iteration requires a list.');
+      }
+      const context: Schema | undefined = schema && items.schema?.kind === 'list' ? {
+        kind: 'record', fields: [
+          { name: 'outer', type: schema }, { name: 'item', type: items.schema.element },
+          { name: 'index', type: { kind: 'natural' } },
+        ],
+      } : undefined;
+      return items.value.flatMap((item, index) =>
+        evaluateChecker(checker.body, { outer: value, item, index: index.toString() }, context, evaluator));
     }
     default: return unsupported(checker);
   }
 }
 
-export function runChecker(checker: Checker, schema: Schema, value: Value): ResolvedError[] {
-  return evaluateChecker(checker, value).map(error => {
+export function runChecker(checker: Checker, schema: Schema, value: Value, evaluator: Evaluator = typescriptEvaluator): ResolvedError[] {
+  return evaluateChecker(checker, value, schema, evaluator).map(error => {
     switch (error.targets.kind) {
       case 'global': return error;
       case 'locations': {
@@ -148,19 +163,19 @@ function prefix(error: ResolvedError, step: LocationStep): ResolvedError {
   }
 }
 
-export function validationErrors(refinement: Refinement, schema: Schema, value: Value): ResolvedError[] {
+export function validationErrors(refinement: Refinement, schema: Schema, value: Value, evaluator: Evaluator = typescriptEvaluator): ResolvedError[] {
   switch (refinement.kind) {
     case 'base': return [];
-    case 'refine': return [...validationErrors(refinement.inner, schema, value),
-      ...runChecker(refinement.checker, schema, value)];
+    case 'refine': return [...validationErrors(refinement.inner, schema, value, evaluator),
+      ...runChecker(refinement.checker, schema, value, evaluator)];
     case 'list': {
       if (schema.kind !== 'list' || !Array.isArray(value)) throw new Error('Invalid list refinement.');
-      return value.flatMap((item, index) => validationErrors(refinement.item, schema.element, item)
+      return value.flatMap((item, index) => validationErrors(refinement.item, schema.element, item, evaluator)
         .map(error => prefix(error, { kind: 'item', index: index.toString() })));
     }
     case 'record': {
       if (schema.kind !== 'record' || !object(value)) throw new Error('Invalid record refinement.');
-      return schema.fields.flatMap(field => validationErrors(refinement.fields[field.name], field.type, value[field.name])
+      return schema.fields.flatMap(field => validationErrors(refinement.fields[field.name], field.type, value[field.name], evaluator)
         .map(error => prefix(error, { kind: 'field', name: field.name })));
     }
     case 'sum': {
@@ -168,7 +183,7 @@ export function validationErrors(refinement: Refinement, schema: Schema, value: 
       const tag = value.tag;
       const branch = schema.constructors.find(branch => branch.name === tag);
       if (!branch) throw new Error('Unknown constructor.');
-      return validationErrors(refinement.branches[tag], branch.type, value.value)
+      return validationErrors(refinement.branches[tag], branch.type, value.value, evaluator)
         .map(error => prefix(error, { kind: 'constructor', tag }));
     }
     default: return unsupported(refinement);
