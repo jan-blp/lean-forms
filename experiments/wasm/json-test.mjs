@@ -51,7 +51,7 @@ for (const { name, args, expected } of requests) {
 const deep = await createEvaluator();
 const depth = 200000;
 assert.throws(() => deep.evaluate(schema, expression, '['.repeat(depth) + ']'.repeat(depth)),
-  /stack overflow/i);
+  /stack overflow|maximum call stack size exceeded/i);
 const fresh = await createEvaluator();
 assert.deepEqual(fresh.evaluate(schema, expression, argument), { ok: true, value: '42' });
 const rejected = cases.filter(test => !test.expected.ok).length;

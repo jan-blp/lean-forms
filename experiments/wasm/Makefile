@@ -28,11 +28,11 @@ setup:
 prepare:
 	@test -x $(SDK)/emcc -a -d $(SOURCE) || { echo 'Run make -f $(MAKEFILE) setup first.'; exit 1; }
 	@grep -q '^#define LEAN_VERSION_STRING "4.34.1"' $(PREFIX)/include/lean/version.h || { echo 'This build requires Lean 4.34.1.'; exit 1; }
-	lake build Forms.Runtime.CheckerProtocol:c Forms.Runtime.ExpressionProtocol:c Forms.Runtime.ExpressionProtocol.Schema:c Forms.Runtime.JsonProtocol:c
+	lake build wasm-discover Forms.Runtime.CheckerProtocol:c Forms.Runtime.ExpressionProtocol:c Forms.Runtime.ExpressionProtocol.Schema:c Forms.Runtime.JsonProtocol:c
 
 discover: prepare
 	$(MAKE) -f $(MAKEFILE) $(OUT)/JsonEval.c $(INCLUDE)/config.stamp
-	python3 experiments/wasm/discover-json.py
+	.lake/build/bin/wasm-discover
 
 $(OUT)/JsonEval.c: experiments/wasm/JsonEval.lean .lake/build/lib/lean/Forms/Runtime/CheckerProtocol.olean .lake/build/lib/lean/Forms/Runtime/ExpressionProtocol.olean $(MAKEFILE)
 	@mkdir -p $(@D)
