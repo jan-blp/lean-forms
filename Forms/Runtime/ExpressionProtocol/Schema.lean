@@ -66,16 +66,6 @@ def checkFields (json : Json) (names : List String) : Except String Unit := do
   for name in names do discard <| json.getObjVal? name
   if object.size != names.length then throw "Unexpected object fields"
 
-/-- Sequence a finite family without dropping its dependent index. -/
-def collectFin {n : Nat} {α : Fin n → Type u}
-    (values : (i : Fin n) → Except String (α i)) : Except String ((i : Fin n) → α i) :=
-  match n with
-  | 0 => pure (fun i => Fin.elim0 i)
-  | _ + 1 => do
-    let head ← values 0
-    let tail ← collectFin (fun i => values i.succ)
-    pure (Fin.cons head tail)
-
 /-- Assemble a record or sum after decoding its named fields. -/
 def Schema.fromFields (record : Bool) (pairs : List (String × Schema)) : Except String Schema :=
   let names := pairs.map Prod.fst

@@ -72,12 +72,12 @@ theorem mapM_ok {α β : Type} (xs : List α) (f : α → β) :
     xs.mapM (fun x => (Except.ok (f x) : Except String β)) = .ok (xs.map f) :=
   List.mapM_pure (m := Except String)
 
-theorem collectFin_ok {n : Nat} {α : Fin n → Type u} (result : (i : Fin n) → α i) :
-    collectFin (fun i => .ok (result i)) = .ok result := by
+theorem sequenceFin_ok {n : Nat} {α : Fin n → Type u} (result : (i : Fin n) → α i) :
+    JsonProtocol.sequenceFin (fun i => .ok (result i)) = .ok result := by
   induction n with
-  | zero => simp only [collectFin, pure, Except.pure]; exact congrArg _ (funext (·.elim0))
+  | zero => simp only [JsonProtocol.sequenceFin, pure, Except.pure]; exact congrArg _ (funext (·.elim0))
   | succ n ih =>
-    simp only [collectFin, ih, bind, Except.bind, pure, Except.pure]
+    simp only [JsonProtocol.sequenceFin, ih, bind, Except.bind, pure, Except.pure]
     exact congrArg _ (Fin.cons_self_tail result)
 
 open Meta Simp in

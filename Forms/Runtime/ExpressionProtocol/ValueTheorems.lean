@@ -6,14 +6,6 @@ namespace Forms.Runtime.ExpressionProtocol
 open Lean
 set_option backward.isDefEq.respectTransparency false
 
-theorem sequenceFin_ok {n : Nat} {α : Fin n → Type} (result : (i : Fin n) → α i) :
-    JsonProtocol.sequenceFin (fun i => .ok (result i)) = .ok result := by
-  induction n with
-  | zero => simp only [JsonProtocol.sequenceFin, pure, Except.pure]; exact congrArg _ (funext (·.elim0))
-  | succ n ih =>
-    simp only [JsonProtocol.sequenceFin, ih, bind, Except.bind, pure, Except.pure]
-    exact congrArg _ (Fin.cons_self_tail result)
-
 private theorem transport_apply {ι : Type} {α : ι → Type} (f : (i : ι) → α i)
     {a b : ι} (h : a = b) : h ▸ f a = f b := by
   cases h

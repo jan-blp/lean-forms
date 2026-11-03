@@ -12,7 +12,7 @@ local macro "decode_step" : tactic =>
   `(tactic| (rw [infer.eq_def]; simp [*, reduceKind, reduceChildField, reduceChildElements,
     reduceGetObjVal, schema_decode, value_decode, path_decode, stringList_roundTrip, bool_roundTrip,
     json_toJson, Json.getObjValAs?, Json.getObjValD, Except.toOption, bind, Except.bind, Except.map,
-    Except.mapError, requireType, pure, Except.pure, canonicalSchema, canonicalExpr, collectFin_ok]))
+    Except.mapError, requireType, pure, Except.pure, canonicalSchema, canonicalExpr, sequenceFin_ok]))
 
 /-- The production decoder reconstructs every serialized expression in its wire types. -/
 theorem expression_decode

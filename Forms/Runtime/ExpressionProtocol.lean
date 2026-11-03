@@ -124,7 +124,7 @@ def infer (input : Schema) (json : Json) : Except String (Decoded input) :=
       (json.getObjVal? "type").bind fun type => (Schema.fromJson type).bind fun result =>
       (childField json "branches").bind fun container => (childElements container.val).bind fun branches => do
       if branches.size != names.length then throw "Wrong number of enum branches"
-      let decoded ← collectFin (n := names.length) fun i => do
+      let decoded ← JsonProtocol.sequenceFin (n := names.length) fun i => do
         let some branch := branches[i.val]? | throw "Missing enum branch"
         requireType result (← infer input branch.val)
       return ⟨result, .enumCases (domain := domain names unique) subject decoded⟩
@@ -133,7 +133,7 @@ def infer (input : Schema) (json : Json) : Except String (Decoded input) :=
       (json.getObjVal? "type").bind fun type => (Schema.fromJson type).bind fun result =>
       (childField json "branches").bind fun branches =>
       (checkFields branches.val names).bind fun _ => do
-      let decoded ← collectFin (n := names.length) fun i =>
+      let decoded ← JsonProtocol.sequenceFin (n := names.length) fun i =>
         (childField branches.val (names.get i)).bind fun branch => do
           requireType result (← infer (types i) branch.val)
       return ⟨result, .cases (tags := domain names unique) subject decoded⟩
