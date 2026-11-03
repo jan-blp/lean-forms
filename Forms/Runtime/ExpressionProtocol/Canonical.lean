@@ -48,6 +48,13 @@ termination_by structural t
     labels.options.get (enumIndex labels i) = labels.label i := by
   simp [Enum.options, FinEnum.toList, enumIndex, List.get_eq_getElem]
 
+theorem toList_length (labels : Enum) : (FinEnum.toList labels).length = labels.options.length := by
+  simp [Enum.options]
+
+theorem toList_getElem (labels : Enum) (i : Fin labels.options.length) (h) :
+    (FinEnum.toList labels)[i.val]'h = (enumIndex labels).symm i := by
+  simp [FinEnum.toList, enumIndex]; rfl
+
 @[simp] theorem canonicalEquiv_list (element : DataType) (xs : List ⟦element⟧) :
     canonicalEquiv (.list element) xs = xs.map (canonicalEquiv element) := rfl
 
@@ -133,10 +140,7 @@ theorem canonicalExpr_eval {input result : DataType} (expression : Forms.Expr in
       canonicalEquiv result (expression.eval value) := by
   induction expression with
   | project path => exact canonicalPath_get path value
-  | @sortBy i e items key descending hi hk =>
-      simp_all [canonicalExpr, Forms.Expr.eval, canonicalEquiv, Equiv.listEquivOfEquiv]
-      exact (List.map_mergeSort (by intros; simp [hk])).symm
-  | @sortNatBy i e items key descending hi hk =>
+  | @sortBy i e items key descending hi hk | @sortNatBy i e items key descending hi hk =>
       simp_all [canonicalExpr, Forms.Expr.eval, canonicalEquiv, Equiv.listEquivOfEquiv]
       exact (List.map_mergeSort (by intros; simp [hk])).symm
   | @search i e items key query hi hk hq =>
@@ -146,8 +150,6 @@ theorem canonicalExpr_eval {input result : DataType} (expression : Forms.Expr in
   | @enumLabel i labels subject ih =>
       simpa [canonicalExpr, Forms.Expr.eval, canonicalEquiv, ih, List.get_eq_getElem]
         using enumIndex_label labels (subject.eval value)
-  | ifThenElse c t f hc ht hf =>
-      simp_all [canonicalExpr, Forms.Expr.eval, canonicalEquiv, apply_ite]
   | @cases i r labels branches subject bodies hi hb =>
       simp only [canonicalExpr, Forms.Expr.eval]
       rw [hi]
@@ -158,7 +160,7 @@ theorem canonicalExpr_eval {input result : DataType} (expression : Forms.Expr in
         (canonicalEquiv (branches (subject.eval value).tag)) (subject.eval value).payload).trans
         (hb _ _)
   | _ => simp_all [canonicalExpr, Forms.Expr.eval, canonicalEquiv, Equiv.listEquivOfEquiv,
-      List.filter_map, Function.comp_def]
+      List.filter_map, Function.comp_def, apply_ite]
 
 private theorem map_finRange_cast {α : Type} {m n : Nat} (h : m = n) (f : Fin n → α) :
     (List.finRange m).map (fun i => f (Fin.cast h i)) = (List.finRange n).map f := by

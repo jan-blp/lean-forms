@@ -48,21 +48,47 @@ theorem checkFields_mkObj {fields : List (String × Json)}
   rw [lookups]
   simp [size_mkObj unique]
 
+theorem string_roundTrip (s : String) : fromJson? (toJson s) = .ok s := rfl
+
+theorem bool_roundTrip (b : Bool) : fromJson? (toJson b) = .ok b := by
+  cases b <;> rfl
+
+theorem json_toJson (json : Json) : toJson json = json := rfl
+
 theorem stringList_roundTrip (xs : List String) : fromJson? (toJson xs) = .ok xs := by
   simp [fromJson?, toJson, Lean.List.fromJson?, Lean.List.toJson,
     Lean.Array.fromJson?, Lean.Array.toJson, Function.comp_def, Json.getStr?]
   rw [List.mapM_pure]
   simp [Except.map, Functor.map, pure, Except.pure]
 
-theorem childElements_bind {α : Type u} (values : Array Json)
-    (f : List Json → Except String α) :
-    (childElements (.arr values)).bind (fun xs => f (xs.toList.map Subtype.val)) = f values.toList := by
-  simp [childElements, Except.bind, List.map_map, Function.comp_def]
+/-- Searching by an injective key finds the element carrying that key. -/
+theorem find?_key {α : Type} {xs : List α} {key : α → String} (inj : Function.Injective key)
+    {x : α} (mem : x ∈ xs) : xs.find? (fun y => key y == key x) = some x := by
+  cases found : xs.find? (fun y => key y == key x) with
+  | none => simpa using List.find?_eq_none.mp found x mem
+  | some y => simpa using inj (by simpa using List.find?_some found)
 
-theorem childElements_mapM {α : Type} (values : Array Json)
-    (f : Json → Except String α) :
-    (childElements (.arr values)).bind (fun xs => xs.toList.mapM (fun x => f x.val)) =
-      values.toList.mapM f := by
-  simpa only [List.mapM_map, Function.comp_def] using childElements_bind values (fun xs => xs.mapM f)
+theorem mapM_ok {α β : Type} (xs : List α) (f : α → β) :
+    xs.mapM (fun x => (Except.ok (f x) : Except String β)) = .ok (xs.map f) :=
+  List.mapM_pure (m := Except String)
+
+theorem collectFin_ok {n : Nat} {α : Fin n → Type u} (result : (i : Fin n) → α i) :
+    collectFin (fun i => .ok (result i)) = .ok result := by
+  induction n with
+  | zero => simp only [collectFin, pure, Except.pure]; exact congrArg _ (funext (·.elim0))
+  | succ n ih =>
+    simp only [collectFin, ih, bind, Except.bind, pure, Except.pure]
+    exact congrArg _ (Fin.cons_self_tail result)
+
+open Meta Simp in
+/-- Evaluate a lookup on a concrete encoded node when it succeeds definitionally. -/
+def okByWhnf (e : Lean.Expr) : SimpM DStep := do
+  let e' ← whnfD e
+  return if e'.isAppOfArity ``Except.ok 3 then .done e' else .continue
+
+dsimproc_decl reduceGetObjVal (Json.getObjVal? _ _) := okByWhnf
+dsimproc_decl reduceCheckFields (checkFields _ _) := okByWhnf
+dsimproc_decl reduceChildField (childField _ _) := okByWhnf
+dsimproc_decl reduceChildElements (childElements _) := okByWhnf
 
 end Forms.Runtime.ExpressionProtocol

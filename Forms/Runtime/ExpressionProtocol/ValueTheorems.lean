@@ -5,48 +5,24 @@ import Std.Data.String.ToNat
 namespace Forms.Runtime.ExpressionProtocol
 open Lean
 set_option backward.isDefEq.respectTransparency false
-universe u
 
-theorem sequenceFin_ok {n : Nat} {α : Fin n → Type}
-    (values : (i : Fin n) → Except String (α i)) (result : (i : Fin n) → α i)
-    (h : ∀ i, values i = .ok (result i)) : JsonProtocol.sequenceFin values = .ok result := by
+theorem sequenceFin_ok {n : Nat} {α : Fin n → Type} (result : (i : Fin n) → α i) :
+    JsonProtocol.sequenceFin (fun i => .ok (result i)) = .ok result := by
   induction n with
-  | zero =>
-      simp only [JsonProtocol.sequenceFin, pure, Except.pure, Except.ok.injEq]
-      funext i
-      exact Fin.elim0 i
+  | zero => simp only [JsonProtocol.sequenceFin, pure, Except.pure]; exact congrArg _ (funext (·.elim0))
   | succ n ih =>
-      simp only [JsonProtocol.sequenceFin, h, bind, Except.bind]
-      rw [ih _ _ (fun _ => rfl)]
-      simp only [pure, Except.pure, Except.ok.injEq]
-      funext i
-      cases i using Fin.cases <;> rfl
+    simp only [JsonProtocol.sequenceFin, ih, bind, Except.bind, pure, Except.pure]
+    exact congrArg _ (Fin.cons_self_tail result)
 
 private theorem transport_apply {ι : Type} {α : ι → Type} (f : (i : ι) → α i)
     {a b : ι} (h : a = b) : h ▸ f a = f b := by
   cases h
   rfl
 
-theorem sequence_ok {ι : Type} [FinEnum ι] {α : ι → Type}
-    (values : (i : ι) → Except String (α i)) (result : (i : ι) → α i)
-    (h : ∀ i, values i = .ok (result i)) : JsonProtocol.sequence values = .ok result := by
-  unfold JsonProtocol.sequence
-  rw [sequenceFin_ok _ _ (fun i => h (FinEnum.equiv.symm i))]
-  simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq]
-  funext i
-  exact transport_apply result (FinEnum.equiv.symm_apply_apply i)
-
-theorem find_label (labels : Enum) (value : labels) :
-    (FinEnum.toList labels).find? (fun i => labels.label i == labels.label value) = some value := by
-  cases h : (FinEnum.toList labels).find? (fun i => labels.label i == labels.label value) with
-  | none =>
-      have := List.find?_eq_none.mp h value (FinEnum.mem_toList value)
-      simp at this
-  | some i =>
-      have hi := List.find?_some h
-      have same : i = value := labels.label_injective (by simpa using hi)
-      subst i
-      rfl
+theorem sequence_ok {ι : Type} [FinEnum ι] {α : ι → Type} (result : (i : ι) → α i) :
+    JsonProtocol.sequence (fun i => .ok (result i)) = .ok result := by
+  simp only [JsonProtocol.sequence, sequenceFin_ok, bind, Except.bind, pure, Except.pure]
+  exact congrArg _ (funext fun i => transport_apply result (FinEnum.equiv.symm_apply_apply i))
 
 private theorem decode_reindex {a b : DataType} (h : a = b) (json : Json) (value : ⟦b⟧)
     (decoded : JsonProtocol.valueFromJson b json = .ok value) :
@@ -54,72 +30,48 @@ private theorem decode_reindex {a b : DataType} (h : a = b) (json : Json) (value
   cases h
   exact decoded
 
+private theorem getObj_mkObj (fields : List (String × Json)) :
+    (Json.mkObj fields).getObj? = .ok (Std.TreeMap.Raw.ofList fields compare) := rfl
+
+private theorem getNat_fromNat (n : Nat) : (Json.num (JsonNumber.fromNat n)).getNat? = .ok n := rfl
+
 /-- Value decoding recovers the original value under the wire-type equivalence. -/
 theorem value_decode
     (type : DataType) (value : ⟦type⟧) :
     JsonProtocol.valueFromJson (canonicalSchema type).dataType (JsonProtocol.valueToJson value) =
       .ok (canonicalEquiv type value) := by
   induction type with
-  | text => rfl
-  | boolean => cases value <;> rfl
-  | natural =>
-      simp [canonicalSchema, JsonProtocol.valueFromJson, JsonProtocol.valueToJson,
-        Json.getStr?, toJson, Nat.toNat?_repr, bind, Except.bind, pure, Except.pure, canonicalEquiv]
-  | date =>
-      simp [canonicalSchema, JsonProtocol.valueFromJson, JsonProtocol.valueToJson,
-        Json.getStr?, toJson, Date.ofString?_toString, bind, Except.bind, pure, Except.pure, canonicalEquiv]
-  | list element ih =>
-      simp only [canonicalSchema, JsonProtocol.valueFromJson, JsonProtocol.valueToJson,
-        Json.getArr?, bind, Except.bind, pure, Except.pure, List.mapM_map]
-      simp only [Function.comp_def, ih]
-      exact List.mapM_pure (m := Except String)
   | enum labels =>
       have bound : (FinEnum.equiv value).val < labels.options.length := (enumIndex labels value).isLt
-      change (if h : (FinEnum.equiv value).val < labels.options.length then
-          Except.ok (⟨(FinEnum.equiv value).val, h⟩ : Fin labels.options.length)
-        else Except.error "Invalid enum in interpreter result") = .ok (enumIndex labels value)
-      rw [dite_eq_left bound]
+      simp [JsonProtocol.valueFromJson, JsonProtocol.valueToJson, toJson, getNat_fromNat, bound,
+        bind, Except.bind, pure, Except.pure]
       rfl
   | record labels fields ih =>
-      have unique : (((FinEnum.toList labels).map
-          (fun i => (labels.label i, JsonProtocol.valueToJson (value i))))).map Prod.fst |>.Nodup := by
-        simpa [List.map_map, Function.comp_def, Enum.options] using labels.options_nodup
+      let pairs := (FinEnum.toList labels).map fun i => (labels.label i, JsonProtocol.valueToJson (value i))
+      have unique : (pairs.map Prod.fst).Nodup := by
+        simpa [pairs, Function.comp_def, Enum.options] using labels.options_nodup
       have size := size_mkObj unique
-      simp only [canonicalSchema, Schema.dataType, JsonProtocol.valueFromJson,
-        JsonProtocol.valueToJson, Json.mkObj, Json.getObj?, bind, Except.bind, pure, Except.pure]
-      rw [size]
-      simp only [List.length_map, FinEnum.toList, List.length_map, List.length_finRange,
-        domain, FinEnum.card, Enum.options, List.length_map, List.length_finRange,
-        bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
-      refine @sequence_ok (Fin labels.options.length) (domain labels.options labels.options_nodup).enum _ _ _ ?_
-      intro j
-      change ((Json.mkObj ((FinEnum.toList labels).map
-        (fun i => (labels.label i, JsonProtocol.valueToJson (value i))))).getObjVal?
-          (labels.options.get j)).bind
-        (JsonProtocol.valueFromJson (canonicalSchema (fields ((enumIndex labels).symm j))).dataType) = _
-      have label : labels.options.get j = labels.label ((enumIndex labels).symm j) := by
-        simpa using enumIndex_label labels ((enumIndex labels).symm j)
-      rw [label, getObjVal_mkObj unique (List.mem_map.mpr
-        ⟨(enumIndex labels).symm j, FinEnum.mem_toList _, rfl⟩)]
-      exact ih _ _
+      have field (i : labels) : (Json.mkObj pairs).getObjVal? (labels.label i) =
+          .ok (JsonProtocol.valueToJson (value i)) :=
+        getObjVal_mkObj unique (List.mem_map.mpr ⟨i, FinEnum.mem_toList i, rfl⟩)
+      simp only [pairs] at size field
+      simp [JsonProtocol.valueFromJson, JsonProtocol.valueToJson, getObj_mkObj, size, field, ih,
+        toList_getElem, sequence_ok, Enum.options, bind, Except.bind]
+      rfl
   | sum labels branches ih =>
-      have found := find_label (domain labels.options labels.options_nodup) (enumIndex labels value.tag)
+      have found := find?_key (domain labels.options labels.options_nodup).label_injective
+        (@FinEnum.mem_toList _ (domain labels.options labels.options_nodup).enum (enumIndex labels value.tag))
       simp only [domain, enumIndex_label] at found
-      let pairs := [("tag", toJson (labels.label value.tag)),
-        ("value", JsonProtocol.valueToJson (t := branches value.tag) value.payload)]
-      have unique : (pairs.map Prod.fst).Nodup := by simp [pairs]
-      have tag := getObjVal_mkObj unique (show ("tag", toJson (labels.label value.tag)) ∈ pairs by simp [pairs])
-      have payload := getObjVal_mkObj unique (show ("value", JsonProtocol.valueToJson value.payload) ∈ pairs by simp [pairs])
-      simp only [canonicalSchema, Schema.dataType, JsonProtocol.valueFromJson, JsonProtocol.valueToJson]
-      rw [tag, payload]
-      simp only [Json.mkObj, Json.getObj?, bind, Except.bind, pure, Except.pure]
-      rw [size_mkObj unique]
-      simp only [pairs, List.length_cons, List.length_nil, bne_self_eq_false,
-        Bool.false_eq_true, ↓reduceIte, toJson, Json.getStr?, pure, Except.pure]
-      rw [found]
-      simp only []
+      have size := size_mkObj (fields := [("tag", toJson (labels.label value.tag)),
+        ("value", JsonProtocol.valueToJson value.payload)]) (by simp)
+      simp [JsonProtocol.valueFromJson, JsonProtocol.valueToJson, getObj_mkObj, reduceGetObjVal,
+        Json.getStr?, toJson, bind, Except.bind, pure, Except.pure] at size found ⊢
+      simp only [size, found, ↓reduceIte]
       rw [decode_reindex (congrArg (fun j => (canonicalSchema (branches j)).dataType)
-        ((enumIndex labels).symm_apply_apply value.tag)) _ _ (ih _ _)]
-      rw [canonicalEquiv_sum]
+        ((enumIndex labels).symm_apply_apply value.tag)) _ _ (ih _ _), canonicalEquiv_sum]
+  | _ =>
+      simp_all [JsonProtocol.valueFromJson, JsonProtocol.valueToJson, Json.getStr?, Json.getBool?,
+        Json.getArr?, toJson, Nat.toNat?_repr, Date.ofString?_toString, List.mapM_map, Function.comp_def,
+        mapM_ok, canonicalEquiv, Equiv.listEquivOfEquiv, bind, Except.bind, pure, Except.pure]
 
 end Forms.Runtime.ExpressionProtocol

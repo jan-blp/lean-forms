@@ -3,32 +3,9 @@ import Forms.Runtime.ExpressionProtocol.SchemaTheorems
 
 namespace Forms.Runtime.ExpressionProtocol
 open Lean
-universe u
 set_option backward.isDefEq.respectTransparency false
 
-open Meta Simp in
-/-- Evaluate a lookup on a concrete encoded node when it succeeds definitionally. -/
-private def okByWhnf (e : Lean.Expr) : SimpM DStep := do
-  let e' ← whnfD e
-  return if e'.isAppOfArity ``Except.ok 3 then .done e' else .continue
-
 dsimproc_decl reduceKind (expressionKind _) := okByWhnf
-dsimproc_decl reduceChildField (childField _ _) := okByWhnf
-dsimproc_decl reduceChildElements (childElements _) := okByWhnf
-dsimproc_decl reduceGetObjVal (Json.getObjVal? _ _) := okByWhnf
-
-private theorem bool_roundTrip (b : Bool) : fromJson? (toJson b) = .ok b := by
-  cases b <;> rfl
-
-private theorem collectFin_ok {n : Nat} {α : Fin n → Type u} (result : (i : Fin n) → α i) :
-    collectFin (fun i => .ok (result i)) = .ok result := by
-  induction n with
-  | zero => simp only [collectFin, pure, Except.pure]; exact congrArg _ (funext (·.elim0))
-  | succ n ih =>
-    simp only [collectFin, ih, bind, Except.bind, pure, Except.pure]
-    exact congrArg _ (Fin.cons_self_tail result)
-
-private theorem json_toJson (json : Json) : toJson json = json := rfl
 
 /-- Unfold one decoder node, rewriting its children with the hypotheses in context. -/
 local macro "decode_step" : tactic =>
@@ -43,10 +20,8 @@ theorem expression_decode
     infer (canonicalSchema input) expression.toJson = .ok ⟨canonicalSchema result, canonicalExpr expression⟩ := by
   induction expression with
   | @enumCases input result labels subject bodies hs hb =>
-      have length : (FinEnum.toList labels).length = labels.options.length := by simp [Enum.options]
-      have row (i : Fin labels.options.length) :
-          (FinEnum.toList labels)[i.val] = (enumIndex labels).symm i := by
-        simp [FinEnum.toList, enumIndex]; rfl
+      have length := toList_length labels
+      have row := toList_getElem labels
       decode_step
   | @cases input result labels branches subject bodies hs hb =>
       let pairs := (FinEnum.toList labels).map fun i => (labels.label i, (bodies i).toJson)
