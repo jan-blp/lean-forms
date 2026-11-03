@@ -1,0 +1,34 @@
+import Forms.Runtime.CheckerProtocol
+import Tests.ValidationCheckers
+import Forms.ExampleForms.Shapes
+
+namespace Tests.CheckerProtocol
+open Forms Forms.Validation Forms.Runtime Forms.ExampleForms
+
+private def roundTrip {type : DataType} (checker : Checker type) (value : ⟦type⟧) : IO Unit := do
+  let actual ← IO.ofExcept (CheckerProtocol.evaluate type.toJson checker.toJson (JsonProtocol.valueToJson value))
+  let expected := Lean.toJson ((checker.run value).map ResolvedError.toJson)
+  unless actual == expected do
+    throw (IO.userError s!"Checker round trip: expected {expected.compress}, got {actual.compress}")
+
+def run : IO Unit := do
+  let item (name : String) (quantity : Nat) : ⟦Invoice.item⟧ := fun
+    | .description => name
+    | .quantity => quantity
+    | .unitPrice => 100
+  for value in [[], [item "A" 0, item "A" 1], [item "🌍\x00" 0, item "🌍\x00" 0]] do
+    roundTrip Forms.Tests.ValidationCheckers.checker value
+    roundTrip (.pass : Checker Invoice.invoice) value
+  let invalid : Checker (.list .natural) := .seq
+    (.report (.value "invalid") (.fields [.item (.value (2 ^ 256)) .self]))
+    (.report (.value "global") .global)
+  roundTrip invalid []
+  roundTrip invalid [1, 2]
+  let branch : Checker Shapes.shape := .seq
+    (.report (.value "circle") (.fields [.constructor .circle .self]))
+    (.report (.value "rectangle") (.fields [.constructor .rectangle (.field .height .self)]))
+  roundTrip branch { tag := .circle, payload := 0 }
+  roundTrip branch { tag := .rectangle, payload := fun | .width => 1 | .height => 0 }
+  IO.println "PASS: decoded checker execution matches core Lean checkers"
+
+end Tests.CheckerProtocol

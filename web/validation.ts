@@ -133,6 +133,8 @@ function evaluateChecker(checker: Checker, value: Value, schema: Schema | undefi
 }
 
 export function runChecker(checker: Checker, schema: Schema, value: Value, evaluator: Evaluator = typescriptEvaluator): ResolvedError[] {
+  // Native checkers decode every branch up front, so they also reject malformed branches that never run.
+  if (evaluator.runChecker) return evaluator.runChecker(checker, schema, value);
   return evaluateChecker(checker, value, schema, evaluator).map(error => {
     switch (error.targets.kind) {
       case 'global': return error;

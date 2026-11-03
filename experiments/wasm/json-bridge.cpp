@@ -3,6 +3,7 @@
 
 extern "C" lean_object * json_evaluate(lean_object *, lean_object *, lean_object *);
 extern "C" lean_object * json_evaluate_typed(lean_object *, lean_object *, lean_object *);
+extern "C" lean_object * json_check(lean_object *, lean_object *, lean_object *);
 extern "C" void wasm_runtime_init();
 extern "C" void json_initialize_constants();
 
@@ -16,11 +17,13 @@ extern "C" void json_init() {
 
 // Explicit lengths preserve embedded NULs, which the JSON parser must reject
 // rather than silently truncating a malformed request. The response is JSON text.
-static const char * run(bool typed, const char * schema, size_t schema_len,
+using Runner = lean_object * (*)(lean_object *, lean_object *, lean_object *);
+
+static const char * run(Runner evaluate, const char * schema, size_t schema_len,
                                  const char * expression, size_t expression_len,
                                  const char * value, size_t value_len) {
     static std::string response;
-    lean_object * result = (typed ? json_evaluate_typed : json_evaluate)(
+    lean_object * result = evaluate(
         lean_mk_string_from_bytes(schema, schema_len),
         lean_mk_string_from_bytes(expression, expression_len),
         lean_mk_string_from_bytes(value, value_len));
@@ -32,11 +35,17 @@ static const char * run(bool typed, const char * schema, size_t schema_len,
 extern "C" const char * json_run(const char * schema, size_t schema_len,
                                  const char * expression, size_t expression_len,
                                  const char * value, size_t value_len) {
-    return run(false, schema, schema_len, expression, expression_len, value, value_len);
+    return run(json_evaluate, schema, schema_len, expression, expression_len, value, value_len);
 }
 
 extern "C" const char * json_run_typed(const char * schema, size_t schema_len,
                                        const char * expression, size_t expression_len,
                                        const char * value, size_t value_len) {
-    return run(true, schema, schema_len, expression, expression_len, value, value_len);
+    return run(json_evaluate_typed, schema, schema_len, expression, expression_len, value, value_len);
+}
+
+extern "C" const char * json_run_checker(const char * schema, size_t schema_len,
+                                         const char * checker, size_t checker_len,
+                                         const char * value, size_t value_len) {
+    return run(json_check, schema, schema_len, checker, checker_len, value, value_len);
 }

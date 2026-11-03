@@ -1,4 +1,4 @@
-import type { Location, Refinement, ResolvedError } from './validation.js';
+import type { Checker, Location, Refinement, ResolvedError } from './validation.js';
 export type Value = string | number | boolean | Value[] | { [name: string]: Value };
 export type Path = (string | number)[];
 export type Schema =
@@ -95,4 +95,7 @@ export type SubmissionError =
 // Typed backends return a schema for results that introduce a new scope (table
 // rows and checker iteration). The TypeScript evaluator only needs the values.
 export interface Evaluation { value: Value; schema?: Schema }
-export type Evaluator = (expression: Expr, value: Value, schema?: Schema) => Evaluation;
+export interface Evaluator {
+  (expression: Expr, value: Value, schema?: Schema): Evaluation;
+  runChecker?: (checker: Checker, schema: Schema, value: Value) => ResolvedError[];
+}

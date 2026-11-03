@@ -22,7 +22,7 @@ theorem path_decode {input result : DataType} (path : Path input result) :
       have found := find?_key (fun _ _ => labels.options_nodup.get_inj_iff.mp)
         (List.mem_finRange (enumIndex labels i))
       rw [enumIndex_label] at found
-      simp only [Path.toList, canonicalSchema, pathFromLabels, found]
+      simp only [Path.toList, canonicalSchema, pathFromLabels, findName, found]
       rw [path_decode_reindex (congrArg (fun j => canonicalSchema (fields j))
         ((enumIndex labels).symm_apply_apply i)) _ _ ih]
       simp only [Except.map, canonicalPath, Eq.mpr, eqRec_eq_cast]

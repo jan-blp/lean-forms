@@ -1,4 +1,5 @@
 import type { Evaluator, Schema, Value } from './protocol.js';
+import type { ResolvedError } from './validation.js';
 
 interface WasmModule {
   _json_init(): void;
@@ -18,17 +19,23 @@ async function load(): Promise<Evaluator> {
   const module: WasmModule = await createModule();
   module._json_init();
   const encoder = new TextEncoder();
-  return (expression, value, schema) => {
-    if (!schema) throw new Error('Missing input schema for WebAssembly evaluation.');
+  function request(name: string, schema: Schema, program: unknown, value: Value): unknown {
     const args: (string | number)[] = [];
-    for (const item of [schema, expression, value]) {
+    for (const item of [schema, program, value]) {
       const text = JSON.stringify(item);
       args.push(text, encoder.encode(text).length);
     }
-    const response = JSON.parse(module.ccall('json_run_typed', 'string',
-      ['string', 'number', 'string', 'number', 'string', 'number'], args)) as
-      { ok: true; value: Value; schema: Schema } | { ok: false; error: string };
+    const response = JSON.parse(module.ccall(name, 'string',
+      ['string', 'number', 'string', 'number', 'string', 'number'], args));
     if (!response.ok) throw new Error(response.error);
-    return { value: response.value, schema: response.schema };
+    return response;
+  }
+  const evaluator: Evaluator = (expression, value, schema) => {
+    if (!schema) throw new Error('Missing input schema for WebAssembly evaluation.');
+    const result = request('json_run_typed', schema, expression, value) as { value: Value; schema: Schema };
+    return { value: result.value, schema: result.schema };
   };
+  evaluator.runChecker = (checker, schema, value) =>
+    (request('json_run_checker', schema, checker, value) as { value: ResolvedError[] }).value;
+  return evaluator;
 }

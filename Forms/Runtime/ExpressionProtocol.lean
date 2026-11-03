@@ -11,12 +11,16 @@ def requireType {input : Schema} (expected : Schema) (decoded : Decoded input)
   if same : decoded.1 = expected then .ok (same ▸ decoded.2)
   else .error s!"Type mismatch: expected {expected.dataType.toJson.compress}, got {decoded.1.dataType.toJson.compress}"
 
+/-- Index of the label equal to `name`. -/
+def findName (names : List String) (name : String) : Option (Fin names.length) :=
+  (List.finRange names.length).find? (fun i => names.get i == name)
+
 def pathFromLabels (input : Schema) (labels : List String)
     : Except String ((result : Schema) × Path input.dataType result.dataType) :=
   match labels, input with
   | [], input => pure ⟨input, .self⟩
   | name :: rest, .record names _ fields =>
-      match (List.finRange names.length).find? (fun i => names.get i == name) with
+      match findName names name with
       | none => .error s!"Unknown field: {name}"
       | some index => (pathFromLabels (fields index) rest).map fun ⟨result, path⟩ =>
           ⟨result, .field index path⟩
