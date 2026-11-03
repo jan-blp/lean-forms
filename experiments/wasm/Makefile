@@ -62,7 +62,7 @@ $(WORK)/%.o: $(WORK)/%.c $(INCLUDE)/config.stamp $(MAKEFILE)
 # Discovery writes modules.mk, then asks Make to compile/link each candidate.
 link: $(OUT)/json.mjs $(OUT)/json.wasm
 $(OUT)/json.mjs $(OUT)/json.wasm &: $(BASE_OBJECTS) $(LEAN_OBJECTS) $(WORK)/modules.mk $(MAKEFILE)
-	$(SDK)/em++ $(FLAGS) $(BASE_OBJECTS) $(LEAN_OBJECTS) --no-entry -Wl,--error-limit=0 -Wl,-Map=$(WORK)/link.map -sMODULARIZE -sEXPORT_ES6 -sENVIRONMENT=node,web -sALLOW_MEMORY_GROWTH -sSTACK_SIZE=1048576 '-sEXPORTED_FUNCTIONS=["_json_init","_json_run","_json_run_typed","_json_run_checker","_wasm_allocated_bytes"]' '-sEXPORTED_RUNTIME_METHODS=["ccall"]' -o $(OUT)/json.mjs
+	$(SDK)/em++ $(FLAGS) $(BASE_OBJECTS) $(LEAN_OBJECTS) --no-entry -Wl,--error-limit=0 -Wl,-Map=$(WORK)/link.map -sMODULARIZE -sEXPORT_ES6 -sENVIRONMENT=node,web -sALLOW_MEMORY_GROWTH -sSTACK_SIZE=1048576 -sSTACK_OVERFLOW_CHECK=2 '-sEXPORTED_FUNCTIONS=["_json_init","_json_run","_json_run_typed","_json_run_checker","_wasm_allocated_bytes"]' '-sEXPORTED_RUNTIME_METHODS=["ccall"]' -o $(OUT)/json.mjs
 
 # Tests are explicit: producing browser assets does not require test sources.
 test: all

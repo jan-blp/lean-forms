@@ -47,9 +47,17 @@ const independent = await createEvaluator();
 for (const { name, args, expected } of requests) {
   assert.deepEqual(independent.evaluate(...args), expected, `independent instance: ${name}`);
 }
+// Deep nesting must trap on stack overflow rather than corrupt static data.
+const deep = await createEvaluator();
+const depth = 200000;
+assert.throws(() => deep.evaluate(schema, expression, '['.repeat(depth) + ']'.repeat(depth)),
+  /stack overflow/i);
+const fresh = await createEvaluator();
+assert.deepEqual(fresh.evaluate(schema, expression, argument), { ok: true, value: '42' });
 const rejected = cases.filter(test => !test.expected.ok).length;
 console.log(`PASS: ${cases.length - rejected} round trips and ${rejected} rejections match native Lean`);
 console.log('PASS: malformed JSON, embedded NUL, recovery, and independent module initialization');
+console.log(`PASS: ${depth}-deep nesting traps on stack overflow; a fresh instance still works`);
 console.log(`PASS: ${cases.length * 100} repeated calls; live allocation bytes ${before} → ${after}`);
 console.log(`Repeated test batches: ${elapsed.toFixed(0)} ms (includes JS assertions; not a standalone benchmark)`);
 

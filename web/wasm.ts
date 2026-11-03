@@ -25,8 +25,16 @@ async function load(): Promise<Evaluator> {
       const text = JSON.stringify(item);
       args.push(text, encoder.encode(text).length);
     }
-    const response = JSON.parse(module.ccall(name, 'string',
-      ['string', 'number', 'string', 'number', 'string', 'number'], args));
+    let text: string;
+    try {
+      text = module.ccall(name, 'string',
+        ['string', 'number', 'string', 'number', 'string', 'number'], args);
+    } catch (error) {
+      // An aborted instance (e.g. stack overflow) is unusable; reload on next use.
+      loading = undefined;
+      throw error;
+    }
+    const response = JSON.parse(text);
     if (!response.ok) throw new Error(response.error);
     return response;
   }
