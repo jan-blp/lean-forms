@@ -16,7 +16,6 @@ import Forms.ExampleForms.Booking
 import Forms.ExampleForms.Location
 import Forms.ExampleForms.Shapes
 import Forms.ExampleForms.Invoice
-import Mathlib.Data.Nat.Basic
 import Forms.ExampleForms.Person
 import Forms.ExampleForms.Thermostat
 import Forms.Runtime.Tui
