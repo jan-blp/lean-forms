@@ -1,6 +1,11 @@
-import Forms.Core.Widget
-import Forms.Core.RefinedDataType
-import Lean.Data.Json
+module
+
+public import Forms.Core.Widget
+public import Forms.Core.RefinedDataType
+public import Lean.Data.Json
+import all Lean.Data.Json.Basic -- for the date decoder's round-trip proof
+
+@[expose] public section
 
 namespace Forms
 
@@ -38,7 +43,7 @@ def valueToJson {t} (value : ⟦t⟧) : Json :=
   | .record fieldNames fieldTypes => Json.mkObj ((FinEnum.toList fieldNames).map fun i =>
       (fieldNames.label i, valueToJson (t := fieldTypes i) (value i)))
 
-private def sequenceFin {n : Nat} {α : Fin n → Type}
+def sequenceFin {n : Nat} {α : Fin n → Type}
   (values : (i : Fin n) → Except String (α i))
   : Except String ((i : Fin n) → α i) :=
   match n with
@@ -48,7 +53,7 @@ private def sequenceFin {n : Nat} {α : Fin n → Type}
     let tail ← sequenceFin (fun i => values i.succ)
     pure (Fin.cons head tail)
 
-private def sequence {ι : Type}
+def sequence {ι : Type}
   [FinEnum ι]
   {α : ι → Type}
   (values : (i : ι) → Except String (α i))

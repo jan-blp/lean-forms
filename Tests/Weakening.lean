@@ -1,11 +1,15 @@
-import Forms.ExampleForms.Basket
-import Forms.ExampleForms.TestReport
-import Forms.ExampleForms.Person
-import Forms.ExampleForms.Invoice
-import Forms.ExampleForms.Location
-import Forms.ExampleForms.Thermostat
-import Forms.Runtime.CompositionProtocol
-import Forms.Runtime.FormSnapshot
+module
+
+public import Forms.ExampleForms.Basket
+public import Forms.ExampleForms.TestReport
+public import Forms.ExampleForms.Person
+public import Forms.ExampleForms.Invoice
+public import Forms.ExampleForms.Location
+public import Forms.ExampleForms.Thermostat
+public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.FormSnapshot
+
+@[expose] public section
 
 namespace Tests.Weakening
 open Forms Forms.Composition Forms.Runtime Forms.ExampleForms
@@ -41,23 +45,23 @@ def basketSpec : String :=
   CompositionProtocol.encode (.base (host Basket.basket))
     (Basket.basketView.weaken (contentPath _)) (wrap Basket.initial)
 
-private def check (name : String) (passed : Bool) : IO Unit := do
+def check (name : String) (passed : Bool) : IO Unit := do
   unless passed do throw (IO.userError ("FAIL " ++ name))
   IO.println ("PASS " ++ name)
 
-private def signature (fields : List FieldRef) := fields.map fun field =>
+def signature (fields : List FieldRef) := fields.map fun field =>
   (field.labels, field.indices, field.disabled, match field.content with
     | .input widget => Widget.name widget
     | .computed value => (JsonProtocol.valueToJson value).compress)
 
-private def checkForm {state : DataType} (name : String)
+def checkForm {state : DataType} (name : String)
     (form : Component state) (value : ⟦state⟧) : IO Unit := do
   let original := (FormSnapshot.render form value).fieldRefs
   let mounted := (FormSnapshot.render (form.weaken (contentPath state)) (wrap value)).fieldRefs
   check name (signature (mounted.map fun field => { field with indices := field.indices.drop 1 }) ==
     signature original)
 
-private def checkComponent {state : DataType} (component : Component state) : IO Unit := do
+def checkComponent {state : DataType} (component : Component state) : IO Unit := do
   check "WeakenSelfPreservesComponent" (CompositionProtocol.componentToJson (component.weaken .self) ==
     CompositionProtocol.componentToJson component)
   let inner := contentPath state

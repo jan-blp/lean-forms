@@ -1,7 +1,18 @@
-import Forms.ExampleForms.Counter
-import Forms.ExampleForms.Basket
-import Forms.Runtime.CompositionProtocol
-import Forms.Runtime.Tui
+module
+
+public import Forms.ExampleForms.Counter
+public import Forms.ExampleForms.Basket
+public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.Tui
+
+public meta import Forms.Core.DataType
+public meta import Forms.Core.ActionInvocation
+public meta import Forms.ExampleForms.Counter
+public meta import Forms.ExampleForms.Basket
+
+@[expose] public section
+
+namespace Tests.Actions
 
 open Forms Forms.Composition Forms.ExampleForms.Basket
 
@@ -10,14 +21,14 @@ open Forms Forms.Composition Forms.ExampleForms.Basket
 #guard (Action.decrement (.self : Path .natural .natural)).eval 2 == 1
 #guard (Action.set (.self : Path .natural .natural) (.value 7)).eval 2 == 7
 
-private def quantity : Path item .natural := .field .quantity .self
-private def bump : Action item := .increment quantity
+def quantity : Path item .natural := .field .quantity .self
+def bump : Action item := .increment quantity
 #guard (bump.eval (line .pen 2)) .product == .pen
 #guard (bump.eval (line .pen 2)) .quantity == 3
 #guard ((Action.set quantity (.project quantity)).eval (line .pen 2)) .quantity == 2
 
-private def nested : DataType := .record itemFields fun _ => item
-private def parent : Path nested item := .field .quantity .self
+def nested : DataType := .record itemFields fun _ => item
+def parent : Path nested item := .field .quantity .self
 #guard ((bump.weaken parent).eval (fun _ => line .pen 2)) .quantity .quantity == 3
 #guard ((bump.weaken parent).eval (fun _ => line .pen 2)) .product .quantity == 2
 #guard (((Action.set quantity (.project quantity)).weaken parent).eval
@@ -34,15 +45,13 @@ open Forms.ExampleForms.Counter in
 open Forms.ExampleForms.Counter in
 #guard minusOne.eval (fun _ => 0) == 0
 
-private def addArgument : WidgetAction .natural :=
+def addArgument : WidgetAction .natural :=
   ⟨"Add amount", .editor .naturalInput
     (.natAdd (.project (.field .current .self)) (.project (.field .argument .self)))⟩
 #guard addArgument.eval (fun
   | .current => 5
   | .argument => 3) == 8
 #guard (Expr.natSub (.value 3) (.value 7) : Expr .natural .natural).eval 0 == 0
-
-namespace Tests.Actions
 
 open ExampleForms.Counter
 
@@ -52,11 +61,11 @@ example : True := by
   fail_if_success have : form.Invocation := ⟨.replace, "42"⟩
   trivial
 
-private def addDefinitions : Unit → Action.Presentation .natural := fun _ => addArgument.presentation
-private def addInvocation : Action.Invocation addDefinitions := ⟨(), (3 : Nat)⟩
+def addDefinitions : Unit → Action.Presentation .natural := fun _ => addArgument.presentation
+def addInvocation : Action.Invocation addDefinitions := ⟨(), (3 : Nat)⟩
 #guard addInvocation.apply 5 == 8
 
-private def testDecodeErrors : IO Unit := do
+def testDecodeErrors : IO Unit := do
   let cases : List (Runtime.ComponentHistoryProtocol.Error × String) := [
     (.missingArgument, "{\"target\":[],\"action\":\"replace\"}"),
     (.unexpectedArgument, "{\"target\":[],\"action\":\"plusOne\",\"argument\":null}"),
@@ -73,7 +82,7 @@ private def testDecodeErrors : IO Unit := do
       unless actual == expected do throw (IO.userError s!"Expected {repr expected}, got {repr actual}")
     | .ok _ => throw (IO.userError "Expected a typed decoding error")
 
-private def testHistory : IO Unit := do
+def testHistory : IO Unit := do
   let initial : ComponentHistory form := ⟨10, #[]⟩
   let first ← IO.ofExcept (initial.apply ⟨.plusOne, ()⟩)
   let final ← IO.ofExcept (first.apply ⟨.plusFive, ()⟩)
@@ -120,10 +129,10 @@ private def testHistory : IO Unit := do
   unless repeated.value == 2 && repeated.actions.size == 2 do
     throw (IO.userError "Replay lost a repeated invocation")
 
-private instance : Runtime.MonadTui (ReaderT String (Except IO.Error)) where
+instance : Runtime.MonadTui (ReaderT String (Except IO.Error)) where
   runSpecification _ := read
 
-private def testReturn : IO Unit := do
+def testReturn : IO Unit := do
   let run := Runtime.Tui.run (m := ReaderT String (Except IO.Error))
     (.base .natural) form 0
   let accepted := "{\"value\":\"43\",\"actions\":[{\"target\":[],\"action\":\"replace\",\"argument\":\"42\"},{\"target\":[],\"action\":\"plusOne\"}]}"

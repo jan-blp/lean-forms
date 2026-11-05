@@ -1,14 +1,18 @@
-import Forms.ExampleForms.Shapes
-import Forms.Runtime.Tui
-import Tests.Weakening
+module
+
+public import Forms.ExampleForms.Shapes
+public import Forms.Runtime.Tui
+public import Tests.Weakening
+
+@[expose] public section
 
 namespace Tests.SumHistory
 open Forms Forms.Composition Forms.Runtime Forms.ExampleForms
 
-private def check (name : String) (passed : Bool) : IO Unit := do
+def check (name : String) (passed : Bool) : IO Unit := do
   unless passed do throw (IO.userError s!"FAIL {name}")
 
-private def actions : Array Shapes.form.Invocation := #[
+def actions : Array Shapes.form.Invocation := #[
   .inPayload .circle ⟨.replace, (8 : Nat)⟩,
   .select .circle,
   .select .rectangle,
@@ -18,10 +22,10 @@ private def actions : Array Shapes.form.Invocation := #[
 example : Shapes.form.applyValidInvocation Shapes.draft (.inPayload ⟨.replace, (8 : Nat)⟩) =
     (⟨.circle, 8⟩ : ⟦Shapes.shape⟧) := rfl
 
-private def nested : Component (.sum Shapes.shapeTags fun _ => Shapes.shape) :=
+def nested : Component (.sum Shapes.shapeTags fun _ => Shapes.shape) :=
   .sum .self "Nested" (fun _ => Shapes.form) (fun _ => Shapes.draft)
 
-private def testNested : IO Unit := do
+def testNested : IO Unit := do
   let initial : ⟦.sum Shapes.shapeTags fun _ => Shapes.shape⟧ := ⟨.circle, Shapes.draft⟩
   let history ← IO.ofExcept (ComponentHistory.replay nested initial #[
     .inPayload .circle (.select .rectangle),
@@ -34,7 +38,7 @@ private def testNested : IO Unit := do
   let reset ← IO.ofExcept (ComponentHistory.replay nested history.value #[.select .dot, .select .circle])
   check "OuterSwitchResetsNestedPayload" (JsonProtocol.valueToJson reset.value == JsonProtocol.valueToJson initial)
 
-private def expectError {ty : DataType}
+def expectError {ty : DataType}
   (component : Component ty)
   (current : ⟦ty⟧)
   (invocation : component.Invocation)

@@ -1,5 +1,9 @@
-import Forms.Core.Component.Builder
-import Forms.Core.RefinedDataType
+module
+
+public import Forms.Core.Component.Builder
+public import Forms.Core.RefinedDataType
+
+@[expose] public section
 
 namespace Forms.ExampleForms.Location
 open Composition

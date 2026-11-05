@@ -1,5 +1,9 @@
-import Forms.Core.ComponentHistory
-import Forms.Runtime.JsonProtocol
+module
+
+public import Forms.Core.ComponentHistory
+public import Forms.Runtime.JsonProtocol
+
+@[expose] public section
 
 namespace Forms.Runtime.CompositionProtocol
 open Lean Composition

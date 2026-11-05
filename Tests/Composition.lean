@@ -1,6 +1,10 @@
-import Forms.Runtime.CompositionProtocol
-import Forms.ExampleForms.TestReport
-import Forms.Runtime.FormSnapshot
+module
+
+public import Forms.Runtime.CompositionProtocol
+public import Forms.ExampleForms.TestReport
+public import Forms.Runtime.FormSnapshot
+
+@[expose] public section
 
 namespace Tests.Composition
 
@@ -8,75 +12,75 @@ open Forms Forms.Runtime
 open Forms.Composition
 open Forms.ExampleForms.TestReport
 
-private def check (name : String) (passed : Bool) : IO Unit := do
+def check (name : String) (passed : Bool) : IO Unit := do
   if passed then IO.println ("PASS " ++ name)
   else throw (IO.userError ("FAIL " ++ name))
 
-private def names (value : ⟦reportShape⟧) : List String :=
+def names (value : ⟦reportShape⟧) : List String :=
   (visibleResults.eval value).map fun entry => entry .name
 
-private def tableRows (snapshot : FormSnapshot) : List (List String) :=
+def tableRows (snapshot : FormSnapshot) : List (List String) :=
   match snapshot with
   | .table _ rows => rows
   | .stack children => children.flatMap tableRows
   | _ => []
 
-private def texts (snapshot : FormSnapshot) : List String :=
+def texts (snapshot : FormSnapshot) : List String :=
   match snapshot with
   | .text value => [value]
   | .stack children => children.flatMap texts
   | _ => []
 
-private def labels (snapshot : FormSnapshot) : List String :=
+def labels (snapshot : FormSnapshot) : List String :=
   match snapshot with
   | .fields fields => fields.flatMap (·.labels)
   | .stack children => children.flatMap labels
   | _ => []
 
-private inductive OuterField where
+inductive OuterField where
   | report
   | title
   deriving DecidableEq
 
-private instance : FinEnum OuterField := FinEnum.ofList [.report, .title] (by grind [OuterField])
+instance : FinEnum OuterField := FinEnum.ofList [.report, .title] (by grind [OuterField])
 
-private def outerFields : Enum where
+def outerFields : Enum where
   type := OuterField
   label
     | .report => "report"
     | .title => "title"
 
-private abbrev outerShape : DataType := .record outerFields fun
+abbrev outerShape : DataType := .record outerFields fun
   | .report => reportShape
   | .title => .text
 
-private def nestedReport : Component outerShape := .weaken (.field .report .self) report
+def nestedReport : Component outerShape := .weaken (.field .report .self) report
 
-private def outerInitial : ⟦outerShape⟧
+def outerInitial : ⟦outerShape⟧
   | .report => initial
   | .title => "Unchanged title"
 
-private theorem pathGetAfterSet {root t : DataType} (path : Path root t) (value : ⟦t⟧)
+theorem pathGetAfterSet {root t : DataType} (path : Path root t) (value : ⟦t⟧)
     (state : ⟦root⟧) : path.get (path.set value state) = value := by
   induction path with
   | self => rfl
   | field index rest ih => simpa [Path.get, Path.set] using ih value (state index)
 
-private def filtersComponent : Component filtersShape :=
+def filtersComponent : Component filtersShape :=
   .stack none (items := filterFields) fun
     | .provider => filtersForm .self
     | .failuresOnly => .field (.field .failuresOnly .self) "Only failures" .checkbox
 
-private def setProviderFilter (provider : ProviderFilter) : ⟦reportShape⟧ → ⟦reportShape⟧ :=
+def setProviderFilter (provider : ProviderFilter) : ⟦reportShape⟧ → ⟦reportShape⟧ :=
   (Path.field .filters (.field .provider .self) : Path reportShape (.enum providerFilterEnum)).set provider
 
-private def setFailuresOnly (enabled : Bool) : ⟦reportShape⟧ → ⟦reportShape⟧ :=
+def setFailuresOnly (enabled : Bool) : ⟦reportShape⟧ → ⟦reportShape⟧ :=
   (Path.field .filters (.field .failuresOnly .self) : Path reportShape .boolean).set enabled
 
-private def setSortOrder (sort : SortOrder) : ⟦reportShape⟧ → ⟦reportShape⟧ :=
+def setSortOrder (sort : SortOrder) : ⟦reportShape⟧ → ⟦reportShape⟧ :=
   sortPath.set sort
 
-private def testFilteringAndSorting : IO Unit := do
+def testFilteringAndSorting : IO Unit := do
   let selectProvider := setProviderFilter (.provider .bedrock)
   let enableFailures := setFailuresOnly true
   let selected := selectProvider initial
@@ -103,7 +107,7 @@ private def testFilteringAndSorting : IO Unit := do
   check "TestRawResultsRemainUnchanged"
     ((filtered .results).map (fun entry => entry .name) == ["Zulu", "Alpha", "Beta", "Delta"])
 
-private def testRendering : IO Unit := do
+def testRendering : IO Unit := do
   let selected := (setProviderFilter (.provider .bedrock)) initial
   let filtered := (setFailuresOnly true) selected
   let snapshot := FormSnapshot.render report filtered
@@ -114,7 +118,7 @@ private def testRendering : IO Unit := do
   check "TestExistingFormEditorsRemainRenderable"
     ((labels snapshot).contains "Provider" && (labels snapshot).contains "Sort")
 
-private def testWeakenedRendering : IO Unit := do
+def testWeakenedRendering : IO Unit := do
   let selected := setFailuresOnly true (setProviderFilter (.provider .bedrock) initial)
   let outer := (Path.field .report .self : Path outerShape reportShape).set selected outerInitial
   let snapshot := FormSnapshot.render nestedReport outer
@@ -126,17 +130,17 @@ private def testWeakenedRendering : IO Unit := do
     ((labels (FormSnapshot.render mounted selected)).contains "Only failures" &&
      (labels (FormSnapshot.render mounted selected)).contains "Provider")
 
-private def contextualSort : Component reportShape :=
+def contextualSort : Component reportShape :=
   (.visibleWhen (.project (.field .filters (.field .failuresOnly .self)))
       (.field sortPath "Contextual sort" .select))
 
-private def testEditorBinding : IO Unit := do
+def testEditorBinding : IO Unit := do
   check "TestEditorReadsOuterState" ((labels (FormSnapshot.render contextualSort initial)).isEmpty)
   let enabled := (setFailuresOnly true) initial
   check "TestEditorReadsSiblingOutsideBinding"
     (labels (FormSnapshot.render contextualSort enabled) == ["Contextual sort"])
 
-private def testProtocol : IO Unit := do
+def testProtocol : IO Unit := do
   let specification := CompositionProtocol.encode (.base reportShape) report initial
   let fixture ← IO.FS.readFile "native/tui/tests/report.json"
   let fixtureJson ← IO.ofExcept (Lean.Json.parse fixture)

@@ -1,4 +1,8 @@
-import Forms.Core.WidgetAction
+module
+
+public import Forms.Core.WidgetAction
+
+@[expose] public section
 
 namespace Forms.Action
 
@@ -31,7 +35,7 @@ structure Invocation {ty : DataType} {actionName : Type}
   name : actionName
   argument : (definitions name).Argument
 
-private def applyArgument {ty : DataType}
+def applyArgument {ty : DataType}
   (presentation : Presentation ty)
   (current : ⟦ty⟧)
   : presentation.Argument → ⟦ty⟧ :=

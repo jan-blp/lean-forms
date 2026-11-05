@@ -1,4 +1,8 @@
-import Forms.Core.Component.Builder
+module
+
+public import Forms.Core.Component.Builder
+
+@[expose] public section
 
 namespace Forms.ExampleForms.Basket
 

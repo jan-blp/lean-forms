@@ -1,40 +1,44 @@
-import Tests.ValidationCheckers
-import Forms.ExampleForms.Shapes
-import Forms.Runtime.JsonProtocol
+module
+
+public import Tests.ValidationCheckers
+public import Forms.ExampleForms.Shapes
+public import Forms.Runtime.JsonProtocol
+
+@[expose] public section
 
 namespace Forms.Tests.ValidationExperiment
 
 open Validation ExampleForms
 
-private def check (name : String) (passed : Bool) : IO Unit := do
+def check (name : String) (passed : Bool) : IO Unit := do
   if passed then IO.println ("PASS " ++ name)
   else throw (IO.userError ("FAIL " ++ name))
 
-private def item (description : String) (quantity : Nat) : ⟦Invoice.item⟧
+def item (description : String) (quantity : Nat) : ⟦Invoice.item⟧
   | .description => description
   | .quantity => quantity
   | .unitPrice => 100
 
-private def targets {root : DataType} (error : ResolvedError root) : Lean.Json :=
+def targets {root : DataType} (error : ResolvedError root) : Lean.Json :=
   error.targets.toJson
 
-private def fieldsAt {root : DataType} (locations : List (Location root))
+def fieldsAt {root : DataType} (locations : List (Location root))
     (nonempty : locations ≠ [] := by simp) : Lean.Json :=
   (TargetResolution.fields locations nonempty).toJson
 
-private def invalidAt {root : DataType} (location : Location root) : Lean.Json :=
+def invalidAt {root : DataType} (location : Location root) : Lean.Json :=
   (TargetResolution.invalidTarget location).toJson
 
-private def globalTarget : Lean.Json :=
+def globalTarget : Lean.Json :=
   (TargetResolution.global (root := .natural)).toJson
 
-private def quantity (index : Nat) : Location Invoice.invoice :=
+def quantity (index : Nat) : Location Invoice.invoice :=
   .item index (.field .quantity .self)
 
-private def description (index : Nat) : Location Invoice.invoice :=
+def description (index : Nat) : Location Invoice.invoice :=
   .item index (.field .description .self)
 
-private def conservative : CheckedProperty .natural :=
+def conservative : CheckedProperty .natural :=
   { property := fun n => 0 < n
     checker := .when (.not (.natLe (.value 2) (.project .self)))
       (.report (.value "At least two.") .global)
@@ -44,7 +48,7 @@ private def conservative : CheckedProperty .natural :=
       have lower : 2 ≤ n := of_decide_eq_true h
       exact Nat.lt_of_lt_of_le (by decide : 0 < 2) lower }
 
-private def conservativeType : RefinedDataType .natural :=
+def conservativeType : RefinedDataType .natural :=
   .refine (.base .natural) conservative
 
 example : conservativeType.ValidatedValue = { n : Nat // 0 < n } := rfl

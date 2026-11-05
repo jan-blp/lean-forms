@@ -1,4 +1,8 @@
-import Forms.Core.Composition
+module
+
+public import Forms.Core.Composition
+
+@[expose] public section
 
 namespace Forms.ExampleForms.Counter
 

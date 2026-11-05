@@ -1,3 +1,8 @@
+module
+
+import all Std.Time.Date.Unit.Month -- for concrete date validity proofs
+import all Std.Time.Date.Unit.Year
+
 import Forms.Core.RefinedDataType.Theorems
 import Tests.Validation
 import Tests.ServerRefinements
@@ -367,7 +372,7 @@ private def testProtocol : IO Unit := do
   check "UnboundedJsonRoundTrip"
     (JsonProtocol.valueFromJson .natural (JsonProtocol.valueToJson (t := .natural) huge) == .ok huge)
 
-def main : IO Unit := do
+public def main : IO Unit := do
   Tests.ServerRefinements.run
   Tests.Web.run
   Tests.SumHistory.run

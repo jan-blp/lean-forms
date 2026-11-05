@@ -1,5 +1,9 @@
-import Forms.Core.Composition
-import Forms.Core.ActionInvocation
+module
+
+public import Forms.Core.Composition
+public import Forms.Core.ActionInvocation
+
+@[expose] public section
 
 namespace Forms.Composition
 
@@ -55,7 +59,7 @@ def Component.ValidInvocation {ty : DataType}
   | .text .. => Empty
   | .table .. => Empty
 
-private def checkedIndex
+def checkedIndex
   (index length : Nat)
   : Except Component.InvocationError (Fin length) :=
   if h : index < length then .ok ⟨index, h⟩ else .error (.indexOutOfBounds index length)

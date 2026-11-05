@@ -1,4 +1,8 @@
-import Forms.Core.Composition
+module
+
+public import Forms.Core.Composition
+
+@[expose] public section
 
 namespace Forms
 
@@ -25,18 +29,18 @@ inductive FormSnapshot where
   | table (headings : List String) (rows : List (List String))
   | stack (children : List FormSnapshot)
 
-private def mapFields (f : FieldRef → FieldRef) : FormSnapshot → FormSnapshot
+def mapFields (f : FieldRef → FieldRef) : FormSnapshot → FormSnapshot
   | .fields fields => .fields (fields.map f)
   | .stack children => .stack (children.map (mapFields f))
   | other => other
 
-private def disable : FormSnapshot → FormSnapshot
+def disable : FormSnapshot → FormSnapshot
   | .fields fields => .fields (fields.map fun field => { field with disabled := true })
   | .action label _ => .action label true
   | .stack children => .stack (children.map disable)
   | other => other
 
-private def pathIndices {state value : DataType} : Path state value → List Nat
+def pathIndices {state value : DataType} : Path state value → List Nat
   | .self => []
   | .field name rest => (FinEnum.equiv name).val :: pathIndices rest
 

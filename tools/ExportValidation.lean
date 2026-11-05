@@ -1,8 +1,20 @@
+module
+
+import all Std.Time.Date.Unit.Month -- for concrete date validity proofs
+import all Std.Time.Date.Unit.Year
+
 import Tests.ValidationCheckers
 import Forms.Runtime.JsonProtocol
 import Forms.ExampleForms.Shapes
 import Forms.ExampleForms.Booking
 import Forms.ExampleForms.Thermostat
+
+-- Load executable code for `lean --run`.
+meta import Tests.ValidationCheckers
+meta import Forms.Runtime.JsonProtocol
+meta import Forms.ExampleForms.Shapes
+meta import Forms.ExampleForms.Booking
+meta import Forms.ExampleForms.Thermostat
 
 open Forms Forms.Validation Forms.ExampleForms
 
@@ -56,7 +68,7 @@ private def nested : Checker (.list Invoice.invoice) :=
         (.fields [.item (.project (.field .outer (.field .index .self)))
           (.item (.project (.field .index .self)) (.field .quantity .self))])))
 
-def main : IO Unit := do
+public def main : IO Unit := do
   let circle : ⟦Shapes.shape⟧ := { tag := .circle, payload := 0 }
   let rectangle : ⟦Shapes.shape⟧ :=
     { tag := .rectangle, payload := fun

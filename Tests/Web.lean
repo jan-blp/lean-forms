@@ -1,16 +1,20 @@
-import Forms.Runtime.Web
-import Forms.ExampleForms.Counter
-import Forms.ExampleForms.Person
-import Forms.ExampleForms.Invoice
-import Forms.ExampleForms.Shapes
+module
+
+public import Forms.Runtime.Web
+public import Forms.ExampleForms.Counter
+public import Forms.ExampleForms.Person
+public import Forms.ExampleForms.Invoice
+public import Forms.ExampleForms.Shapes
+
+@[expose] public section
 
 namespace Tests.Web
 open Forms Forms.Runtime Forms.Composition Forms.ExampleForms
 
-private def check (name : String) (passed : Bool) : IO Unit := do
+def check (name : String) (passed : Bool) : IO Unit := do
   unless passed do throw (IO.userError s!"FAIL {name}")
 
-private def testTrafficLog : IO Unit := do
+def testTrafficLog : IO Unit := do
   let body := TrafficLog.json "{\"value\":\"12345678901234567890\",\"actions\":[]}"
   let document := TrafficLog.request "POST /api/submit" (some body)
   let plain := TrafficLog.render document false 35
@@ -40,21 +44,21 @@ private def testTrafficLog : IO Unit := do
     (.text "outer " ++ TrafficLog.Style.key.tag (.text "inner") ++ .text " outer")
   check "TrafficRestoresOuterStyle" ((TrafficLog.render nested true).contains "inner\x1b[0m\x1b[1m\x1b[32m outer")
 
-private def errorsJson {ty : DataType}
+def errorsJson {ty : DataType}
   (refined : RefinedDataType ty)
   (draft : String)
   : IO Lean.Json := do
   let value ← IO.ofExcept (JsonProtocol.valueFromJson ty (← IO.ofExcept (Lean.Json.parse draft)))
   return Lean.toJson ((RefinedDataType.errors refined value).map Validation.ResolvedError.toJson)
 
-private def located {ty : DataType}
+def located {ty : DataType}
   (message : String)
   (locations : List (Validation.Location ty))
   (nonempty : locations ≠ [] := by simp)
   : Lean.Json :=
   Validation.ResolvedError.toJson { message := message, targets := .fields locations nonempty }
 
-private def testPreciseErrors : IO Unit := do
+def testPreciseErrors : IO Unit := do
   let positive := "Quantity and unit price must be at least 1."
   let invoice ← errorsJson Invoice.invoiceType
     "[{\"description\":\"A\",\"quantity\":\"1\",\"unitPrice\":\"5\"},{\"description\":\"B\",\"quantity\":\"0\",\"unitPrice\":\"5\"}]"
