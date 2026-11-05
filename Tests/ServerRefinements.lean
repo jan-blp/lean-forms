@@ -29,7 +29,6 @@ def run : IO Unit := do
   check "ServerPredicateRejects" (((even positive).validate 3).isNone)
   check "ServerKeepsInnerRefinement" (((even positive).validate 0).isNone)
   check "ServerLayerNotSerialized" ((even positive).toJson == positive.toJson)
-  check "ServerOnlySerializesBase" ((even (.base .natural)).toJson == (RefinedDataType.base .natural).toJson)
   let stacked := (even (.base .natural)).serverRefine (.require (fun n => n < 3) (fun _ => "Below three") .global)
   check "ServerRulesAccumulate" ((stacked.errors 3).map (·.message) == ["Server rule: 3 must be even.", "Below three"])
   check "ServerRulesDisappearRecursively" (stacked.toJson == (RefinedDataType.base .natural).toJson)

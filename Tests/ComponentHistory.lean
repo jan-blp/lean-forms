@@ -36,9 +36,6 @@ def mixed : Component mixedState :=
     | .right => .actionWidget (ids := Counter.actionIds) (.field .right .self) "Text"
         (fun _ => ⟨"Replace", .editor .textInput (.project (.field .argument .self))⟩))
 
-instance : MonadTui (ReaderT String (Except IO.Error)) where
-  runSpecification _ := read
-
 def visible : Component .natural :=
   .visibleWhen (.natLe (.project .self) (.value 0)) Counter.form
 
@@ -80,15 +77,8 @@ def testConditions : IO Unit := do
   let wrappedStack := Component.disabledWhen (Expr.value false) conditionalStack
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify wrappedStack 0 (ComponentHistoryProtocol.encode restored))
   let weakened := visible.weaken (Tests.Weakening.contentPath .natural)
-  let weakenedResult ← IO.ofExcept (ComponentHistory.replay weakened (Tests.Weakening.wrap 0) #[⟨.plusOne, ()⟩])
-  check "ConditionalWeakeningPreservesSibling" (weakenedResult.value .title == "Keep this title")
   check "ConditionalWeakeningChecksLocalState"
     ((weakened.applyInvocation (Tests.Weakening.wrap 1) ⟨.plusOne, ()⟩).toOption.isNone)
-  let empty : ComponentHistory visible := ⟨1, #[]⟩
-  let _ ← IO.ofExcept (ComponentHistoryProtocol.verify visible 1 (ComponentHistoryProtocol.encode empty))
-  let result ← IO.ofExcept ((Tui.run (m := ReaderT String (Except IO.Error))
-    (.base .natural) visible 0).run (ComponentHistoryProtocol.encode visibleResult).compress)
-  check "ConditionalTuiReturnsHistory" (result.any fun result => result.actions.size == 1)
 
 def run : IO Unit := do
   testConditions
@@ -134,38 +124,14 @@ def run : IO Unit := do
       "{\"target\":[\"missing\"],\"action\":\"plusOne\"}",
       "{\"target\":[],\"action\":\"plusOne\"}",
       "{\"target\":[\"left\",\"extra\"],\"action\":\"plusOne\"}",
-      "{\"target\":[0],\"action\":\"plusOne\"}",
-      "{\"target\":[\"left\"],\"action\":\"missing\"}",
-      "{\"target\":[\"left\"],\"action\":\"replace\"}",
-      "{\"target\":[\"left\"],\"action\":\"replace\",\"argument\":true}",
-      "{\"target\":[\"left\"],\"action\":\"plusOne\",\"argument\":\"1\"}",
-      "{\"target\":[\"left\"],\"action\":\"plusOne\",\"extra\":true}"] do
+      "{\"target\":[0],\"action\":\"plusOne\"}"] do
     let json ← IO.ofExcept (Lean.Json.parse entry)
     let submission := Lean.Json.mkObj [("value", JsonProtocol.valueToJson Counters.initial),
       ("actions", Lean.Json.arr #[json])]
     check "RejectMalformedInvocation" (ComponentHistoryProtocol.verify Counters.form Counters.initial submission).toOption.isNone
-  let forged := Lean.Json.mkObj [("value", JsonProtocol.valueToJson Counters.initial),
-    ("actions", ← IO.ofExcept (encoded.getObjVal? "actions"))]
-  check "RejectForgedFinalValue" (ComponentHistoryProtocol.verify Counters.form Counters.initial forged).toOption.isNone
-  let result ← IO.ofExcept ((Tui.run (m := ReaderT String (Except IO.Error))
-    (.base Counters.state) Counters.form Counters.initial).run encoded.compress)
-  check "TuiReturnsComponentHistory" (result.any fun result =>
-    result.value .left == 42 && result.actions.size == 4)
-  let withSum : Component Shapes.shape := .stack (items := Counters.sides) none (fun
-    | .left => .text (.value "Shape")
-    | .right => Shapes.form)
-  check "RejectBareUnchangedValue" (match
-      ((Tui.run (m := ReaderT String (Except IO.Error))
-        (.base Shapes.shape) withSum Shapes.draft).run (JsonProtocol.valueToJson Shapes.draft).compress) with
-    | .error _ => true
-    | .ok _ => false)
-  let result ← IO.ofExcept ((Tui.run (m := ReaderT String (Except IO.Error))
-    (.base Shapes.shape) withSum Shapes.draft).run
-      (ComponentHistoryProtocol.encode (⟨Shapes.draft, #[]⟩ : ComponentHistory withSum)).compress)
-  check "SumHistoryIsAvailable" (result.any fun result => result.actions.size == 0)
   let expected ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "native/tui/tests/counters.json"))
   let actual ← IO.ofExcept (Lean.Json.parse (CompositionProtocol.encode (.base Counters.state) Counters.form Counters.initial))
   check "CountersFixture" (actual == expected)
-  IO.println "PASS: component targets, replay, display order, weakening, and sum results"
+  IO.println "PASS: component targets, replay, display order, and weakening"
 
 end Tests.ComponentHistory

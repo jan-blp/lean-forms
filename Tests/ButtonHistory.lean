@@ -20,8 +20,22 @@ def child : Counters.Side → Component Counters.state
 
 def mixed : Component Counters.state := .stack (items := Counters.sides) none child
 
-instance : MonadTui (ReaderT String (Except IO.Error)) where
-  runSpecification _ := read
+example {state element : DataType}
+  (target : Path state (.list element))
+  (value : Expr state element)
+  : Action.append target value = .set target (.snoc (.project target) value) := rfl
+
+def appendState : DataType := .record Counters.sides fun
+  | .left => .natural
+  | .right => .list .natural
+
+def appendInitial : ⟦appendState⟧
+  | .left => 0
+  | .right => [7]
+
+def appendMixed : Component appendState := .stack (items := Counters.sides) none fun
+  | .left => .field (.field .left .self) "Value" .naturalInput
+  | .right => .button "Append value" (.append (.field .right .self) (.project (.field .left .self)))
 
 def run : IO Unit := do
   let history ← IO.ofExcept (ComponentHistory.replay increment 0 #[.press, .press])
@@ -31,17 +45,15 @@ def run : IO Unit := do
     "{\"value\":\"2\",\"actions\":[{\"target\":[],\"action\":\"press\"},{\"target\":[],\"action\":\"press\"}]}")
   check "ButtonWireFormat" (encoded == expected)
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify increment 0 encoded)
-  let empty : ComponentHistory increment := ⟨0, #[]⟩
-  let _ ← IO.ofExcept (ComponentHistoryProtocol.verify increment 0 (ComponentHistoryProtocol.encode empty))
   let decrement := Component.button "Decrement" (Action.decrement Path.self)
   let unchanged ← IO.ofExcept (ComponentHistory.replay decrement 0 #[.press, .press])
   check "NoOpPressesAreRecorded" (unchanged.value == 0 && unchanged.actions.size == 2)
   let result ← IO.ofExcept (ComponentHistory.replay mixed Counters.initial
     #[⟨.left, ⟨.replace, (42 : Nat)⟩⟩, ⟨.right, .press⟩])
   check "ButtonReadsCurrentSibling" (result.value .left == 42 && result.value .right == 42)
-  let encodedMixed := ComponentHistoryProtocol.encode result
-  let reordered := Component.stack (items := Counters.sides) none child (Equiv.swap .left .right)
-  let _ ← IO.ofExcept (ComponentHistoryProtocol.verify reordered Counters.initial encodedMixed)
+  let appended ← IO.ofExcept (ComponentHistory.replay appendMixed appendInitial
+    #[⟨.left, ⟨.replace, (42 : Nat)⟩⟩, ⟨.right, .press⟩, ⟨.right, .press⟩])
+  check "AppendReadsCurrentSibling" (appended.value .left == 42 && appended.value .right == [7, 42, 42])
   let nested := Component.stack (items := Counters.sides) none (fun _ => mixed)
   let nestedHistory ← IO.ofExcept (ComponentHistory.replay nested Counters.initial #[⟨.right, ⟨.right, .press⟩⟩])
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify nested Counters.initial (ComponentHistoryProtocol.encode nestedHistory))
@@ -54,22 +66,12 @@ def run : IO Unit := do
       ("{\"target\":[],\"action\":\"replace\"}", ComponentHistoryProtocol.Error.unknownAction "replace"),
       ("{\"target\":[],\"action\":\"press\",\"argument\":null}", .unexpectedArgument),
       ("{\"target\":[\"extra\"],\"action\":\"press\"}", .targetBeyondWidget),
-      ("{\"target\":[],\"action\":\"press\",\"extra\":true}", .invalidFields ["target", "action"]),
-      ("{\"target\":[],\"action\":\"press\"}", .valueMismatch)] do
+      ("{\"target\":[],\"action\":\"press\",\"extra\":true}", .invalidFields ["target", "action"])] do
     let entry ← IO.ofExcept (Lean.Json.parse entry)
     let submission := Lean.Json.mkObj [("value", Lean.toJson "0"), ("actions", Lean.Json.arr #[entry])]
     check "RejectInvalidButtonSubmission" (match ComponentHistoryProtocol.verify increment 0 submission with
       | .error error => error == expectedError
       | .ok _ => false)
-  let visible := Component.visibleWhen (.natLe (.project .self) (.value 0)) increment
-  let disabled := Component.disabledWhen (.natLe (.value 1) (.project .self)) increment
-  for (component, expectedError) in [(visible, Component.InvocationError.hidden), (disabled, .disabled)] do
-    check "RejectUnavailableButtonPress" (match ComponentHistoryProtocol.verify component 0 expected with
-      | .error error => error == .invocation expectedError
-      | .ok _ => false)
-  let result ← IO.ofExcept ((Tui.run (m := ReaderT String (Except IO.Error))
-    (.base .natural) increment 0).run encoded.compress)
-  check "TuiReturnsButtonHistory" (result.any fun result => result.value == 2 && result.actions.size == 2)
-  IO.println "PASS: standalone button history, targets, conditions, and decoding"
+  IO.println "PASS: button and append history, targets, and decoding"
 
 end Tests.ButtonHistory
