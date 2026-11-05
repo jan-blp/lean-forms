@@ -99,10 +99,14 @@ function mount(model: ReturnType<typeof createModel>) {
       if (drafts.size > 0 && (control.kind === 'choice' ||
         (control.kind === 'button' && control.effect.kind !== 'appendDefault'))) {
         announce('Apply your edits before using this control.', true);
+        renderedViews = new WeakMap();
         render(drafts.keys().next().value);
         return;
       }
+      const previous = model.getSnapshot();
       model.apply(control.key, argument);
+      // Browser inputs can differ even when normalization leaves the snapshot unchanged.
+      if (model.getSnapshot() === previous) renderedViews = new WeakMap();
       validationErrors = validationStarted ? model.errors() : [];
       drafts.delete(control.key);
       result.hidden = true;
@@ -110,6 +114,8 @@ function mount(model: ReturnType<typeof createModel>) {
       render(control.key);
     } catch (error) {
       announce(message(error), true);
+      renderedViews = new WeakMap();
+      render(control.key);
     }
   }
 

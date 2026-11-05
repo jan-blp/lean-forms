@@ -113,6 +113,8 @@ try {
     check(document.querySelector('#count').textContent === '1 action', 'Invalid draft applied');
     edit('Age (18-120)', '35');
     field('Age (18-120)').requestSubmit();
+    edit('Age (18-120)', '035'); apply('Age (18-120)');
+    check(field('Age (18-120)').querySelector('input').value === '35', 'Unchanged normalized value left raw input visible');
     document.querySelector('input[type=checkbox]').click();
     const select = document.querySelector('select');
     select.value = '2'; select.dispatchEvent(new Event('change'));
@@ -265,7 +267,13 @@ try {
     } finally { window.fetch = originalFetch; }
   `);
   await example('shapes', `
-    select('Shape', 'rectangle'); edit('Width', '8');
+    select('Shape', 'rectangle');
+    const draftWidth = document.querySelector('input');
+    draftWidth.value = '8'; draftWidth.dispatchEvent(new Event('input'));
+    select('Shape', 'dot');
+    check(document.querySelector('.choice select').value === 'rectangle' && draftWidth.value === '8',
+      'Rejected constructor change left the selector inconsistent or lost the draft');
+    edit('Width', '8');
     select('Shape', 'dot'); check(!document.querySelector('input'), 'Inactive payload remains');
     select('Shape', 'rectangle');
     check(document.querySelector('input').value === '4', 'Old payload was restored');
