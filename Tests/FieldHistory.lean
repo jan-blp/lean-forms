@@ -1,14 +1,21 @@
-import Forms.ExampleForms.Counters
-import Forms.Runtime.Tui
-import Tests.Weakening
+module
+
+import all Std.Time.Date.Unit.Month -- for concrete date validity proofs
+import all Std.Time.Date.Unit.Year
+
+public import Forms.ExampleForms.Counters
+public import Forms.Runtime.Tui
+public import Tests.Weakening
+
+@[expose] public section
 
 namespace Tests.FieldHistory
 open Forms Forms.Composition Forms.Runtime Forms.ExampleForms
 
-private def check (name : String) (passed : Bool) : IO Unit := do
+def check (name : String) (passed : Bool) : IO Unit := do
   unless passed do throw (IO.userError s!"FAIL {name}")
 
-private def checkWidget {ty : DataType}
+def checkWidget {ty : DataType}
   (widget : Widget ty)
   (initial argument : ⟦ty⟧)
   : IO Unit := do
@@ -24,16 +31,16 @@ private def checkWidget {ty : DataType}
     (Lean.Json.mkObj [("target", Lean.toJson ([] : List String)),
       ("action", Lean.toJson "replace"), ("argument", JsonProtocol.valueToJson argument)])))
 
-private def mixed : Component Counters.state :=
+def mixed : Component Counters.state :=
   .stack (items := Counters.sides) none (fun
     | .left => Counters.widget .left
     | .right => .field (.field .right .self) "Right" .naturalInput)
 
-private def visibleField : Component .natural :=
+def visibleField : Component .natural :=
   .visibleWhen (.natLe (.project .self) (.value 0))
     (.field .self "Value" .naturalInput)
 
-private def hideField : visibleField.ValidInvocation 0 :=
+def hideField : visibleField.ValidInvocation 0 :=
   ⟨⟨.replace, (1 : Nat)⟩, by
     change decide (0 ≤ 0) = true
     decide⟩
@@ -45,7 +52,7 @@ example (invocation : visibleField.ValidInvocation 1) : False := by
   change decide (1 ≤ 0) = true at visible
   contradiction
 
-private def disabledField : Component .natural :=
+def disabledField : Component .natural :=
   .disabledWhen (.natLe (.value 1) (.project .self))
     (.field .self "Value" .naturalInput)
 
@@ -54,7 +61,7 @@ example (invocation : disabledField.ValidInvocation 1) : False := by
   change decide (1 ≤ 1) = false at enabled
   contradiction
 
-private def testValidatedInvocation : IO Unit := do
+def testValidatedInvocation : IO Unit := do
   let validated ← IO.ofExcept (visibleField.validateInvocation 0 ⟨.replace, (1 : Nat)⟩)
   let current := visibleField.applyValidInvocation 0 validated
   check "ValidatedEditCanHideItsField" (current == 1)

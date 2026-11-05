@@ -1,7 +1,11 @@
-import Std.Http
-import Forms.Runtime.TrafficLog
-import Forms.Runtime.CompositionProtocol
-import Forms.Runtime.SubmissionProtocol
+module
+
+public import Std.Http
+public import Forms.Runtime.TrafficLog
+public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.SubmissionProtocol
+
+@[expose] public section
 
 namespace Forms.Runtime.Web
 open Std Http Async
@@ -56,7 +60,7 @@ inductive ResponseBody where
   | json (content : Lean.Json)
   | text (content : String)
 
-private def ResponseBody.contentType : ResponseBody → Option String
+def ResponseBody.contentType : ResponseBody → Option String
   | .empty => none
   | .html _ => some "text/html; charset=utf-8"
   | .javascript _ => some "text/javascript; charset=utf-8"
@@ -64,7 +68,7 @@ private def ResponseBody.contentType : ResponseBody → Option String
   | .json _ => some "application/json"
   | .text _ => some "text/plain; charset=utf-8"
 
-private def ResponseBody.serialize : ResponseBody → String
+def ResponseBody.serialize : ResponseBody → String
   | .empty => ""
   | .html content => content
   | .javascript content => content
@@ -72,11 +76,11 @@ private def ResponseBody.serialize : ResponseBody → String
   | .json content => content.compress
   | .text content => content
 
-private def requestErrorJson (message : String) : Lean.Json :=
+def requestErrorJson (message : String) : Lean.Json :=
   Lean.Json.mkObj [("error", Lean.Json.mkObj [
     ("kind", Lean.toJson "request"), ("message", Lean.toJson message)])]
 
-private def respond
+def respond
   (logger : TrafficLog.Logger)
   (request : String)
   (status : Status)
@@ -91,7 +95,7 @@ private def respond
     | some contentType => response.header! "Content-Type" contentType
   response.fromBytes body.toUTF8
 
-private structure Application where
+structure Application where
   logger : TrafficLog.Logger
   form : ComponentEndpoint
   html : String
@@ -100,7 +104,7 @@ private structure Application where
   validation : String
   style : String
 
-private def Application.get
+def Application.get
   (app : Application)
   (route : GetRoute)
   : ResponseBody :=
@@ -112,7 +116,7 @@ private def Application.get
   | .stylesheet => .css app.style
   | .specification => .json app.form.specification
 
-private def Application.submit
+def Application.submit
   (app : Application)
   (label : String)
   (request : Request Body.Stream)
@@ -131,7 +135,7 @@ private def Application.submit
       | .error error => respond .unprocessableEntity (.json (Lean.Json.mkObj [("error", error)]))
       | .ok () => respond .noContent .empty
 
-private instance : Server.Handler Application where
+instance : Server.Handler Application where
   ResponseBody := Body.Full
   onRequest app request := do
     let label := s!"{request.line.method} {request.line.uri}"
@@ -150,7 +154,7 @@ private instance : Server.Handler Application where
         respond .ok (app.get route)
     | .submit => app.submit label request
 
-private def openDefaultBrowser (url : String) : IO Unit := do
+def openDefaultBrowser (url : String) : IO Unit := do
   let command := if System.Platform.isOSX then "open" else "xdg-open"
   try
     let result ← IO.Process.output { cmd := command, args := #[url], stdin := .null }

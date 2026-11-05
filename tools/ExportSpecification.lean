@@ -1,3 +1,5 @@
+module
+
 import Forms.ExampleForms.Counter
 import Forms.ExampleForms.Counters
 import Forms.ExampleForms.Basket
@@ -11,9 +13,23 @@ import Forms.ExampleForms.Person
 import Forms.ExampleForms.Thermostat
 import Forms.Runtime.JsonProtocol
 
+-- Load executable code for `lean --run`.
+meta import Forms.ExampleForms.Counter
+meta import Forms.ExampleForms.Counters
+meta import Forms.ExampleForms.Basket
+meta import Forms.ExampleForms.TestReport
+meta import Forms.Runtime.CompositionProtocol
+meta import Forms.ExampleForms.Booking
+meta import Forms.ExampleForms.Location
+meta import Forms.ExampleForms.Shapes
+meta import Forms.ExampleForms.Invoice
+meta import Forms.ExampleForms.Person
+meta import Forms.ExampleForms.Thermostat
+meta import Forms.Runtime.JsonProtocol
+
 open Forms ExampleForms Forms.Runtime
 
-def main (args : List String) : IO Unit :=
+public def main (args : List String) : IO Unit :=
   IO.println (if args.contains "counter" then CompositionProtocol.encode (.base .natural) Counter.form 0
     else if args.contains "counters" then CompositionProtocol.encode (.base Counters.state) Counters.form Counters.initial
     else if args.contains "basket" then CompositionProtocol.encode (.base Basket.basket) Basket.basketView Basket.initial

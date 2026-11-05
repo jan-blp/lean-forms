@@ -1,3 +1,5 @@
+module
+
 import Forms.ExampleForms.Example
 import Forms.Runtime.Cli
 import Forms.Runtime.NativeTerminal
@@ -39,4 +41,4 @@ def run (args : List String) : IO Unit := cli.run args
 
 end Forms.Application
 
-def main (args : List String) : IO Unit := Forms.Application.run args
+public def main (args : List String) : IO Unit := Forms.Application.run args

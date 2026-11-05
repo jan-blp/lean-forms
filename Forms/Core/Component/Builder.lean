@@ -1,19 +1,23 @@
-import Forms.Core.Composition
+module
+
+public import Forms.Core.Composition
+
+@[expose] public section
 
 namespace Forms.Composition
 
 /-- A reusable editor builder. Apply its target path to obtain an ordinary component. -/
 abbrev Component.Builder (state value : DataType) := Path state value → Component state
 
-private inductive PairSection where
+inductive PairSection where
   | body
   | extra
   deriving DecidableEq
 
-private instance : FinEnum PairSection :=
+instance : FinEnum PairSection :=
   FinEnum.ofList [.body, .extra] (by grind [PairSection])
 
-private def pairFields : Enum where
+def pairFields : Enum where
   type := PairSection
   label
     | .body => "body"

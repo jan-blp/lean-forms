@@ -1,6 +1,10 @@
-import Forms.Core.Widget
-import Forms.Core.Action
-import Forms.Core.WidgetAction
+module
+
+public import Forms.Core.Widget
+public import Forms.Core.Action
+public import Forms.Core.WidgetAction
+
+@[expose] public section
 
 namespace Forms.Composition
 

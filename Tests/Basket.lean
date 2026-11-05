@@ -1,5 +1,12 @@
-import Forms.ExampleForms.Basket
-import Forms.Runtime.CompositionProtocol
+module
+
+public import Forms.ExampleForms.Basket
+public import Forms.Runtime.CompositionProtocol
+
+public meta import Forms.Core.DataType
+public meta import Forms.ExampleForms.Basket
+
+@[expose] public section
 
 namespace Tests.Basket
 open Forms Forms.Composition Forms.ExampleForms.Basket

@@ -1,15 +1,19 @@
-import Forms.ExampleForms.Counters
-import Forms.ExampleForms.Shapes
-import Forms.Runtime.Tui
-import Tests.Weakening
+module
+
+public import Forms.ExampleForms.Counters
+public import Forms.ExampleForms.Shapes
+public import Forms.Runtime.Tui
+public import Tests.Weakening
+
+@[expose] public section
 
 namespace Tests.ListHistory
 open Forms Forms.Composition Forms.Runtime Forms.ExampleForms
 
-private def check (name : String) (passed : Bool) : IO Unit := do
+def check (name : String) (passed : Bool) : IO Unit := do
   unless passed do throw (IO.userError s!"FAIL {name}")
 
-private def form : Component (.list .natural) :=
+def form : Component (.list .natural) :=
   .list .self "Numbers" (.field .self "Value" .naturalInput) 7
 
 example (invocation : form.ValidInvocation []) : invocation = .appendDefault := by
@@ -18,12 +22,12 @@ example (invocation : form.ValidInvocation []) : invocation = .appendDefault := 
   | remove index => exact Fin.elim0 index
   | item index _ => exact Fin.elim0 index
 
-private def conditionalItems : Component (.list .natural) :=
+def conditionalItems : Component (.list .natural) :=
   .list .self "Numbers"
     (.visibleWhen (.natLe (.project .self) (.value 0))
       (.field .self "Value" .naturalInput)) 0
 
-private def testValidatedItems : IO Unit := do
+def testValidatedItems : IO Unit := do
   let initial := [0, 1]
   let allowed ← IO.ofExcept (conditionalItems.validateInvocation initial
     (.item 0 ⟨.replace, (2 : Nat)⟩))
@@ -43,7 +47,7 @@ private def testValidatedItems : IO Unit := do
       | .error error => error == .indexOutOfBounds 1 1
       | .ok _ => false)
 
-private instance : MonadTui (ReaderT String (Except IO.Error)) where
+instance : MonadTui (ReaderT String (Except IO.Error)) where
   runSpecification _ := read
 
 def run : IO Unit := do

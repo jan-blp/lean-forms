@@ -1,7 +1,11 @@
-import Forms.Core.RefinedDataType.Theorems
-import Forms.Runtime.Web
-import Forms.ExampleForms.Counter
-import Forms.ExampleForms.Shapes
+module
+
+public import Forms.Core.RefinedDataType.Theorems
+public import Forms.Runtime.Web
+public import Forms.ExampleForms.Counter
+public import Forms.ExampleForms.Shapes
+
+@[expose] public section
 
 namespace Tests.ServerRefinements
 open Forms Forms.Validation Forms.Runtime Forms.ExampleForms Forms.Composition

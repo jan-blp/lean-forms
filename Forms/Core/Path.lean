@@ -1,4 +1,8 @@
-import Forms.Core.DataType
+module
+
+public import Forms.Core.DataType
+
+@[expose] public section
 
 namespace Forms
 

@@ -1,3 +1,5 @@
+module
+
 import all Std.Time.Date.Unit.Month -- for concrete date validity proofs
 import all Std.Time.Date.Unit.Year
 
@@ -8,6 +10,11 @@ import Forms.ExampleForms.Booking
 import Forms.ExampleForms.Thermostat
 
 -- Load executable code for `lean --run`.
+meta import Tests.ValidationCheckers
+meta import Forms.Runtime.JsonProtocol
+meta import Forms.ExampleForms.Shapes
+meta import Forms.ExampleForms.Booking
+meta import Forms.ExampleForms.Thermostat
 
 open Forms Forms.Validation Forms.ExampleForms
 
@@ -84,7 +91,7 @@ example : (shapeCases.run [⟨.rectangle, fun | .width => 2 | .height => 0⟩]).
     [.locations [.item 0 (.constructor .rectangle (.field .width .self))]] := by rfl
 example : shapeCases.run [⟨.dot, by intro i; cases i⟩, ⟨.circle, 2⟩] = [] := by rfl
 
-def main : IO Unit := do
+public def main : IO Unit := do
   let circle : ⟦Shapes.shape⟧ := { tag := .circle, payload := 0 }
   let rectangle : ⟦Shapes.shape⟧ :=
     { tag := .rectangle, payload := fun

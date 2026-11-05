@@ -1,4 +1,8 @@
-import Forms.Core.Expr
+module
+
+public import Forms.Core.Expr
+
+@[expose] public section
 
 namespace Forms.Validation
 

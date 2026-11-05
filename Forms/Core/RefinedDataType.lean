@@ -1,4 +1,8 @@
-import Forms.Core.Validation
+module
+
+public import Forms.Core.Validation
+
+@[expose] public section
 
 namespace Forms
 open Validation

@@ -1,11 +1,15 @@
-import Forms.Core.RefinedDataType
+module
+
+public import Forms.Core.RefinedDataType
+
+@[expose] public section
 
 namespace Forms
 open Validation
 
 variable {t : DataType}
 
-private theorem sequenceFin_eq_some {n : Nat} {α : Fin n → Type}
+theorem sequenceFin_eq_some {n : Nat} {α : Fin n → Type}
   (values : (i : Fin n) → Option (α i))
   (result : (i : Fin n) → α i)
   (h : sequenceFin values = some result)
@@ -18,7 +22,7 @@ private theorem sequenceFin_eq_some {n : Nat} {α : Fin n → Type}
       intro i
       exact Fin.cases hhead (fun j => ih _ _ htail j) i
 
-private theorem sequence_eq_some {ι : Type} [FinEnum ι] {α : ι → Type}
+theorem sequence_eq_some {ι : Type} [FinEnum ι] {α : ι → Type}
   (values : (i : ι) → Option (α i))
   (result : (i : ι) → α i)
   (h : sequence values = some result)
@@ -81,12 +85,12 @@ theorem RefinedDataType.erase_validate
           rw [ih _ _ hhead]
           exact congrArg (head :: ·) (tailIH _ htail)
 
-private theorem sequenceFin_some {n : Nat} {α : Fin n → Type}
+theorem sequenceFin_some {n : Nat} {α : Fin n → Type}
   (values : (i : Fin n) → α i)
   : sequenceFin (fun i => some (values i)) = some values := by
   induction n <;> simp [sequenceFin, *] <;> solve_by_elim [Subsingleton.elim, Fin.cons_self_tail]
 
-private theorem sequence_some {ι : Type} [FinEnum ι] {α : ι → Type}
+theorem sequence_some {ι : Type} [FinEnum ι] {α : ι → Type}
   (values : (i : ι) → α i)
   : sequence (fun i => some (values i)) = some values := by
   simp [sequence, sequenceFin_some]
@@ -96,7 +100,7 @@ private theorem sequence_some {ι : Type} [FinEnum ι] {α : ι → Type}
     rfl
   exact transport _ _
 
-private theorem sequenceFin_isSome {n : Nat} {α : Fin n → Type}
+theorem sequenceFin_isSome {n : Nat} {α : Fin n → Type}
   (values : (i : Fin n) → Option (α i))
   : (sequenceFin values).isSome ↔ ∀ i, (values i).isSome := by
   induction n with
@@ -106,7 +110,7 @@ private theorem sequenceFin_isSome {n : Nat} {α : Fin n → Type}
       simp only [sequenceFin]
       rcases values 0 with _ | head <;> rcases sequenceFin (fun i => values i.succ) with _ | tail <;> simp
 
-private theorem sequence_isSome {ι : Type} [FinEnum ι] {α : ι → Type}
+theorem sequence_isSome {ι : Type} [FinEnum ι] {α : ι → Type}
   (values : (i : ι) → Option (α i))
   : (sequence values).isSome ↔ ∀ i, (values i).isSome := by
   have : (sequence values).isSome = (sequenceFin fun i => values (FinEnum.equiv.symm i)).isSome := by

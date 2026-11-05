@@ -1,5 +1,9 @@
-import Forms.Core.Validation
-import Forms.ExampleForms.Invoice
+module
+
+public import Forms.Core.Validation
+public import Forms.ExampleForms.Invoice
+
+@[expose] public section
 
 namespace Forms.Tests.ValidationCheckers
 
@@ -14,16 +18,16 @@ def quantities : Checker invoice :=
       (.report (.value "Quantity must be at least 1.")
         (.locations [.item (.project (.field .index .self)) (.field .quantity .self)])))
 
-private def firstIndex : Expr PairInput .natural :=
+def firstIndex : Expr PairInput .natural :=
   .project (.field .outer (.field .index .self))
 
-private def secondIndex : Expr PairInput .natural :=
+def secondIndex : Expr PairInput .natural :=
   .project (.field .index .self)
 
-private def firstName : Expr PairInput .text :=
+def firstName : Expr PairInput .text :=
   .project (.field .outer (.field .item (.field .description .self)))
 
-private def secondName : Expr PairInput .text :=
+def secondName : Expr PairInput .text :=
   .project (.field .item (.field .description .self))
 
 def duplicateNames : Checker invoice :=

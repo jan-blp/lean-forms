@@ -1,4 +1,8 @@
-import Forms.Runtime.Tui
+module
+
+public import Forms.Runtime.Tui
+
+@[expose] public section
 
 namespace Forms.Runtime.NativeTerminal
 
@@ -18,7 +22,7 @@ def Theme.choices : List (String × Theme) :=
 def Theme.ofString? (name : String) : Option Theme :=
   (Theme.choices.find? (fun entry => entry.1 == name)).map Prod.snd
 
-private def Theme.toCode (theme : Theme) : UInt8 :=
+def Theme.toCode (theme : Theme) : UInt8 :=
   match theme with
   | .frappe => 0
   | .macchiato => 1
@@ -29,7 +33,7 @@ private def Theme.toCode (theme : Theme) : UInt8 :=
   | .nord => 6
 
 @[extern "forms_terminal_run"]
-private opaque runSpecification (specification : @& String) (theme : UInt8) : IO String
+opaque runSpecification (specification : @& String) (theme : UInt8) : IO String
 
 @[instance_reducible] def interpreter (theme : Theme) : MonadTui IO where
   runSpecification specification := runSpecification specification theme.toCode

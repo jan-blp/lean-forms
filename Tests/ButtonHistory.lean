@@ -1,22 +1,26 @@
-import Forms.ExampleForms.Counters
-import Forms.Runtime.Tui
-import Tests.Weakening
+module
+
+public import Forms.ExampleForms.Counters
+public import Forms.Runtime.Tui
+public import Tests.Weakening
+
+@[expose] public section
 
 namespace Tests.ButtonHistory
 open Forms Forms.Composition Forms.Runtime Forms.ExampleForms
 
-private def check (name : String) (passed : Bool) : IO Unit := do
+def check (name : String) (passed : Bool) : IO Unit := do
   unless passed do throw (IO.userError s!"FAIL {name}")
 
-private def increment : Component .natural := .button "Increment" (.increment .self)
+def increment : Component .natural := .button "Increment" (.increment .self)
 
-private def child : Counters.Side → Component Counters.state
+def child : Counters.Side → Component Counters.state
   | .left => .field (.field .left .self) "Left" .naturalInput
   | .right => .button "Copy left" (.set (.field .right .self) (.project (.field .left .self)))
 
-private def mixed : Component Counters.state := .stack (items := Counters.sides) none child
+def mixed : Component Counters.state := .stack (items := Counters.sides) none child
 
-private instance : MonadTui (ReaderT String (Except IO.Error)) where
+instance : MonadTui (ReaderT String (Except IO.Error)) where
   runSpecification _ := read
 
 def run : IO Unit := do

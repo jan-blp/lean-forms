@@ -1,4 +1,8 @@
-import Forms.Core.Path
+module
+
+public import Forms.Core.Path
+
+@[expose] public section
 
 namespace Forms
 

@@ -1,5 +1,9 @@
-import Forms.Core.ComponentHistory
-import Forms.Runtime.JsonProtocol
+module
+
+public import Forms.Core.ComponentHistory
+public import Forms.Runtime.JsonProtocol
+
+@[expose] public section
 
 namespace Forms.Runtime.ComponentHistoryProtocol
 open Lean Composition
@@ -38,22 +42,22 @@ instance : ToString Error where
     | .invocation error => toString error
     | .valueMismatch => "Submitted value does not match action replay"
 
-private def readJson {α : Type} (result : Except String α) : Except Error α :=
+def readJson {α : Type} (result : Except String α) : Except Error α :=
   result.mapError Error.malformedJson
 
-private def argumentToJson {ty : DataType}
+def argumentToJson {ty : DataType}
   (presentation : Action.Presentation ty)
   : presentation.Argument → List (String × Json) :=
   match presentation with
   | .button .. => fun () => []
   | .editor .. => fun argument => [("argument", JsonProtocol.valueToJson argument)]
 
-private def buttonArgumentFromJson (json : Json) : Except Error Unit := do
+def buttonArgumentFromJson (json : Json) : Except Error Unit := do
   let fields ← readJson json.getObj?
   if (json.getObjVal? "argument").isOk then throw .unexpectedArgument
   if fields.size != 2 then throw (.invalidFields ["target", "action"])
 
-private def argumentFromJson {ty : DataType}
+def argumentFromJson {ty : DataType}
   (presentation : Action.Presentation ty)
   (json : Json)
   : Except Error presentation.Argument :=
@@ -65,7 +69,7 @@ private def argumentFromJson {ty : DataType}
       if fields.size != 3 then throw (.invalidFields ["target", "action", "argument"])
       (JsonProtocol.valueFromJson ty argument).mapError Error.invalidArgument
 
-private def invocationToJson {ty : DataType}
+def invocationToJson {ty : DataType}
   (component : Component ty)
   (target : List Json)
   : component.Invocation → Json :=
@@ -95,7 +99,7 @@ private def invocationToJson {ty : DataType}
   | .button .. => fun
       | .press => Json.mkObj [("target", toJson target), ("action", toJson "press")]
 
-private def invocationFromJson {ty : DataType}
+def invocationFromJson {ty : DataType}
   (component : Component ty)
   (target : List Json)
   (json : Json)

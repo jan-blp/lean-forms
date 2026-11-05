@@ -1,4 +1,8 @@
-import Forms.Core.Widget
+module
+
+public import Forms.Core.Widget
+
+@[expose] public section
 
 namespace Forms
 
