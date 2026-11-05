@@ -96,7 +96,13 @@ try {
     window.fetch = (...args) => { if (args[0] === '/api/submit') posts++; return originalFetch(...args); };
     edit('Name', '<img src=x> Grace');
     edit('Age (18-120)', '35');
+    const preservedAgeInput = field('Age (18-120)').querySelector('input');
+    const formRoot = document.querySelector('#controls').firstChild;
+    preservedAgeInput.setSelectionRange(1, 2);
     apply('Name');
+    check(document.querySelector('#controls').firstChild === formRoot, 'Applying Name replaced the form root');
+    check(field('Age (18-120)').querySelector('input') === preservedAgeInput && preservedAgeInput.selectionStart === 1 && preservedAgeInput.selectionEnd === 2,
+      'Applying Name replaced the Age input or lost its selection');
     check(field('Age (18-120)').querySelector('input').value === '35', 'Applying Name lost the Age draft');
     check(document.querySelector('#count').textContent === '1 action', 'Draft entered history');
     document.querySelector('#submit').click();

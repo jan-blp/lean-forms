@@ -192,10 +192,9 @@ export function createModel(specification: Specification) {
   let nextId = 0;
   const nodeIds = new WeakMap<View, string>();
   const listeners = new Map<string | undefined, Set<() => void>>();
-  let changedPath: Path | undefined;
   let root: View | null = null;
 
-  function refresh() {
+  function refresh(changedPath?: Path) {
     const previous = entries;
     const previousRoot = root;
     const active = new Map<string, Entry>();
@@ -290,7 +289,6 @@ export function createModel(specification: Specification) {
     }
     root = visit(spec.form);
     entries = active;
-    changedPath = undefined;
     // Publish only after all snapshots belong to the same state revision.
     for (const [id, callbacks] of listeners) {
       const before = id === undefined ? previousRoot : previous.get(id)?.snapshot ?? null;
@@ -365,8 +363,7 @@ export function createModel(specification: Specification) {
     }
     value = set(value, [...control.scope, ...path], next);
     actions.push(invocation);
-    changedPath = [...control.scope, ...path];
-    refresh();
+    refresh([...control.scope, ...path]);
   }
 
   refresh();

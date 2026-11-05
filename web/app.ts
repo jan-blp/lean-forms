@@ -84,6 +84,10 @@ function mount(model: ReturnType<typeof createModel>) {
   let validationErrors: ValidationError[] = [];
   let validationStarted = false;
   const drafts = new Map<string, string>();
+  let renderedViews = new WeakMap<View, HTMLElement>();
+  let renderContext = '';
+  let errorId = 0;
+
 
   function act(...[control, argument]:
     | [control: Extract<Control, { kind: 'button' }>]
@@ -110,12 +114,26 @@ function mount(model: ReturnType<typeof createModel>) {
   }
 
   function render(focusKey?: string) {
-    container.replaceChildren();
-    let focus: HTMLElement | undefined;
-    const editable = new Set<string>();
-    let errorId = 0;
-    function renderNode(node: View | null): HTMLElement | DocumentFragment {
+    const context = JSON.stringify([pending, validationErrors]);
+    if (context !== renderContext) renderedViews = new WeakMap();
+    renderContext = context;
+    const retained = new WeakMap<Node, HTMLElement>();
+    const views = new WeakMap<Node, View>();
+
+    function renderNode(node: View | null): HTMLElement | DocumentFragment | Comment {
+      const cached = node && renderedViews.get(node);
+      if (cached) {
+        const placeholder = document.createComment('');
+        retained.set(placeholder, cached);
+        return placeholder;
+      }
       const rendered = renderContent(node);
+      if (node && rendered instanceof HTMLElement) {
+        views.set(rendered, node);
+        const key = model.getNodeId(node) ?? ('key' in node ? node.key : undefined);
+        if (key !== undefined) rendered.dataset.viewKey = key;
+        if ('key' in node) rendered.dataset.controlKey = node.key;
+      }
       const path = node && (node.kind === 'actionWidget' && node.children.some(child => child.kind === 'editor') ? null
         : 'location' in node ? node.location : null);
       if (path && rendered instanceof HTMLElement) {
@@ -176,9 +194,8 @@ function mount(model: ReturnType<typeof createModel>) {
         }
         select.value = node.value;
         select.disabled = pending || node.disabled;
-        select.addEventListener('change', () => act(node, select.value));
+        select.onchange = event => act(node, (event.currentTarget as HTMLSelectElement).value);
         label.append(select);
-        if (focusKey === node.key) focus = select;
         return label;
       }
       if (node.kind === 'table') {
@@ -224,8 +241,7 @@ function mount(model: ReturnType<typeof createModel>) {
         const button = element('button', node.label, 'action');
         button.type = 'button';
         button.disabled = pending || node.disabled;
-        button.addEventListener('click', () => act(node));
-        if (focusKey === node.key) focus = button;
+        button.onclick = () => act(node);
         return button;
       }
       if (node.kind !== 'editor') return unsupported(node);
@@ -273,31 +289,94 @@ function mount(model: ReturnType<typeof createModel>) {
       input.disabled = pending || node.disabled;
       label.append(input);
       form.append(label);
-      const argument = () => input instanceof HTMLInputElement && node.widget === 'checkbox' ? input.checked
+      const argument = (input: HTMLInputElement | HTMLSelectElement) => input instanceof HTMLInputElement && node.widget === 'checkbox' ? input.checked
         : node.widget === 'select' ? Number(input.value) : input.value;
       if (node.widget === 'checkbox' || node.widget === 'select') {
-        input.addEventListener('change', () => act(node, argument()));
+        input.onchange = event => act(node, argument(event.currentTarget as HTMLInputElement | HTMLSelectElement));
       } else {
         if (!input.disabled) {
-          editable.add(node.key);
           const initial = input.value;
           input.value = drafts.get(node.key) ?? initial;
-          input.addEventListener('input', () => {
-            if (input.value === initial) drafts.delete(node.key);
-            else drafts.set(node.key, input.value);
-          });
+          input.oninput = event => {
+            const value = (event.currentTarget as HTMLInputElement).value;
+            if (value === initial) drafts.delete(node.key);
+            else drafts.set(node.key, value);
+          };
         }
         const button = element('button', 'Apply');
         button.disabled = input.disabled;
         form.append(button);
       }
-      form.addEventListener('submit', event => { event.preventDefault(); act(node, argument()); });
-      if (focusKey === node.key) focus = input;
+      form.onsubmit = event => {
+        event.preventDefault();
+        const input = (event.currentTarget as HTMLFormElement).querySelector('input, select') as HTMLInputElement | HTMLSelectElement;
+        act(node, argument(input));
+      };
       return form;
     }
-    container.append(renderNode(model.view()));
+    // Reconcile container shells; unchanged snapshots retain their entire DOM subtree.
+    function patch(current: Node | undefined, next: Node): Node {
+      const cached = retained.get(next);
+      if (cached) return cached;
+      let result = next;
+      if (current instanceof HTMLElement && next instanceof HTMLElement &&
+          current.tagName === next.tagName && current.dataset.viewKey === next.dataset.viewKey) {
+        for (const attribute of [...current.attributes]) {
+          if (!next.hasAttribute(attribute.name)) current.removeAttribute(attribute.name);
+        }
+        for (const attribute of [...next.attributes]) {
+          if (current.getAttribute(attribute.name) !== attribute.value) current.setAttribute(attribute.name, attribute.value);
+        }
+        current.onclick = next.onclick;
+        current.onchange = next.onchange;
+        current.oninput = next.oninput;
+        current.onsubmit = next.onsubmit;
+        const selected = next instanceof HTMLSelectElement ? next.value : undefined;
+        patchChildren(current, [...next.childNodes]);
+        if (current instanceof HTMLInputElement && next instanceof HTMLInputElement) {
+          if (current.value !== next.value) current.value = next.value;
+          current.checked = next.checked;
+        }
+        if (current instanceof HTMLSelectElement && next instanceof HTMLSelectElement && current.value !== selected) {
+          current.value = selected!;
+        }
+        result = current;
+      } else if (current?.nodeType === Node.TEXT_NODE && next.nodeType === Node.TEXT_NODE) {
+        if (current.textContent !== next.textContent) current.textContent = next.textContent;
+        result = current;
+      } else if (next instanceof HTMLElement) {
+        patchChildren(next, [...next.childNodes]);
+      }
+      const view = views.get(next);
+      if (view && result instanceof HTMLElement) renderedViews.set(view, result);
+      return result;
+    }
+    function patchChildren(parent: HTMLElement, children: Node[]) {
+      const old = [...parent.childNodes];
+      const key = (node: Node) => node instanceof HTMLElement ? node.dataset.viewKey : undefined;
+      const keyed = new Map(old.flatMap(node => key(node) === undefined ? [] : [[key(node)!, node] as const]));
+      let cursor = parent.firstChild;
+      for (const next of children) {
+        const nextKey = key(retained.get(next) ?? next);
+        const current = nextKey === undefined ? (cursor && key(cursor) === undefined ? cursor : undefined) : keyed.get(nextKey);
+        const updated = patch(current, next);
+        if (updated !== cursor) parent.insertBefore(updated, cursor);
+        cursor = updated.nextSibling;
+      }
+      while (cursor) {
+        const next = cursor.nextSibling;
+        parent.removeChild(cursor);
+        cursor = next;
+      }
+    }
+    const tree = renderNode(model.getSnapshot());
+    patchChildren(container, tree instanceof DocumentFragment ? [...tree.childNodes] : [tree]);
+    const editable = new Set(model.controls().filter(control => control.kind === 'editor' && !control.disabled).map(control => control.key));
     for (const key of drafts.keys()) if (!editable.has(key)) drafts.delete(key);
-    focus?.focus();
+    if (focusKey !== undefined) {
+      const control = [...container.querySelectorAll<HTMLElement>('[data-control-key]')].find(node => node.dataset.controlKey === focusKey);
+      (control?.querySelector<HTMLElement>('input, select') ?? control)?.focus();
+    }
     const total = model.submission().actions.length;
     count.textContent = `${total} ${total === 1 ? 'action' : 'actions'}`;
     submit.disabled = pending;
@@ -347,6 +426,7 @@ function mount(model: ReturnType<typeof createModel>) {
   reset.addEventListener('click', () => {
     if (pending) return;
     drafts.clear();
+    renderedViews = new WeakMap();
     validationErrors = [];
     validationStarted = false;
     model.reset();
