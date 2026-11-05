@@ -3,6 +3,7 @@ module
 import all Std.Time.Date.Unit.Month -- for concrete date validity proofs
 import all Std.Time.Date.Unit.Year
 
+import Forms.Core.Dependencies.Theorems
 import Forms.Core.RefinedDataType.Theorems
 import Tests.Validation
 import Tests.ServerRefinements

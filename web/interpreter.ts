@@ -39,11 +39,10 @@ function unsupported(value: never): never {
 
 function set(value: Value, path: Path, replacement: Value): Value {
   if (path.length === 0) return structuredClone(replacement);
-  const result = structuredClone(value);
-  const parent = get(result, path.slice(0, -1));
-  const last = path[path.length - 1];
-  if (typeof last === 'number') array(parent)[last] = structuredClone(replacement);
-  else record(parent)[last] = structuredClone(replacement);
+  const [first, ...rest] = path;
+  const result = Array.isArray(value) ? [...value] : { ...record(value) };
+  if (typeof first === 'number') array(result)[first] = set(get(value, [first]), rest, replacement);
+  else record(result)[first] = set(get(value, [first]), rest, replacement);
   return result;
 }
 
@@ -161,15 +160,85 @@ function fieldLocation(path: Path): Location {
     ? { kind: 'field', name: step } : { kind: 'item', index: step.toString() });
 }
 
+function pathsOverlap(left: Path, right: Path): boolean {
+  return left.slice(0, Math.min(left.length, right.length)).every((step, i) => step === right[i]);
+}
+
+// Snapshots are shared with consumers; freeze them so caches cannot be mutated.
+function freeze<T>(value: T): T {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.values(value).forEach(freeze);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+function equal(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+  const a = Object.entries(left), b = Object.entries(right);
+  return a.length === b.length && a.every(([key, value], i) => key === b[i][0] && equal(value, b[i][1]));
+}
+
 export function createModel(specification: Specification) {
   if (specification.version !== 8) throw new Error('Unsupported form specification version.');
   const spec = structuredClone(specification);
   let value = structuredClone(spec.value);
   let actions: Invocation[] = [];
 
-  function view(): View | null {
-    // JSON payloads use "value"; error locations use the active constructor tag.
+  type Entry = { id: string; dependencies: Path[]; children: Entry[]; snapshot: View | null;
+    disabled: boolean; inputs: Value[]; condition?: boolean };
+  let entries = new Map<string, Entry>();
+  const componentIds = new WeakMap<Component, number>();
+  let nextId = 0;
+  const nodeIds = new WeakMap<View, string>();
+  const listeners = new Map<string | undefined, Set<() => void>>();
+  let changedPath: Path | undefined;
+  let root: View | null = null;
+
+  function refresh() {
+    const previous = entries;
+    const previousRoot = root;
+    const active = new Map<string, Entry>();
+    const frames: Entry[] = [];
+    function retain(entry: Entry) {
+      active.set(entry.id, entry);
+      entry.children.forEach(retain);
+    }
     function visit(component: Component, target: Path = [], disabled = false, scope: Path = [], location: Location = []): View | null {
+      if (!componentIds.has(component)) componentIds.set(component, nextId++);
+      const id = JSON.stringify([componentIds.get(component), target, scope]);
+      const old = previous.get(id);
+      let entry: Entry;
+      if (old && old.disabled === disabled && changedPath &&
+          !old.dependencies.some(path => pathsOverlap(path, changedPath!))) {
+        entry = old;
+        retain(entry);
+      } else {
+        // Older/manual specifications without metadata conservatively read the whole scope.
+        const dependencies = (component.dependencies ?? [[]]).map(path => [...scope, ...path]);
+        const inputs = dependencies.map(path => get(value, path));
+        entry = { id, dependencies, inputs, children: [], snapshot: null, disabled };
+        if (old && inputs.length === old.inputs.length && inputs.every((input, i) => input === old.inputs[i])) {
+          entry.condition = old.condition;
+        }
+        frames.push(entry);
+        const snapshot = renderComponent(component, target, disabled, scope, location);
+        frames.pop();
+        entry.snapshot = old && equal(old.snapshot, snapshot) ? old.snapshot : freeze(snapshot);
+        active.set(id, entry);
+        if (entry.snapshot) nodeIds.set(entry.snapshot, id);
+      }
+      const parent = frames.at(-1);
+      if (parent) {
+        parent.children.push(entry);
+        parent.dependencies.push(...entry.dependencies);
+      }
+      return entry.snapshot;
+    }
+
+    // JSON payloads use "value"; error locations use the active constructor tag.
+    function renderComponent(component: Component, target: Path, disabled: boolean, scope: Path, location: Location): View | null {
       const current = get(value, scope);
       function identity(id: string, label: string, index?: number) {
         return { id, label, target, disabled, scope, key: JSON.stringify(index === undefined ? [target, id] : [target, id, index]) };
@@ -182,15 +251,20 @@ export function createModel(specification: Specification) {
           default: return unsupported(action);
         }
       }
+      function condition(): boolean {
+        const entry = frames.at(-1)!;
+        if (component.kind !== 'visibleWhen' && component.kind !== 'disabledWhen') throw new Error('Expected condition.');
+        return entry.condition ??= Boolean(evaluate(component.condition, current));
+      }
       switch (component.kind) {
         case 'stack':
           return { kind: 'stack', label: component.label,
             children: component.children.map((child, index) => visit(child, [...target, component.childIds[index]], disabled, scope, location))
               .filter((child): child is View => child !== null) };
         case 'visibleWhen':
-          return evaluate(component.condition, current) ? visit(component.body, target, disabled, scope, location) : null;
+          return condition() ? visit(component.body, target, disabled, scope, location) : null;
         case 'disabledWhen':
-          return visit(component.body, target, disabled || Boolean(evaluate(component.condition, current)), scope, location);
+          return visit(component.body, target, disabled || condition(), scope, location);
         case 'list': {
           const items = array(get(current, component.path));
           return { kind: 'list', location: [...location, ...fieldLocation(component.path)], label: component.label,
@@ -231,7 +305,17 @@ export function createModel(specification: Specification) {
         default: return unsupported(component);
       }
     }
-    return structuredClone(visit(spec.form));
+    root = visit(spec.form);
+    entries = active;
+    changedPath = undefined;
+    // Publish only after all snapshots belong to the same state revision.
+    for (const [id, callbacks] of listeners) {
+      const before = id === undefined ? previousRoot : previous.get(id)?.snapshot ?? null;
+      const after = id === undefined ? root : active.get(id)?.snapshot ?? null;
+      if (before !== after) {
+        for (const callback of [...callbacks]) callback();
+      }
+    }
   }
 
   function controls(): Control[] {
@@ -251,7 +335,7 @@ export function createModel(specification: Specification) {
         default: return unsupported(node);
       }
     }
-    return collect(view());
+    return collect(root);
   }
 
   function apply(key: string, argument?: unknown) {
@@ -298,15 +382,31 @@ export function createModel(specification: Specification) {
     }
     value = set(value, [...control.scope, ...path], next);
     actions.push(invocation);
+    changedPath = [...control.scope, ...path];
+    refresh();
   }
 
-  view();
+  refresh();
   return {
-    view,
+    // Preserve the existing detached-view API; subscribers use immutable snapshots.
+    view: () => structuredClone(root),
+    // IDs address component instances (list positions), not persistent data items.
+    // Obtain them from getSnapshot(), not the detached view() copy.
+    getNodeId: (node: View) => nodeIds.get(node),
+    getSnapshot: (id?: string) => id === undefined ? root : entries.get(id)?.snapshot ?? null,
+    subscribe(id: string | undefined, callback: () => void) {
+      let callbacks = listeners.get(id);
+      if (!callbacks) listeners.set(id, callbacks = new Set());
+      callbacks.add(callback);
+      return () => {
+        callbacks.delete(callback);
+        if (callbacks.size === 0) listeners.delete(id);
+      };
+    },
     controls,
     apply,
     submission: () => structuredClone({ value, actions }),
     errors() { return validationErrors(spec.validation, spec.schema, value); },
-    reset() { value = structuredClone(spec.value); actions = []; },
+    reset() { value = structuredClone(spec.value); actions = []; refresh(); },
   };
 }

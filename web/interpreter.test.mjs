@@ -333,3 +333,42 @@ test('all predicates can access their outer value, item, and index', () => {
   const embedded = { ...expression, context: ['content'], items: project('content', 'items') };
   assert.equal(evaluate(embedded, { limit: '0', content: { limit: '5', items: ['2', '5'] } }), true);
 });
+
+test('static dependencies preserve unrelated snapshots and suppress unchanged notifications', () => {
+  const model = createModel(fixture('counters'));
+  const before = model.getSnapshot();
+  const left = before.children[0], right = before.children[1];
+  const id = model.getNodeId(left);
+  let notifications = 0;
+  model.subscribe(id, () => notifications++);
+  press(model, 'plusOne', ['left']);
+  assert.equal(model.getSnapshot().children[1], right);
+  assert.notEqual(model.getSnapshot(id), left);
+  assert.equal(notifications, 1);
+  const editor = model.controls().find(c => c.kind === 'editor' && c.target[0] === 'left');
+  model.apply(editor.key, model.submission().value.left);
+  assert.equal(notifications, 1);
+});
+
+test('hidden bodies stop notifying and read current state when shown again', () => {
+  const spec = fixture('counters');
+  spec.form.childIds.push('summary');
+  spec.form.children.push({ kind: 'visibleWhen', dependencies: [['right']],
+    condition: { kind: 'natLe', left: { kind: 'project', path: ['right'] }, right: { kind: 'value', value: '10' } },
+    body: { kind: 'text', dependencies: [['left']], expression: { kind: 'natToText', operand: { kind: 'project', path: ['left'] } } },
+  });
+  const model = createModel(spec);
+  const summary = model.getSnapshot().children.at(-1);
+  const id = model.getNodeId(summary);
+  let notifications = 0;
+  model.subscribe(id, () => notifications++);
+  press(model, 'plusOne', ['left']);
+  assert.equal(model.getSnapshot(id).value, '1');
+  press(model, 'plusOne', ['right']);
+  assert.equal(model.getSnapshot(id), null);
+  const hiddenNotifications = notifications;
+  press(model, 'plusOne', ['left']);
+  assert.equal(notifications, hiddenNotifications);
+  press(model, 'minusOne', ['right']);
+  assert.equal(model.getSnapshot(id).value, '2');
+});

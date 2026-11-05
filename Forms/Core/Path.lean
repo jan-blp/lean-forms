@@ -14,6 +14,10 @@ inductive Path : (source : DataType) → (target : DataType) → Type 1 where
       (rest : Path (fieldTypes fieldName) target)
       : Path (.record fieldNames fieldTypes) target
 
+structure PathFrom (source : DataType) where
+  {target : DataType}
+  path : Path source target
+
 section
 
 variable {source target a b c : DataType}

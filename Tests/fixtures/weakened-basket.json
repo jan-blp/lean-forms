@@ -13,6 +13,12 @@
     ],
     "children": [
       {
+        "dependencies": [
+          [
+            "content",
+            "items"
+          ]
+        ],
         "expression": {
           "kind": "textAppend",
           "left": {
@@ -97,6 +103,12 @@
         "kind": "text"
       },
       {
+        "dependencies": [
+          [
+            "content",
+            "page"
+          ]
+        ],
         "kind": "field",
         "label": "Page",
         "path": [
@@ -122,6 +134,13 @@
           ],
           "children": [
             {
+              "dependencies": [
+                [
+                  "content",
+                  "filters",
+                  "search"
+                ]
+              ],
               "kind": "field",
               "label": "Search",
               "path": [
@@ -135,6 +154,13 @@
               "widget": "textInput"
             },
             {
+              "dependencies": [
+                [
+                  "content",
+                  "filters",
+                  "category"
+                ]
+              ],
               "kind": "field",
               "label": "Category",
               "path": [
@@ -154,6 +180,13 @@
               "widget": "select"
             },
             {
+              "dependencies": [
+                [
+                  "content",
+                  "filters",
+                  "budget"
+                ]
+              ],
               "kind": "field",
               "label": "Price limit",
               "path": [
@@ -172,6 +205,13 @@
               "widget": "select"
             },
             {
+              "dependencies": [
+                [
+                  "content",
+                  "filters",
+                  "sort"
+                ]
+              ],
               "kind": "field",
               "label": "Sort",
               "path": [
@@ -190,6 +230,7 @@
               "widget": "select"
             }
           ],
+          "dependencies": [],
           "kind": "stack",
           "label": "Find products"
         },
@@ -214,10 +255,98 @@
             "value": 0
           }
         },
+        "dependencies": [
+          [
+            "content",
+            "page"
+          ]
+        ],
         "kind": "visibleWhen"
       },
       {
         "body": {
+          "dependencies": [
+            [
+              "content",
+              "filters",
+              "sort"
+            ],
+            [
+              "content",
+              "filters",
+              "budget"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "search"
+            ],
+            [
+              "content",
+              "filters",
+              "budget"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "search"
+            ],
+            [
+              "content",
+              "filters",
+              "budget"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "search"
+            ]
+          ],
           "expression": {
             "kind": "textAppend",
             "left": {
@@ -4543,6 +4672,12 @@
             "value": 0
           }
         },
+        "dependencies": [
+          [
+            "content",
+            "page"
+          ]
+        ],
         "kind": "visibleWhen"
       },
       {
@@ -4706,6 +4841,88 @@
               },
               "label": "Price (EUR)"
             }
+          ],
+          "dependencies": [
+            [
+              "content",
+              "filters",
+              "sort"
+            ],
+            [
+              "content",
+              "filters",
+              "budget"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "search"
+            ],
+            [
+              "content",
+              "filters",
+              "budget"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "search"
+            ],
+            [
+              "content",
+              "filters",
+              "budget"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "category"
+            ],
+            [
+              "content",
+              "filters",
+              "search"
+            ]
           ],
           "kind": "table",
           "rows": {
@@ -9016,10 +9233,22 @@
             "value": 0
           }
         },
+        "dependencies": [
+          [
+            "content",
+            "page"
+          ]
+        ],
         "kind": "visibleWhen"
       },
       {
         "body": {
+          "dependencies": [
+            [
+              "content",
+              "selected"
+            ]
+          ],
           "kind": "field",
           "label": "Product to add",
           "path": [
@@ -9059,6 +9288,12 @@
             "value": 0
           }
         },
+        "dependencies": [
+          [
+            "content",
+            "page"
+          ]
+        ],
         "kind": "visibleWhen"
       },
       {
@@ -9271,6 +9506,7 @@
               }
             }
           },
+          "dependencies": [],
           "kind": "button",
           "label": "Add selected product"
         },
@@ -9295,6 +9531,12 @@
             "value": 0
           }
         },
+        "dependencies": [
+          [
+            "content",
+            "page"
+          ]
+        ],
         "kind": "visibleWhen"
       },
       {
@@ -9303,6 +9545,12 @@
             "product": 0,
             "quantity": "1"
           },
+          "dependencies": [
+            [
+              "content",
+              "items"
+            ]
+          ],
           "item": {
             "childIds": [
               "Product",
@@ -9314,6 +9562,11 @@
             ],
             "children": [
               {
+                "dependencies": [
+                  [
+                    "product"
+                  ]
+                ],
                 "kind": "field",
                 "label": "Product",
                 "path": [
@@ -9332,6 +9585,11 @@
                 "widget": "select"
               },
               {
+                "dependencies": [
+                  [
+                    "quantity"
+                  ]
+                ],
                 "kind": "field",
                 "label": "Quantity",
                 "path": [
@@ -9365,6 +9623,7 @@
                     }
                   }
                 },
+                "dependencies": [],
                 "kind": "button",
                 "label": "−1"
               },
@@ -9391,6 +9650,7 @@
                     }
                   }
                 },
+                "dependencies": [],
                 "kind": "button",
                 "label": "+1"
               },
@@ -9408,10 +9668,16 @@
                     "value": "0"
                   }
                 },
+                "dependencies": [],
                 "kind": "button",
                 "label": "Reset quantity"
               },
               {
+                "dependencies": [
+                  [
+                    "product"
+                  ]
+                ],
                 "expression": {
                   "branches": [
                     {
@@ -9468,6 +9734,7 @@
                 }
               }
             ],
+            "dependencies": [],
             "kind": "stack",
             "label": "Item"
           },
@@ -9526,6 +9793,12 @@
             "value": 1
           }
         },
+        "dependencies": [
+          [
+            "content",
+            "page"
+          ]
+        ],
         "kind": "visibleWhen"
       },
       {
@@ -9627,6 +9900,12 @@
               "label": "Subtotal (EUR)"
             }
           ],
+          "dependencies": [
+            [
+              "content",
+              "items"
+            ]
+          ],
           "kind": "table",
           "rows": {
             "kind": "project",
@@ -9657,9 +9936,16 @@
             "value": 1
           }
         },
+        "dependencies": [
+          [
+            "content",
+            "page"
+          ]
+        ],
         "kind": "visibleWhen"
       }
     ],
+    "dependencies": [],
     "kind": "stack",
     "label": null
   },

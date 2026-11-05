@@ -31,7 +31,8 @@ export type Presentation = { id: string; label: string } & (
   | { kind: 'button'; body: Expr }
   | { kind: 'editor'; widget: Widget; body: Expr }
 );
-export type Component =
+// Lean supplies reads relative to this component’s state scope.
+export type Component = { dependencies?: Path[] } & (
   | { kind: 'stack'; label?: string | null; children: Component[]; childIds: string[] }
   | { kind: 'visibleWhen' | 'disabledWhen'; condition: Expr; body: Component }
   | { kind: 'computed'; label: string; type: Schema; expression: Expr }
@@ -41,7 +42,7 @@ export type Component =
   | { kind: 'sum'; path: Path; label: string; schema: Extract<Schema, { kind: 'sum' }>; branches: Record<string, Component>; defaults: Record<string, Value> }
   | { kind: 'field'; path: Path; schema: Schema; label: string; widget: Widget }
   | { kind: 'button'; label: string; action: Action }
-  | { kind: 'actionWidget'; path: Path; schema: Schema; label: string; actions: Presentation[] };
+  | { kind: 'actionWidget'; path: Path; schema: Schema; label: string; actions: Presentation[] });
 
 export interface Specification {
   version: number;

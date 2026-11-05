@@ -77,6 +77,11 @@
             "label": "−1"
           }
         ],
+        "dependencies": [
+          [
+            "left"
+          ]
+        ],
         "kind": "actionWidget",
         "label": "left",
         "path": [
@@ -158,6 +163,11 @@
             "label": "−1"
           }
         ],
+        "dependencies": [
+          [
+            "right"
+          ]
+        ],
         "kind": "actionWidget",
         "label": "right",
         "path": [
@@ -168,6 +178,7 @@
         }
       }
     ],
+    "dependencies": [],
     "kind": "stack",
     "label": "Counters"
   },

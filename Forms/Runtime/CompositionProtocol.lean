@@ -1,5 +1,6 @@
 module
 
+public import Forms.Core.Dependencies
 public import Forms.Core.ComponentHistory
 public import Forms.Runtime.JsonProtocol
 
@@ -26,41 +27,42 @@ def widgetActionToJson {value : DataType}
 def componentToJson {state : DataType}
   (component : Component state)
   : Json :=
+  Json.mkObj ([("dependencies", toJson (component.dependencies.map (fun path => Path.toList path.path)))] ++
   match component with
-  | .field (value := value) path label widget => Json.mkObj [
+  | .field (value := value) path label widget => [
       ("kind", toJson "field"), ("path", toJson (Path.toList path)),
       ("schema", DataType.toJson value), ("label", toJson label), ("widget", toJson (Widget.name widget))]
-  | .list (element := element) path label item defaultItem => Json.mkObj [
+  | .list (element := element) path label item defaultItem => [
       ("kind", toJson "list"), ("path", toJson (Path.toList path)),
       ("schema", DataType.toJson (.list element)), ("label", toJson label),
       ("item", componentToJson item), ("defaultItem", JsonProtocol.valueToJson defaultItem)]
-  | .sum (tags := tags) (constructors := constructors) path label branches defaults => Json.mkObj [
+  | .sum (tags := tags) (constructors := constructors) path label branches defaults => [
       ("kind", toJson "sum"), ("path", toJson (Path.toList path)),
       ("schema", DataType.toJson (.sum tags constructors)), ("label", toJson label),
       ("branches", Json.mkObj ((FinEnum.toList tags).map fun tag => (tags.label tag, componentToJson (branches tag)))),
       ("defaults", Json.mkObj ((FinEnum.toList tags).map fun tag => (tags.label tag, JsonProtocol.valueToJson (defaults tag))))]
-  | .computed (result := result) label expression => Json.mkObj [
+  | .computed (result := result) label expression => [
       ("kind", toJson "computed"), ("label", toJson label),
       ("type", DataType.toJson result), ("expression", Expr.toJson expression)]
-  | .text expression => Json.mkObj [("kind", toJson "text"), ("expression", Expr.toJson expression)]
-  | .table rows columns => Json.mkObj [
+  | .text expression => [("kind", toJson "text"), ("expression", Expr.toJson expression)]
+  | .table rows columns => [
       ("kind", toJson "table"), ("rows", Expr.toJson rows),
       ("columns", toJson (columns.map fun column => Json.mkObj [
         ("label", toJson column.label), ("expression", Expr.toJson column.format)]))]
-  | .visibleWhen condition body => Json.mkObj [
+  | .visibleWhen condition body => [
       ("kind", toJson "visibleWhen"), ("condition", Expr.toJson condition), ("body", componentToJson body)]
-  | .disabledWhen condition body => Json.mkObj [
+  | .disabledWhen condition body => [
       ("kind", toJson "disabledWhen"), ("condition", Expr.toJson condition), ("body", componentToJson body)]
-  | .actionWidget (value := value) (ids := ids) path label actions => Json.mkObj [
+  | .actionWidget (value := value) (ids := ids) path label actions => [
       ("kind", toJson "actionWidget"), ("path", toJson (Path.toList path)),
       ("schema", DataType.toJson value), ("label", toJson label),
       ("actions", toJson ((FinEnum.toList ids).map fun id => widgetActionToJson (ids.label id) (actions id)))]
-  | .button label action => Json.mkObj [
+  | .button label action => [
       ("kind", toJson "button"), ("label", toJson label), ("action", actionToJson action)]
-  | .stack (items := items) label children order => Json.mkObj [
+  | .stack (items := items) label children order => [
       ("kind", toJson "stack"), ("label", toJson label),
       ("children", toJson ((FinEnum.toList items).map fun index => componentToJson (children (order index)))),
-      ("childIds", toJson ((FinEnum.toList items).map fun index => items.label (order index)))]
+      ("childIds", toJson ((FinEnum.toList items).map fun index => items.label (order index)))])
 
 def specificationToJson {state : DataType}
   (refined : RefinedDataType state)

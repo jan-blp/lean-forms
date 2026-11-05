@@ -2,6 +2,9 @@
   "form": {
     "branches": {
       "circle": {
+        "dependencies": [
+          []
+        ],
         "kind": "field",
         "label": "Radius",
         "path": [],
@@ -13,6 +16,7 @@
       "dot": {
         "childIds": [],
         "children": [],
+        "dependencies": [],
         "kind": "stack",
         "label": "Dot"
       },
@@ -23,6 +27,11 @@
         ],
         "children": [
           {
+            "dependencies": [
+              [
+                "width"
+              ]
+            ],
             "kind": "field",
             "label": "Width",
             "path": [
@@ -34,6 +43,11 @@
             "widget": "naturalInput"
           },
           {
+            "dependencies": [
+              [
+                "height"
+              ]
+            ],
             "kind": "field",
             "label": "Height",
             "path": [
@@ -45,6 +59,7 @@
             "widget": "naturalInput"
           }
         ],
+        "dependencies": [],
         "kind": "stack",
         "label": "Dimensions"
       }
@@ -57,6 +72,9 @@
         "width": "4"
       }
     },
+    "dependencies": [
+      []
+    ],
     "kind": "sum",
     "label": "Shape",
     "path": [],
@@ -140,10 +158,6 @@
   "validation": {
     "branches": {
       "circle": {
-        "inner": {
-          "kind": "base"
-        },
-        "kind": "refine",
         "checker": {
           "condition": {
             "kind": "not",
@@ -162,6 +176,9 @@
               }
             }
           },
+          "elseBranch": {
+            "kind": "pass"
+          },
           "kind": "ite",
           "thenBranch": {
             "kind": "report",
@@ -178,11 +195,12 @@
                 []
               ]
             }
-          },
-          "elseBranch": {
-            "kind": "pass"
           }
-        }
+        },
+        "inner": {
+          "kind": "base"
+        },
+        "kind": "refine"
       },
       "dot": {
         "fields": {},
@@ -191,10 +209,6 @@
       "rectangle": {
         "fields": {
           "height": {
-            "inner": {
-              "kind": "base"
-            },
-            "kind": "refine",
             "checker": {
               "condition": {
                 "kind": "not",
@@ -213,6 +227,9 @@
                   }
                 }
               },
+              "elseBranch": {
+                "kind": "pass"
+              },
               "kind": "ite",
               "thenBranch": {
                 "kind": "report",
@@ -229,17 +246,14 @@
                     []
                   ]
                 }
-              },
-              "elseBranch": {
-                "kind": "pass"
               }
-            }
+            },
+            "inner": {
+              "kind": "base"
+            },
+            "kind": "refine"
           },
           "width": {
-            "inner": {
-              "kind": "base"
-            },
-            "kind": "refine",
             "checker": {
               "condition": {
                 "kind": "not",
@@ -258,6 +272,9 @@
                   }
                 }
               },
+              "elseBranch": {
+                "kind": "pass"
+              },
               "kind": "ite",
               "thenBranch": {
                 "kind": "report",
@@ -274,11 +291,12 @@
                     []
                   ]
                 }
-              },
-              "elseBranch": {
-                "kind": "pass"
               }
-            }
+            },
+            "inner": {
+              "kind": "base"
+            },
+            "kind": "refine"
           }
         },
         "kind": "record"

@@ -13,6 +13,11 @@
     ],
     "children": [
       {
+        "dependencies": [
+          [
+            "items"
+          ]
+        ],
         "expression": {
           "kind": "textAppend",
           "left": {
@@ -96,6 +101,11 @@
         "kind": "text"
       },
       {
+        "dependencies": [
+          [
+            "page"
+          ]
+        ],
         "kind": "field",
         "label": "Page",
         "path": [
@@ -120,6 +130,12 @@
           ],
           "children": [
             {
+              "dependencies": [
+                [
+                  "filters",
+                  "search"
+                ]
+              ],
               "kind": "field",
               "label": "Search",
               "path": [
@@ -132,6 +148,12 @@
               "widget": "textInput"
             },
             {
+              "dependencies": [
+                [
+                  "filters",
+                  "category"
+                ]
+              ],
               "kind": "field",
               "label": "Category",
               "path": [
@@ -150,6 +172,12 @@
               "widget": "select"
             },
             {
+              "dependencies": [
+                [
+                  "filters",
+                  "budget"
+                ]
+              ],
               "kind": "field",
               "label": "Price limit",
               "path": [
@@ -167,6 +195,12 @@
               "widget": "select"
             },
             {
+              "dependencies": [
+                [
+                  "filters",
+                  "sort"
+                ]
+              ],
               "kind": "field",
               "label": "Sort",
               "path": [
@@ -184,6 +218,7 @@
               "widget": "select"
             }
           ],
+          "dependencies": [],
           "kind": "stack",
           "label": "Find products"
         },
@@ -207,10 +242,81 @@
             "value": 0
           }
         },
+        "dependencies": [
+          [
+            "page"
+          ]
+        ],
         "kind": "visibleWhen"
       },
       {
         "body": {
+          "dependencies": [
+            [
+              "filters",
+              "sort"
+            ],
+            [
+              "filters",
+              "budget"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "search"
+            ],
+            [
+              "filters",
+              "budget"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "search"
+            ],
+            [
+              "filters",
+              "budget"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "search"
+            ]
+          ],
           "expression": {
             "kind": "textAppend",
             "left": {
@@ -4519,6 +4625,11 @@
             "value": 0
           }
         },
+        "dependencies": [
+          [
+            "page"
+          ]
+        ],
         "kind": "visibleWhen"
       },
       {
@@ -4682,6 +4793,72 @@
               },
               "label": "Price (EUR)"
             }
+          ],
+          "dependencies": [
+            [
+              "filters",
+              "sort"
+            ],
+            [
+              "filters",
+              "budget"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "search"
+            ],
+            [
+              "filters",
+              "budget"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "search"
+            ],
+            [
+              "filters",
+              "budget"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "category"
+            ],
+            [
+              "filters",
+              "search"
+            ]
           ],
           "kind": "table",
           "rows": {
@@ -8975,10 +9152,20 @@
             "value": 0
           }
         },
+        "dependencies": [
+          [
+            "page"
+          ]
+        ],
         "kind": "visibleWhen"
       },
       {
         "body": {
+          "dependencies": [
+            [
+              "selected"
+            ]
+          ],
           "kind": "field",
           "label": "Product to add",
           "path": [
@@ -9016,6 +9203,11 @@
             "value": 0
           }
         },
+        "dependencies": [
+          [
+            "page"
+          ]
+        ],
         "kind": "visibleWhen"
       },
       {
@@ -9225,6 +9417,7 @@
               }
             }
           },
+          "dependencies": [],
           "kind": "button",
           "label": "Add selected product"
         },
@@ -9248,6 +9441,11 @@
             "value": 0
           }
         },
+        "dependencies": [
+          [
+            "page"
+          ]
+        ],
         "kind": "visibleWhen"
       },
       {
@@ -9256,6 +9454,11 @@
             "product": 0,
             "quantity": "1"
           },
+          "dependencies": [
+            [
+              "items"
+            ]
+          ],
           "item": {
             "childIds": [
               "Product",
@@ -9267,6 +9470,11 @@
             ],
             "children": [
               {
+                "dependencies": [
+                  [
+                    "product"
+                  ]
+                ],
                 "kind": "field",
                 "label": "Product",
                 "path": [
@@ -9285,6 +9493,11 @@
                 "widget": "select"
               },
               {
+                "dependencies": [
+                  [
+                    "quantity"
+                  ]
+                ],
                 "kind": "field",
                 "label": "Quantity",
                 "path": [
@@ -9318,6 +9531,7 @@
                     }
                   }
                 },
+                "dependencies": [],
                 "kind": "button",
                 "label": "−1"
               },
@@ -9344,6 +9558,7 @@
                     }
                   }
                 },
+                "dependencies": [],
                 "kind": "button",
                 "label": "+1"
               },
@@ -9361,10 +9576,16 @@
                     "value": "0"
                   }
                 },
+                "dependencies": [],
                 "kind": "button",
                 "label": "Reset quantity"
               },
               {
+                "dependencies": [
+                  [
+                    "product"
+                  ]
+                ],
                 "expression": {
                   "branches": [
                     {
@@ -9421,6 +9642,7 @@
                 }
               }
             ],
+            "dependencies": [],
             "kind": "stack",
             "label": "Item"
           },
@@ -9477,6 +9699,11 @@
             "value": 1
           }
         },
+        "dependencies": [
+          [
+            "page"
+          ]
+        ],
         "kind": "visibleWhen"
       },
       {
@@ -9578,6 +9805,11 @@
               "label": "Subtotal (EUR)"
             }
           ],
+          "dependencies": [
+            [
+              "items"
+            ]
+          ],
           "kind": "table",
           "rows": {
             "kind": "project",
@@ -9606,9 +9838,15 @@
             "value": 1
           }
         },
+        "dependencies": [
+          [
+            "page"
+          ]
+        ],
         "kind": "visibleWhen"
       }
     ],
+    "dependencies": [],
     "kind": "stack",
     "label": null
   },

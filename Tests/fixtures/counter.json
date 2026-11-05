@@ -71,6 +71,9 @@
         "label": "−1"
       }
     ],
+    "dependencies": [
+      []
+    ],
     "kind": "actionWidget",
     "label": "Counter",
     "path": [],
