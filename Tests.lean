@@ -8,6 +8,7 @@ import Tests.Validation
 import Tests.ServerRefinements
 import Tests.CheckerProtocol
 import Tests.ExpressionProtocol
+import Forms.Runtime.ExpressionProtocol.Theorems
 import Tests.Web
 import Tests.SumHistory
 import Tests.ListHistory
