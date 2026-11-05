@@ -1,4 +1,8 @@
-import Forms.Runtime.ComponentHistoryProtocol
+module
+
+public import Forms.Runtime.ComponentHistoryProtocol
+
+@[expose] public section
 
 namespace Forms.Runtime.SubmissionProtocol
 open Lean Composition

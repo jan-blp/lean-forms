@@ -1,5 +1,12 @@
-import Forms.Core.Component.Builder
-import Forms.Core.RefinedDataType
+module
+
+public import Forms.Core.Component.Builder
+public import Forms.Core.RefinedDataType
+import all Std.Time.Date.Unit.Month -- for concrete date validity proofs
+import all Std.Time.Date.Unit.Year
+import all Std.Time.Date.PlainDate -- for concrete date ordering proofs
+
+@[expose] public section
 
 namespace Forms.ExampleForms.Booking
 open Composition

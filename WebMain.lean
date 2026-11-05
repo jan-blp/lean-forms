@@ -1,3 +1,5 @@
+module
+
 import Forms.ExampleForms.Example
 import Forms.Runtime.Web
 
@@ -46,7 +48,7 @@ private def complete (words : List String) : List String :=
           (if options.openBrowser then [] else ["--open"]) ++ ["--port", "--help"]
         candidates.filter (fun candidate => candidate.startsWith (words.getLast?.getD ""))
 
-def main (args : List String) : IO Unit := do
+public def main (args : List String) : IO Unit := do
   if let "--complete" :: words := args then
     for candidate in complete words do IO.println candidate
     return

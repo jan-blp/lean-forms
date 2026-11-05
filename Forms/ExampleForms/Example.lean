@@ -1,13 +1,17 @@
-import Forms.ExampleForms.Counter
-import Forms.ExampleForms.Counters
-import Forms.ExampleForms.Person
-import Forms.ExampleForms.Booking
-import Forms.ExampleForms.Basket
-import Forms.ExampleForms.TestReport
-import Forms.ExampleForms.Location
-import Forms.ExampleForms.Shapes
-import Forms.ExampleForms.Invoice
-import Forms.ExampleForms.Thermostat
+module
+
+public import Forms.ExampleForms.Counter
+public import Forms.ExampleForms.Counters
+public import Forms.ExampleForms.Person
+public import Forms.ExampleForms.Booking
+public import Forms.ExampleForms.Basket
+public import Forms.ExampleForms.TestReport
+public import Forms.ExampleForms.Location
+public import Forms.ExampleForms.Shapes
+public import Forms.ExampleForms.Invoice
+public import Forms.ExampleForms.Thermostat
+
+@[expose] public section
 
 namespace Forms.ExampleForms
 

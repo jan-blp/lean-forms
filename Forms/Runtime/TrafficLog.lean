@@ -1,5 +1,9 @@
-import Lean.Data.Json
-import Mathlib.Data.FinEnum
+module
+
+public import Lean.Data.Json
+public import Mathlib.Data.FinEnum
+
+public section
 
 namespace Forms.Runtime.TrafficLog
 open Std

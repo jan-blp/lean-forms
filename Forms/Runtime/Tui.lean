@@ -1,5 +1,9 @@
-import Forms.Runtime.CompositionProtocol
-import Forms.Runtime.ComponentHistoryProtocol
+module
+
+public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.ComponentHistoryProtocol
+
+@[expose] public section
 
 namespace Forms.Runtime
 

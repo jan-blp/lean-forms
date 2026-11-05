@@ -1,14 +1,21 @@
-import Forms.ExampleForms.Counters
-import Forms.Runtime.Tui
-import Tests.Weakening
+module
+
+public import Forms.ExampleForms.Counters
+public import Forms.Runtime.Tui
+public import Tests.Weakening
+
+public meta import Forms.Core.DataType
+public meta import Forms.ExampleForms.Basket
+
+@[expose] public section
 
 namespace Tests.AppendHistory
 open Forms Forms.Composition Forms.Runtime Forms.ExampleForms
 
-private def check (name : String) (passed : Bool) : IO Unit := do
+def check (name : String) (passed : Bool) : IO Unit := do
   unless passed do throw (IO.userError s!"FAIL {name}")
 
-private def append : Component (.list .natural) :=
+def append : Component (.list .natural) :=
   .button "Append length" (.append .self (.length (.project .self)))
 
 example {state element : DataType}
@@ -19,21 +26,21 @@ example {state element : DataType}
 #guard (Expr.snoc (.value ([] : List Nat)) (.value 7) : Expr .natural (.list .natural)).eval 0 == [7]
 #guard (Expr.snoc (.value [1, 2]) (.project .self) : Expr .natural (.list .natural)).eval 3 == [1, 2, 3]
 
-private def state : DataType := .record Counters.sides fun
+def state : DataType := .record Counters.sides fun
   | .left => .natural
   | .right => .list .natural
 
-private def initial : ⟦state⟧
+def initial : ⟦state⟧
   | .left => 0
   | .right => [7]
 
-private def child : Counters.Side → Component state
+def child : Counters.Side → Component state
   | .left => .field (.field .left .self) "Value" .naturalInput
   | .right => .button "Append value" (.append (.field .right .self) (.project (.field .left .self)))
 
-private def mixed : Component state := .stack (items := Counters.sides) none child
+def mixed : Component state := .stack (items := Counters.sides) none child
 
-private instance : MonadTui (ReaderT String (Except IO.Error)) where
+instance : MonadTui (ReaderT String (Except IO.Error)) where
   runSpecification _ := read
 
 def run : IO Unit := do

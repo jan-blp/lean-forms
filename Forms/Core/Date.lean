@@ -1,4 +1,8 @@
-import Std.Time.Format
+module
+
+public import Std.Time.Format
+
+@[expose] public section
 
 namespace Forms
 

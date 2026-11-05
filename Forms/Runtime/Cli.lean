@@ -1,4 +1,8 @@
-import Lean
+module
+
+public import Lean
+
+@[expose] public section
 
 namespace Forms.Runtime
 
@@ -10,13 +14,13 @@ structure Cli (α : Type) where
 
 namespace Cli
 
-private structure State (α : Type) where
+structure State (α : Type) where
   value : α
   selected : Option (String × (α → IO Unit)) := none
   pending : Option (String × List (String × α)) := none
   help : Bool := false
 
-private def step {α : Type} (cli : Cli α) (state : State α) (word : String)
+def step {α : Type} (cli : Cli α) (state : State α) (word : String)
     : Except String (State α) := do
   if let some (name, values) := state.pending then
     let some entry := values.find? (fun entry => entry.1 == word)
@@ -31,7 +35,7 @@ private def step {α : Type} (cli : Cli α) (state : State α) (word : String)
   if state.selected.isSome then throw "Choose exactly one example"
   return { state with selected := some entry }
 
-private def parse {α : Type} (cli : Cli α) (args : List String) : Except String (State α) :=
+def parse {α : Type} (cli : Cli α) (args : List String) : Except String (State α) :=
   args.foldlM (step cli) { value := cli.initial }
 
 /-- The last argument is the current word, including an empty word after a space. -/
@@ -47,7 +51,7 @@ def complete {α : Type} (cli : Cli α) (words : List String) : List String :=
           cli.options.map Prod.fst ++ ["--help"]
     candidates.filter (fun candidate => candidate.startsWith (words.getLast?.getD ""))
 
-private def helpText {α : Type} (cli : Cli α) : String :=
+def helpText {α : Type} (cli : Cli α) : String :=
   String.intercalate "\n" (
     ["Usage: forms [example] [options]",
      "Examples: " ++ String.intercalate ", " (cli.examples.map Prod.fst),

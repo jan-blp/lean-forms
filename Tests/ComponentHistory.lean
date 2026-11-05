@@ -1,50 +1,56 @@
-import Forms.ExampleForms.Counters
-import Forms.ExampleForms.Shapes
-import Forms.Runtime.Tui
-import Tests.Weakening
+module
+
+public import Batteries.Data.Except
+
+public import Forms.ExampleForms.Counters
+public import Forms.ExampleForms.Shapes
+public import Forms.Runtime.Tui
+public import Tests.Weakening
+
+@[expose] public section
 
 namespace Tests.ComponentHistory
 open Forms Forms.Composition Forms.Runtime Forms.ExampleForms
 
-private def check (name : String) (passed : Bool) : IO Unit := do
+def check (name : String) (passed : Bool) : IO Unit := do
   unless passed do throw (IO.userError s!"FAIL {name}")
 
-private def reordered : Component Counters.state :=
+def reordered : Component Counters.state :=
   .stack (items := Counters.sides) (some "Counters") Counters.widget (Equiv.swap .left .right)
 
-private def nested : Component Counters.state :=
+def nested : Component Counters.state :=
   .stack (items := Counters.sides) none (fun _ => Counters.form)
 
-private def shared : Component .natural :=
+def shared : Component .natural :=
   .stack (items := Counters.sides) none (fun
     | .left => Counter.form
     | .right => .actionWidget (ids := Counter.actionIds) .self "Counter" (fun _ => Counter.plusFive))
 
-private def mixedState : DataType := .record Counters.sides fun
+def mixedState : DataType := .record Counters.sides fun
   | .left => .natural
   | .right => .text
 
-private def mixed : Component mixedState :=
+def mixed : Component mixedState :=
   .stack (items := Counters.sides) none (fun
     | .left => .actionWidget (ids := Counter.actionIds) (.field .left .self) "Number" Counter.actions
     | .right => .actionWidget (ids := Counter.actionIds) (.field .right .self) "Text"
         (fun _ => ⟨"Replace", .editor .textInput (.project (.field .argument .self))⟩))
 
-private instance : MonadTui (ReaderT String (Except IO.Error)) where
+instance : MonadTui (ReaderT String (Except IO.Error)) where
   runSpecification _ := read
 
-private def visible : Component .natural :=
+def visible : Component .natural :=
   .visibleWhen (.natLe (.project .self) (.value 0)) Counter.form
 
-private def disabled : Component .natural :=
+def disabled : Component .natural :=
   .disabledWhen (.natLe (.value 1) (.project .self)) Counter.form
 
-private def conditionalStack : Component .natural :=
+def conditionalStack : Component .natural :=
   .stack (items := Counters.sides) none (fun
     | .left => .visibleWhen (.natLe (.project .self) (.value 0)) disabled
     | .right => Counter.form)
 
-private def testConditions : IO Unit := do
+def testConditions : IO Unit := do
   for result in [visible.applyInvocation 1 ⟨.plusOne, ()⟩,
       visible.applyInvocation 1 ⟨.replace, (0 : Nat)⟩] do
     check "HiddenActionRejected" (result == .error .hidden)
