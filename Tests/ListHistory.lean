@@ -2,7 +2,8 @@ module
 
 public import Forms.ExampleForms.Counters
 public import Forms.ExampleForms.Shapes
-public import Forms.Runtime.Tui
+public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.ComponentHistoryProtocol
 
 @[expose] public section
 

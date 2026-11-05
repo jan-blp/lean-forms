@@ -7,7 +7,7 @@ public import Forms.ExampleForms.Invoice
 public import Forms.ExampleForms.Location
 public import Forms.ExampleForms.Thermostat
 public import Forms.Runtime.CompositionProtocol
-public import Forms.Runtime.FormSnapshot
+public import Tests.FormSnapshot
 
 @[expose] public section
 
@@ -85,7 +85,7 @@ def run : IO Unit := do
   checkForm "WeakenContextOutsideEditorTarget" form TestReport.initial
   for (name, exported) in [("weakened-report", reportSpec), ("weakened-basket", basketSpec)] do
     let actual ← IO.ofExcept (Lean.Json.parse exported)
-    let expected ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile s!"native/tui/tests/{name}.json"))
+    let expected ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile s!"Tests/fixtures/{name}.json"))
     check (name ++ " fixture") (actual == expected)
 
 end Tests.Weakening

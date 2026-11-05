@@ -23,7 +23,7 @@ import Forms.ExampleForms.Invoice
 import Forms.ExampleForms.Person
 import Forms.ExampleForms.Thermostat
 
-open Forms Forms.Composition Forms.Runtime
+open Forms Forms.Composition Forms.Runtime Tests
 
 private def fieldRefs {state : DataType}
   (component : Component state)
@@ -266,7 +266,7 @@ private def testComputed : IO Unit := do
   check "ComputedWeakening" (Expr.eval (Expr.weaken path total) nested == 100)
 
 private def testDates : IO Unit := do
-  let cases ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "native/tui/tests/dates.json"))
+  let cases ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "Tests/fixtures/dates.json"))
   let valid ← IO.ofExcept (cases.getObjValAs? (List String) "valid")
   let invalid ← IO.ofExcept (cases.getObjValAs? (List String) "invalid")
   for text in valid do
@@ -293,13 +293,13 @@ private def testDates : IO Unit := do
 
 private def testProtocol : IO Unit := do
   for (fixture, encoded) in [
-      ("native/tui/tests/booking.json", CompositionProtocol.encode ExampleForms.Booking.bookingType ExampleForms.Booking.form ExampleForms.Booking.draft),
-      ("native/tui/tests/location.json", CompositionProtocol.encode ExampleForms.Location.locationType ExampleForms.Location.form ExampleForms.Location.draft),
-      ("native/tui/tests/shapes.json", CompositionProtocol.encode ExampleForms.Shapes.shapeType ExampleForms.Shapes.form ExampleForms.Shapes.draft),
-      ("native/tui/tests/invoice.json", CompositionProtocol.encode ExampleForms.Invoice.invoiceType ExampleForms.Invoice.form ExampleForms.Invoice.draft),
-      ("native/tui/tests/person.json", CompositionProtocol.encode ExampleForms.Person.personType ExampleForms.Person.form ExampleForms.Person.draft),
-      ("native/tui/tests/thermostat.json", CompositionProtocol.encode ExampleForms.Thermostat.thermostatType ExampleForms.Thermostat.form ExampleForms.Thermostat.draft)] do
-    check "RustFixtureMatchesLean" ((Lean.Json.parse (← IO.FS.readFile fixture)).toOption == (Lean.Json.parse encoded).toOption)
+      ("Tests/fixtures/booking.json", CompositionProtocol.encode ExampleForms.Booking.bookingType ExampleForms.Booking.form ExampleForms.Booking.draft),
+      ("Tests/fixtures/location.json", CompositionProtocol.encode ExampleForms.Location.locationType ExampleForms.Location.form ExampleForms.Location.draft),
+      ("Tests/fixtures/shapes.json", CompositionProtocol.encode ExampleForms.Shapes.shapeType ExampleForms.Shapes.form ExampleForms.Shapes.draft),
+      ("Tests/fixtures/invoice.json", CompositionProtocol.encode ExampleForms.Invoice.invoiceType ExampleForms.Invoice.form ExampleForms.Invoice.draft),
+      ("Tests/fixtures/person.json", CompositionProtocol.encode ExampleForms.Person.personType ExampleForms.Person.form ExampleForms.Person.draft),
+      ("Tests/fixtures/thermostat.json", CompositionProtocol.encode ExampleForms.Thermostat.thermostatType ExampleForms.Thermostat.form ExampleForms.Thermostat.draft)] do
+    check "ProtocolFixtureMatchesLean" ((Lean.Json.parse (← IO.FS.readFile fixture)).toOption == (Lean.Json.parse encoded).toOption)
 
 public def main : IO Unit := do
   Tests.ServerRefinements.run

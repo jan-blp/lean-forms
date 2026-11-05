@@ -1,7 +1,8 @@
 module
 
 public import Forms.ExampleForms.Counters
-public import Forms.Runtime.Tui
+public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.ComponentHistoryProtocol
 public import Tests.Weakening
 
 @[expose] public section

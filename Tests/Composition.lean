@@ -2,7 +2,7 @@ module
 
 public import Forms.Runtime.CompositionProtocol
 public import Forms.ExampleForms.TestReport
-public import Forms.Runtime.FormSnapshot
+public import Tests.FormSnapshot
 
 @[expose] public section
 
@@ -142,7 +142,7 @@ def testEditorBinding : IO Unit := do
 
 def testProtocol : IO Unit := do
   let specification := CompositionProtocol.encode (.base reportShape) report initial
-  let fixture ← IO.FS.readFile "native/tui/tests/report.json"
+  let fixture ← IO.FS.readFile "Tests/fixtures/report.json"
   let fixtureJson ← IO.ofExcept (Lean.Json.parse fixture)
   let specificationJson ← IO.ofExcept (Lean.Json.parse specification)
   check "TestReportFixtureMatchesLean" (fixtureJson == specificationJson)

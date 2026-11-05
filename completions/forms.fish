@@ -1,4 +1,4 @@
-# Complete forms and forms-web, directly or through Lake.
+# Complete forms-web, directly or through Lake.
 function __forms_lake_start
     set -l words (commandline -opc)
     test (count $words) -ge 3; or return 1
@@ -9,7 +9,7 @@ function __forms_lake_start
     end
     test "$words[$start]" = exe; or return 1
     set -l next (math $start + 1)
-    contains -- "$words[$next]" forms forms-web; or return 1
+    contains -- "$words[$next]" forms-web; or return 1
     echo (math $start + 2)
 end
 
@@ -26,6 +26,5 @@ function __forms_candidates
     end
 end
 
-complete -c forms -f -a '(__forms_candidates)'
 complete -c forms-web -f -a '(__forms_candidates)'
 complete -c lake -n '__forms_lake_start >/dev/null' -f -a '(__forms_candidates)'
