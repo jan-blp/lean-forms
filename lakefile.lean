@@ -10,7 +10,7 @@ package «lean-forms» where
     { name := `relaxedAutoImplicit
       value := false }]
 
-require mathlib from git "https://github.com/leanprover-community/mathlib4" @ "v4.34.1"
+require mathlib from git "https://github.com/leanprover-community/mathlib4" @ "v4.35.0"
 
 target lean_bridge.o pkg : FilePath := do
   let source ← inputTextFile (pkg.dir / "native" / "lean_bridge.c")

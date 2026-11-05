@@ -2,7 +2,6 @@ import Forms.Core.RefinedDataType
 
 namespace Forms
 open Validation
-open private sequenceFin sequence from Forms.Core.RefinedDataType
 
 variable {t : DataType}
 
