@@ -3,7 +3,7 @@ module
 public import Forms.ExampleForms.Counter
 public import Forms.ExampleForms.Basket
 public import Forms.Runtime.CompositionProtocol
-public import Forms.Runtime.Tui
+public import Forms.Runtime.ComponentHistoryProtocol
 
 public meta import Forms.Core.DataType
 public meta import Forms.Core.ActionInvocation
@@ -118,41 +118,11 @@ def testHistory : IO Unit := do
     form 0 #[⟨.minusOne, ()⟩, ⟨.plusFive, ()⟩])
   unless ordered.value == 5 do throw (IO.userError "Replay changed action order")
 
-instance : Runtime.MonadTui (ReaderT String (Except IO.Error)) where
-  runSpecification _ := read
-
-def testReturn : IO Unit := do
-  let run := Runtime.Tui.run (m := ReaderT String (Except IO.Error))
-    (.base .natural) form 0
-  let accepted := "{\"value\":\"43\",\"actions\":[{\"target\":[],\"action\":\"replace\",\"argument\":\"42\"},{\"target\":[],\"action\":\"plusOne\"}]}"
-  match run.run accepted with
-  | .ok (some result) =>
-    unless result.value == 43 && result.actions.size == 2 do
-      throw (IO.userError "Lost verified result or history")
-  | .ok none => throw (IO.userError "Rejected valid terminal submission")
-  | .error error => throw error
-  for forged in ["\"43\"", "{\"value\":\"43\",\"actions\":[]}",
-      "{\"value\":\"43\",\"actions\":[{\"target\":[],\"action\":\"unknown\"}]}"] do
-    unless (run.run forged).toOption.isNone do
-      throw (IO.userError "Accepted forged terminal submission")
-  match run.run "null" with
-  | .ok none => pure ()
-  | .ok (some _) => throw (IO.userError "Lost terminal cancellation")
-  | .error error => throw error
-  let refined : RefinedDataType .natural := .refine (.base .natural)
-    (.ofChecker <| .when (.not (.natLe (.project .self) (.value 10)))
-      (.report (.value "Too large") (.global)))
-  let restricted := Runtime.Tui.run (m := ReaderT String (Except IO.Error))
-    refined form 0
-  unless (restricted.run accepted).toOption.isNone do
-    throw (IO.userError "Replay bypassed refinement validation")
-
 def run : IO Unit := do
   testHistory
   testDecodeErrors
-  testReturn
   let encoded := Runtime.CompositionProtocol.encode (.base .natural) ExampleForms.Counter.form 0
-  let expected ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "native/tui/tests/counter.json"))
+  let expected ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "Tests/fixtures/counter.json"))
   let actual ← IO.ofExcept (Lean.Json.parse encoded)
   unless actual == expected do throw (IO.userError "Counter fixture differs from Lean")
   IO.println "PASS: expression actions, button history replay, and counter protocol fixture"

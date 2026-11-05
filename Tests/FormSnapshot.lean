@@ -4,7 +4,8 @@ public import Forms.Core.Composition
 
 @[expose] public section
 
-namespace Forms
+namespace Tests
+open Forms Forms.Composition
 
 inductive FieldContent (t : DataType) where
   | input (widget : Widget t)
@@ -17,11 +18,6 @@ structure FieldRef where
   indices : List Nat
   disabled : Bool := false
 
-end Forms
-
-namespace Forms.Runtime
-open Composition
-
 inductive FormSnapshot where
   | fields (values : List FieldRef)
   | text (value : String)
@@ -29,18 +25,18 @@ inductive FormSnapshot where
   | table (headings : List String) (rows : List (List String))
   | stack (children : List FormSnapshot)
 
-def mapFields (f : FieldRef → FieldRef) : FormSnapshot → FormSnapshot
-  | .fields fields => .fields (fields.map f)
+def FormSnapshot.mapFields (f : FieldRef → FieldRef) : FormSnapshot → FormSnapshot
+  | .fields values => .fields (values.map f)
   | .stack children => .stack (children.map (mapFields f))
   | other => other
 
-def disable : FormSnapshot → FormSnapshot
-  | .fields fields => .fields (fields.map fun field => { field with disabled := true })
+def FormSnapshot.disable : FormSnapshot → FormSnapshot
+  | .fields values => .fields (values.map fun field => { field with disabled := true })
   | .action label _ => .action label true
   | .stack children => .stack (children.map disable)
   | other => other
 
-def pathIndices {state value : DataType} : Path state value → List Nat
+def FormSnapshot.pathIndices {state value : DataType} : Path state value → List Nat
   | .self => []
   | .field name rest => (FinEnum.equiv name).val :: pathIndices rest
 
@@ -88,4 +84,4 @@ def FormSnapshot.fieldRefs : FormSnapshot → List FieldRef
   | .stack children => children.flatMap FormSnapshot.fieldRefs
   | _ => []
 
-end Forms.Runtime
+end Tests

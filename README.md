@@ -1,25 +1,15 @@
 # lean-forms
 
-Requires Linux or macOS, [elan](https://lean-lang.org/install/), Rust/Cargo 1.88+, and `cc`.
+Requires Linux or macOS, [elan](https://lean-lang.org/install/), Node.js 22+, and npm.
 
-Run in an interactive terminal:
+Run the web client (opens `http://127.0.0.1:8080`):
 
 ```sh
 lake exe cache get
-lake -q exe forms
-lake -q exe forms counter
-lake -q exe forms --help
-```
-
-↑/↓ selects; Enter edits/saves; Space toggles; Esc cancels an edit;
-`q` submits; `x` cancels the form.
-
-Web client (requires Node.js 22+ and npm; open `http://127.0.0.1:8080`):
-
-```sh
 npm --prefix web ci
 lake -q exe forms-web --open
 lake -q exe forms-web person --port 8081
+lake -q exe forms-web --help
 ```
 
 Apply or Enter saves a field edit; Submit sends the applied values.

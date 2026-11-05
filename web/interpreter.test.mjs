@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createModel, evaluate, formatValue } from './dist/interpreter.js';
 
-const fixture = name => JSON.parse(readFileSync(new URL(`../native/tui/tests/${name}.json`, import.meta.url)));
+const fixture = name => JSON.parse(readFileSync(new URL(`../Tests/fixtures/${name}.json`, import.meta.url)));
 const press = (model, id, target = []) => model.apply(model.controls().find(c => c.id === id && JSON.stringify(c.target) === JSON.stringify(target)).key);
 
 test('actions preserve order, repetitions, and arbitrary precision', () => {

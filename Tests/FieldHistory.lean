@@ -4,7 +4,8 @@ import all Std.Time.Date.Unit.Month -- for concrete date validity proofs
 import all Std.Time.Date.Unit.Year
 
 public import Forms.ExampleForms.Counters
-public import Forms.Runtime.Tui
+public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.ComponentHistoryProtocol
 
 @[expose] public section
 

@@ -42,7 +42,7 @@ def nested : DataType := .record basketFields fun _ => basket
 
 def run : IO Unit := do
   let exported := Runtime.CompositionProtocol.encode (.base basket) basketView initial
-  let expected ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "native/tui/tests/basket.json"))
+  let expected ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "Tests/fixtures/basket.json"))
   let actual ← IO.ofExcept (Lean.Json.parse exported)
   unless actual == expected do throw (IO.userError "Basket fixture differs from Lean")
   IO.println "PASS: basket queries, selected item, and protocol fixture"

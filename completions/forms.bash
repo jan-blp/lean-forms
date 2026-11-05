@@ -1,4 +1,4 @@
-# Complete forms and forms-web, directly or through Lake.
+# Complete forms-web, directly or through Lake.
 _forms_complete() {
     local start=1 cursor=$COMP_CWORD word executable
     local -a invoke
@@ -8,7 +8,7 @@ _forms_complete() {
             ((start += 1))
         done
         executable=${COMP_WORDS[start+1]}
-        if [[ ${COMP_WORDS[start]} != exe || ( $executable != forms && $executable != forms-web ) ]] || ((cursor < start + 2)); then
+        if [[ ${COMP_WORDS[start]} != exe || $executable != forms-web ]] || ((cursor < start + 2)); then
             if [[ -n ${_forms_previous_lake_completion:-} ]]; then
                 "$_forms_previous_lake_completion" "$@"
             fi
@@ -31,5 +31,5 @@ if [[ $_forms_existing_completion =~ -F[[:space:]]+([^[:space:]]+) ]] && [[ ${BA
     _forms_previous_lake_completion=${BASH_REMATCH[1]}
 fi
 unset _forms_existing_completion
-complete -F _forms_complete forms forms-web .lake/build/bin/forms .lake/build/bin/forms-web
+complete -F _forms_complete forms-web .lake/build/bin/forms-web
 complete -o default -F _forms_complete lake
