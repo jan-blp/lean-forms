@@ -47,17 +47,6 @@ def childField (json : Json) (key : String) : Except String (Child json) :=
   | .ok value => .ok ⟨value, sizeOf_field json value key h⟩
   | .error error => .error error
 
-theorem childField_ok {json value : Json} {key : String} (h : json.getObjVal? key = .ok value) :
-    childField json key = .ok ⟨value, sizeOf_field json value key h⟩ := by
-  unfold childField
-  split
-  · rename_i found he
-    have same : found = value := Except.ok.inj (he.symm.trans h)
-    subst found
-    rfl
-  · rename_i error he
-    cases he.symm.trans h
-
 /-- Array elements with erased proofs for well-founded recursion. -/
 def childElements (json : Json) : Except String (Array (Child json)) :=
   match json with
