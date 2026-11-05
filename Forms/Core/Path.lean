@@ -18,6 +18,20 @@ structure PathFrom (source : DataType) where
   {target : DataType}
   path : Path source target
 
+def PathFrom.decEq : {source : DataType} → DecidableEq (PathFrom source)
+  | _, ⟨.self⟩, ⟨.self⟩ => isTrue rfl
+  | _, ⟨.self⟩, ⟨.field _ _⟩ | _, ⟨.field _ _⟩, ⟨.self⟩ => isFalse (by grind)
+  | _, ⟨.field n p⟩, ⟨.field m q⟩ => by
+    by_cases h : n = m
+    · subst m
+      match PathFrom.decEq ⟨p⟩ ⟨q⟩ with
+      | isTrue h => exact isTrue (by grind)
+      | isFalse h => exact isFalse (by grind)
+    · exact isFalse (by grind)
+
+
+instance {source : DataType} : DecidableEq (PathFrom source) := PathFrom.decEq
+
 section
 
 variable {source target a b c : DataType}
