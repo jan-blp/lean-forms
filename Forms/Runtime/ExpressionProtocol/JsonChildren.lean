@@ -1,9 +1,14 @@
-import Forms.Runtime.JsonProtocol
+module
+
+import all Lean.Data.Json.Basic -- for JSON decoding proofs
+public import Forms.Runtime.JsonProtocol
+
+@[expose] public section
 
 namespace Forms.Runtime.ExpressionProtocol
 open Lean Std.DTreeMap.Internal
 
-private theorem lookup_lt (tree : Impl String (fun _ => Json)) (key : String) (value : Json)
+theorem lookup_lt (tree : Impl String (fun _ => Json)) (key : String) (value : Json)
     (h : Impl.Const.get? tree key = some value) : sizeOf value < sizeOf tree := by
   induction tree with
   | leaf => simp [Impl.Const.get?] at h

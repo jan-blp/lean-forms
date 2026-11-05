@@ -1,4 +1,8 @@
-import Forms.Runtime.ExpressionProtocol.ExpressionTheorems
+module
+
+public import Forms.Runtime.ExpressionProtocol.ExpressionTheorems
+
+@[expose] public section
 
 namespace Forms.Runtime.ExpressionProtocol
 

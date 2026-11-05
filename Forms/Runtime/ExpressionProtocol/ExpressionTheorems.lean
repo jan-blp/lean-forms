@@ -1,5 +1,17 @@
-import Forms.Runtime.ExpressionProtocol.PathTheorems
-import Forms.Runtime.ExpressionProtocol.SchemaTheorems
+module
+
+import all Lean.Data.Json.Basic -- for JSON decoding proofs
+import all Lean.Data.Json.FromToJson.Basic
+import all Std.Data.TreeMap.Raw.Basic
+import all Std.Data.DTreeMap.Raw.Basic
+import all Std.Data.DTreeMap.Internal.Queries
+import all Std.Data.DTreeMap.Internal.Operations
+import all Std.Data.DTreeMap.Internal.Balancing
+import all Init.Data.Ord.String
+public import Forms.Runtime.ExpressionProtocol.PathTheorems
+public import Forms.Runtime.ExpressionProtocol.SchemaTheorems
+
+@[expose] public section
 
 namespace Forms.Runtime.ExpressionProtocol
 open Lean

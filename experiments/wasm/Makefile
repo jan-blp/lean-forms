@@ -5,7 +5,7 @@
 OUT := .lake/wasm
 WORK := $(OUT)/json-build
 PREFIX := $(shell lean --print-prefix)
-SOURCE := $(OUT)/toolchains/lean4-4.34.1/src
+SOURCE := $(OUT)/toolchains/lean4-4.35.0/src
 SDK := $(OUT)/toolchains/emsdk-4.0.23/upstream/emscripten
 INCLUDE := $(WORK)/include
 MAKEFILE := experiments/wasm/Makefile
@@ -27,7 +27,7 @@ setup:
 # Lake tracks Lean dependencies; discovery then follows the generated C symbols.
 prepare:
 	@test -x $(SDK)/emcc -a -d $(SOURCE) || { echo 'Run make -f $(MAKEFILE) setup first.'; exit 1; }
-	@grep -q '^#define LEAN_VERSION_STRING "4.34.1"' $(PREFIX)/include/lean/version.h || { echo 'This build requires Lean 4.34.1.'; exit 1; }
+	@grep -q '^#define LEAN_VERSION_STRING "4.35.0"' $(PREFIX)/include/lean/version.h || { echo 'This build requires Lean 4.35.0.'; exit 1; }
 	lake build wasm-discover Forms.Runtime.CheckerProtocol:c Forms.Runtime.ExpressionProtocol:c Forms.Runtime.ExpressionProtocol.Schema:c Forms.Runtime.JsonProtocol:c
 
 discover: prepare

@@ -1,4 +1,8 @@
-import Forms.Runtime.ExpressionProtocol.Schema
+module
+
+public import Forms.Runtime.ExpressionProtocol.Schema
+
+@[expose] public section
 
 namespace Forms.Runtime.ExpressionProtocol
 open Lean

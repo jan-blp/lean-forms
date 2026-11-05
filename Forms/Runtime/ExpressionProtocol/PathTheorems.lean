@@ -1,11 +1,15 @@
-import Forms.Runtime.ExpressionProtocol
-import Forms.Runtime.ExpressionProtocol.ValueTheorems
+module
+
+public import Forms.Runtime.ExpressionProtocol
+public import Forms.Runtime.ExpressionProtocol.ValueTheorems
+
+@[expose] public section
 
 namespace Forms.Runtime.ExpressionProtocol
 open Lean
 set_option backward.isDefEq.respectTransparency false
 
-private theorem path_decode_reindex {a b result : Schema} (h : a = b) (labels : List String)
+theorem path_decode_reindex {a b result : Schema} (h : a = b) (labels : List String)
     (path : Path b.dataType result.dataType)
     (decoded : pathFromLabels b labels = .ok ⟨result, path⟩) :
     pathFromLabels a labels =

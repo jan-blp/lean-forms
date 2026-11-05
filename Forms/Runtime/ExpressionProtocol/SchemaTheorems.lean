@@ -1,5 +1,17 @@
-import Forms.Runtime.ExpressionProtocol.Canonical
-import Forms.Runtime.ExpressionProtocol.JsonLemmas
+module
+
+import all Lean.Data.Json.Basic -- for JSON decoding proofs
+import all Lean.Data.Json.FromToJson.Basic
+import all Std.Data.TreeMap.Raw.Basic
+import all Std.Data.DTreeMap.Raw.Basic
+import all Std.Data.DTreeMap.Internal.Queries
+import all Std.Data.DTreeMap.Internal.Operations
+import all Std.Data.DTreeMap.Internal.Balancing
+import all Init.Data.Ord.String
+public import Forms.Runtime.ExpressionProtocol.Canonical
+public import Forms.Runtime.ExpressionProtocol.JsonLemmas
+
+@[expose] public section
 
 namespace Forms.Runtime.ExpressionProtocol
 open Lean
@@ -10,7 +22,7 @@ theorem fromFields_canonical (record : Bool) (labels : Enum) (fields : labels â†
     Schema.fromFields record ((FinEnum.toList labels).map
       (fun i => (labels.label i, canonicalSchema (fields i)))) =
       .ok (if record then canonicalSchema (.record labels fields) else canonicalSchema (.sum labels fields)) := by
-  have names : ((FinEnum.toList labels).map fun i => labels.label i) = labels.options := rfl
+  have names : ((FinEnum.toList labels).map fun i => labels.label i) = labels.options := by rfl
   simp only [Schema.fromFields, List.map_map, Function.comp_def, names, labels.options_nodup, dite_true]
   cases record <;> simp [Enum.options, FinEnum.toList, enumIndex, Function.comp_def] <;>
     exact (Fin.heq_fun_iff (by simp)).2 fun _ => rfl

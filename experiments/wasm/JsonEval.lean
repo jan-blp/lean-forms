@@ -1,4 +1,8 @@
-import Forms.Runtime.CheckerProtocol
+module
+
+public import Forms.Runtime.CheckerProtocol
+
+public section
 
 namespace WasmExperiment
 open Lean Forms.Runtime

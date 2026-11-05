@@ -1,11 +1,15 @@
-import Forms.Runtime.CheckerProtocol
-import Tests.ValidationCheckers
-import Forms.ExampleForms.Shapes
+module
+
+public import Forms.Runtime.CheckerProtocol
+public import Tests.ValidationCheckers
+public import Forms.ExampleForms.Shapes
+
+@[expose] public section
 
 namespace Tests.CheckerProtocol
 open Forms Forms.Validation Forms.Runtime Forms.ExampleForms
 
-private def roundTrip {type : DataType} (checker : Checker type) (value : ⟦type⟧) : IO Unit := do
+def roundTrip {type : DataType} (checker : Checker type) (value : ⟦type⟧) : IO Unit := do
   let actual ← IO.ofExcept (CheckerProtocol.evaluate type.toJson checker.toJson (JsonProtocol.valueToJson value))
   let expected := Lean.toJson ((checker.run value).map ResolvedError.toJson)
   unless actual == expected do

@@ -1,4 +1,8 @@
-import Forms.Runtime.ExpressionProtocol.JsonChildren
+module
+
+public import Forms.Runtime.ExpressionProtocol.JsonChildren
+
+@[expose] public section
 
 namespace Forms.Runtime.ExpressionProtocol
 open Lean

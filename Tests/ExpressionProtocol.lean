@@ -1,16 +1,22 @@
-import Forms.Runtime.ExpressionProtocol.Theorems
-import Forms.ExampleForms.Person
-import Forms.ExampleForms.Invoice
-import Forms.ExampleForms.Shapes
-import Forms.ExampleForms.Location
+module
+
+public import Mathlib.Data.String.Defs
+
+public import Forms.Runtime.ExpressionProtocol.Theorems
+public import Forms.ExampleForms.Person
+public import Forms.ExampleForms.Invoice
+public import Forms.ExampleForms.Shapes
+public import Forms.ExampleForms.Location
+
+@[expose] public section
 
 namespace Tests.ExpressionProtocol
 open Forms Forms.Runtime Forms.Runtime.ExpressionProtocol Forms.ExampleForms Lean
 
-private def check (name : String) (passed : Bool) : IO Unit :=
+def check (name : String) (passed : Bool) : IO Unit :=
   unless passed do throw (IO.userError s!"FAIL {name}")
 
-private def roundTrip (emit : Json → IO Unit) {input result : DataType} (name : String)
+def roundTrip (emit : Json → IO Unit) {input result : DataType} (name : String)
     (expression : Forms.Expr input result) (value : ⟦input⟧) : IO Unit := do
   let schema := input.toJson
   let encoded := expression.toJson
@@ -26,7 +32,7 @@ private def roundTrip (emit : Json → IO Unit) {input result : DataType} (name 
       (decode input result encoded).map Forms.Expr.toJson
   check (name ++ "WireRoundTrip") ((← IO.ofExcept reencoded) == encoded)
 
-private def reject (emit : Json → IO Unit) (name schema expression value : String) : IO Unit := do
+def reject (emit : Json → IO Unit) (name schema expression value : String) : IO Unit := do
   let schema ← IO.ofExcept (Json.parse schema)
   let expression ← IO.ofExcept (Json.parse expression)
   let value ← IO.ofExcept (Json.parse value)
@@ -37,7 +43,7 @@ private def reject (emit : Json → IO Unit) (name schema expression value : Str
         ("argument", value), ("expected", Json.mkObj [("ok", toJson false), ("error", toJson message)])]
   | .ok _ => throw (IO.userError s!"FAIL {name}: accepted malformed expression")
 
-private def testOperators (emit : Json → IO Unit) : IO Unit := do
+def testOperators (emit : Json → IO Unit) : IO Unit := do
   let x : Forms.Expr .natural .natural := .project .self
   let huge := 2 ^ 256 + 123
   for value in [0, 1, 9, huge] do
@@ -76,7 +82,7 @@ private def testOperators (emit : Json → IO Unit) : IO Unit := do
   roundTrip emit "DateValue" (Forms.Expr.value (input := .date) (result := .date) early) late
   roundTrip emit "DateLe" (Forms.Expr.dateLe (.project .self) (.value late)) early
 
-private def testLists (emit : Json → IO Unit) : IO Unit := do
+def testLists (emit : Json → IO Unit) : IO Unit := do
   let items : Forms.Expr (.list .natural) (.list .natural) := .project .self
   let x : Forms.Expr .natural .natural := .project .self
   for values in [[], [0, 9, 10, 2 ^ 128], [10, 10, 3]] do
@@ -97,7 +103,7 @@ private def testLists (emit : Json → IO Unit) : IO Unit := do
   roundTrip emit "NestedLists" (Forms.Expr.sum (input := .list (.list .natural)) (.project .self)
     (.sum (.project .self) (.project .self))) [[1, 2], [], [2 ^ 100]]
 
-private def testStructured (emit : Json → IO Unit) : IO Unit := do
+def testStructured (emit : Json → IO Unit) : IO Unit := do
   roundTrip emit "RecordProject" (Forms.Expr.project Person.street) Person.draft
   roundTrip emit "RecordValue" (Forms.Expr.value (input := .natural) (result := Person.person) Person.draft) 0
   roundTrip emit "RecordBranch" (Forms.Expr.ifThenElse (input := .boolean) (.project .self)
@@ -123,7 +129,7 @@ private def testStructured (emit : Json → IO Unit) : IO Unit := do
          | .japan => .enumLabel (.project .self)
          | .catalonia => .enumLabel (.project .self))) Location.draft
 
-private def testRejected (emit : Json → IO Unit) : IO Unit := do
+def testRejected (emit : Json → IO Unit) : IO Unit := do
   reject emit "UnknownOperator"
     "{\"kind\":\"natural\"}"
     "{\"kind\":\"wat\"}"

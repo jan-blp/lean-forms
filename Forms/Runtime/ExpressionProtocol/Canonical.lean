@@ -1,5 +1,9 @@
-import Forms.Runtime.ExpressionProtocol.Schema
-import Mathlib.Logic.Equiv.List
+module
+
+public import Forms.Runtime.ExpressionProtocol.Schema
+public import Mathlib.Logic.Equiv.List
+
+@[expose] public section
 
 namespace Forms.Runtime.ExpressionProtocol
 open Lean
@@ -23,7 +27,7 @@ abbrev canonicalSchema : DataType → Schema
   | .sum labels branches => .sum labels.options labels.options_nodup
       (fun i => canonicalSchema (branches ((enumIndex labels).symm i)))
 
-private def sumValueEquiv {α : Type} (types : α → Type) : SumValue types ≃ Sigma types where
+def sumValueEquiv {α : Type} (types : α → Type) : SumValue types ≃ Sigma types where
   toFun := fun v => ⟨v.tag, v.payload⟩
   invFun := fun v => ⟨v.1, v.2⟩
   left_inv := fun _ => rfl
@@ -70,7 +74,7 @@ def canonicalPath {input result : DataType} (path : Path input result) :
   | .field (fieldNames := labels) i rest =>
       .field (enumIndex labels i) (by simpa using canonicalPath rest)
 
-private theorem path_get_reindex {α : Type} (types : α → DataType) {a b : α}
+theorem path_get_reindex {α : Type} (types : α → DataType) {a b : α}
     (h : a = b) {result : DataType} (path : Path (types b) result)
     (values : (i : α) → ⟦types i⟧) :
     ((congrArg types h).symm ▸ path).get (values a) = path.get (values b) := by
@@ -127,7 +131,7 @@ def canonicalExpr {input result : DataType} (expression : Forms.Expr input resul
 @[simp] theorem canonicalEquiv_enum (labels : Enum) (v : labels) :
     canonicalEquiv (.enum labels) v = enumIndex labels v := rfl
 
-private theorem reindex_equiv_apply {α A B : Type} (types : α → Type)
+theorem reindex_equiv_apply {α A B : Type} (types : α → Type)
     (f : (a : α) → types a → B) {a b : α} (h : a = b)
     (e : A ≃ types b) (v : A) :
     f a ((cast (congrArg (fun x => A ≃ types x) h.symm) e) v) = f b (e v) := by
@@ -162,7 +166,7 @@ theorem canonicalExpr_eval {input result : DataType} (expression : Forms.Expr in
   | _ => simp_all [canonicalExpr, Forms.Expr.eval, canonicalEquiv, Equiv.listEquivOfEquiv,
       List.filter_map, Function.comp_def, apply_ite]
 
-private theorem map_finRange_cast {α : Type} {m n : Nat} (h : m = n) (f : Fin n → α) :
+theorem map_finRange_cast {α : Type} {m n : Nat} (h : m = n) (f : Fin n → α) :
     (List.finRange m).map (fun i => f (Fin.cast h i)) = (List.finRange n).map f := by
   subst n
   rfl
@@ -207,7 +211,7 @@ theorem canonicalValue_toJson (type : DataType) (value : ⟦type⟧) :
       congr 3
       exact congrArg toJson (enumIndex_label labels value.tag)
 
-private theorem cast_equiv_apply {A B C : Type} (h : B = C) (e : A ≃ B) (v : A) :
+theorem cast_equiv_apply {A B C : Type} (h : B = C) (e : A ≃ B) (v : A) :
     (cast (congrArg (fun t => A ≃ t) h) e) v = cast h (e v) := by
   cases h
   rfl

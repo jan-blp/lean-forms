@@ -1,12 +1,24 @@
-import Forms.Runtime.ExpressionProtocol.Canonical
-import Forms.Runtime.ExpressionProtocol.JsonLemmas
-import Std.Data.String.ToNat
+module
+
+import all Lean.Data.Json.Basic -- for JSON decoding proofs
+import all Lean.Data.Json.FromToJson.Basic
+import all Std.Data.TreeMap.Raw.Basic
+import all Std.Data.DTreeMap.Raw.Basic
+import all Std.Data.DTreeMap.Internal.Queries
+import all Std.Data.DTreeMap.Internal.Operations
+import all Std.Data.DTreeMap.Internal.Balancing
+import all Init.Data.Ord.String
+public import Forms.Runtime.ExpressionProtocol.Canonical
+public import Forms.Runtime.ExpressionProtocol.JsonLemmas
+public import Std.Data.String.ToNat
+
+@[expose] public section
 
 namespace Forms.Runtime.ExpressionProtocol
 open Lean
 set_option backward.isDefEq.respectTransparency false
 
-private theorem transport_apply {ι : Type} {α : ι → Type} (f : (i : ι) → α i)
+theorem transport_apply {ι : Type} {α : ι → Type} (f : (i : ι) → α i)
     {a b : ι} (h : a = b) : h ▸ f a = f b := by
   cases h
   rfl
@@ -16,16 +28,16 @@ theorem sequence_ok {ι : Type} [FinEnum ι] {α : ι → Type} (result : (i : �
   simp only [JsonProtocol.sequence, sequenceFin_ok, bind, Except.bind, pure, Except.pure]
   exact congrArg _ (funext fun i => transport_apply result (FinEnum.equiv.symm_apply_apply i))
 
-private theorem decode_reindex {a b : DataType} (h : a = b) (json : Json) (value : ⟦b⟧)
+theorem decode_reindex {a b : DataType} (h : a = b) (json : Json) (value : ⟦b⟧)
     (decoded : JsonProtocol.valueFromJson b json = .ok value) :
     JsonProtocol.valueFromJson a json = .ok (cast (congrArg DataType.denote h).symm value) := by
   cases h
   exact decoded
 
-private theorem getObj_mkObj (fields : List (String × Json)) :
-    (Json.mkObj fields).getObj? = .ok (Std.TreeMap.Raw.ofList fields compare) := rfl
+theorem getObj_mkObj (fields : List (String × Json)) :
+    (Json.mkObj fields).getObj? = .ok (Std.TreeMap.Raw.ofList fields compare) := by rfl
 
-private theorem getNat_fromNat (n : Nat) : (Json.num (JsonNumber.fromNat n)).getNat? = .ok n := rfl
+theorem getNat_fromNat (n : Nat) : (Json.num (JsonNumber.fromNat n)).getNat? = .ok n := by rfl
 
 /-- Value decoding recovers the original value under the wire-type equivalence. -/
 theorem value_decode

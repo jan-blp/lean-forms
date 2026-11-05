@@ -1,5 +1,11 @@
-import Forms.Runtime.ExpressionProtocol.Schema
-import Std.Data.TreeMap.Raw.Lemmas
+module
+
+import all Lean.Data.Json.Basic -- for JSON decoding proofs
+import all Lean.Data.Json.FromToJson.Basic
+public import Forms.Runtime.ExpressionProtocol.Schema
+public import Std.Data.TreeMap.Raw.Lemmas
+
+@[expose] public section
 
 namespace Forms.Runtime.ExpressionProtocol
 open Lean
@@ -24,7 +30,7 @@ theorem size_mkObj {fields : List (String × Json)}
   apply Std.TreeMap.Raw.size_ofList
   simpa [List.Nodup, List.pairwise_map] using unique
 
-private theorem forIn_ok {α β : Type} (xs : List α) (b : β)
+theorem forIn_ok {α β : Type} (xs : List α) (b : β)
     (f : α → β → Except String (ForInStep β))
     (h : ∀ a ∈ xs, f a b = .ok (.yield b)) : forIn xs b f = .ok b := by
   induction xs with
@@ -48,7 +54,7 @@ theorem checkFields_mkObj {fields : List (String × Json)}
   rw [lookups]
   simp [size_mkObj unique]
 
-theorem string_roundTrip (s : String) : fromJson? (toJson s) = .ok s := rfl
+theorem string_roundTrip (s : String) : fromJson? (toJson s) = .ok s := by rfl
 
 theorem bool_roundTrip (b : Bool) : fromJson? (toJson b) = .ok b := by
   cases b <;> rfl
@@ -82,7 +88,7 @@ theorem sequenceFin_ok {n : Nat} {α : Fin n → Type u} (result : (i : Fin n) �
 
 open Meta Simp in
 /-- Evaluate a lookup on a concrete encoded node when it succeeds definitionally. -/
-def okByWhnf (e : Lean.Expr) : SimpM DStep := do
+meta def okByWhnf (e : Lean.Expr) : SimpM DStep := do
   let e' ← whnfD e
   return if e'.isAppOfArity ``Except.ok 3 then .done e' else .continue
 

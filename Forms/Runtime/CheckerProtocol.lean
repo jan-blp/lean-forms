@@ -1,4 +1,8 @@
-import Forms.Runtime.ExpressionProtocol
+module
+
+public import Forms.Runtime.ExpressionProtocol
+
+@[expose] public section
 
 namespace Forms.Runtime.CheckerProtocol
 open Lean Forms.Validation ExpressionProtocol
@@ -7,7 +11,7 @@ open Lean Forms.Validation ExpressionProtocol
 abbrev Program (root input : Schema) :=
   ⟦root.dataType⟧ → ⟦input.dataType⟧ → List (ResolvedError root.dataType)
 
-private def location (input : Schema) : (target : Schema) → List Json →
+def location (input : Schema) : (target : Schema) → List Json →
     Except String (LocationExpr input.dataType target.dataType)
   | _, [] => pure .self
   | target, step :: rest =>
@@ -33,7 +37,7 @@ private def location (input : Schema) : (target : Schema) → List Json →
     | _, _ => throw s!"Invalid target step {kind} for {target.dataType.toJson.compress}"
 termination_by _ steps => steps.length
 
-private def targets (root input : Schema) (json : Json) :
+def targets (root input : Schema) (json : Json) :
     Except String (TargetsExpr root.dataType input.dataType) :=
   (json.getObjValAs? String "kind").bind fun kind =>
   match kind with
@@ -48,14 +52,14 @@ private def targets (root input : Schema) (json : Json) :
     else throw "Error locations must be nonempty"
   | kind => throw s!"Unknown target kind: {kind}"
 
-private def iterationSchema (outer element : Schema) : Schema :=
+def iterationSchema (outer element : Schema) : Schema :=
   .record ["outer", "item", "index"] (by decide) fun i =>
     match i.val with
     | 0 => outer
     | 1 => element
     | _ => .natural
 
-private def iterationValue {outer element : Schema}
+def iterationValue {outer element : Schema}
     (context : ⟦outer.dataType⟧) (item : ⟦element.dataType⟧) (index : Nat) :
     ⟦(iterationSchema outer element).dataType⟧ :=
   fun i => match i with
