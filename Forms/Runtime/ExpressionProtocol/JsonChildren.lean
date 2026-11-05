@@ -12,31 +12,16 @@ theorem lookup_lt (tree : Impl String (fun _ => Json)) (key : String) (value : J
     (h : Impl.Const.get? tree key = some value) : sizeOf value < sizeOf tree := by
   induction tree with
   | leaf => simp [Impl.Const.get?] at h
-  | inner sz k v l r ihl ihr =>
-    simp only [Impl.Const.get?] at h
-    split at h
-    · have := ihl h; simp only [Impl.inner.sizeOf_spec]; omega
-    · have := ihr h; simp only [Impl.inner.sizeOf_spec]; omega
-    · cases h; simp only [Impl.inner.sizeOf_spec]; omega
+  | inner => simp only [Impl.Const.get?] at h; split at h <;> simp_all <;> omega
 
 /-- Successful object lookup returns a structurally smaller JSON value. -/
 theorem sizeOf_field (json child : Json) (key : String) (h : json.getObjVal? key = .ok child) :
     sizeOf child < sizeOf json := by
-  cases json <;> simp only [Json.getObjVal?, pure, Except.pure, throw] at h
-  all_goals try contradiction
-  rename_i tree
-  split at h
-  · rename_i value hv
-    cases h
-    have small := lookup_lt tree.inner.inner key child hv
-    cases tree with
-    | mk tree =>
-      cases tree with
-      | mk tree =>
-        simp only [Json.obj.sizeOf_spec, Std.TreeMap.Raw.mk.sizeOf_spec,
-          Std.DTreeMap.Raw.mk.sizeOf_spec] at *
-        omega
-  · contradiction
+  rcases json with _ | _ | _ | _ | _ | ⟨⟨⟨tree⟩⟩⟩ <;>
+    simp [Json.getObjVal?, pure, Except.pure, throw] at h
+  split at h <;> simp_all
+  have := lookup_lt tree key child ‹_›
+  omega
 
 /-- A JSON child carries the size bound needed by the total decoders. -/
 abbrev Child (parent : Json) := { child : Json // sizeOf child < sizeOf parent }
@@ -51,9 +36,7 @@ def childField (json : Json) (key : String) : Except String (Child json) :=
 def childElements (json : Json) : Except String (Array (Child json)) :=
   match json with
   | .arr items => .ok (items.attach.map fun item => ⟨item.val, by
-      have := Array.sizeOf_lt_of_mem item.property
-      simp only [Json.arr.sizeOf_spec]
-      omega⟩)
+      have := Array.sizeOf_lt_of_mem item.property; simp; omega⟩)
   | _ => .error "array expected"
 
 end Forms.Runtime.ExpressionProtocol

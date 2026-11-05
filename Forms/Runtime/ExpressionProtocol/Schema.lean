@@ -16,34 +16,19 @@ inductive Schema where
   | record (names : List String) (unique : names.Nodup) (fields : Fin names.length → Schema)
   | sum (names : List String) (unique : names.Nodup) (branches : Fin names.length → Schema)
 
-def Schema.decEq (a b : Schema) : Decidable (a = b) :=
-  match a, b with
-  | .text, .text | .boolean, .boolean | .natural, .natural | .date, .date => isTrue rfl
-  | .enum names unique, .enum other otherUnique =>
-      decidable_of_iff (names = other) (by simp)
-  | .list element, .list other =>
-      letI := Schema.decEq element other
-      decidable_of_iff (element = other) (by simp)
-  | .record names unique fields, .record other otherUnique otherFields =>
-      if h : names = other then by
-        subst other
-        letI := fun i => Schema.decEq (fields i) (otherFields i)
-        exact decidable_of_iff (∀ i, fields i = otherFields i) (by simp [funext_iff])
-      else isFalse (by intro same; cases same; exact h rfl)
-  | .sum names unique branches, .sum other otherUnique otherBranches =>
-      if h : names = other then by
-        subst other
-        letI := fun i => Schema.decEq (branches i) (otherBranches i)
-        exact decidable_of_iff (∀ i, branches i = otherBranches i) (by simp [funext_iff])
-      else isFalse (by intro same; cases same; exact h rfl)
-  | .text, .boolean | .text, .natural | .text, .date | .text, .enum .. | .text, .list .. | .text, .record .. | .text, .sum ..
-  | .boolean, .text | .boolean, .natural | .boolean, .date | .boolean, .enum .. | .boolean, .list .. | .boolean, .record .. | .boolean, .sum ..
-  | .natural, .text | .natural, .boolean | .natural, .date | .natural, .enum .. | .natural, .list .. | .natural, .record .. | .natural, .sum ..
-  | .date, .text | .date, .boolean | .date, .natural | .date, .enum .. | .date, .list .. | .date, .record .. | .date, .sum ..
-  | .enum .., .text | .enum .., .boolean | .enum .., .natural | .enum .., .date | .enum .., .list .. | .enum .., .record .. | .enum .., .sum ..
-  | .list .., .text | .list .., .boolean | .list .., .natural | .list .., .date | .list .., .enum .. | .list .., .record .. | .list .., .sum ..
-  | .record .., .text | .record .., .boolean | .record .., .natural | .record .., .date | .record .., .enum .. | .record .., .list .. | .record .., .sum ..
-  | .sum .., .text | .sum .., .boolean | .sum .., .natural | .sum .., .date | .sum .., .enum .. | .sum .., .list .. | .sum .., .record .. => isFalse (by intro h; cases h)
+def Schema.decEq (a b : Schema) : Decidable (a = b) := by
+  cases a <;> cases b
+  all_goals try first | exact isTrue rfl | (apply isFalse; intro h; cases h; done)
+  case enum.enum names _ other _ => exact decidable_of_iff (names = other) (by simp)
+  case list.list element other =>
+    have := Schema.decEq element other
+    exact decidable_of_iff (element = other) (by simp)
+  case record.record names _ fields other _ otherFields | sum.sum names _ fields other _ otherFields =>
+    if h : names = other then
+      subst other
+      have := fun i => Schema.decEq (fields i) (otherFields i)
+      exact decidable_of_iff (∀ i, fields i = otherFields i) (by simp [funext_iff])
+    else exact isFalse (by intro same; cases same; exact h rfl)
 termination_by structural a
 
 instance : DecidableEq Schema := Schema.decEq

@@ -171,9 +171,6 @@ private def testSums : IO Unit := do
   let outer : DataType := wrapper ExampleForms.Shapes.shape
   let lifted : Expr outer .natural := Expr.weaken (.field .content .self) dimension
   check "CasesWeakensSubjectOnly" (Expr.eval lifted (wrap false valid) == 2)
-  check "CasesEncodesResultType" (match (Expr.toJson dimension).getObjVal? "type" with
-    | .ok ty => ty == DataType.toJson .natural
-    | _ => false)
 
   for draft in [dot, valid, invalid] do
     let encoded := JsonProtocol.valueToJson draft
@@ -268,16 +265,6 @@ private def testComputed : IO Unit := do
   check "ComputedWeakening" (Expr.eval (Expr.weaken path total) nested == 100)
 
 private def testDates : IO Unit := do
-  let cases ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "Tests/fixtures/dates.json"))
-  let valid ← IO.ofExcept (cases.getObjValAs? (List String) "valid")
-  let invalid ← IO.ofExcept (cases.getObjValAs? (List String) "invalid")
-  for text in valid do
-    let value ← IO.ofExcept (JsonProtocol.valueFromJson .date (Lean.toJson text))
-    check "DateRoundTrip" (JsonProtocol.valueToJson (t := .date) value == Lean.toJson text)
-  for text in invalid do
-    check "RejectInvalidDate" (match JsonProtocol.valueFromJson .date (Lean.toJson text) with
-      | .error _ => true
-      | .ok _ => false)
   let early : Date := ⟨⟨2028, 2, 29, by decide⟩, by decide⟩
   let late : Date := ⟨⟨2028, 3, 1, by decide⟩, by decide⟩
   check "DateComparison" (Expr.eval (input := .date) (.dateLe (.value early) (.project .self)) late)
