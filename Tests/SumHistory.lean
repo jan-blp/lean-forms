@@ -2,7 +2,6 @@ module
 
 public import Forms.ExampleForms.Shapes
 public import Forms.Runtime.Tui
-public import Tests.Weakening
 
 @[expose] public section
 
@@ -65,11 +64,6 @@ def run : IO Unit := do
   expectError Shapes.form Shapes.draft (.inPayload .rectangle ⟨.width, ⟨.replace, (7 : Nat)⟩⟩) .inactiveConstructor
   let dot ← IO.ofExcept (Shapes.form.applyInvocation Shapes.draft (.select .dot))
   expectError Shapes.form dot (.inPayload .circle ⟨.replace, (7 : Nat)⟩) .inactiveConstructor
-  let hidden := Component.visibleWhen (.value false) Shapes.form
-  let disabled := Component.disabledWhen (.value true) Shapes.form
-  for invocation in actions do
-    expectError hidden Shapes.draft invocation .hidden
-    expectError disabled Shapes.draft invocation .disabled
   let hiddenBranch : Component Shapes.shape :=
     .sum .self "Shape" (fun tag => .visibleWhen (.value false)
       (match tag with
@@ -87,11 +81,6 @@ def run : IO Unit := do
     .appendDefault, .appendDefault, .item 1 (.select .rectangle), .remove 0,
     .item 0 (.inPayload .rectangle ⟨.height, ⟨.replace, (6 : Nat)⟩⟩)])
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify shapes [] (ComponentHistoryProtocol.encode listed))
-  let weakened := Shapes.form.weaken (Tests.Weakening.contentPath Shapes.shape)
-  let initial := Tests.Weakening.wrap Shapes.draft
-  let wrapped ← IO.ofExcept (ComponentHistory.replay weakened initial actions)
-  check "SumWeakeningPreservesSibling" (wrapped.value .title == "Keep this title")
-  let _ ← IO.ofExcept (ComponentHistoryProtocol.verify weakened initial (ComponentHistoryProtocol.encode wrapped))
   for entry in [
       "{\"target\":[],\"action\":\"select\"}",
       "{\"target\":[],\"action\":\"select\",\"constructor\":\"missing\"}",

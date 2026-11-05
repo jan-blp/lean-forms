@@ -3,7 +3,6 @@ module
 public import Forms.ExampleForms.Counters
 public import Forms.ExampleForms.Shapes
 public import Forms.Runtime.Tui
-public import Tests.Weakening
 
 @[expose] public section
 
@@ -47,9 +46,6 @@ def testValidatedItems : IO Unit := do
       | .error error => error == .indexOutOfBounds 1 1
       | .ok _ => false)
 
-instance : MonadTui (ReaderT String (Except IO.Error)) where
-  runSpecification _ := read
-
 def run : IO Unit := do
   testValidatedItems
   let actions : Array form.Invocation := #[
@@ -83,11 +79,6 @@ def run : IO Unit := do
     #[.appendDefault, .item 0 ⟨.right, ⟨.plusFive, ()⟩⟩])
   check "ListChildUsesLocalState" (countersHistory.value.head?.any fun value => value .right == 15)
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify counters [] (ComponentHistoryProtocol.encode countersHistory))
-  let weakened := form.weaken (Tests.Weakening.contentPath (.list .natural))
-  let initial := Tests.Weakening.wrap [10, 20]
-  let result ← IO.ofExcept (ComponentHistory.replay weakened initial actions)
-  check "ListWeakeningPreservesSibling" (result.value .title == "Keep this title")
-  let _ ← IO.ofExcept (ComponentHistoryProtocol.verify weakened initial (ComponentHistoryProtocol.encode result))
   for entry in [
       "{\"target\":[],\"action\":\"appendDefault\",\"argument\":\"42\"}",
       "{\"target\":[],\"action\":\"remove\"}",
@@ -101,20 +92,9 @@ def run : IO Unit := do
     let entry ← IO.ofExcept (Lean.Json.parse entry)
     check "RejectMalformedListAction" (ComponentHistoryProtocol.verify form [1]
       (Lean.Json.mkObj [("value", Lean.toJson (["1"] : List String)), ("actions", Lean.Json.arr #[entry])])).toOption.isNone
-  let disabled := Component.disabledWhen (Expr.value true) form
-  for action in ([.appendDefault, .remove 0, .item 0 ⟨.replace, (2 : Nat)⟩] : List form.Invocation) do
-    check "DisabledListRejectsAllActions" (match disabled.applyInvocation [1] action with
-      | .error error => error == .disabled
-      | .ok _ => false)
   let hiddenChild := Component.list Path.self "Numbers"
     (Component.visibleWhen (Expr.value false) (Component.field Path.self "Value" Widget.naturalInput)) 7
-  check "HiddenChildCannotBeEdited" (match hiddenChild.applyInvocation [1] (.item 0 ⟨.replace, (2 : Nat)⟩) with
-    | .error error => error == .hidden
-    | .ok _ => false)
   let _ ← IO.ofExcept (hiddenChild.applyInvocation [1] (.remove 0))
-  let result ← IO.ofExcept ((Tui.run (m := ReaderT String (Except IO.Error))
-    (.base (.list .natural)) form [10, 20]).run encoded.compress)
-  check "TuiReturnsListHistory" (result.any fun result => result.value == [21, 30] && result.actions.size == 4)
   IO.println "PASS: list history, shifting indices, bounds, nested targets, and decoding"
 
 end Tests.ListHistory

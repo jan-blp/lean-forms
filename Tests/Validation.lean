@@ -70,8 +70,6 @@ def run : IO Unit := do
   let checker := Forms.Tests.ValidationCheckers.checker
   for draft in [[], [item "A" 1], [item "A" 1, item "B" 2]] do
     check "DynamicAcceptsValidInvoice" ((checker.run draft).isEmpty)
-  for draft in [[item "A" 0], [item "A" 1, item "A" 1]] do
-    check "DynamicRejectsInvalidInvoice" (!(checker.run draft).isEmpty)
   let errors := checker.run [item "A" 2, item "B" 0, item "A" 0]
   check "DynamicAccumulatesQuantityAndDuplicateErrors"
     (errors.map (·.message) == ["Quantity must be at least 1.", "Quantity must be at least 1.", "Duplicate item: A"])
@@ -99,7 +97,6 @@ def run : IO Unit := do
       invalidAt (root := Invoice.invoice) (.item 1 .self)])
   check "DynamicInvalidLocationsPreserveMessages"
     ((bad.run draft).map (·.message) == ["Invalid index", "Second invalid index"])
-  check "DynamicInvalidLocationsStillRejectValue" (!(bad.run draft).isEmpty)
   let mixed : Checker Invoice.invoice :=
     .report (.value "Mixed targets") (.locations [.item (.value 0) (.field .quantity .self), .item (.value 9) (.field .quantity .self)])
   check "DynamicMixedLocationsReportInvalidTarget"

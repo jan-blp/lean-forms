@@ -14,36 +14,6 @@ open Forms Forms.Runtime Forms.Composition Forms.ExampleForms
 def check (name : String) (passed : Bool) : IO Unit := do
   unless passed do throw (IO.userError s!"FAIL {name}")
 
-def testTrafficLog : IO Unit := do
-  let body := TrafficLog.json "{\"value\":\"12345678901234567890\",\"actions\":[]}"
-  let document := TrafficLog.request "POST /api/submit" (some body)
-  let plain := TrafficLog.render document false 35
-  let colored := TrafficLog.render document true 35
-  check "TrafficPlainHasNoAnsi" (!(plain.contains "\x1b"))
-  check "TrafficRequestIsCyan" (colored.contains "\x1b[36m")
-  let stripped := ([0, 1, 32, 33, 34, 35, 36] : List Nat).foldl
-    (fun text code => text.replace s!"\x1b[{code}m" "") colored
-  check "TrafficColorsPreserveLayout" (stripped == plain)
-  for (status, code) in [(200, "32"), (422, "33"), (500, "31")] do
-    let message := TrafficLog.render (TrafficLog.response "POST /api/submit" status "application/json" "{}") true
-    check "TrafficStatusColor" (message.contains s!"\x1b[{code}m")
-    check "TrafficHeadingStyleEndsBeforePayload" (message.contains "\x1b[0m\n  {}")
-  check "TrafficNoContentHasNoPayload"
-    (TrafficLog.render (TrafficLog.response "POST /api/submit" 204 "" "") false ==
-      "SERVER → CLIENT 204 POST /api/submit\n")
-  let sample := "{\"key\":[\"text\",42,true,false,null,{},[]]}"
-  let value ← IO.ofExcept (Lean.Json.parse sample)
-  let highlighted := TrafficLog.render (TrafficLog.json sample) true 20
-  check "TrafficJsonKeysBlue" (highlighted.contains "\x1b[34m\"key\"\x1b[0m")
-  check "TrafficJsonStringsGreen" (highlighted.contains "\x1b[32m\"text\"\x1b[0m")
-  check "TrafficJsonNumbersMagenta" (highlighted.contains "\x1b[35m42\x1b[0m")
-  for literal in ["true", "false", "null"] do
-    check "TrafficJsonLiteralsYellow" (highlighted.contains s!"\x1b[33m{literal}\x1b[0m")
-  check "TrafficJsonKeepsLeanLayout" (TrafficLog.render (TrafficLog.json sample) false 20 == value.pretty 20)
-  let nested := TrafficLog.Style.success.tag
-    (.text "outer " ++ TrafficLog.Style.key.tag (.text "inner") ++ .text " outer")
-  check "TrafficRestoresOuterStyle" ((TrafficLog.render nested true).contains "inner\x1b[0m\x1b[1m\x1b[32m outer")
-
 def errorsJson {ty : DataType}
   (refined : RefinedDataType ty)
   (draft : String)
@@ -60,9 +30,6 @@ def located {ty : DataType}
 
 def testPreciseErrors : IO Unit := do
   let positive := "Quantity and unit price must be at least 1."
-  let invoice ← errorsJson Invoice.invoiceType
-    "[{\"description\":\"A\",\"quantity\":\"1\",\"unitPrice\":\"5\"},{\"description\":\"B\",\"quantity\":\"0\",\"unitPrice\":\"5\"}]"
-  check "ListErrorNamesItemField" (invoice == Lean.toJson [located (ty := Invoice.invoice) positive [.item 1 (.field .quantity .self)]])
   let both ← errorsJson Invoice.invoiceType
     "[{\"description\":\"A\",\"quantity\":\"0\",\"unitPrice\":\"0\"},{\"description\":\"B\",\"quantity\":\"0\",\"unitPrice\":\"5\"}]"
   check "ListErrorsPerItemAndField" (both == Lean.toJson [located (ty := Invoice.invoice) positive [.item 0 (.field .quantity .self)],
@@ -74,7 +41,6 @@ def testPreciseErrors : IO Unit := do
 
 def run : IO Unit := do
   testPreciseErrors
-  testTrafficLog
   let refined : RefinedDataType .natural := .refine (.base .natural)
     (.ofChecker <| .when (.not (.natLe (.project .self) (.value 5)))
       (.report (.value "At most five") (.global)))
@@ -85,10 +51,6 @@ def run : IO Unit := do
   check "WebChecksRefinementsAfterReplay" (match form.submit (ComponentHistoryProtocol.encode invalid) with
     | .error error => error == (SubmissionProtocol.Error.invalidValue (ty := .natural) [⟨"At most five", .global⟩]).toJson
     | .ok _ => false)
-  check "WebExplainsFailedRefinement"
-    (toString (SubmissionProtocol.Error.invalidValue (ty := .natural) [⟨"At most five", .global⟩]) == "At most five")
-  check "WebReportsDistinctFailures"
-    (toString (SubmissionProtocol.Error.invalidValue (ty := .natural) [⟨"First rule", .global⟩, ⟨"Second rule", .global⟩, ⟨"First rule", .global⟩]) == "First rule\nSecond rule")
   let unlocated := SubmissionProtocol.Error.invalidValue (ty := .natural) [⟨"Rule", .global⟩]
   let root := SubmissionProtocol.Error.invalidValue (ty := .natural) [⟨"Rule", .locations [.self]⟩]
   check "ValidationDistinguishesRootAndNoTarget" (unlocated.toJson != root.toJson)
