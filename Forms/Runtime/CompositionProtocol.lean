@@ -27,7 +27,8 @@ def widgetActionToJson {value : DataType}
 def componentToJson {state : DataType}
   (component : Component state)
   : Json :=
-  Json.mkObj ([("dependencies", toJson (component.dependencies.map (fun path => Path.toList path.path)))] ++
+  Json.mkObj ([
+    ("dependencies", toJson (component.dependencies.map (fun path => Path.toList path.path)))] ++
   match component with
   | .field (value := value) path label widget => [
       ("kind", toJson "field"), ("path", toJson (Path.toList path)),

@@ -25,12 +25,16 @@ def Expr.dependencies {input result : DataType} : Expr input result → List (Pa
   | .and left right | .dateLe left right | .natLe left right =>
       left.dependencies ++ right.dependencies
 
+namespace Composition.Component
+
 /-- Display dependencies, excluding children and action bodies. -/
-def Composition.Component.dependencies {state : DataType} : Component state → List (PathFrom state)
+def dependencies {state : DataType} : Component state → List (PathFrom state)
   | .stack .. | .button .. => []
   | .field path .. | .list path .. | .sum path .. | .actionWidget path .. => [⟨path⟩]
   | .computed _ expression | .text expression => expression.dependencies
   | .table rows _ => rows.dependencies
   | .visibleWhen condition _ | .disabledWhen condition _ => condition.dependencies
+
+end Composition.Component
 
 end Forms

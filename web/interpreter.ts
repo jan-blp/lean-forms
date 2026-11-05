@@ -186,8 +186,7 @@ export function createModel(specification: Specification) {
   let value = structuredClone(spec.value);
   let actions: Invocation[] = [];
 
-  type Entry = { id: string; dependencies: Path[]; children: Entry[]; snapshot: View | null;
-    disabled: boolean; inputs: Value[]; condition?: boolean };
+  type Entry = { snapshot: View | null; disabled: boolean; condition?: boolean };
   let entries = new Map<string, Entry>();
   const componentIds = new WeakMap<Component, number>();
   let nextId = 0;
@@ -200,45 +199,30 @@ export function createModel(specification: Specification) {
     const previous = entries;
     const previousRoot = root;
     const active = new Map<string, Entry>();
-    const frames: Entry[] = [];
-    function retain(entry: Entry) {
-      active.set(entry.id, entry);
-      entry.children.forEach(retain);
-    }
     function visit(component: Component, target: Path = [], disabled = false, scope: Path = [], location: Location = []): View | null {
       if (!componentIds.has(component)) componentIds.set(component, nextId++);
       const id = JSON.stringify([componentIds.get(component), target, scope]);
       const old = previous.get(id);
+      // Missing metadata conservatively reads the whole scope.
+      const affected = (paths: Path[] = [[]]) => !changedPath ||
+        paths.some(path => pathsOverlap([...scope, ...path], changedPath!));
+      const container = ['stack', 'list', 'sum', 'visibleWhen', 'disabledWhen'].includes(component.kind);
       let entry: Entry;
-      if (old && old.disabled === disabled && changedPath &&
-          !old.dependencies.some(path => pathsOverlap(path, changedPath!))) {
+      if (old && !container && old.disabled === disabled && !affected(component.dependencies)) {
         entry = old;
-        retain(entry);
       } else {
-        // Older/manual specifications without metadata conservatively read the whole scope.
-        const dependencies = (component.dependencies ?? [[]]).map(path => [...scope, ...path]);
-        const inputs = dependencies.map(path => get(value, path));
-        entry = { id, dependencies, inputs, children: [], snapshot: null, disabled };
-        if (old && inputs.length === old.inputs.length && inputs.every((input, i) => input === old.inputs[i])) {
-          entry.condition = old.condition;
-        }
-        frames.push(entry);
-        const snapshot = renderComponent(component, target, disabled, scope, location);
-        frames.pop();
+        entry = { snapshot: null, disabled };
+        if (old && !affected(component.dependencies)) entry.condition = old.condition;
+        const snapshot = renderComponent(component, target, disabled, scope, location, entry);
         entry.snapshot = old && equal(old.snapshot, snapshot) ? old.snapshot : freeze(snapshot);
-        active.set(id, entry);
         if (entry.snapshot) nodeIds.set(entry.snapshot, id);
       }
-      const parent = frames.at(-1);
-      if (parent) {
-        parent.children.push(entry);
-        parent.dependencies.push(...entry.dependencies);
-      }
+      active.set(id, entry);
       return entry.snapshot;
     }
 
     // JSON payloads use "value"; error locations use the active constructor tag.
-    function renderComponent(component: Component, target: Path, disabled: boolean, scope: Path, location: Location): View | null {
+    function renderComponent(component: Component, target: Path, disabled: boolean, scope: Path, location: Location, entry: Entry): View | null {
       const current = get(value, scope);
       function identity(id: string, label: string, index?: number) {
         return { id, label, target, disabled, scope, key: JSON.stringify(index === undefined ? [target, id] : [target, id, index]) };
@@ -252,7 +236,6 @@ export function createModel(specification: Specification) {
         }
       }
       function condition(): boolean {
-        const entry = frames.at(-1)!;
         if (component.kind !== 'visibleWhen' && component.kind !== 'disabledWhen') throw new Error('Expected condition.');
         return entry.condition ??= Boolean(evaluate(component.condition, current));
       }
