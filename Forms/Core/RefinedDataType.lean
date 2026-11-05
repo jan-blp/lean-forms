@@ -73,7 +73,7 @@ def RefinedDataType.erase
   : RefinedDataType.ValidatedValue refined → ⟦t⟧ :=
   (RefinedDataType.denotation refined).erase
 
-private def sequenceFin {n : Nat} {α : Fin n → Type}
+def sequenceFin {n : Nat} {α : Fin n → Type}
     (values : (i : Fin n) → Option (α i)) : Option ((i : Fin n) → α i) :=
   match n with
   | 0 => some (fun i => Fin.elim0 i)
@@ -82,7 +82,7 @@ private def sequenceFin {n : Nat} {α : Fin n → Type}
     let tail ← sequenceFin (fun i => values i.succ)
     pure (Fin.cons head tail)
 
-private def sequence {ι : Type} [FinEnum ι] {α : ι → Type}
+def sequence {ι : Type} [FinEnum ι] {α : ι → Type}
     (values : (i : ι) → Option (α i)) : Option ((i : ι) → α i) := do
   let result ← sequenceFin (fun i => values (FinEnum.equiv.symm i))
   pure fun i => (FinEnum.equiv.symm_apply_apply i) ▸ result (FinEnum.equiv i)
