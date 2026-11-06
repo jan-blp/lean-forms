@@ -19,6 +19,6 @@ theorem Expr.non_interference
         agree dependency (List.mem_append_left _ member))
       have sameContext := agree ⟨context⟩ (by simp [Expr.dependencies.collect])
       simp only [Expr.eval, sameItems, sameContext]
-  | _ => simp_all [Expr.dependencies.collect, Expr.eval]; grind
+  | _ => simp_all [Expr.dependencies.collect, Expr.eval] <;> grind
 
 end Forms
