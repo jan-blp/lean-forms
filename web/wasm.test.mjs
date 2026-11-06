@@ -65,8 +65,8 @@ test('Wasm checker rejects malformed nodes, expressions, and target paths before
   const bad = [
     { kind: 'unknown' }, { kind: 'pass', extra: true },
     { kind: 'seq', left: { kind: 'pass' } },
-    { kind: 'when', condition: literal(natural, '0'), body: { kind: 'pass' } },
-    { kind: 'when', condition: literal({ kind: 'boolean' }, false), body: { kind: 'unknown' } },
+    { kind: 'ite', condition: literal(natural, '0'), thenBranch: { kind: 'pass' }, elseBranch: { kind: 'pass' } },
+    { kind: 'ite', condition: literal({ kind: 'boolean' }, false), thenBranch: { kind: 'pass' }, elseBranch: { kind: 'unknown' } },
     { kind: 'each', items: literal(natural, '0'), body: { kind: 'pass' } },
     { kind: 'each', items: literal({ kind: 'list', element: natural }, []), body: { kind: 'unknown' } },
     { kind: 'report', message: literal(natural, '0'), targets: { kind: 'global' } },

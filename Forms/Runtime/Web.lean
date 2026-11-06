@@ -76,14 +76,11 @@ def ResponseBody.contentType : ResponseBody → Option String
   | .text _ => some "text/plain; charset=utf-8"
   | .wasm _ => some "application/wasm"
 
-def ResponseBody.serialize : ResponseBody → String
-  | .empty => ""
-  | .html content => content
-  | .javascript content => content
-  | .css content => content
-  | .json content => content.compress
-  | .text content => content
-  | .wasm _ => ""
+def ResponseBody.bytes : ResponseBody → ByteArray
+  | .empty => .empty
+  | .html content | .javascript content | .css content | .text content => content.toUTF8
+  | .json content => content.compress.toUTF8
+  | .wasm content => content
 
 def requestErrorJson (message : String) : Lean.Json :=
   Lean.Json.mkObj [("error", Lean.Json.mkObj [
@@ -96,10 +93,8 @@ def respond
   (body : ResponseBody)
   : Async (Response Body.Full) := do
   let contentType := body.contentType
-  let bytes := match body with
-    | .wasm bytes => bytes
-    | _ => body.serialize.toUTF8
-  logger.write (TrafficLog.response request status.toCode.toNat (contentType.getD "") body.serialize (some bytes.size))
+  let bytes := body.bytes
+  logger.write (TrafficLog.response request status.toCode.toNat (contentType.getD "") bytes)
   let response := Response.new.status status |>.header! "Cache-Control" "no-store"
   -- Lean's upstream Emscripten runtime uses shared WebAssembly memory.
   let response := response.header! "Cross-Origin-Opener-Policy" "same-origin"

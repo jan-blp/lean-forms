@@ -3,7 +3,6 @@
 #include <cstdlib>
 #include <malloc.h>
 
-extern "C" lean_object * json_evaluate(lean_object *, lean_object *, lean_object *);
 extern "C" lean_object * json_evaluate_typed(lean_object *, lean_object *, lean_object *);
 extern "C" lean_object * json_check(lean_object *, lean_object *, lean_object *);
 extern "C" lean_object * runtime_initialize_lean_x2dforms_JsonEval(uint8_t);
@@ -39,12 +38,6 @@ static const char * run(Runner evaluate, const char * schema, size_t schema_len,
     response.assign(lean_string_cstr(result), lean_string_size(result) - 1);
     lean_dec(result);
     return response.c_str();
-}
-
-extern "C" const char * json_run(const char * schema, size_t schema_len,
-                                 const char * expression, size_t expression_len,
-                                 const char * value, size_t value_len) {
-    return run(json_evaluate, schema, schema_len, expression, expression_len, value, value_len);
 }
 
 extern "C" const char * json_run_typed(const char * schema, size_t schema_len,

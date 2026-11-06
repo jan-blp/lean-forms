@@ -136,16 +136,15 @@ def response
   (label : String)
   (status : Nat)
   (contentType : String)
-  (body : String)
-  (byteSize : Option Nat := none)
+  (body : ByteArray)
   : Format :=
   let style := if status ≥ 500 then Style.failure else if status ≥ 400 then .rejection else .success
   let title := heading style s!"SERVER → CLIENT {status} {label}"
   if status == 204 then title ++ .line
   else if contentType == "application/json" then
-    title ++ .nest 2 (.line ++ json body) ++ .line
+    title ++ .nest 2 (.line ++ json ((String.fromUTF8? body).getD "")) ++ .line
   else
-    title ++ Style.detail.tag (.text s!" ({contentType}, {byteSize.getD body.toUTF8.size} bytes)") ++ .line
+    title ++ Style.detail.tag (.text s!" ({contentType}, {body.size} bytes)") ++ .line
 
 structure Logger where
   output : IO.FS.Stream

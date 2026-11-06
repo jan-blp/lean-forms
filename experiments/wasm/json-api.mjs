@@ -16,7 +16,11 @@ export async function createEvaluator(options) {
       ['string', 'number', 'string', 'number', 'string', 'number'], args));
   }
   return {
-    evaluate: (...args) => request('json_run', ...args),
+    // Compares against native results, which carry no result schema.
+    evaluate: (...args) => {
+      const { schema, ...result } = request('json_run_typed', ...args);
+      return result;
+    },
     check: (...args) => request('json_run_checker', ...args),
     // Experiment instrumentation, not part of the evaluation protocol.
     allocatedBytes: () => module._wasm_allocated_bytes(),

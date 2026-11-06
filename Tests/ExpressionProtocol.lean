@@ -35,10 +35,7 @@ def roundTrip (emit : Json → IO Unit) {input result : DataType} (name : String
           JsonProtocol.valueToJson (program.eval value)
   check (name ++ "TypedDecode") ((← IO.ofExcept typed) == expected)
 
-def reject (emit : Json → IO Unit) (name schema expression value : String) : IO Unit := do
-  let schema ← IO.ofExcept (Json.parse schema)
-  let expression ← IO.ofExcept (Json.parse expression)
-  let value ← IO.ofExcept (Json.parse value)
+def reject (emit : Json → IO Unit) (name : String) (schema expression value : Json) : IO Unit := do
   match evaluate schema expression value with
   | .error message =>
       check name (!message.isEmpty)
@@ -139,137 +136,137 @@ def testStructured (emit : Json → IO Unit) : IO Unit := do
 
 def testRejected (emit : Json → IO Unit) : IO Unit := do
   reject emit "UnknownOperator"
-    "{\"kind\":\"natural\"}"
-    "{\"kind\":\"wat\"}"
-    "\"0\""
+    (json% {kind: "natural"})
+    (json% {kind: "wat"})
+    (json% "0")
   reject emit "UnknownSchema"
-    "{\"kind\":\"wat\"}"
-    "{\"kind\":\"project\",\"path\":[]}"
-    "\"0\""
+    (json% {kind: "wat"})
+    (json% {kind: "project", path: []})
+    (json% "0")
   reject emit "ExtraFields"
-    "{\"kind\":\"natural\"}"
-    "{\"kind\":\"project\",\"path\":[],\"extra\":true}"
-    "\"0\""
+    (json% {kind: "natural"})
+    (json% {kind: "project", path: [], extra: true})
+    (json% "0")
   reject emit "MissingField"
-    "{\"kind\":\"natural\"}"
-    "{\"kind\":\"natAdd\",\"left\":{\"kind\":\"project\",\"path\":[]}}"
-    "\"0\""
+    (json% {kind: "natural"})
+    (json% {kind: "natAdd", left: {kind: "project", path: []}})
+    (json% "0")
   reject emit "WrongOperandType"
-    "{\"kind\":\"natural\"}"
-    "{\"kind\":\"natAdd\",\"left\":{\"kind\":\"project\",\"path\":[]},\"right\":{\"kind\":\"value\",\"type\":{\"kind\":\"text\"},\"value\":\"x\"}}"
-    "\"0\""
+    (json% {kind: "natural"})
+    (json% {kind: "natAdd", left: {kind: "project", path: []}, right: {kind: "value", type: {kind: "text"}, value: "x"}})
+    (json% "0")
   reject emit "WrongLiteralValue"
-    "{\"kind\":\"natural\"}"
-    "{\"kind\":\"value\",\"type\":{\"kind\":\"natural\"},\"value\":false}"
-    "\"0\""
+    (json% {kind: "natural"})
+    (json% {kind: "value", type: {kind: "natural"}, value: false})
+    (json% "0")
   reject emit "ScalarPath"
-    "{\"kind\":\"natural\"}"
-    "{\"kind\":\"project\",\"path\":[\"x\"]}"
-    "\"0\""
+    (json% {kind: "natural"})
+    (json% {kind: "project", path: ["x"]})
+    (json% "0")
   reject emit "NumericPath"
-    "{\"kind\":\"natural\"}"
-    "{\"kind\":\"project\",\"path\":[0]}"
-    "\"0\""
+    (json% {kind: "natural"})
+    (json% {kind: "project", path: [0]})
+    (json% "0")
   reject emit "UnknownField"
-    "{\"kind\":\"record\",\"fields\":[{\"name\":\"x\",\"type\":{\"kind\":\"natural\"}}]}"
-    "{\"kind\":\"project\",\"path\":[\"absent\"]}"
-    "{\"x\":\"0\"}"
+    (json% {kind: "record", fields: [{name: "x", type: {kind: "natural"}}]})
+    (json% {kind: "project", path: ["absent"]})
+    (json% {x: "0"})
   reject emit "NonListItems"
-    "{\"kind\":\"natural\"}"
-    "{\"kind\":\"length\",\"items\":{\"kind\":\"project\",\"path\":[]}}"
-    "\"0\""
+    (json% {kind: "natural"})
+    (json% {kind: "length", items: {kind: "project", path: []}})
+    (json% "0")
   reject emit "WrongInputValue"
-    "{\"kind\":\"natural\"}"
-    "{\"kind\":\"project\",\"path\":[]}"
-    "false"
+    (json% {kind: "natural"})
+    (json% {kind: "project", path: []})
+    (json% false)
   reject emit "MissingLiteralType"
-    "{\"kind\":\"natural\"}"
-    "{\"kind\":\"value\",\"value\":\"1\"}"
-    "\"0\""
+    (json% {kind: "natural"})
+    (json% {kind: "value", value: "1"})
+    (json% "0")
   reject emit "DuplicateEnumLabels"
-    "{\"kind\":\"enum\",\"options\":[\"a\",\"a\"]}"
-    "{\"kind\":\"project\",\"path\":[]}"
-    "0"
+    (json% {kind: "enum", options: ["a", "a"]})
+    (json% {kind: "project", path: []})
+    (json% 0)
   reject emit "EnumIndexBounds"
-    "{\"kind\":\"enum\",\"options\":[\"a\"]}"
-    "{\"kind\":\"project\",\"path\":[]}"
-    "1"
+    (json% {kind: "enum", options: ["a"]})
+    (json% {kind: "project", path: []})
+    (json% 1)
   reject emit "WrongEnumLabels"
-    "{\"kind\":\"enum\",\"options\":[\"a\"]}"
-    "{\"kind\":\"enumLabel\",\"subject\":{\"kind\":\"project\",\"path\":[]},\"options\":[\"b\"]}"
-    "0"
+    (json% {kind: "enum", options: ["a"]})
+    (json% {kind: "enumLabel", subject: {kind: "project", path: []}, options: ["b"]})
+    (json% 0)
   reject emit "MissingEnumBranch"
-    "{\"kind\":\"enum\",\"options\":[\"a\"]}"
-    "{\"kind\":\"enumCases\",\"type\":{\"kind\":\"text\"},\"subject\":{\"kind\":\"project\",\"path\":[]},\"branches\":[]}"
-    "0"
+    (json% {kind: "enum", options: ["a"]})
+    (json% {kind: "enumCases", type: {kind: "text"}, subject: {kind: "project", path: []}, branches: []})
+    (json% 0)
   reject emit "WrongEnumBranchType"
-    "{\"kind\":\"enum\",\"options\":[\"a\"]}"
-    "{\"kind\":\"enumCases\",\"type\":{\"kind\":\"text\"},\"subject\":{\"kind\":\"project\",\"path\":[]},\"branches\":[{\"kind\":\"value\",\"type\":{\"kind\":\"natural\"},\"value\":\"0\"}]}"
-    "0"
+    (json% {kind: "enum", options: ["a"]})
+    (json% {kind: "enumCases", type: {kind: "text"}, subject: {kind: "project", path: []}, branches: [{kind: "value", type: {kind: "natural"}, value: "0"}]})
+    (json% 0)
   reject emit "DifferentEnumDomains"
-    "{\"kind\":\"enum\",\"options\":[\"a\"]}"
-    "{\"kind\":\"enumEq\",\"left\":{\"kind\":\"project\",\"path\":[]},\"right\":{\"kind\":\"value\",\"type\":{\"kind\":\"enum\",\"options\":[\"b\"]},\"value\":0}}"
-    "0"
+    (json% {kind: "enum", options: ["a"]})
+    (json% {kind: "enumEq", left: {kind: "project", path: []}, right: {kind: "value", type: {kind: "enum", options: ["b"]}, value: 0}})
+    (json% 0)
   reject emit "DuplicateRecordFields"
-    "{\"kind\":\"record\",\"fields\":[{\"name\":\"x\",\"type\":{\"kind\":\"natural\"}},{\"name\":\"x\",\"type\":{\"kind\":\"text\"}}]}"
-    "{\"kind\":\"project\",\"path\":[]}"
-    "{}"
+    (json% {kind: "record", fields: [{name: "x", type: {kind: "natural"}}, {name: "x", type: {kind: "text"}}]})
+    (json% {kind: "project", path: []})
+    (json% {})
   reject emit "DuplicateSumTags"
-    "{\"kind\":\"sum\",\"constructors\":[{\"name\":\"x\",\"type\":{\"kind\":\"natural\"}},{\"name\":\"x\",\"type\":{\"kind\":\"text\"}}]}"
-    "{\"kind\":\"project\",\"path\":[]}"
-    "{}"
+    (json% {kind: "sum", constructors: [{name: "x", type: {kind: "natural"}}, {name: "x", type: {kind: "text"}}]})
+    (json% {kind: "project", path: []})
+    (json% {})
   reject emit "InvalidDate"
-    "{\"kind\":\"date\"}"
-    "{\"kind\":\"project\",\"path\":[]}"
-    "\"2027-02-29\""
+    (json% {kind: "date"})
+    (json% {kind: "project", path: []})
+    (json% "2027-02-29")
   reject emit "NegativeNatural"
-    "{\"kind\":\"natural\"}"
-    "{\"kind\":\"project\",\"path\":[]}"
-    "\"-1\""
+    (json% {kind: "natural"})
+    (json% {kind: "project", path: []})
+    (json% "-1")
   reject emit "WrongCondition"
-    "{\"kind\":\"natural\"}"
-    "{\"kind\":\"ifThenElse\",\"condition\":{\"kind\":\"project\",\"path\":[]},\"whenTrue\":{\"kind\":\"value\",\"type\":{\"kind\":\"natural\"},\"value\":\"0\"},\"whenFalse\":{\"kind\":\"value\",\"type\":{\"kind\":\"natural\"},\"value\":\"1\"}}"
-    "\"0\""
+    (json% {kind: "natural"})
+    (json% {kind: "ifThenElse", condition: {kind: "project", path: []}, whenTrue: {kind: "value", type: {kind: "natural"}, value: "0"}, whenFalse: {kind: "value", type: {kind: "natural"}, value: "1"}})
+    (json% "0")
   reject emit "DifferentBranchTypes"
-    "{\"kind\":\"natural\"}"
-    "{\"kind\":\"ifThenElse\",\"condition\":{\"kind\":\"value\",\"type\":{\"kind\":\"boolean\"},\"value\":true},\"whenTrue\":{\"kind\":\"project\",\"path\":[]},\"whenFalse\":{\"kind\":\"value\",\"type\":{\"kind\":\"text\"},\"value\":\"x\"}}"
-    "\"0\""
+    (json% {kind: "natural"})
+    (json% {kind: "ifThenElse", condition: {kind: "value", type: {kind: "boolean"}, value: true}, whenTrue: {kind: "project", path: []}, whenFalse: {kind: "value", type: {kind: "text"}, value: "x"}})
+    (json% "0")
   reject emit "PredicateScope"
-    "{\"kind\":\"list\",\"element\":{\"kind\":\"natural\"}}"
-    "{\"kind\":\"all\",\"items\":{\"kind\":\"project\",\"path\":[]},\"predicate\":{\"kind\":\"project\",\"path\":[\"x\"]}}"
-    "[]"
+    (json% {kind: "list", element: {kind: "natural"}})
+    (json% {kind: "all", items: {kind: "project", path: []}, predicate: {kind: "project", path: ["x"]}})
+    (json% [])
   reject emit "NonBooleanPredicate"
-    "{\"kind\":\"list\",\"element\":{\"kind\":\"natural\"}}"
-    "{\"kind\":\"filter\",\"items\":{\"kind\":\"project\",\"path\":[]},\"predicate\":{\"kind\":\"project\",\"path\":[]}}"
-    "[]"
+    (json% {kind: "list", element: {kind: "natural"}})
+    (json% {kind: "filter", items: {kind: "project", path: []}, predicate: {kind: "project", path: []}})
+    (json% [])
   reject emit "WrongSortKey"
-    "{\"kind\":\"list\",\"element\":{\"kind\":\"natural\"}}"
-    "{\"kind\":\"sortBy\",\"items\":{\"kind\":\"project\",\"path\":[]},\"key\":{\"kind\":\"project\",\"path\":[]},\"descending\":false}"
-    "[]"
+    (json% {kind: "list", element: {kind: "natural"}})
+    (json% {kind: "sortBy", items: {kind: "project", path: []}, key: {kind: "project", path: []}, descending: false})
+    (json% [])
   reject emit "WrongDescending"
-    "{\"kind\":\"list\",\"element\":{\"kind\":\"natural\"}}"
-    "{\"kind\":\"sortNatBy\",\"items\":{\"kind\":\"project\",\"path\":[]},\"key\":{\"kind\":\"project\",\"path\":[]},\"descending\":\"false\"}"
-    "[]"
+    (json% {kind: "list", element: {kind: "natural"}})
+    (json% {kind: "sortNatBy", items: {kind: "project", path: []}, key: {kind: "project", path: []}, descending: "false"})
+    (json% [])
   reject emit "WrongAppendType"
-    "{\"kind\":\"list\",\"element\":{\"kind\":\"natural\"}}"
-    "{\"kind\":\"snoc\",\"items\":{\"kind\":\"project\",\"path\":[]},\"value\":{\"kind\":\"value\",\"type\":{\"kind\":\"text\"},\"value\":\"x\"}}"
-    "[]"
+    (json% {kind: "list", element: {kind: "natural"}})
+    (json% {kind: "snoc", items: {kind: "project", path: []}, value: {kind: "value", type: {kind: "text"}, value: "x"}})
+    (json% [])
   reject emit "MissingSumBranch"
-    "{\"kind\":\"sum\",\"constructors\":[{\"name\":\"one\",\"type\":{\"kind\":\"natural\"}},{\"name\":\"two\",\"type\":{\"kind\":\"text\"}}]}"
-    "{\"kind\":\"cases\",\"type\":{\"kind\":\"natural\"},\"subject\":{\"kind\":\"project\",\"path\":[]},\"branches\":{\"one\":{\"kind\":\"project\",\"path\":[]}}}"
-    "{\"tag\":\"one\",\"value\":\"0\"}"
+    (json% {kind: "sum", constructors: [{name: "one", type: {kind: "natural"}}, {name: "two", type: {kind: "text"}}]})
+    (json% {kind: "cases", type: {kind: "natural"}, subject: {kind: "project", path: []}, branches: {one: {kind: "project", path: []}}})
+    (json% {tag: "one", value: "0"})
   reject emit "WrongInactiveSumBranch"
-    "{\"kind\":\"sum\",\"constructors\":[{\"name\":\"one\",\"type\":{\"kind\":\"natural\"}},{\"name\":\"two\",\"type\":{\"kind\":\"text\"}}]}"
-    "{\"kind\":\"cases\",\"type\":{\"kind\":\"natural\"},\"subject\":{\"kind\":\"project\",\"path\":[]},\"branches\":{\"one\":{\"kind\":\"project\",\"path\":[]},\"two\":{\"kind\":\"project\",\"path\":[]}}}"
-    "{\"tag\":\"one\",\"value\":\"0\"}"
+    (json% {kind: "sum", constructors: [{name: "one", type: {kind: "natural"}}, {name: "two", type: {kind: "text"}}]})
+    (json% {kind: "cases", type: {kind: "natural"}, subject: {kind: "project", path: []}, branches: {one: {kind: "project", path: []}, two: {kind: "project", path: []}}})
+    (json% {tag: "one", value: "0"})
   reject emit "ExtraSumBranch"
-    "{\"kind\":\"sum\",\"constructors\":[{\"name\":\"one\",\"type\":{\"kind\":\"natural\"}},{\"name\":\"two\",\"type\":{\"kind\":\"text\"}}]}"
-    "{\"kind\":\"cases\",\"type\":{\"kind\":\"natural\"},\"subject\":{\"kind\":\"project\",\"path\":[]},\"branches\":{\"one\":{\"kind\":\"project\",\"path\":[]},\"two\":{\"kind\":\"value\",\"type\":{\"kind\":\"natural\"},\"value\":\"0\"},\"three\":{\"kind\":\"value\",\"type\":{\"kind\":\"natural\"},\"value\":\"0\"}}}"
-    "{\"tag\":\"one\",\"value\":\"0\"}"
+    (json% {kind: "sum", constructors: [{name: "one", type: {kind: "natural"}}, {name: "two", type: {kind: "text"}}]})
+    (json% {kind: "cases", type: {kind: "natural"}, subject: {kind: "project", path: []}, branches: {one: {kind: "project", path: []}, two: {kind: "value", type: {kind: "natural"}, value: "0"}, three: {kind: "value", type: {kind: "natural"}, value: "0"}}})
+    (json% {tag: "one", value: "0"})
   reject emit "WrongSumTag"
-    "{\"kind\":\"sum\",\"constructors\":[{\"name\":\"one\",\"type\":{\"kind\":\"natural\"}},{\"name\":\"two\",\"type\":{\"kind\":\"text\"}}]}"
-    "{\"kind\":\"project\",\"path\":[]}"
-    "{\"tag\":\"missing\",\"value\":\"0\"}"
+    (json% {kind: "sum", constructors: [{name: "one", type: {kind: "natural"}}, {name: "two", type: {kind: "text"}}]})
+    (json% {kind: "project", path: []})
+    (json% {tag: "missing", value: "0"})
 
 /-- Reuse the exact native cases as a cross-runtime test corpus. -/
 def runWith (emit : Json → IO Unit) : IO Unit := do

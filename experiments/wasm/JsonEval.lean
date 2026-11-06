@@ -19,16 +19,11 @@ private def respond (program schema source value : String)
     | .ok fields => Json.mkObj (("ok", toJson true) :: fields)
     | .error error => Json.mkObj [("ok", toJson false), ("error", toJson error)]).compress
 
-private def run (typed : Bool) (schema expression value : String) : String :=
+@[export json_evaluate_typed]
+def evaluateJsonTyped (schema expression value : String) : String :=
   respond "expression" schema expression value fun schema expression value =>
     (ExpressionProtocol.evaluateTyped schema expression value).map fun (schema, value) =>
-      ("value", value) :: if typed then [("schema", schema.dataType.toJson)] else []
-
-@[export json_evaluate]
-def evaluateJson (schema expression value : String) : String := run false schema expression value
-
-@[export json_evaluate_typed]
-def evaluateJsonTyped (schema expression value : String) : String := run true schema expression value
+      [("value", value), ("schema", schema.dataType.toJson)]
 
 @[export json_check]
 def checkJson (schema checker value : String) : String :=
