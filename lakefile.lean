@@ -34,3 +34,7 @@ target webAssets pkg : Unit := Job.async do
 lean_exe «forms-web» where
   root := `WebMain
   extraDepTargets := #[`webAssets]
+
+lean_exe «wasm-discover» where
+  root := `DiscoverWasm
+  srcDir := "experiments/wasm"

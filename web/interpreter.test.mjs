@@ -135,7 +135,7 @@ const project = (...path) => ({ kind: 'project', path });
 test('computed invoice subtotal updates without adding derived state or actions', () => {
   const spec = fixture('invoice');
   const item = spec.form.children.find(child => child.kind === 'list').item;
-  const model = createModel({ version: 8, value: spec.value[0], form: item });
+  const model = createModel({ version: 8, schema: spec.schema.element, value: spec.value[0], form: item });
   const subtotal = () => model.view().children.find(child => child.kind === 'computed').value;
   assert.equal(subtotal(), '100');
   const quantity = model.controls().find(control => control.path[0] === 'quantity');
@@ -239,7 +239,7 @@ test('nested lists and sums evaluate guards and actions in local state', () => {
   const field = { kind: 'field', path: [], label: 'Value', widget: 'naturalInput', schema: { kind: 'natural' } };
   const choice = { kind: 'sum', path: [], label: 'Choice', schema: { kind: 'sum', constructors: [{ name: 'number', type: { kind: 'natural' } }] },
     defaults: { number: '1' }, branches: { number: { kind: 'disabledWhen', condition: { kind: 'natLe', left: constant('5'), right: project() }, body: field } } };
-  const model = createModel({ version: 8, value: [[{ tag: 'number', value: '1' }]], form: {
+  const model = createModel({ version: 8, schema: { kind: 'list', element: { kind: 'list', element: choice.schema } }, value: [[{ tag: 'number', value: '1' }]], form: {
     kind: 'list', path: [], label: 'Outer', defaultItem: [], item: {
       kind: 'list', path: [], label: 'Inner', defaultItem: { tag: 'number', value: '1' }, item: choice,
     },
@@ -293,6 +293,7 @@ test('hidden and disabled containers prevent structural actions', () => {
 test('buttons inside list items read and write only the item state', () => {
   const spec = fixture('counter');
   spec.value = ['1', '10'];
+  spec.schema = { kind: 'list', element: { kind: 'natural' } };
   spec.form = { kind: 'list', path: [], label: 'Counters', defaultItem: '0', item: {
     kind: 'button', label: 'Double', action: { kind: 'set', path: [], value: {
       kind: 'natMul', left: project(), right: constant('2'),

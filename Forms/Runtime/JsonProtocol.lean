@@ -8,6 +8,7 @@ import all Lean.Data.Json.Basic -- for the date decoder's round-trip proof
 @[expose] public section
 
 namespace Forms
+universe u
 
 open Lean
 
@@ -43,7 +44,8 @@ def valueToJson {t} (value : ⟦t⟧) : Json :=
   | .record fieldNames fieldTypes => Json.mkObj ((FinEnum.toList fieldNames).map fun i =>
       (fieldNames.label i, valueToJson (t := fieldTypes i) (value i)))
 
-def sequenceFin {n : Nat} {α : Fin n → Type}
+/-- Sequence a finite family without dropping its dependent index. -/
+def sequenceFin {n : Nat} {α : Fin n → Type u}
   (values : (i : Fin n) → Except String (α i))
   : Except String ((i : Fin n) → α i) :=
   match n with

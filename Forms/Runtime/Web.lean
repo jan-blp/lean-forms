@@ -28,6 +28,9 @@ inductive GetRoute where
   | script
   | interpreter
   | validation
+  | wasmAdapter
+  | wasmLoader
+  | wasmBinary
   | stylesheet
   | specification
 
@@ -36,6 +39,9 @@ def GetRoute.ofPath (path : String) : Option GetRoute :=
   else if path == "/app.js" then some .script
   else if path == "/interpreter.js" then some .interpreter
   else if path == "/validation.js" then some .validation
+  else if path == "/wasm.js" then some .wasmAdapter
+  else if path == "/wasm/json.mjs" then some .wasmLoader
+  else if path == "/wasm/json.wasm" then some .wasmBinary
   else if path == "/style.css" then some .stylesheet
   else if path == "/api/form" then some .specification
   else none
@@ -59,6 +65,7 @@ inductive ResponseBody where
   | css (content : String)
   | json (content : Lean.Json)
   | text (content : String)
+  | wasm (content : ByteArray)
 
 def ResponseBody.contentType : ResponseBody → Option String
   | .empty => none
@@ -67,6 +74,7 @@ def ResponseBody.contentType : ResponseBody → Option String
   | .css _ => some "text/css; charset=utf-8"
   | .json _ => some "application/json"
   | .text _ => some "text/plain; charset=utf-8"
+  | .wasm _ => some "application/wasm"
 
 def ResponseBody.serialize : ResponseBody → String
   | .empty => ""
@@ -75,6 +83,7 @@ def ResponseBody.serialize : ResponseBody → String
   | .css content => content
   | .json content => content.compress
   | .text content => content
+  | .wasm _ => ""
 
 def requestErrorJson (message : String) : Lean.Json :=
   Lean.Json.mkObj [("error", Lean.Json.mkObj [
@@ -87,13 +96,15 @@ def respond
   (body : ResponseBody)
   : Async (Response Body.Full) := do
   let contentType := body.contentType
-  let body := body.serialize
-  logger.write (TrafficLog.response request status.toCode.toNat (contentType.getD "") body)
+  let bytes := match body with
+    | .wasm bytes => bytes
+    | _ => body.serialize.toUTF8
+  logger.write (TrafficLog.response request status.toCode.toNat (contentType.getD "") body.serialize (some bytes.size))
   let response := Response.new.status status |>.header! "Cache-Control" "no-store"
   let response := match contentType with
     | none => response
     | some contentType => response.header! "Content-Type" contentType
-  response.fromBytes body.toUTF8
+  response.fromBytes bytes
 
 structure Application where
   logger : TrafficLog.Logger
@@ -102,19 +113,25 @@ structure Application where
   script : String
   interpreter : String
   validation : String
+  wasmAdapter : String
+  wasmLoader : Option String
+  wasmBinary : Option ByteArray
   style : String
 
 def Application.get
   (app : Application)
   (route : GetRoute)
-  : ResponseBody :=
+  : Option ResponseBody :=
   match route with
-  | .index => .html app.html
-  | .script => .javascript app.script
-  | .interpreter => .javascript app.interpreter
-  | .validation => .javascript app.validation
-  | .stylesheet => .css app.style
-  | .specification => .json app.form.specification
+  | .index => some (.html app.html)
+  | .script => some (.javascript app.script)
+  | .interpreter => some (.javascript app.interpreter)
+  | .validation => some (.javascript app.validation)
+  | .wasmAdapter => some (.javascript app.wasmAdapter)
+  | .wasmLoader => app.wasmLoader.map .javascript
+  | .wasmBinary => app.wasmBinary.map .wasm
+  | .stylesheet => some (.css app.style)
+  | .specification => some (.json app.form.specification)
 
 def Application.submit
   (app : Application)
@@ -151,7 +168,9 @@ instance : Server.Handler Application where
     match route with
     | .get route =>
         app.logger.write (TrafficLog.request label)
-        respond .ok (app.get route)
+        match app.get route with
+        | some body => respond .ok body
+        | none => respond .notFound (.text "WebAssembly assets are not built. Run make -f experiments/wasm/Makefile.")
     | .submit => app.submit label request
 
 def openDefaultBrowser (url : String) : IO Unit := do
@@ -177,6 +196,11 @@ def run {ty : DataType}
     script := ← IO.FS.readFile "web/dist/app.js"
     interpreter := ← IO.FS.readFile "web/dist/interpreter.js"
     validation := ← IO.FS.readFile "web/dist/validation.js"
+    wasmAdapter := ← IO.FS.readFile "web/dist/wasm.js"
+    wasmLoader := ← if ← System.FilePath.pathExists "web/dist/wasm/json.mjs"
+      then some <$> IO.FS.readFile "web/dist/wasm/json.mjs" else pure none
+    wasmBinary := ← if ← System.FilePath.pathExists "web/dist/wasm/json.wasm"
+      then some <$> IO.FS.readBinFile "web/dist/wasm/json.wasm" else pure none
     style := ← IO.FS.readFile "web/style.css"
   }
   Async.block do
