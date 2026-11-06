@@ -1,0 +1,38 @@
+digraph ThermostatValue {
+  graph [rankdir=TB, bgcolor="transparent", pad=0.12, nodesep=0.22,
+         ranksep=0.35, ordering=out];
+  node [shape=box, style="rounded,filled", fontname="DejaVu Sans",
+        fontsize=17, margin="0.12,0.09", color="#CDD5DF",
+        fillcolor="white", fontcolor="#18243A", penwidth=1.4];
+  edge [color="#526078", penwidth=1.4, arrowsize=0.6,
+        fontname="DejaVu Sans", fontsize=14];
+
+  root [label="refine", color="#3454A5", fillcolor="#E8EEFC"];
+  fields [label="record", color="#3454A5", fillcolor="#E8EEFC"];
+  ordering [label="proof: Away ≤ Home", color="#7B3FA1", fillcolor="#F2EAF8"];
+  root -> fields [label="val"];
+  root -> ordering [label="property"];
+
+  home [label="refine", color="#3454A5", fillcolor="#E8EEFC"];
+  away [label="refine", color="#3454A5", fillcolor="#E8EEFC"];
+  fields -> home [label="home"];
+  fields -> away [label="away"];
+
+  homeNumber [label="Home : Nat", color="#CDD5DF", fillcolor="white"];
+  homeBounds [label="∧", fontsize=24, color="#7B3FA1", fillcolor="#F2EAF8"];
+  homeMin [label="proof: 5 ≤ Home", color="#7B3FA1", fillcolor="#F2EAF8"];
+  homeMax [label="proof: Home ≤ 30", color="#7B3FA1", fillcolor="#F2EAF8"];
+  home -> homeNumber [label="val"];
+  home -> homeBounds [label="property"];
+  homeBounds -> homeMin;
+  homeBounds -> homeMax;
+
+  awayLower [label="refine", color="#3454A5", fillcolor="#E8EEFC"];
+  awayMax [label="proof: Away ≤ 30", color="#7B3FA1", fillcolor="#F2EAF8"];
+  away -> awayLower [label="val"];
+  away -> awayMax [label="property"];
+  awayNumber [label="Away : Nat", color="#CDD5DF", fillcolor="white"];
+  awayMin [label="proof: 5 ≤ Away", color="#7B3FA1", fillcolor="#F2EAF8"];
+  awayLower -> awayNumber [label="val"];
+  awayLower -> awayMin [label="property"];
+}
