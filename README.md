@@ -26,7 +26,9 @@ lake -q exe forms-web
 The build uses Lean's normal C output and Emscripten. It builds the full Lean
 runtime and standard libraries with upstream CMake, compiles the application's
 dependencies supplied by Lake, and links an ES module plus a WebAssembly binary.
-Generated C and module initialization are used unchanged. The first build is
+Generated C and module initialization are used unchanged. It links upstream's
+minimal `lean_initialize`, which skips initializing (and so linking) the
+elaborator; the evaluator never elaborates Lean source. The first build is
 large and slow; subsequent builds reuse the runtime and compiled objects.
 Build prerequisites are CMake, Make, a C++ build environment, Python 3, curl,
 Git, and patch. `setup` downloads pinned Lean 4.35.0 and Emscripten 7.0.0 into

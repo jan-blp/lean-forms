@@ -23,10 +23,12 @@ FLAGS := -O2 -DNDEBUG -DLEAN_EMSCRIPTEN -I$(RUNTIME)/include -pthread -fwasm-exc
 LEAN_SOURCES := $(patsubst $(CURDIR)/%,%,$(shell cat .lake/build/browser-sources.txt 2>/dev/null))
 LEAN_OBJECTS := $(addprefix $(WORK)/objects/,$(LEAN_SOURCES:.c=.o))
 LIBRARIES := $(addprefix $(RUNTIME)/lib/lean/,libInit.a libStd.a libLean.a libleancpp.a libleanrt.a) $(RUNTIME)/libuv/src/libuv/libuv.a
+# Upstream's lean_initialize without initialize_Lean; linked first so it wins over libleancpp's.
+MINIMAL_INIT := $(RUNTIME)/lib/lean/libinitialize_minimal.a
 
 .PHONY: all setup link test FORCE
 # Lake writes the source list, so linking runs in a second pass that reads it.
-all: $(LIBRARIES)
+all: $(MINIMAL_INIT) $(LIBRARIES)
 	lake build browserSources
 	$(MAKE) -f $(MAKEFILE) -j$(JOBS) link
 	install -d web/dist/wasm
@@ -66,12 +68,12 @@ $(EMSDK)/.activated: $(TOOLCHAINS)/emsdk-$(EMSDK_VERSION).tar.gz
 	touch $@
 
 # The upstream build owns the complete runtime and standard libraries.
-$(LIBRARIES) &: $(LEAN_TREE)/.patched $(EMSDK)/.activated
+$(MINIMAL_INIT) $(LIBRARIES) &: $(LEAN_TREE)/.patched $(EMSDK)/.activated
 	@grep -q '^#define LEAN_VERSION_STRING "$(LEAN_VERSION)"' $(PREFIX)/include/lean/version.h || { echo 'This build requires Lean $(LEAN_VERSION).'; exit 1; }
 	$(SDK)/emcmake cmake -S $(SOURCE) -B $(RUNTIME) -DSTAGE=1 -DPREV_STAGE=$(PREFIX) -DPREV_STAGE_CMAKE_EXECUTABLE_SUFFIX= -DUSE_GMP=OFF -DUSE_MIMALLOC=OFF -DMMAP=OFF -DUSE_LAKE=OFF -DUSE_GITHASH=OFF -DCMAKE_BUILD_TYPE=Release -DCCACHE=OFF
-	cmake --build $(RUNTIME) --target leanrt leancpp -j$(JOBS)
+	cmake --build $(RUNTIME) --target leanrt leancpp initialize_minimal -j$(JOBS)
 	$(MAKE) -C $(SOURCE) -f $(abspath $(RUNTIME))/stdlib.make -j$(JOBS) Lean
-	touch $(LIBRARIES)
+	touch $(MINIMAL_INIT) $(LIBRARIES)
 
 $(WORK)/objects/%.o: %.c $(MAKEFILE)
 	@mkdir -p $(@D)
@@ -86,8 +88,8 @@ $(WORK)/json-bridge.o: experiments/wasm/json-bridge.cpp $(MAKEFILE)
 FORCE:
 
 link: $(OUT)/json.mjs $(OUT)/json.wasm
-$(OUT)/json.mjs $(OUT)/json.wasm &: $(WORK)/json-bridge.o $(LEAN_OBJECTS) $(LIBRARIES) .lake/build/browser-sources.txt $(MAKEFILE)
-	$(SDK)/em++ $(FLAGS) $(WORK)/json-bridge.o $(LEAN_OBJECTS) -Wl,--start-group $(LIBRARIES) -Wl,--end-group --no-entry -Wl,--fatal-warnings -sMODULARIZE -sEXPORT_ES6 -sENVIRONMENT=node,web,worker -sALLOW_MEMORY_GROWTH -sSTACK_SIZE=8388608 -sSTACK_OVERFLOW_CHECK=2 '-sEXPORTED_FUNCTIONS=["_json_init","_json_run_typed","_json_run_checker","_wasm_allocated_bytes"]' '-sEXPORTED_RUNTIME_METHODS=["ccall"]' -o $(OUT)/json.mjs
+$(OUT)/json.mjs $(OUT)/json.wasm &: $(WORK)/json-bridge.o $(LEAN_OBJECTS) $(MINIMAL_INIT) $(LIBRARIES) .lake/build/browser-sources.txt $(MAKEFILE)
+	$(SDK)/em++ $(FLAGS) $(WORK)/json-bridge.o $(LEAN_OBJECTS) $(MINIMAL_INIT) -Wl,--start-group $(LIBRARIES) -Wl,--end-group --no-entry -Wl,--fatal-warnings -sMODULARIZE -sEXPORT_ES6 -sENVIRONMENT=node,web,worker -sALLOW_MEMORY_GROWTH -sSTACK_SIZE=8388608 -sSTACK_OVERFLOW_CHECK=2 '-sEXPORTED_FUNCTIONS=["_json_init","_json_run_typed","_json_run_checker","_wasm_allocated_bytes"]' '-sEXPORTED_RUNTIME_METHODS=["ccall"]' -o $(OUT)/json.mjs
 
 test: all
 	lake build Tests.ExpressionProtocol
