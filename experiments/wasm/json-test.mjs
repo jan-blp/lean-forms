@@ -75,15 +75,41 @@ for (const [args, prefix] of [
 }
 const checker = JSON.stringify({ kind: 'each', items: { kind: 'project', path: [] }, body: {
   kind: 'report', message: { kind: 'value', type: { kind: 'text' }, value: 'hello 🌍\0' },
-  targets: { kind: 'fields', locations: [[{ kind: 'item', index: { kind: 'project', path: ['index'] } }]] },
+  targets: { kind: 'locations', locations: [[{ kind: 'item', index: { kind: 'project', path: ['index'] } }]] },
 } });
 const listSchema = '{"kind":"list","element":{"kind":"natural"}}';
 const listValue = '["1","2"]';
 const expectedErrors = { ok: true, value: ['0', '1'].map(index => ({ message: 'hello 🌍\0',
-  targets: { kind: 'fields', locations: [[{ kind: 'item', index }]] } })) };
+  targets: { kind: 'locations', locations: [[{ kind: 'item', index }]] } })) };
 assert.deepEqual(evaluator.check(listSchema, checker, listValue), expectedErrors);
 const checkerBefore = evaluator.allocatedBytes();
 for (let i = 0; i < 1000; i++) assert.deepEqual(evaluator.check(listSchema, checker, listValue), expectedErrors);
 assert.equal(evaluator.allocatedBytes(), checkerBefore);
 assert.deepEqual(independent.check(listSchema, checker, listValue), expectedErrors);
 console.log('PASS: checker transport, nested scope, Unicode/NUL, recovery, independent initialization, and 1000 calls without retained allocations');
+
+// Branch payloads and both conditional outcomes retain their checked scopes.
+const natural = { kind: 'natural' };
+const shapeSchema = { kind: 'sum', constructors: [
+  { name: 'circle', type: natural },
+  { name: 'rectangle', type: { kind: 'record', fields: [{ name: 'width', type: natural }] } },
+] };
+const literal = (type, value) => ({ kind: 'value', type, value });
+const project = (...path) => ({ kind: 'project', path });
+const report = (message, location) => ({ kind: 'report', message,
+  targets: { kind: 'locations', locations: [location] } });
+const activeShape = { kind: 'cases', subject: project(), branches: {
+  circle: { kind: 'ite', condition: { kind: 'natLe', left: project('payload'), right: literal(natural, '10') },
+    thenBranch: { kind: 'pass' }, elseBranch: report(literal({ kind: 'text' }, 'large circle'),
+      [{ kind: 'constructor', tag: 'circle' }]) },
+  rectangle: report({ kind: 'natToText', operand: project('payload', 'width') },
+    [{ kind: 'constructor', tag: 'rectangle' }, { kind: 'field', name: 'width' }]),
+} };
+const checkShape = (program, value) => evaluator.check(JSON.stringify(shapeSchema), JSON.stringify(program), JSON.stringify(value));
+assert.deepEqual(checkShape(activeShape, { tag: 'circle', value: '5' }), { ok: true, value: [] });
+assert.equal(checkShape(activeShape, { tag: 'circle', value: '20' }).value[0].message, 'large circle');
+assert.equal(checkShape(activeShape, { tag: 'rectangle', value: { width: '12' } }).value[0].message, '12');
+const malformed = structuredClone(activeShape);
+malformed.branches.rectangle.message = project('missing');
+assert.equal(checkShape(malformed, { tag: 'circle', value: '5' }).ok, false);
+console.log('PASS: checker cases, conditional outcomes, and validation of inactive branches');

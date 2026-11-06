@@ -12,8 +12,8 @@ abbrev Program (root input : Schema) :=
   ⟦root.dataType⟧ → ⟦input.dataType⟧ → List (ResolvedError root.dataType)
 
 def location (input : Schema) : (target : Schema) → List Json →
-    Except String (LocationExpr input.dataType target.dataType)
-  | _, [] => pure .self
+    Except String (⟦input.dataType⟧ → Location target.dataType)
+  | _, [] => pure (fun _ => .self)
   | target, step :: rest =>
     (step.getObjValAs? String "kind").bind fun kind =>
     match kind, target with
@@ -22,50 +22,48 @@ def location (input : Schema) : (target : Schema) → List Json →
       (step.getObjValAs? String "name").bind fun name => do
       let some i := findName names name
         | .error s!"Unknown target field: {name}"
-      (location input (fields i) rest).map (.field i)
+      (location input (fields i) rest).map (fun rest context => .field i (rest context))
     | "item", .list element =>
       (checkFields step ["kind", "index"]).bind fun _ =>
       (step.getObjVal? "index").bind fun index =>
       (decode input .natural index).bind fun index =>
-      (location input element rest).map (.item index)
+      (location input element rest).map (fun rest context => .item (index.eval context) (rest context))
     | "constructor", .sum names _ branches =>
       (checkFields step ["kind", "tag"]).bind fun _ =>
       (step.getObjValAs? String "tag").bind fun tag => do
       let some i := findName names tag
         | .error s!"Unknown target constructor: {tag}"
-      (location input (branches i) rest).map (.constructor i)
+      (location input (branches i) rest).map (fun rest context => .constructor i (rest context))
     | _, _ => throw s!"Invalid target step {kind} for {target.dataType.toJson.compress}"
 termination_by _ steps => steps.length
 
 def targets (root input : Schema) (json : Json) :
-    Except String (TargetsExpr root.dataType input.dataType) :=
+    Except String (⟦root.dataType⟧ → ⟦input.dataType⟧ → TargetResolution root.dataType) :=
   (json.getObjValAs? String "kind").bind fun kind =>
   match kind with
-  | "global" => (checkFields json ["kind"]).map fun _ => .global
-  | "fields" =>
+  | "global" => (checkFields json ["kind"]).map fun _ _ _ => .global
+  | "locations" =>
     (checkFields json ["kind", "locations"]).bind fun _ =>
     (json.getObjVal? "locations").bind fun entries =>
     entries.getArr?.bind fun entries => do
     let locations ← entries.toList.mapM fun entry =>
       entry.getArr?.bind fun steps => location input root steps.toList
-    if nonempty : locations ≠ [] then pure (.fields locations nonempty)
+    if nonempty : locations ≠ [] then pure (fun value context =>
+      let resolved := locations.map (fun location => location context)
+      match resolved.find? (fun location => !location.exists value) with
+      | some location => .invalidTarget location
+      | none => .locations resolved (by simpa [resolved] using nonempty))
     else throw "Error locations must be nonempty"
   | kind => throw s!"Unknown target kind: {kind}"
 
-def iterationSchema (outer element : Schema) : Schema :=
-  .record ["outer", "item", "index"] (by decide) fun i =>
-    match i.val with
-    | 0 => outer
-    | 1 => element
-    | _ => .natural
+def branchSchema (outer payload : Schema) : Schema :=
+  .record ["outer", "payload"] (by decide) fun i =>
+    match i.val with | 0 => outer | _ => payload
 
-def iterationValue {outer element : Schema}
-    (context : ⟦outer.dataType⟧) (item : ⟦element.dataType⟧) (index : Nat) :
-    ⟦(iterationSchema outer element).dataType⟧ :=
-  fun i => match i with
-    | ⟨0, _⟩ => context
-    | ⟨1, _⟩ => item
-    | ⟨_ + 2, _⟩ => index
+def branchValue {outer payload : Schema}
+    (context : ⟦outer.dataType⟧) (value : ⟦payload.dataType⟧) :
+    ⟦(branchSchema outer payload).dataType⟧ :=
+  fun i => match i with | ⟨0, _⟩ => context | ⟨_ + 1, _⟩ => value
 
 /-- Decode every branch up front; expressions keep their checked types. -/
 def decodeChecker (root input : Schema) (json : Json) : Except String (Program root input) :=
@@ -79,13 +77,27 @@ def decodeChecker (root input : Schema) (json : Json) : Except String (Program r
     (json.getObjVal? "message").bind fun message =>
     (decode input .text message).bind fun message => do
     let target ← (json.getObjVal? "targets").bind (targets root input)
-    pure (fun value context => [{ message := message.eval context, targets := target.resolve value context }])
-  | "when" =>
-    (checkFields json ["kind", "condition", "body"]).bind fun _ =>
+    pure (fun value context => [{ message := message.eval context, targets := target value context }])
+  | "ite" =>
+    (checkFields json ["kind", "condition", "thenBranch", "elseBranch"]).bind fun _ =>
     (json.getObjVal? "condition").bind fun condition =>
     (decode input .boolean condition).bind fun condition => do
-    let body ← (childField json "body").bind fun body => decodeChecker root input body.val
-    pure (fun value context => if condition.eval context then body value context else [])
+    let yes ← (childField json "thenBranch").bind fun body => decodeChecker root input body.val
+    let no ← (childField json "elseBranch").bind fun body => decodeChecker root input body.val
+    pure (fun value context => if condition.eval context then yes value context else no value context)
+  | "cases" =>
+    (checkFields json ["kind", "subject", "branches"]).bind fun _ =>
+    (json.getObjVal? "subject").bind fun subject => do
+    let ⟨.sum names unique types, subject⟩ ← infer input subject
+      | throw "Validation cases requires a sum"
+    (childField json "branches").bind fun branches =>
+    (checkFields branches.val names).bind fun _ => do
+    let decoded ← JsonProtocol.sequenceFin (n := names.length) fun i =>
+      (childField branches.val (names.get i)).bind fun branch =>
+        decodeChecker root (branchSchema input (types i)) branch.val
+    pure (fun value context =>
+      let selected := subject.eval context
+      decoded selected.tag value (branchValue context selected.payload))
   | "seq" =>
     (checkFields json ["kind", "left", "right"]).bind fun _ => do
     let left ← (childField json "left").bind fun left => decodeChecker root input left.val

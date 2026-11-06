@@ -24,15 +24,25 @@ def run : IO Unit := do
     roundTrip Forms.Tests.ValidationCheckers.checker value
     roundTrip (.pass : Checker Invoice.invoice) value
   let invalid : Checker (.list .natural) := .seq
-    (.report (.value "invalid") (.fields [.item (.value (2 ^ 256)) .self]))
+    (.report (.value "invalid") (.locations [.item (.value (2 ^ 256)) .self]))
     (.report (.value "global") .global)
   roundTrip invalid []
   roundTrip invalid [1, 2]
   let branch : Checker Shapes.shape := .seq
-    (.report (.value "circle") (.fields [.constructor .circle .self]))
-    (.report (.value "rectangle") (.fields [.constructor .rectangle (.field .height .self)]))
+    (.report (.value "circle") (.locations [.constructor .circle .self]))
+    (.report (.value "rectangle") (.locations [.constructor .rectangle (.field .height .self)]))
   roundTrip branch { tag := .circle, payload := 0 }
   roundTrip branch { tag := .rectangle, payload := fun | .width => 1 | .height => 0 }
+  let active : Checker Shapes.shape := .cases (.project .self) fun
+    | .dot => .pass
+    | .circle => .ite (.natLe (.project (.field .payload .self)) (.value 10))
+        .pass (.report (.value "large circle") (.locations [.constructor .circle .self]))
+    | .rectangle => .report
+        (.natToText (.project (.field .payload (.field .width .self))))
+        (.locations [.constructor .rectangle (.field .width .self)])
+  roundTrip active { tag := .circle, payload := 5 }
+  roundTrip active { tag := .circle, payload := 20 }
+  roundTrip active { tag := .rectangle, payload := fun | .width => 12 | .height => 2 }
   IO.println "PASS: decoded checker execution matches core Lean checkers"
 
 end Tests.CheckerProtocol

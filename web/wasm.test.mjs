@@ -70,22 +70,22 @@ test('Wasm checker rejects malformed nodes, expressions, and target paths before
     { kind: 'each', items: literal(natural, '0'), body: { kind: 'pass' } },
     { kind: 'each', items: literal({ kind: 'list', element: natural }, []), body: { kind: 'unknown' } },
     { kind: 'report', message: literal(natural, '0'), targets: { kind: 'global' } },
-    report({ kind: 'unknown' }), report({ kind: 'fields', locations: [] }),
-    report({ kind: 'fields', locations: [[{ kind: 'field', name: 'missing' }]] }),
-    report({ kind: 'fields', locations: [[{ kind: 'item', index: literal(natural, '0') }]] }),
-    report({ kind: 'fields', locations: [[{ kind: 'constructor', tag: 'missing' }]] }),
+    report({ kind: 'unknown' }), report({ kind: 'locations', locations: [] }),
+    report({ kind: 'locations', locations: [[{ kind: 'field', name: 'missing' }]] }),
+    report({ kind: 'locations', locations: [[{ kind: 'item', index: literal(natural, '0') }]] }),
+    report({ kind: 'locations', locations: [[{ kind: 'constructor', tag: 'missing' }]] }),
   ];
   for (const checker of bad) assert.throws(() => wasm.runChecker(checker, natural, '0'));
   assert.throws(() => wasm.runChecker({ kind: 'pass' }, natural, false));
-  assert.throws(() => wasm.runChecker(report({ kind: 'fields', locations: [
+  assert.throws(() => wasm.runChecker(report({ kind: 'locations', locations: [
     [{ kind: 'item', index: literal({ kind: 'text' }, '0') }],
   ] }), { kind: 'list', element: natural }, []));
   assert.deepEqual(wasm.runChecker({ kind: 'pass' }, natural, '0'), []);
 });
 
 test('Wasm checker repeated calls preserve error ordering', () => {
-  const checker = { kind: 'seq', left: report({ kind: 'global' }), right: report({ kind: 'fields', locations: [[]] }) };
+  const checker = { kind: 'seq', left: report({ kind: 'global' }), right: report({ kind: 'locations', locations: [[]] }) };
   const expected = [{ message: 'error', targets: { kind: 'global' } },
-    { message: 'error', targets: { kind: 'fields', locations: [[]] } }];
+    { message: 'error', targets: { kind: 'locations', locations: [[]] } }];
   for (let i = 0; i < 1000; i++) assert.deepEqual(wasm.runChecker(checker, natural, '0'), expected);
 });

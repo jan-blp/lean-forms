@@ -1,6 +1,6 @@
 module
 
-public import Forms.Runtime.ExpressionProtocol.Schema
+public import Forms.Runtime.ExpressionProtocol.Program
 
 @[expose] public section
 
@@ -8,10 +8,10 @@ namespace Forms.Runtime.ExpressionProtocol
 open Lean
 
 /-- A decoded expression carries its checked result schema. -/
-abbrev Decoded (input : Schema) := (result : Schema) × Forms.Expr input.dataType result.dataType
+abbrev Decoded (input : Schema) := (result : Schema) × Program input.dataType result.dataType
 
 def requireType {input : Schema} (expected : Schema) (decoded : Decoded input)
-    : Except String (Forms.Expr input.dataType expected.dataType) :=
+    : Except String (Program input.dataType expected.dataType) :=
   if same : decoded.1 = expected then .ok (same ▸ decoded.2)
   else .error s!"Type mismatch: expected {expected.dataType.toJson.compress}, got {decoded.1.dataType.toJson.compress}"
 
@@ -39,7 +39,8 @@ def expressionKind (json : Json) : Except String String := do
     | "dateLe" | "and" | "enumEq" => pure ["left", "right"]
     | "not" | "natToText" => pure ["operand"]
     | "ifThenElse" => pure ["condition", "whenTrue", "whenFalse"]
-    | "all" | "filter" => pure ["items", "predicate"]
+    | "all" => pure ["items", "predicate", "context"]
+    | "filter" => pure ["items", "predicate"]
     | "sum" => pure ["items", "expression"]
     | "length" => pure ["items"]
     | "snoc" => pure ["items", "value"]
@@ -59,7 +60,7 @@ def infer (input : Schema) (json : Json) : Except String (Decoded input) :=
     (childField json key).bind fun value =>
       (infer context value.val).mapError (fun error => s!"{kind}.{key}: {error}")
   let child := childAt input
-  let checked (expected : Schema) (key : String) : Except String (Forms.Expr input.dataType expected.dataType) := do
+  let checked (expected : Schema) (key : String) : Except String (Program input.dataType expected.dataType) := do
     requireType expected (← child key)
   match kind with
   | "value" =>
@@ -94,11 +95,16 @@ def infer (input : Schema) (json : Json) : Except String (Decoded input) :=
       let condition ← checked .boolean "condition"
       let ⟨result, whenTrue⟩ ← child "whenTrue"
       return ⟨result, .ifThenElse condition whenTrue (← checked result "whenFalse")⟩
-  | "all" | "filter" =>
+  | "all" =>
+      let ⟨.list element, items⟩ ← child "items" | throw "Expected list items"
+      (json.getObjValAs? (List String) "context").bind fun labels => do
+      (pathFromLabels input labels).bind fun ⟨outer, context⟩ => do
+      let predicate ← requireType .boolean (← childAt (iterationSchema outer element) "predicate")
+      return ⟨.boolean, .all items predicate context⟩
+  | "filter" =>
       let ⟨.list element, items⟩ ← child "items" | throw "Expected list items"
       let predicate ← requireType .boolean (← childAt element "predicate")
-      if kind == "all" then return ⟨.boolean, .all items predicate⟩
-      else return ⟨.list element, .filter items predicate⟩
+      return ⟨.list element, .filter items predicate⟩
   | "sum" =>
       let ⟨.list element, items⟩ ← child "items" | throw "Expected list items"
       let body ← requireType .natural (← childAt element "expression")
@@ -152,7 +158,7 @@ decreasing_by all_goals decreasing_tactic
 
 /-- Decode with an expected result schema when the surrounding component supplies one. -/
 def decode (input result : Schema) (json : Json)
-    : Except String (Forms.Expr input.dataType result.dataType) := do
+    : Except String (Program input.dataType result.dataType) := do
   requireType result (← infer input json)
 
 /-- Preserve the inferred result schema for callers evaluating nested scopes. -/

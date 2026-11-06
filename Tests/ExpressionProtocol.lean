@@ -3,6 +3,7 @@ module
 public import Mathlib.Data.String.Defs
 
 public import Forms.Runtime.ExpressionProtocol
+public import Tests.ValidationCheckers
 public import Forms.ExampleForms.Person
 public import Forms.ExampleForms.Invoice
 public import Forms.ExampleForms.Shapes
@@ -27,10 +28,12 @@ def roundTrip (emit : Json → IO Unit) {input result : DataType} (name : String
   emit <| Json.mkObj [("name", toJson name), ("schema", schema), ("expression", encoded),
     ("argument", argument), ("expected", Json.mkObj [("ok", toJson true), ("value", expected)])]
   -- Check the expected result schema too, including structural record/enum equality.
-  let reencoded := (Schema.fromJson schema).bind fun input =>
+  let typed := (Schema.fromJson schema).bind fun input =>
     (Schema.fromJson result.toJson).bind fun result =>
-      (decode input result encoded).map Forms.Expr.toJson
-  check (name ++ "WireRoundTrip") ((← IO.ofExcept reencoded) == encoded)
+      (decode input result encoded).bind fun program =>
+        (JsonProtocol.valueFromJson input.dataType argument).map fun value =>
+          JsonProtocol.valueToJson (program.eval value)
+  check (name ++ "TypedDecode") ((← IO.ofExcept typed) == expected)
 
 def reject (emit : Json → IO Unit) (name schema expression value : String) : IO Unit := do
   let schema ← IO.ofExcept (Json.parse schema)
@@ -86,13 +89,18 @@ def testLists (emit : Json → IO Unit) : IO Unit := do
   let items : Forms.Expr (.list .natural) (.list .natural) := .project .self
   let x : Forms.Expr .natural .natural := .project .self
   for values in [[], [0, 9, 10, 2 ^ 128], [10, 10, 3]] do
-    roundTrip emit "All" (.all items (.natLe (.value 10) x)) values
+    roundTrip emit "All" (.all items (.natLe (.value 10) (.project (.field .item .self)))) values
     roundTrip emit "Filter" (.filter items (.natLe (.value 10) x)) values
     roundTrip emit "Sum" (.sum items (.natMul x x)) values
     roundTrip emit "Length" (.length items) values
     roundTrip emit "Snoc" (.snoc items (.length items)) values
     roundTrip emit "SortNatAsc" (.sortNatBy items x false) values
     roundTrip emit "SortNatDesc" (.sortNatBy items x true) values
+  for values in [[], [2, 2], [3], [0, 0], [1, 2]] do
+    roundTrip emit "AllContext" Forms.Tests.ValidationCheckers.boundedItems values
+    roundTrip emit "AllNested" Forms.Tests.ValidationCheckers.nestedAll values
+    roundTrip emit "AllWeakened" Forms.Tests.ValidationCheckers.embeddedItems
+      (fun | .outer => 99 | .item => values | .index => 99)
   let texts : Forms.Expr (.list .text) (.list .text) := .project .self
   let key : Forms.Expr .text .text := .project .self
   let values := ["beta", "ALPHA", "alpha", "Álpha", "\uE000", "𐀀", "alpha"]
