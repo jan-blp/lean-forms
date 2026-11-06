@@ -4,11 +4,11 @@
 
 LEAN_VERSION := 4.35.0
 LEAN_SHA256 := 6747b099d03d3675f2716e7cf5924a16bfbf75822b13a3d36f51f933ffcc307b
-EMSDK_VERSION := 4.0.23
-EMSDK_SHA256 := a91a4c1f42dbb0345faac093161e27d43e9b6964840d8c8d80976ab8d3eaf2d3
+EMSDK_VERSION := 7.0.0
+EMSDK_SHA256 := b2d153874f97b3c41f76b91239407d124c8d22f60a5e1a3f0a4ebc92a44479e4
 
 OUT := .lake/wasm
-WORK := $(OUT)/browser-build
+WORK := $(OUT)/browser-build-$(EMSDK_VERSION)
 TOOLCHAINS := $(OUT)/toolchains
 PREFIX := $(shell lean --print-prefix)
 LEAN_TREE := $(TOOLCHAINS)/lean4-$(LEAN_VERSION)
@@ -16,7 +16,7 @@ SOURCE := $(LEAN_TREE)/src
 EMSDK := $(TOOLCHAINS)/emsdk-$(EMSDK_VERSION)
 SDK := $(EMSDK)/upstream/emscripten
 PATCH := experiments/wasm/lean-$(LEAN_VERSION).patch
-RUNTIME := $(OUT)/full-runtime
+RUNTIME := $(OUT)/full-runtime-$(EMSDK_VERSION)
 MAKEFILE := experiments/wasm/Makefile
 JOBS ?= 8
 FLAGS := -O2 -DNDEBUG -DLEAN_EMSCRIPTEN -I$(RUNTIME)/include -pthread -fwasm-exceptions
