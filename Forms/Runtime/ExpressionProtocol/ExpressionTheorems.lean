@@ -26,11 +26,22 @@ local macro "decode_step" : tactic =>
     json_toJson, Json.getObjValAs?, Json.getObjValD, Except.toOption, bind, Except.bind, Except.map,
     Except.mapError, requireType, pure, Except.pure, canonicalSchema, canonicalExpr, sequenceFin_ok]))
 
+theorem infer_schema_eq {a b result : Schema} {json : Json}
+    {program : Program a.dataType result.dataType} (h : a = b)
+    (decoded : infer a json = .ok ⟨result, program⟩) :
+    infer b json = .ok ⟨result,
+      cast (congrArg (fun s => Program s.dataType result.dataType) h) program⟩ := by
+  cases h
+  exact decoded
+
 /-- The production decoder reconstructs every serialized expression in its wire types. -/
 theorem expression_decode
     {input result : DataType} (expression : Forms.Expr input result) :
     infer (canonicalSchema input) expression.toJson = .ok ⟨canonicalSchema result, canonicalExpr expression⟩ := by
   induction expression with
+  | @all input outer element items predicate context hi hp =>
+      have predicateDecoded := infer_schema_eq (canonicalSchema_iteration outer element) hp
+      decode_step
   | @enumCases input result labels subject bodies hs hb =>
       have length := toList_length labels
       have row := toList_getElem labels

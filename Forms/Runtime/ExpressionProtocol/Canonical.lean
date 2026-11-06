@@ -1,7 +1,8 @@
 module
 
-public import Forms.Runtime.ExpressionProtocol.Schema
+public import Forms.Runtime.ExpressionProtocol.Program
 public import Mathlib.Logic.Equiv.List
+public import Mathlib.Tactic.FinCases
 
 @[expose] public section
 
@@ -93,12 +94,52 @@ theorem canonicalPath_get {input result : DataType} (path : Path input result)
         ((enumIndex labels).symm_apply_apply i) (canonicalPath rest)
         (fun j => canonicalEquiv (fields j) (value j))).trans (ih (value i))
 
+@[simp] theorem canonicalSchema_iteration (outer element : DataType) :
+    canonicalSchema (Validation.IterationContext outer element) =
+      iterationSchema (canonicalSchema outer) (canonicalSchema element) := by
+  change Schema.record _ _ _ = Schema.record _ _ _
+  congr 1
+  funext i
+  fin_cases i <;> rfl
+
+theorem program_cast_eval {a b : Schema} {result : DataType} (h : a = b)
+    (program : Program a.dataType result) (value : ⟦a.dataType⟧) :
+    (cast (congrArg (fun s => Program s.dataType result) h) program).eval
+      (cast (congrArg (fun (s : Schema) => DataType.denote s.dataType) h) value) = program.eval value := by
+  cases h
+  rfl
+
+theorem cast_record_apply {names : List String} {unique : names.Nodup}
+    {fields other : Fin names.length → Schema}
+    (h : Schema.record names unique fields = Schema.record names unique other)
+    (value : ⟦(Schema.record names unique fields).dataType⟧) (i : Fin names.length) :
+    (cast (congrArg (fun (s : Schema) => DataType.denote s.dataType) h) value) i =
+      cast (congrArg (fun (s : Schema) => DataType.denote s.dataType)
+        (congrFun (by injection h) i)) (value i) := by
+  have same : fields = other := by injection h
+  subst other
+  rfl
+
+theorem canonicalIterationValue (outer element : DataType)
+    (value : ⟦outer⟧) (item : ⟦element⟧) (index : Nat) :
+    cast (congrArg (fun (s : Schema) => DataType.denote s.dataType) (canonicalSchema_iteration outer element))
+      (canonicalEquiv (Validation.IterationContext outer element)
+        (fun | .outer => value | .item => item | .index => index)) =
+      iterationValue (canonicalEquiv outer value) (canonicalEquiv element item) index := by
+  funext i
+  rw [cast_record_apply (canonicalSchema_iteration outer element)]
+  fin_cases i <;> rfl
+
 def canonicalExpr {input result : DataType} (expression : Forms.Expr input result) :
-    Forms.Expr (canonicalSchema input).dataType (canonicalSchema result).dataType :=
+    Program (canonicalSchema input).dataType (canonicalSchema result).dataType :=
   match expression with
   | .value v => .value (canonicalEquiv result v)
   | .project path => .project (canonicalPath path)
-  | .all items predicate => .all (canonicalExpr items) (canonicalExpr predicate)
+  | .all (outer := outer) (element := element) items predicate context =>
+      .all (outer := canonicalSchema outer) (element := canonicalSchema element)
+        (canonicalExpr items) (cast (congrArg (fun schema => Program schema.dataType .boolean)
+          (canonicalSchema_iteration outer element)) (canonicalExpr predicate))
+        (canonicalPath context)
   | .cases (tags := labels) subject branches =>
       .cases (canonicalExpr subject) (fun i => canonicalExpr (branches ((enumIndex labels).symm i)))
   | .sum items body => .sum (canonicalExpr items) (canonicalExpr body)
@@ -138,11 +179,24 @@ theorem reindex_equiv_apply {α A B : Type} (types : α → Type)
   cases h
   rfl
 
+attribute [local simp] Program.value Program.project Program.cases Program.sum Program.filter Program.sortBy Program.search Program.sortNatBy Program.snoc Program.length Program.enumCases Program.enumEq Program.enumLabel Program.ifThenElse Program.natToText Program.textEq Program.textAppend Program.natAdd Program.natSub Program.natMul Program.not Program.and Program.dateLe Program.natLe Program.all
+
 theorem canonicalExpr_eval {input result : DataType} (expression : Forms.Expr input result)
     (value : ⟦input⟧) :
     (canonicalExpr expression).eval (canonicalEquiv input value) =
       canonicalEquiv result (expression.eval value) := by
   induction expression with
+  | @all input outer element items predicate context hi hp =>
+      simp only [canonicalExpr, Program.all, Forms.Expr.eval, hi, canonicalPath_get]
+      change ((items.eval value).map (canonicalEquiv element)).zipIdx.all _ =
+        (items.eval value).zipIdx.all _
+      rw [← List.map_zipIdx, List.all_map]
+      apply congrArg (List.all (items.eval value).zipIdx)
+      funext pair
+      rcases pair with ⟨item, index⟩
+      dsimp
+      rw [← canonicalIterationValue, program_cast_eval (canonicalSchema_iteration outer element)]
+      exact hp _
   | project path => exact canonicalPath_get path value
   | @sortBy i e items key descending hi hk | @sortNatBy i e items key descending hi hk =>
       simp_all [canonicalExpr, Forms.Expr.eval, canonicalEquiv, Equiv.listEquivOfEquiv]
@@ -155,7 +209,7 @@ theorem canonicalExpr_eval {input result : DataType} (expression : Forms.Expr in
       simpa [canonicalExpr, Forms.Expr.eval, canonicalEquiv, ih, List.get_eq_getElem]
         using enumIndex_label labels (subject.eval value)
   | @cases i r labels branches subject bodies hi hb =>
-      simp only [canonicalExpr, Forms.Expr.eval]
+      simp only [canonicalExpr, Forms.Expr.eval, Program.cases]
       rw [hi]
       dsimp [canonicalEquiv, sumValueEquiv, Equiv.sigmaCongr, Equiv.sigmaCongrLeft, Equiv.sigmaCongrRight]
       exact (reindex_equiv_apply (fun j => ⟦(canonicalSchema (branches j)).dataType⟧)

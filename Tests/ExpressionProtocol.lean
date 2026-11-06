@@ -2,7 +2,7 @@ module
 
 public import Mathlib.Data.String.Defs
 
-public import Forms.Runtime.ExpressionProtocol
+public import Forms.Runtime.ExpressionProtocol.Theorems
 public import Tests.ValidationCheckers
 public import Forms.ExampleForms.Person
 public import Forms.ExampleForms.Invoice
