@@ -365,7 +365,10 @@ try {
   const title = ('label' in spec.form && spec.form.label) || 'Form';
   required('#title', HTMLElement).textContent = title;
   document.title = `Lean Forms · ${title}`;
-  mount(createModel(spec));
+  const useWasm = new URLSearchParams(location.search).get('evaluator') === 'wasm';
+  const evaluator = useWasm ? await (await import('./wasm.js')).loadWasmEvaluator() : undefined;
+  mount(createModel(spec, evaluator));
+  container.dataset.evaluator = useWasm ? 'wasm' : 'typescript';
 } catch (error) {
   container.setAttribute('aria-busy', 'false');
   count.textContent = '';

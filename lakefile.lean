@@ -34,3 +34,21 @@ target webAssets pkg : Unit := Job.async do
 lean_exe «forms-web» where
   root := `WebMain
   extraDepTargets := #[`webAssets]
+
+lean_lib Browser where
+  roots := #[`JsonEval]
+  srcDir := "experiments/wasm"
+
+-- Use Lake's dependency graph, without inspecting or rewriting generated C.
+target browserSources pkg : FilePath := do
+  let some root := pkg.findModule? `JsonEval
+    | error "Missing browser entry module"
+  let imports ← (← root.transImports.fetch).await
+  let jobs ← (imports.push root).mapM fun mod => mod.c.fetch
+  Job.async do
+    let files ← jobs.mapM fun job => job.await
+    let path := pkg.buildDir / "browser-sources.txt"
+    let contents := String.intercalate "\n" (files.toList.map (·.toString)) ++ "\n"
+    unless (← path.pathExists) && (← IO.FS.readFile path) == contents do
+      IO.FS.writeFile path contents
+    return path

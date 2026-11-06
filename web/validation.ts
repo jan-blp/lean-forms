@@ -1,5 +1,5 @@
 import { evaluate, textValue } from './interpreter.js';
-import type { Expr, Schema, Value } from './protocol.js';
+import type { Evaluator, Expr, Schema, Value } from './protocol.js';
 
 export type LocationStep =
   | { kind: 'field'; name: string }
@@ -117,7 +117,8 @@ function evaluateChecker(checker: Checker, value: Value): ValidationError[] {
   }
 }
 
-export function runChecker(checker: Checker, schema: Schema, value: Value): ResolvedError[] {
+export function runChecker(checker: Checker, schema: Schema, value: Value, evaluator?: Evaluator): ResolvedError[] {
+  if (evaluator?.runChecker) return evaluator.runChecker(checker, schema, value);
   return evaluateChecker(checker, value).map(error => {
     switch (error.targets.kind) {
       case 'global': return error;
@@ -148,19 +149,19 @@ function prefix(error: ResolvedError, step: LocationStep): ResolvedError {
   }
 }
 
-export function validationErrors(refinement: Refinement, schema: Schema, value: Value): ResolvedError[] {
+export function validationErrors(refinement: Refinement, schema: Schema, value: Value, evaluator?: Evaluator): ResolvedError[] {
   switch (refinement.kind) {
     case 'base': return [];
-    case 'refine': return [...validationErrors(refinement.inner, schema, value),
-      ...runChecker(refinement.checker, schema, value)];
+    case 'refine': return [...validationErrors(refinement.inner, schema, value, evaluator),
+      ...runChecker(refinement.checker, schema, value, evaluator)];
     case 'list': {
       if (schema.kind !== 'list' || !Array.isArray(value)) throw new Error('Invalid list refinement.');
-      return value.flatMap((item, index) => validationErrors(refinement.item, schema.element, item)
+      return value.flatMap((item, index) => validationErrors(refinement.item, schema.element, item, evaluator)
         .map(error => prefix(error, { kind: 'item', index: index.toString() })));
     }
     case 'record': {
       if (schema.kind !== 'record' || !object(value)) throw new Error('Invalid record refinement.');
-      return schema.fields.flatMap(field => validationErrors(refinement.fields[field.name], field.type, value[field.name])
+      return schema.fields.flatMap(field => validationErrors(refinement.fields[field.name], field.type, value[field.name], evaluator)
         .map(error => prefix(error, { kind: 'field', name: field.name })));
     }
     case 'sum': {
@@ -168,7 +169,7 @@ export function validationErrors(refinement: Refinement, schema: Schema, value: 
       const tag = value.tag;
       const branch = schema.constructors.find(branch => branch.name === tag);
       if (!branch) throw new Error('Unknown constructor.');
-      return validationErrors(refinement.branches[tag], branch.type, value.value)
+      return validationErrors(refinement.branches[tag], branch.type, value.value, evaluator)
         .map(error => prefix(error, { kind: 'constructor', tag }));
     }
     default: return unsupported(refinement);
