@@ -24,7 +24,7 @@ LEAN_SOURCES := $(patsubst $(CURDIR)/%,%,$(shell cat .lake/build/browser-sources
 LEAN_OBJECTS := $(addprefix $(WORK)/objects/,$(LEAN_SOURCES:.c=.o))
 LIBRARIES := $(addprefix $(RUNTIME)/lib/lean/,libInit.a libStd.a libLean.a libleancpp.a libleanrt.a) $(RUNTIME)/libuv/src/libuv/libuv.a
 
-.PHONY: all setup link test
+.PHONY: all setup link test FORCE
 # Lake writes the source list, so linking runs in a second pass that reads it.
 all: $(LIBRARIES)
 	lake build browserSources
@@ -48,14 +48,16 @@ $(TOOLCHAINS)/emsdk-$(EMSDK_VERSION).tar.gz:
 	mv $@.part $@
 
 # Fix runtime FFI signatures and the layout of static scalar data on wasm32.
-$(LEAN_TREE)/.patched: $(TOOLCHAINS)/lean-$(LEAN_VERSION).tar.gz $(PATCH)
+# The stamp holds the applied patch: checkouts reset the patch's mtime, so compare contents.
+PATCH_CHANGED := $(shell cmp -s $(PATCH) $(LEAN_TREE)/.patched || echo FORCE)
+$(LEAN_TREE)/.patched: $(TOOLCHAINS)/lean-$(LEAN_VERSION).tar.gz $(PATCH_CHANGED)
 	rm -rf $(LEAN_TREE) $(LEAN_TREE).tmp
 	mkdir $(LEAN_TREE).tmp
 	tar -xzf $< -C $(LEAN_TREE).tmp
 	patch --batch -s -d $(LEAN_TREE).tmp/lean4-$(LEAN_VERSION) -p1 < $(PATCH)
 	mv $(LEAN_TREE).tmp/lean4-$(LEAN_VERSION) $(LEAN_TREE)
 	rmdir $(LEAN_TREE).tmp
-	touch $@
+	cp $(PATCH) $@
 
 $(EMSDK)/.activated: $(TOOLCHAINS)/emsdk-$(EMSDK_VERSION).tar.gz
 	tar -xzf $< -C $(TOOLCHAINS)
@@ -80,6 +82,8 @@ $(WORK)/json-bridge.o: experiments/wasm/json-bridge.cpp $(MAKEFILE)
 	$(SDK)/em++ -std=c++20 $(FLAGS) -MMD -MP -c $< -o $@
 
 -include $(LEAN_OBJECTS:.o=.d) $(WORK)/json-bridge.d
+
+FORCE:
 
 link: $(OUT)/json.mjs $(OUT)/json.wasm
 $(OUT)/json.mjs $(OUT)/json.wasm &: $(WORK)/json-bridge.o $(LEAN_OBJECTS) $(LIBRARIES) .lake/build/browser-sources.txt $(MAKEFILE)
