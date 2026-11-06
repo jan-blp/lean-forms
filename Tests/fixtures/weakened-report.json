@@ -14,6 +14,13 @@
         ],
         "children": [
           {
+            "dependencies": [
+              [
+                "content",
+                "filters",
+                "provider"
+              ]
+            ],
             "kind": "field",
             "label": "Provider",
             "path": [
@@ -32,6 +39,13 @@
             "widget": "select"
           },
           {
+            "dependencies": [
+              [
+                "content",
+                "filters",
+                "failuresOnly"
+              ]
+            ],
             "kind": "field",
             "label": "Failures only",
             "path": [
@@ -45,10 +59,17 @@
             "widget": "checkbox"
           }
         ],
+        "dependencies": [],
         "kind": "stack",
         "label": "Filters"
       },
       {
+        "dependencies": [
+          [
+            "content",
+            "sort"
+          ]
+        ],
         "kind": "field",
         "label": "Sort",
         "path": [
@@ -66,6 +87,17 @@
         "widget": "select"
       },
       {
+        "dependencies": [
+          [
+            "content",
+            "filters",
+            "provider"
+          ],
+          [
+            "content",
+            "results"
+          ]
+        ],
         "expression": {
           "kind": "textAppend",
           "left": {
@@ -385,6 +417,26 @@
             },
             "label": "Result"
           }
+        ],
+        "dependencies": [
+          [
+            "content",
+            "sort"
+          ],
+          [
+            "content",
+            "filters",
+            "failuresOnly"
+          ],
+          [
+            "content",
+            "filters",
+            "provider"
+          ],
+          [
+            "content",
+            "results"
+          ]
         ],
         "kind": "table",
         "rows": {
@@ -1197,6 +1249,7 @@
         }
       }
     ],
+    "dependencies": [],
     "kind": "stack",
     "label": null
   },

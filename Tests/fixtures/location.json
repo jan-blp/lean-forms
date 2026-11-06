@@ -2,6 +2,9 @@
   "form": {
     "branches": {
       "Catalonia": {
+        "dependencies": [
+          []
+        ],
         "kind": "field",
         "label": "City",
         "path": [],
@@ -16,6 +19,9 @@
         "widget": "select"
       },
       "France": {
+        "dependencies": [
+          []
+        ],
         "kind": "field",
         "label": "City",
         "path": [],
@@ -30,6 +36,9 @@
         "widget": "select"
       },
       "Japan": {
+        "dependencies": [
+          []
+        ],
         "kind": "field",
         "label": "City",
         "path": [],
@@ -49,6 +58,9 @@
       "France": 0,
       "Japan": 0
     },
+    "dependencies": [
+      []
+    ],
     "kind": "sum",
     "label": "Country",
     "path": [],

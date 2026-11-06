@@ -1,6 +1,7 @@
 module
 
 public import Forms.Core.Composition
+public import Forms.Core.Dependencies
 public import Forms.Core.RefinedDataType.Theorems
 public import Forms.Core.Component.Builder
 

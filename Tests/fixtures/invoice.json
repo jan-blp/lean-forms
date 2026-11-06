@@ -11,6 +11,9 @@
           "quantity": "1",
           "unitPrice": "100"
         },
+        "dependencies": [
+          []
+        ],
         "item": {
           "childIds": [
             "body",
@@ -25,6 +28,11 @@
               ],
               "children": [
                 {
+                  "dependencies": [
+                    [
+                      "description"
+                    ]
+                  ],
                   "kind": "field",
                   "label": "Description",
                   "path": [
@@ -36,6 +44,11 @@
                   "widget": "textInput"
                 },
                 {
+                  "dependencies": [
+                    [
+                      "quantity"
+                    ]
+                  ],
                   "kind": "field",
                   "label": "Quantity",
                   "path": [
@@ -47,6 +60,11 @@
                   "widget": "naturalInput"
                 },
                 {
+                  "dependencies": [
+                    [
+                      "unitPrice"
+                    ]
+                  ],
                   "kind": "field",
                   "label": "Unit price (cents)",
                   "path": [
@@ -58,10 +76,19 @@
                   "widget": "naturalInput"
                 }
               ],
+              "dependencies": [],
               "kind": "stack",
               "label": "Item"
             },
             {
+              "dependencies": [
+                [
+                  "quantity"
+                ],
+                [
+                  "unitPrice"
+                ]
+              ],
               "expression": {
                 "kind": "natMul",
                 "left": {
@@ -84,6 +111,7 @@
               }
             }
           ],
+          "dependencies": [],
           "kind": "stack",
           "label": null
         },
@@ -118,6 +146,9 @@
         }
       },
       {
+        "dependencies": [
+          []
+        ],
         "expression": {
           "expression": {
             "kind": "natMul",
@@ -147,6 +178,7 @@
         }
       }
     ],
+    "dependencies": [],
     "kind": "stack",
     "label": null
   },
@@ -183,10 +215,6 @@
           "kind": "base"
         },
         "quantity": {
-          "inner": {
-            "kind": "base"
-          },
-          "kind": "refine",
           "checker": {
             "condition": {
               "kind": "not",
@@ -205,6 +233,9 @@
                 }
               }
             },
+            "elseBranch": {
+              "kind": "pass"
+            },
             "kind": "ite",
             "thenBranch": {
               "kind": "report",
@@ -221,17 +252,14 @@
                   []
                 ]
               }
-            },
-            "elseBranch": {
-              "kind": "pass"
             }
-          }
+          },
+          "inner": {
+            "kind": "base"
+          },
+          "kind": "refine"
         },
         "unitPrice": {
-          "inner": {
-            "kind": "base"
-          },
-          "kind": "refine",
           "checker": {
             "condition": {
               "kind": "not",
@@ -250,6 +278,9 @@
                 }
               }
             },
+            "elseBranch": {
+              "kind": "pass"
+            },
             "kind": "ite",
             "thenBranch": {
               "kind": "report",
@@ -266,11 +297,12 @@
                   []
                 ]
               }
-            },
-            "elseBranch": {
-              "kind": "pass"
             }
-          }
+          },
+          "inner": {
+            "kind": "base"
+          },
+          "kind": "refine"
         }
       },
       "kind": "record"

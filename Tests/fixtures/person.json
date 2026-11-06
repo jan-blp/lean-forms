@@ -8,6 +8,11 @@
     ],
     "children": [
       {
+        "dependencies": [
+          [
+            "name"
+          ]
+        ],
         "kind": "field",
         "label": "Name",
         "path": [
@@ -19,6 +24,11 @@
         "widget": "textInput"
       },
       {
+        "dependencies": [
+          [
+            "age"
+          ]
+        ],
         "kind": "field",
         "label": "Age (18-120)",
         "path": [
@@ -30,6 +40,11 @@
         "widget": "naturalInput"
       },
       {
+        "dependencies": [
+          [
+            "subscribed"
+          ]
+        ],
         "kind": "field",
         "label": "Send me postal mail",
         "path": [
@@ -48,6 +63,12 @@
           ],
           "children": [
             {
+              "dependencies": [
+                [
+                  "address",
+                  "street"
+                ]
+              ],
               "kind": "field",
               "label": "Street",
               "path": [
@@ -60,6 +81,12 @@
               "widget": "textInput"
             },
             {
+              "dependencies": [
+                [
+                  "address",
+                  "kind"
+                ]
+              ],
               "kind": "field",
               "label": "Kind",
               "path": [
@@ -77,6 +104,7 @@
               "widget": "select"
             }
           ],
+          "dependencies": [],
           "kind": "stack",
           "label": "Address"
         },
@@ -86,9 +114,15 @@
             "subscribed"
           ]
         },
+        "dependencies": [
+          [
+            "subscribed"
+          ]
+        ],
         "kind": "visibleWhen"
       }
     ],
+    "dependencies": [],
     "kind": "stack",
     "label": "Registration"
   },
@@ -146,10 +180,6 @@
         "kind": "base"
       },
       "age": {
-        "inner": {
-          "kind": "base"
-        },
-        "kind": "refine",
         "checker": {
           "condition": {
             "kind": "not",
@@ -185,6 +215,9 @@
               }
             }
           },
+          "elseBranch": {
+            "kind": "pass"
+          },
           "kind": "ite",
           "thenBranch": {
             "kind": "report",
@@ -201,11 +234,12 @@
                 []
               ]
             }
-          },
-          "elseBranch": {
-            "kind": "pass"
           }
-        }
+        },
+        "inner": {
+          "kind": "base"
+        },
+        "kind": "refine"
       },
       "name": {
         "kind": "base"
