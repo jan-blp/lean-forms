@@ -1,6 +1,7 @@
 module
 
 public import Forms.Runtime.Wire
+import Forms.Protocol.TypeScriptAst
 meta import Forms.Protocol.TypeScript
 
 public section
@@ -38,8 +39,19 @@ def run : IO Unit := do
   let child := DisplayView.element .input [] [] [] none (some "hello") none (some "key")
   roundtrip (DisplayView.element .div [("class", "form")] [none, some child]
     [⟨.input, .draft, "key", "input", .value⟩] (some "title") none none none)
-  check "Generated schema omitted dependencies" ((typescript% [FormRequest]).contains "FormEvent")
-  check "Optional structure field was not optional in TS" ((typescript% [OptionalSample]).contains "\"omitted\"?: string")
+  check "Generated schema omitted dependencies" ((typescript% [FormRequest]).declarations.any (·.name == "FormEvent"))
+  check "Optional structure field was not optional in TS" ((typescript% [OptionalSample]).pretty.contains "\"omitted\"?: string")
+  let schema := typescript% [OptionalSample]
+  check "Generated optional fields have wrong AST" (schema.declarations == [
+    ⟨"OptionalSample", .object [
+      .mk "required" (.union .string .null []), .mk "omitted" .string true]⟩])
+  let nested : TS.Type := .array (.union (.reference "Node") .null [])
+  check "Array union precedence changed" (nested.pretty == "(Node | null)[]")
+  check "Nested array printing changed" ((TS.Type.array nested).pretty == "(Node | null)[][]")
+  check "Tuple printing changed" ((TS.Type.tuple [.string, nested]).pretty ==
+    "[string, (Node | null)[]]")
+  check "String literal escaping changed" ((TS.Type.stringLiteral "a\"\n").pretty ==
+    "\"a\\\"\\n\"")
   IO.println "PASS built-in JSON codecs and generated TypeScript"
 
 end Tests.Wire

@@ -4,7 +4,7 @@ import Forms.Protocol.TypeScript
 open Forms.Protocol Forms.Runtime.Wire
 
 def protocol : String := "// Generated from Lean. Run npm --prefix web run generate.\n" ++
-  typescript% [Request, Success, Failure]
+  (typescript% [Request, Success, Failure]).pretty
 
 def main (args : List String) : IO Unit := do
   let path := "web/protocol.ts"

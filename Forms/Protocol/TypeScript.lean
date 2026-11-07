@@ -1,39 +1,41 @@
 module
 
+public import Forms.Protocol.TypeScriptAst
+public meta import Forms.Protocol.TypeScriptAst
+
 public meta import Lean.Elab.Term
 public meta import Lean.Meta
 
 public meta section
 namespace Forms.Protocol
-open Lean Meta Elab
+open Lean Meta Elab TS
 
 private def fieldName (name : Name) : String := name.eraseMacroScopes.getString!
-private def quoted (text : String) : String := (Json.str text).compress
 
-private partial def tsType (type : Expr) : MetaM String := do
+private partial def tsType (type : Expr) : MetaM TS.Type := do
   let fn := type.getAppFn.constName!
   let args := type.getAppArgs
-  if fn == ``String then return "string"
-  if fn == ``Bool then return "boolean"
-  if fn == ``Nat || fn == ``Int then return "number"
-  if fn == ``Json then return "unknown"
-  if fn == ``Option then return s!"({← tsType args[0]!} | null)"
-  if fn == ``List || fn == ``Array then return s!"({← tsType args[0]!})[]"
-  if fn == ``Prod then return s!"[{← tsType args[0]!}, {← tsType args[1]!}]"
+  if fn == ``String then return .string
+  if fn == ``Bool then return .boolean
+  if fn == ``Nat || fn == ``Int then return .number
+  if fn == ``Json then return .unknown
+  if fn == ``Option then return .union (← tsType args[0]!) .null []
+  if fn == ``List || fn == ``Array then return .array (← tsType args[0]!)
+  if fn == ``Prod then return .tuple [← tsType args[0]!, ← tsType args[1]!]
   unless args.isEmpty do throwError "Unsupported wire type: {type}"
   let info ← getConstInfoInduct fn
   unless info.numIndices == 0 && info.numParams == 0 do
     throwError "Indexed types belong behind the wire boundary: {type}"
-  return fn.getString!
+  return .reference fn.getString!
 
-private def tsField (name : String) (type : Expr) (isStruct : Bool) : MetaM String := do
+private def tsField (name : String) (type : Expr) (isStruct : Bool) : MetaM Property := do
   if isStruct && name.endsWith "?" then
     unless type.isAppOf ``Option do throwError "Optional JSON field must have type Option: {name}"
     let key := name.dropEndWhile (· == '?') |>.toString
-    return s!"{quoted key}?: {← tsType type.getAppArgs[0]!}"
-  return s!"{quoted name}: {← tsType type}"
+    return .mk key (← tsType type.getAppArgs[0]!) true
+  return .mk name (← tsType type)
 
-private def declaration (name : Name) : MetaM String := do
+private def declaration (name : Name) : MetaM TypeAlias := do
   let info ← getConstInfoInduct name
   unless info.numParams == 0 && info.numIndices == 0 do throwError "Wire types must be unindexed and monomorphic"
   let isStruct := isStructure (← getEnv) name
@@ -44,16 +46,20 @@ private def declaration (name : Name) : MetaM String := do
     forallTelescopeReducing ctor.type fun fields _ => do
       let decls ← fields.mapM fun field => field.fvarId!.getDecl
       let parts ← decls.mapM fun decl => tsField (fieldName decl.userName) decl.type isStruct
-      let object := "{ " ++ String.intercalate "; " parts.toList ++ " }"
+      let object := TS.Type.object parts.toList
       if isStruct then return object
-      if fields.isEmpty then return quoted ctor.name.getString!
+      if fields.isEmpty then return .stringLiteral ctor.name.getString!
       let payload ← if decls.all (! ·.userName.hasMacroScopes) then pure object
         else if fields.size == 1 then tsType decls[0]!.type
         else do
           let types ← decls.mapM fun decl => tsType decl.type
-          pure ("[" ++ String.intercalate ", " types.toList ++ "]")
-      return "{ " ++ quoted ctor.name.getString! ++ ": " ++ payload ++ " }"
-  return "export type " ++ name.getString! ++ " = " ++ String.intercalate " | " variants ++ ";\n"
+          pure (.tuple types.toList)
+      return .object [.mk ctor.name.getString! payload]
+  let type ← match variants with
+    | [] => throwError "Empty wire types are unsupported: {name}"
+    | [type] => pure type
+    | first :: second :: rest => pure (.union first second rest)
+  return ⟨name.getString!, type⟩
 
 private partial def collectTypes (type : Expr) (seen : Array Name) : MetaM (Array Name) := do
   let fn := type.getAppFn.constName!
@@ -78,6 +84,6 @@ elab "typescript%" "[" names:ident,* "]" : term => do
   for name in names.getElems do
     types ← collectTypes (← Term.elabType name) types
   let declarations ← types.toList.mapM fun name => declaration name
-  return mkStrLit (String.join declarations)
+  return toExpr (Module.mk declarations)
 
 end Forms.Protocol
