@@ -1,14 +1,11 @@
+import { textValue } from './display.js';
+export { formatValue, textValue } from './display.js';
 import type { Location } from './validation.js';
 import { validationErrors } from './validation.js';
 import type { Component, Control, Evaluator, Expr, Invocation, Path, Presentation, Schema, Specification, Value, View } from './protocol.js';
 
 export function get(value: Value, path: Path): Value {
   return path.reduce((current, name) => typeof name === 'number' ? array(current)[name] : record(current)[name], value);
-}
-
-export function textValue(value: unknown): string {
-  if (typeof value !== 'string') throw new Error('Expected text.');
-  return value;
 }
 
 function array(value: Value): Value[] {
@@ -18,11 +15,6 @@ function array(value: Value): Value[] {
 
 function record(value: Value): { [name: string]: Value } {
   if (typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected a record.');
-  return value;
-}
-
-function index(value: Value): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) throw new Error('Expected an enum index.');
   return value;
 }
 
@@ -57,25 +49,6 @@ function schemaAt(schema: Schema, path: Path, value: Value): Schema {
     value = get(value, [step]);
   }
   return schema;
-}
-
-export function formatValue(schema: Schema, value: Value): string {
-  switch (schema.kind) {
-    case 'text':
-    case 'natural':
-    case 'date': return textValue(value);
-    case 'boolean': return value ? 'true' : 'false';
-    case 'enum': return schema.options[index(value)];
-    case 'list': return '[' + array(value).map(item => formatValue(schema.element, item)).join(', ') + ']';
-    case 'record': return '{' + schema.fields.map(field => `${field.name}: ${formatValue(field.type, record(value)[field.name])}`).join(', ') + '}';
-    case 'sum': {
-      const selected = record(value);
-      const branch = schema.constructors.find(branch => branch.name === selected.tag);
-      if (!branch) throw new Error('Unknown sum constructor.');
-      return `${selected.tag}: ${formatValue(branch.type, selected.value)}`;
-    }
-    default: return unsupported(schema);
-  }
 }
 
 function fieldLocation(path: Path): Location {

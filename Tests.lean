@@ -6,6 +6,7 @@ import all Std.Time.Date.Unit.Year
 import Forms.Core.RefinedDataType.Theorems
 import Tests.Validation
 import Tests.ServerRefinements
+import Tests.CompiledForms
 import Tests.InputProtocol
 import Tests.ValidationProtocol
 import Tests.CheckerProtocol
@@ -307,6 +308,7 @@ private def testProtocol : IO Unit := do
 
 public def main : IO Unit := do
   Tests.ServerRefinements.run
+  Tests.CompiledForms.run
   Tests.InputProtocol.run
   Tests.ValidationProtocol.run
   Tests.CheckerProtocol.run

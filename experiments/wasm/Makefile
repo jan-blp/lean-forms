@@ -1,4 +1,4 @@
-# Run from the repository root: make -f experiments/wasm/Makefile [all|test|setup|size|size-gzip|size-brotli]
+# Run from the repository root: make -f experiments/wasm/Makefile [all|test|setup|size|size-gzip|size-brotli|ts-lines]
 .DEFAULT_GOAL := all
 .DELETE_ON_ERROR:
 
@@ -26,7 +26,7 @@ LIBRARIES := $(addprefix $(RUNTIME)/lib/lean/,libInit.a libStd.a libLean.a lible
 # Upstream's lean_initialize without initialize_Lean; linked first so it wins over libleancpp's.
 MINIMAL_INIT := $(RUNTIME)/lib/lean/libinitialize_minimal.a
 
-.PHONY: all setup link test size size-gzip size-brotli FORCE
+.PHONY: all setup link test size size-gzip size-brotli ts-lines FORCE
 # Lake writes the source list, so linking runs in a second pass that reads it.
 all: $(MINIMAL_INIT) $(LIBRARIES)
 	lake build browserSources
@@ -89,14 +89,14 @@ FORCE:
 
 link: $(OUT)/json.mjs $(OUT)/json.wasm
 $(OUT)/json.mjs $(OUT)/json.wasm &: $(WORK)/json-bridge.o $(LEAN_OBJECTS) $(MINIMAL_INIT) $(LIBRARIES) .lake/build/browser-sources.txt $(MAKEFILE)
-	$(SDK)/em++ $(FLAGS) $(WORK)/json-bridge.o $(LEAN_OBJECTS) $(MINIMAL_INIT) -Wl,--start-group $(LIBRARIES) -Wl,--end-group --no-entry -Wl,--fatal-warnings -sMODULARIZE -sEXPORT_ES6 -sENVIRONMENT=node,web,worker -sALLOW_MEMORY_GROWTH -sSTACK_SIZE=8388608 -sSTACK_OVERFLOW_CHECK=2 '-sEXPORTED_FUNCTIONS=["_json_init","_json_run_typed","_json_run_checker","_json_run_validation","_json_run_normalize","_wasm_allocated_bytes"]' '-sEXPORTED_RUNTIME_METHODS=["ccall"]' -o $(OUT)/json.mjs
+	$(SDK)/em++ $(FLAGS) $(WORK)/json-bridge.o $(LEAN_OBJECTS) $(MINIMAL_INIT) -Wl,--start-group $(LIBRARIES) -Wl,--end-group --no-entry -Wl,--fatal-warnings -sMODULARIZE -sEXPORT_ES6 -sENVIRONMENT=node,web,worker -sALLOW_MEMORY_GROWTH -sSTACK_SIZE=8388608 -sSTACK_OVERFLOW_CHECK=2 '-sEXPORTED_FUNCTIONS=["_json_init","_json_run_typed","_json_run_checker","_json_run_validation","_json_run_normalize","_json_run_form","_wasm_allocated_bytes"]' '-sEXPORTED_RUNTIME_METHODS=["ccall"]' -o $(OUT)/json.mjs
 
 test: all
 	lake build Tests.ExpressionProtocol
 	lake env lean --run experiments/wasm/ExportJsonCases.lean > $(OUT)/json-cases.jsonl
 	node experiments/wasm/json-test.mjs
 	npm --prefix web run build
-	node --test web/interpreter.test.mjs web/wasm.test.mjs web/validation.test.mjs
+	node --test web/interpreter.test.mjs web/wasm.test.mjs web/validation.test.mjs web/compiled.test.mjs
 
 # Report the existing binary without rebuilding it.
 size:
@@ -109,3 +109,7 @@ size-gzip:
 # Measure Brotli quality 11 using Node.js without writing an archive.
 size-brotli:
 	@node --input-type=commonjs -e 'const fs = require("node:fs"), z = require("node:zlib"), p = "$(OUT)/json.wasm"; if (!fs.existsSync(p)) { console.error("Wasm binary missing; run make -f $(MAKEFILE) first."); process.exit(1); } const n = z.brotliCompressSync(fs.readFileSync(p), { params: { [z.constants.BROTLI_PARAM_QUALITY]: 11 } }).length; console.log(p + " (Brotli quality 11): " + (n / 1024).toFixed(2) + " KiB (" + (n / 1048576).toFixed(2) + " MiB)");'
+
+# Count physical source lines, including comments and blank lines.
+ts-lines:
+	@python3 -c 'from pathlib import Path; files = sorted(p for p in Path("web").rglob("*") if p.suffix in {".ts", ".tsx"} and not {"node_modules", "dist", "tests", "__tests__"}.intersection(p.parts) and not p.stem.endswith((".test", ".spec"))); counts = [(p, len(p.read_text().splitlines())) for p in files]; [print(f"{n:6} {p}") for p, n in counts]; print(f"{sum(n for _, n in counts):6} total")'

@@ -11,6 +11,7 @@ make -f experiments/wasm/Makefile
 lake -q exe forms-web --open
 ```
 
-The first Wasm build downloads toolchains and takes time. The app opens at
+Rebuild Wasm after changing a form. The first build downloads toolchains and takes time.
+The app opens at
 `http://127.0.0.1:8080`; run `lake -q exe forms-web --help` for options.
 Apply or Enter saves a field edit; Submit sends the applied values.

@@ -1,6 +1,7 @@
+import { openCompiledForm } from './wasm.js';
 import { sameLocation } from './validation.js';
-import { createModel, formatValue, textValue } from './interpreter.js';
-import type { Control, Specification, SubmissionError, ValidationError, Value, View } from './protocol.js';
+import { formatValue, textValue } from './display.js';
+import type { DisplayControl as Control, CompiledDescriptor, SubmissionError, ValidationError, Value, DisplayView as View } from './protocol.js';
 
 function required<T extends HTMLElement>(selector: string, type: { new(): T }): T {
   const node = document.querySelector(selector);
@@ -79,7 +80,7 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, c
   return node;
 }
 
-function mount(model: ReturnType<typeof createModel>) {
+function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
   let pending = false;
   let validationErrors: ValidationError[] = [];
   let validationStarted = false;
@@ -93,7 +94,7 @@ function mount(model: ReturnType<typeof createModel>) {
     if (pending) return;
     try {
       if (drafts.size > 0 && (control.kind === 'choice' ||
-        (control.kind === 'button' && control.effect.kind !== 'appendDefault'))) {
+        (control.kind === 'button' && !control.keepDrafts))) {
         announce('Apply your edits before using this control.', true);
         render(drafts.keys().next().value);
         return;
@@ -359,14 +360,15 @@ function mount(model: ReturnType<typeof createModel>) {
 }
 
 try {
-  const response = await fetch('/api/form');
+  const response = await fetch('/api/compiled-form');
   if (!response.ok) throw new Error('Could not load the form.');
-  const spec = await response.json() as Specification;
-  const title = ('label' in spec.form && spec.form.label) || 'Form';
-  required('#title', HTMLElement).textContent = title;
-  document.title = `Lean Forms · ${title}`;
-  const evaluator = await (await import('./wasm.js')).loadWasmEvaluator();
-  mount(createModel(spec, evaluator));
+  const descriptor = await response.json() as CompiledDescriptor;
+  const model = await openCompiledForm(descriptor);
+  required('#title', HTMLElement).textContent = model.title;
+  document.title = `Lean Forms · ${model.title}`;
+  mount(model);
+  window.addEventListener('pagehide', event => { if (!event.persisted) model.dispose(); });
+  container.dataset.runtime = 'compiled';
   container.dataset.evaluator = 'wasm';
 } catch (error) {
   container.setAttribute('aria-busy', 'false');

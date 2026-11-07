@@ -1,6 +1,7 @@
 module
 
 import Forms.ExampleForms.Example
+import Forms.Runtime.CompiledForms
 import Forms.Runtime.Web
 
 open Forms Forms.Runtime Forms.ExampleForms
@@ -56,5 +57,6 @@ public def main (args : List String) : IO Unit := do
     IO.println usage
     return
   let options ← IO.ofExcept (parseOptions args)
-  let definition := (options.selected.getD .counter).definition
-  Web.run definition.refined definition.component definition.initial options.port options.openBrowser
+  let selected := options.selected.getD .counter
+  let definition := selected.definition
+  Web.run definition.refined definition.component definition.initial options.port options.openBrowser (some (CompiledForms.descriptor selected))

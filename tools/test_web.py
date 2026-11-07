@@ -50,15 +50,21 @@ def session(example):
         assert status == 200
         spec = json.loads(body)
         assert spec['version'] == 8
+        status, _, body = request('/api/compiled-form')
+        assert status == 200
+        descriptor = json.loads(body)
+        assert set(descriptor) == {'form', 'revision', 'value'}
+        assert descriptor['form'] == example and descriptor['value'] == spec['value']
+        assert descriptor['revision'].startswith('compiled-1-')
         for path, mime in [('/', 'text/html'), ('/app.js', 'text/javascript'),
-                           ('/interpreter.js', 'text/javascript'), ('/validation.js', 'text/javascript'), ('/style.css', 'text/css')]:
+                           ('/display.js', 'text/javascript'), ('/interpreter.js', 'text/javascript'), ('/validation.js', 'text/javascript'), ('/style.css', 'text/css')]:
             status, headers, body = request(path)
             assert status == 200 and headers['Content-Type'].startswith(mime), (path, status, headers)
             assert body and headers['Cache-Control'] == 'no-store'
         for method in ['GET', 'POST', 'DELETE']:
             status, headers, _ = request('/missing', method=method)
             assert status == 404 and 'Allow' not in headers
-        for path in ['/', '/app.js', '/interpreter.js', '/validation.js', '/style.css', '/api/form']:
+        for path in ['/', '/app.js', '/interpreter.js', '/validation.js', '/style.css', '/display.js', '/api/form', '/api/compiled-form']:
             for method in ['POST', 'DELETE']:
                 status, headers, _ = request(path, method=method)
                 assert status == 405 and headers['Allow'] == 'GET', (path, method, status, headers)
@@ -72,9 +78,9 @@ def session(example):
         assert status == 204 and body == ''
         assert 'Content-Type' not in headers
         script = '''
-import { createModel } from './web/dist/interpreter.js';
+import { openCompiledForm } from './web/dist/wasm.js';
 import { readFileSync } from 'node:fs';
-const model = createModel(JSON.parse(readFileSync(0, 'utf8')));
+const model = await openCompiledForm(JSON.parse(readFileSync(0, 'utf8')));
 const edit = (widget, argument) => model.apply(model.controls().find(c => c.widget === widget).key, argument);
 const apply = (label, argument) => model.apply(model.controls().find(c => c.label === label).key, argument);
 const quantity = (index, argument) =>
@@ -113,11 +119,12 @@ switch (process.argv[1]) {
 }
 model.view();
 process.stdout.write(JSON.stringify(model.submission()));
+model.dispose();
 '''
 
         def run_client(scenario):
             return json.loads(subprocess.check_output(['node', '--input-type=module', '-e', script, scenario],
-                                                      input=json.dumps(spec).encode(), cwd=ROOT))
+                                                      input=json.dumps(descriptor).encode(), cwd=ROOT))
         submission = run_client(example)
         status, _, accepted = request('/api/submit', submission)
         assert status == 204 and accepted == '', (status, accepted)

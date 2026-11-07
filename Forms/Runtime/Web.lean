@@ -27,22 +27,26 @@ inductive GetRoute where
   | index
   | script
   | interpreter
+  | display
   | validation
   | wasmAdapter
   | wasmLoader
   | wasmBinary
   | stylesheet
   | specification
+  | compiledSpecification
 
 def GetRoute.ofPath (path : String) : Option GetRoute :=
   if path == "/" then some .index
   else if path == "/app.js" then some .script
+  else if path == "/display.js" then some .display
   else if path == "/interpreter.js" then some .interpreter
   else if path == "/validation.js" then some .validation
   else if path == "/wasm.js" then some .wasmAdapter
   else if path == "/wasm/json.mjs" then some .wasmLoader
   else if path == "/wasm/json.wasm" then some .wasmBinary
   else if path == "/style.css" then some .stylesheet
+  else if path == "/api/compiled-form" then some .compiledSpecification
   else if path == "/api/form" then some .specification
   else none
 
@@ -109,12 +113,14 @@ structure Application where
   form : ComponentEndpoint
   html : String
   script : String
+  display : String
   interpreter : String
   validation : String
   wasmAdapter : String
   wasmLoader : Option String
   wasmBinary : Option ByteArray
   style : String
+  compiledForm : Option Lean.Json := none
 
 def Application.get
   (app : Application)
@@ -123,12 +129,14 @@ def Application.get
   match route with
   | .index => some (.html app.html)
   | .script => some (.javascript app.script)
+  | .display => some (.javascript app.display)
   | .interpreter => some (.javascript app.interpreter)
   | .validation => some (.javascript app.validation)
   | .wasmAdapter => some (.javascript app.wasmAdapter)
   | .wasmLoader => app.wasmLoader.map .javascript
   | .wasmBinary => app.wasmBinary.map .wasm
   | .stylesheet => some (.css app.style)
+  | .compiledSpecification => app.compiledForm.map .json
   | .specification => some (.json app.form.specification)
 
 def Application.submit
@@ -186,12 +194,15 @@ def run {ty : DataType}
   (initial : ⟦ty⟧)
   (port : UInt16 := 8080)
   (openBrowser : Bool := false)
+  (compiledForm : Option Lean.Json := none)
   : IO Unit := do
   let app : Application := {
+    compiledForm
     logger := ← TrafficLog.Logger.create
     form := .ofComponent refined component initial
     html := ← IO.FS.readFile "web/index.html"
     script := ← IO.FS.readFile "web/dist/app.js"
+    display := ← IO.FS.readFile "web/dist/display.js"
     interpreter := ← IO.FS.readFile "web/dist/interpreter.js"
     validation := ← IO.FS.readFile "web/dist/validation.js"
     wasmAdapter := ← IO.FS.readFile "web/dist/wasm.js"

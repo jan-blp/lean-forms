@@ -99,3 +99,27 @@ export interface Evaluator {
   validate: (refinement: Refinement, schema: Schema, value: Value) => ResolvedError[];
   runChecker: (checker: Checker, schema: Schema, value: Value) => ResolvedError[];
 }
+
+
+// Compiled forms send display data and opaque control keys, never expression programs.
+interface DisplayIdentity { key: string; id: string; target: Path; label: string; disabled: boolean }
+export type DisplayControl = DisplayIdentity & (
+  | { kind: 'button'; keepDrafts: boolean }
+  | { kind: 'choice'; location: Location; value: string; options: string[] }
+  | { kind: 'editor'; location: Location; schema: Schema; value: Value; widget: Widget }
+);
+export type DisplayView =
+  | { kind: 'stack'; label?: string | null; children: DisplayView[] }
+  | { kind: 'actionWidget'; location: Location; label: string; schema: Schema; value: Value; children: DisplayControl[] }
+  | { kind: 'list'; location: Location; label: string; items: { body: DisplayView | null; remove: DisplayControl }[]; append: DisplayControl }
+  | { kind: 'sum'; selector: DisplayControl; body: DisplayView | null }
+  | Extract<View, { kind: 'computed' | 'table' | 'text' }>
+  | DisplayControl;
+export interface CompiledDescriptor { form: string; revision: string; value: Value }
+export interface FormSnapshot {
+  title: string;
+  view: DisplayView | null;
+  controls: DisplayControl[];
+  errors: ResolvedError[];
+  submission: { value: Value; actions: Invocation[] };
+}

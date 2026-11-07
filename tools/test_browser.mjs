@@ -93,7 +93,7 @@ try {
     const status = () => document.querySelector('#status').textContent;
     await wait(() => !document.querySelector('#submit').disabled);
     check(crossOriginIsolated, 'Shared-memory runtime requires cross-origin isolation');
-    check(document.querySelector('[data-evaluator=wasm]'), 'Compiled Lean evaluator was not loaded');
+    check(document.querySelector('[data-evaluator=wasm][data-runtime=compiled]'), 'Compiled form runtime was not loaded');
     let posts = 0;
     const originalFetch = window.fetch;
     window.fetch = (...args) => { if (args[0] === '/api/submit') posts++; return originalFetch(...args); };
@@ -192,7 +192,7 @@ try {
         };
         await wait(() => !document.querySelector('#submit').disabled);
         check(crossOriginIsolated, 'Shared-memory runtime requires cross-origin isolation');
-        check(document.querySelector('[data-evaluator=wasm]'), 'Compiled Lean evaluator was not loaded');
+        check(document.querySelector('[data-evaluator=wasm][data-runtime=compiled]'), 'Compiled form runtime was not loaded');
         ${body}
         document.querySelector('#submit').click();
         await wait(() => document.querySelector('#status').textContent === 'Submitted successfully.');

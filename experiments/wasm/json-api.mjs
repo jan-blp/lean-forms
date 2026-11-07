@@ -22,6 +22,7 @@ export async function createEvaluator(options) {
       return result;
     },
     check: (...args) => request('json_run_checker', ...args),
+    form: requestJson => request('json_run_form', requestJson),
     normalize: (...args) => request('json_run_normalize', ...args),
     validate: (...args) => request('json_run_validation', ...args),
     // Experiment instrumentation, not part of the evaluation protocol.

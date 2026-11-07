@@ -2,6 +2,7 @@ module
 
 public import Forms.Runtime.ValidationProtocol
 public import Forms.Runtime.InputProtocol
+public import Forms.Runtime.CompiledForms
 
 public section
 
@@ -46,5 +47,19 @@ def normalizeJson (schema value : String) : String :=
     let value ← (Json.parse value).mapError ("value: " ++ ·)
     let normalized ← InputProtocol.evaluate schema value
     pure [("value", normalized)]
+
+initialize formStore : IO.Ref CompiledForms.Store ← IO.mkRef {}
+
+@[export json_form_request]
+def formRequest (request : String) : IO String := do
+  let store ← formStore.get
+  let result := do
+    let request ← Json.parse request
+    CompiledForms.execute store request
+  match result with
+  | .error error => return encodeResponse (.error error)
+  | .ok (store, value) =>
+    formStore.set store
+    return encodeResponse (.ok [("value", value)])
 
 end WasmExperiment

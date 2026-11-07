@@ -5,6 +5,7 @@
 
 extern "C" lean_object * json_evaluate_typed(lean_object *, lean_object *, lean_object *);
 extern "C" lean_object * json_validate(lean_object *, lean_object *, lean_object *);
+extern "C" lean_object * json_form_request(lean_object *);
 extern "C" lean_object * json_normalize(lean_object *, lean_object *);
 extern "C" lean_object * json_check(lean_object *, lean_object *, lean_object *);
 extern "C" lean_object * runtime_initialize_lean_x2dforms_JsonEval(uint8_t);
@@ -69,4 +70,17 @@ extern "C" const char * json_run_normalize(const char * schema, size_t schema_le
     return save_response(json_normalize(
         lean_mk_string_from_bytes(schema, schema_len),
         lean_mk_string_from_bytes(value, value_len)));
+}
+
+extern "C" const char * json_run_form(const char * request, size_t request_len) {
+    lean_object * result = json_form_request(
+        lean_mk_string_from_bytes(request, request_len));
+    if (lean_io_result_is_error(result)) {
+        lean_io_result_show_error(result);
+        abort();
+    }
+    lean_object * value = lean_io_result_get_value(result);
+    lean_inc(value);
+    lean_dec_ref(result);
+    return save_response(value);
 }
