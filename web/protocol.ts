@@ -10,14 +10,8 @@ interface InvocationBase {
 
 export type Invocation = InvocationBase | (InvocationBase & { constructor: string });
 
-export type ValidationError = ResolvedError;
-
-export type SubmissionError =
-  | { kind: 'validation'; message: string; errors: ValidationError[] }
-  | { kind: 'replay' | 'request'; message: string };
-
 // Compiled forms send display data and opaque control keys, never expression programs.
-interface DisplayIdentity { key: string; id: string; target: Path; label: string; disabled: boolean }
+interface DisplayIdentity { messages?: string; key: string; id: string; target: Path; label: string; disabled: boolean }
 export type DisplayControl = DisplayIdentity & (
   | { kind: 'button'; keepDrafts: boolean }
   | { kind: 'choice'; location: Location; value: string; options: string[] }
@@ -27,7 +21,7 @@ export type DisplayControl = DisplayIdentity & (
       | { widget: 'textInput' | 'naturalInput' | 'dateInput'; value: string }
     ))
 );
-export type DisplayView =
+export type DisplayView = { messages?: string } & (
   | { kind: 'stack'; label?: string | null; children: DisplayView[] }
   | { kind: 'actionWidget'; location: Location; label: string; text: string; children: DisplayControl[] }
   | { kind: 'list'; location: Location; label: string; items: { body: DisplayView | null; remove: DisplayControl }[]; append: DisplayControl }
@@ -35,9 +29,11 @@ export type DisplayView =
   | { kind: 'computed'; label: string; text: string }
   | { kind: 'text'; value: string }
   | { kind: 'table'; columns: string[]; rows: string[][] }
-  | DisplayControl;
+  | DisplayControl);
 export interface CompiledDescriptor { form: string; revision: string; value: Value }
 export interface FormSnapshot {
+  summary: string;
+  submissionBlocked: boolean;
   title: string;
   view: DisplayView | null;
   controls: DisplayControl[];

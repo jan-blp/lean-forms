@@ -40,8 +40,29 @@ def testFormatting : IO Unit := do
   check "SelectValueRemainsIndex" ((editor.view.getObjVal? "value").toOption == some (toJson (1 : Nat)))
   check "EditorHasNoSchema" ((editor.view.getObjVal? "schema").toOption.isNone)
 
+def testFeedback : IO Unit := do
+  let invalid : Feedback.Error := { message := "Missing field", targets := .invalidTarget [] }
+  check "Invalid targets remain in summary"
+    (Feedback.summary [invalid] == "Invalid validation target: Missing field")
+  let error : Feedback.Error := { message := "List error", targets := .locations [] [] }
+  check "Root location messages deduplicate"
+    (Feedback.messages [error, error, invalid] [] == some "List error")
+  check "Global and invalid targets do not attach to fields"
+    (Feedback.messages [invalid, { message := "Global", targets := .global }] [] == none)
+  let path : Feedback.Location := [.field "items", .item 2, .constructor "circle"]
+  let nested : Feedback.Error := { message := "Nested", targets := .locations path [] }
+  check "Typed locations preserve item and constructor identity"
+    (Feedback.messages [nested] path == some "Nested" &&
+      Feedback.messages [nested] [.field "items", .item 1, .constructor "circle"] == none &&
+      Feedback.messages [nested] [.field "items", .item 2, .constructor "rectangle"] == none)
+  check "Location boundary round trip"
+    ((FeedbackProtocol.locationFromJson (FeedbackProtocol.locationToJson path)).toOption == some path)
+  let response := Json.mkObj [("error", Json.mkObj [("kind", toJson "replay"), ("message", toJson "Replay rejected")])]
+  check "Replay message is preserved" ((FeedbackProtocol.serverError 400 response.compress).message == "Replay rejected")
+
 def run : IO Unit := do
   testFormatting
+  testFeedback
   let (store, opened) ← IO.ofExcept (execute {} (openRequest .counter))
   let handle ← IO.ofExcept (opened.getObjValAs? String "handle")
   let key := (toJson [toJson ([] : List Json), toJson "plusOne"]).compress

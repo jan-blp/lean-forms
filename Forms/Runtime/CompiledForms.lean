@@ -2,6 +2,7 @@ module
 
 public import Forms.ExampleForms.Example
 public import Forms.Runtime.CompiledView
+public import Forms.Runtime.Feedback
 
 @[expose] public section
 
@@ -29,6 +30,8 @@ def descriptor (revision : String) (selected : Example) : Json :=
     ("value", JsonProtocol.valueToJson definition.initial)]
 
 structure Model (selected : Example) where
+  validationStarted : Bool := false
+  serverFeedback : Option Feedback.ServerError := none
   initial : ⟦selected.definition.ty⟧
   history : ComponentHistory selected.definition.component
 
@@ -40,20 +43,28 @@ def openModel (request : Json) : Except String ((selected : Example) × Model se
   pure ⟨selected, { initial, history := { value := initial } }⟩
 
 def snapshot {selected : Example} (model : Model selected) : Json :=
-  let rendered := CompiledView.render selected.definition.component model.history.value
+  let errors := clientErrors selected.definition.refined model.history.value
+  let visible := match model.serverFeedback with
+    | some feedback => feedback.errors
+    | none => if model.validationStarted then errors.map Feedback.ofResolved else []
+  let rendered := CompiledView.render selected.definition.component model.history.value (errors := visible)
   let title := match rendered.view.getObjValAs? String "label" with
     | .ok label => if label.isEmpty then "Form" else label
     | .error _ => "Form"
-  Json.mkObj [("view", rendered.view), ("controls", toJson (rendered.controls.map (·.view))),
+  let summary := match model.serverFeedback with
+    | some feedback => feedback.message
+    | none => Feedback.summary visible
+  Json.mkObj [("summary", toJson summary), ("submissionBlocked", toJson (!visible.isEmpty)),
+    ("view", rendered.view), ("controls", toJson (rendered.controls.map (·.view))),
     ("title", toJson title), ("submission", ComponentHistoryProtocol.encode model.history),
-    ("errors", toJson ((clientErrors selected.definition.refined model.history.value).map Validation.ResolvedError.toJson))]
+    ("errors", toJson (errors.map Validation.ResolvedError.toJson))]
 
 def apply {selected : Example} (model : Model selected) (request : Json) : Except String (Model selected) := do
   let key ← request.getObjValAs? String "key"
   let invocation ← CompiledView.invocation selected.definition.component model.history.value key
     (request.getObjVal? "argument").toOption
   let history ← (model.history.apply invocation).mapError toString
-  pure { model with history }
+  pure { model with history, serverFeedback := none }
 
 /-- IDs are never reused: disposed handles cannot address a later model. -/
 structure Store where
@@ -79,7 +90,12 @@ def execute (revision : String) (store : Store) (request : Json) : Except String
     else
       let model ← match operation with
         | "apply" => apply model request
-        | "reset" => pure { model with history := { value := model.initial } }
+        | "reset" => pure { model with history := { value := model.initial }, validationStarted := false, serverFeedback := none }
+        | "validate" => pure { model with validationStarted := true, serverFeedback := none }
+        | "serverError" => do
+          let status ← request.getObjValAs? Nat "status"
+          let body ← request.getObjValAs? String "body"
+          pure { model with serverFeedback := some (FeedbackProtocol.serverError status body) }
         | "inspect" => pure model
         | _ => throw s!"Unknown form operation: {operation}"
       let response := snapshot model

@@ -13,7 +13,7 @@ const fixture = name => fixtures.find(f => f.descriptor.form === name);
 
 function snapshot(model) {
   return { title: model.title, view: model.view(), controls: model.controls(),
-    submission: model.submission(), errors: model.errors() };
+    submission: model.submission(), errors: model.errors(), summary: model.summary(), submissionBlocked: model.submissionBlocked() };
 }
 for (const { descriptor, initial, cases } of fixtures) {
   test(`compiled ${descriptor.form} matches native Lean through actions, views, validation, and reset`, async () => {
@@ -194,4 +194,53 @@ test('Wasm exposes only the compiled-form API and recovers using a fresh instanc
   assert.equal(result.ok, true);
   assert.equal(result.value.snapshot.submission.value, '0');
   assert.equal(fresh.form(JSON.stringify({ operation: 'dispose', handle: result.value.handle })).ok, true);
+});
+
+
+test('Lean owns validation visibility, server feedback, and recovery', async () => {
+  const model = await openCompiledForm(fixture('invoice').descriptor);
+  const messages = value => {
+    if (!value || typeof value !== 'object') return [];
+    return [...(typeof value.messages === 'string' ? [value.messages] : []),
+      ...Object.values(value).flatMap(messages)];
+  };
+  try {
+    const quantity = model.controls().find(c => c.label === 'Quantity');
+    model.apply(quantity.key, '0');
+    assert.ok(model.errors().length);
+    assert.deepEqual(messages(model.view()), []);
+    assert.equal(model.summary(), '');
+    model.validate();
+    assert.equal(model.submissionBlocked(), true);
+    assert.ok(messages(model.view()).length);
+    assert.ok(model.summary());
+    model.apply(quantity.key, '2');
+    assert.deepEqual(messages(model.view()), []);
+    assert.equal(model.submissionBlocked(), false);
+    const location = quantity.location.map(step => ({ ...step, ignored: true }));
+    const error = { message: '<b>Literal 🌍</b>', targets: { kind: 'locations', locations: [location] } };
+    model.serverError(422, JSON.stringify({ error: { kind: 'validation', message: 'Server rejected',
+      errors: [error, error, { message: 'Global', targets: { kind: 'global' } }] } }));
+    assert.deepEqual(messages(model.view()), ['<b>Literal 🌍</b>']);
+    assert.equal(model.summary(), 'Server rejected');
+    assert.equal(model.submissionBlocked(), true);
+    const feedback = snapshot(model);
+    assert.throws(() => model.apply('missing'));
+    assert.deepEqual(snapshot(model), feedback);
+    model.apply(quantity.key, '3');
+    assert.deepEqual(messages(model.view()), []);
+    assert.equal(model.summary(), '');
+    for (const body of ['not json', '{}', JSON.stringify({ error: { kind: 'validation', message: 'Bad',
+      errors: [error, { message: 'Broken', targets: { kind: 'locations', locations: [[{kind: 'item', index: '-1'}]] } }] } })]) {
+      model.serverError(503, body);
+      assert.equal(model.summary(), 'Submission failed (HTTP 503).');
+      assert.deepEqual(messages(model.view()), []);
+    }
+    model.reset();
+    assert.equal(model.summary(), '');
+    model.apply(quantity.key, '0');
+    assert.deepEqual(messages(model.view()), []);
+    model.validate();
+    assert.equal(model.submissionBlocked(), true);
+  } finally { model.dispose(); }
 });

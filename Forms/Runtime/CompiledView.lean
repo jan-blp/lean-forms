@@ -2,6 +2,7 @@ module
 
 public import Forms.Runtime.ComponentHistoryProtocol
 public import Forms.Runtime.InputProtocol
+public import Forms.Runtime.FeedbackProtocol
 
 @[expose] public section
 
@@ -31,14 +32,12 @@ def control (target : List Json) (id label kind : String) (disabled : Bool)
     view := Json.mkObj ([("key", toJson key), ("id", toJson id), ("target", toJson target),
       ("label", toJson label), ("kind", toJson kind), ("disabled", toJson disabled)] ++ fields) }
 
-def fieldSteps {a b : DataType} (path : Path a b) : List Json :=
-  path.toList.map fun name => Json.mkObj [("kind", toJson "field"), ("name", toJson name)]
+def fieldSteps {a b : DataType} (path : Path a b) : Feedback.Location :=
+  path.toList.map Feedback.Step.field
 
-def itemStep (index : Nat) : Json :=
-  Json.mkObj [("kind", toJson "item"), ("index", toJson (toString index))]
-
-def constructorStep (tag : String) : Json :=
-  Json.mkObj [("kind", toJson "constructor"), ("tag", toJson tag)]
+/-- Serialize already resolved feedback alongside the display node. -/
+def feedbackFields (errors : List Feedback.Error) (location : Feedback.Location) : List (String × Json) :=
+  (Feedback.messages errors location).toList.map fun message => ("messages", toJson message)
 
 /-- Display text is formatted from the Lean type, never from a schema in the browser. -/
 def formatValue {ty : DataType} (value : ⟦ty⟧) : String :=
@@ -54,35 +53,36 @@ def formatValue {ty : DataType} (value : ⟦ty⟧) : String :=
   | .sum tags _ => tags.label value.tag ++ ": " ++ formatValue value.payload
 
 def editor {ty : DataType} (widget : Widget ty) (value : ⟦ty⟧)
-    (target location : List Json) (id label : String) (disabled : Bool) : Control :=
+    (target : List Json) (location : Feedback.Location) (id label : String) (disabled : Bool) (errors : List Feedback.Error := []) : Control :=
   control target id label "editor" disabled
     ([("widget", toJson widget.name),
-      ("value", JsonProtocol.valueToJson value), ("location", toJson location)] ++
+      ("value", JsonProtocol.valueToJson value), ("location", FeedbackProtocol.locationToJson location)] ++ feedbackFields errors location ++
       match widget with
       | .select (domain := domain) => [("options", toJson (Enum.options domain))]
       | _ => [])
     none (some (InputProtocol.normalize ty))
 
 def presentation {ty : DataType} (action : WidgetAction ty) (value : ⟦ty⟧)
-    (target location : List Json) (id : String) (disabled : Bool) : Control :=
+    (target : List Json) (location : Feedback.Location) (id : String) (disabled : Bool) (errors : List Feedback.Error := []) : Control :=
   match action.presentation with
   | .button _ => control target id action.label "button" disabled [("keepDrafts", toJson false)]
-  | .editor widget _ => editor widget value target location id action.label disabled
+  | .editor widget _ => editor widget value target location id action.label disabled errors
 
 def render {ty : DataType} (component : Component ty) (value : ⟦ty⟧)
-    (target : List Json := []) (location : List Json := []) (disabled : Bool := false) : Rendered :=
+    (target : List Json := []) (location : Feedback.Location := []) (disabled : Bool := false)
+    (errors : List Feedback.Error := []) : Rendered :=
   match component with
   | .visibleWhen condition body =>
-    if condition.eval value then render body value target location disabled else ⟨Json.null, []⟩
-  | .disabledWhen condition body => render body value target location (disabled || condition.eval value)
+    if condition.eval value then render body value target location disabled errors else ⟨Json.null, []⟩
+  | .disabledWhen condition body => render body value target location (disabled || condition.eval value) errors
   | .stack (items := items) label children order =>
     let rendered := (FinEnum.toList items).map fun i =>
-      render (children (order i)) value (target ++ [toJson (items.label (order i))]) location disabled
+      render (children (order i)) value (target ++ [toJson (items.label (order i))]) location disabled errors
     { view := Json.mkObj [("kind", toJson "stack"), ("label", toJson label),
         ("children", toJson ((rendered.filter (·.view != Json.null)).map (·.view)))]
       controls := rendered.flatMap (·.controls) }
   | .field path label widget =>
-    let c := editor widget (path.get value) target (location ++ fieldSteps path) "replace" label disabled
+    let c := editor widget (path.get value) target (location ++ fieldSteps path) "replace" label disabled errors
     ⟨c.view, [c]⟩
   | .button label _ =>
     let c := control target "press" label "button" disabled [("keepDrafts", toJson false)]
@@ -90,30 +90,34 @@ def render {ty : DataType} (component : Component ty) (value : ⟦ty⟧)
   | .actionWidget (ids := ids) path label actions =>
     let current := path.get value
     let controls := (FinEnum.toList ids).map fun id =>
-      presentation (actions id) current target (location ++ fieldSteps path) (ids.label id) disabled
-    { view := Json.mkObj [("kind", toJson "actionWidget"), ("label", toJson label),
+      presentation (actions id) current target (location ++ fieldSteps path) (ids.label id) disabled errors
+    let ownsFeedback := !(FinEnum.toList ids).any fun id => match (actions id).presentation with
+      | .editor _ _ => true
+      | .button _ => false
+    { view := Json.mkObj ([("kind", toJson "actionWidget"), ("label", toJson label),
         ("text", toJson (formatValue current)),
-        ("location", toJson (location ++ fieldSteps path)), ("children", toJson (controls.map (·.view)))]
+        ("location", FeedbackProtocol.locationToJson (location ++ fieldSteps path)), ("children", toJson (controls.map (·.view)))] ++
+        if ownsFeedback then feedbackFields errors (location ++ fieldSteps path) else [])
       controls }
   | .list path label item _ =>
     let loc := location ++ fieldSteps path
     let add := control target "appendDefault" "Add item" "button" disabled [("keepDrafts", toJson true)]
     let rendered := (path.get value).zipIdx.map fun (v, i) =>
-      let body := render item v (target ++ [toJson i]) (loc ++ [itemStep i]) disabled
+      let body := render item v (target ++ [toJson i]) (loc ++ [.item i]) disabled errors
       let remove := control target "remove" "Remove item" "button" disabled
         [("keepDrafts", toJson false)] (some i)
       (Json.mkObj [("body", body.view), ("remove", remove.view)], body.controls ++ [remove])
-    { view := Json.mkObj [("kind", toJson "list"), ("label", toJson label), ("location", toJson loc),
-        ("append", add.view), ("items", toJson (rendered.map Prod.fst))]
+    { view := Json.mkObj ([("kind", toJson "list"), ("label", toJson label), ("location", FeedbackProtocol.locationToJson loc),
+        ("append", add.view), ("items", toJson (rendered.map Prod.fst))] ++ feedbackFields errors loc)
       controls := add :: rendered.flatMap Prod.snd }
   | .sum (tags := tags) path label branches _ =>
     let current := path.get value
     let tag := tags.label current.tag
     let loc := location ++ fieldSteps path
     let selector := control target "select" label "choice" disabled
-      [("location", toJson loc), ("value", toJson tag), ("options", toJson (Enum.options tags))]
+      ([("location", FeedbackProtocol.locationToJson loc), ("value", toJson tag), ("options", toJson (Enum.options tags))] ++ feedbackFields errors loc)
     let body := render (branches current.tag) current.payload (target ++ [toJson tag])
-      (loc ++ [constructorStep tag]) disabled
+      (loc ++ [.constructor tag]) disabled errors
     { view := Json.mkObj [("kind", toJson "sum"), ("selector", selector.view), ("body", body.view)]
       controls := selector :: body.controls }
   | .computed label expression =>

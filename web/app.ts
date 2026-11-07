@@ -1,6 +1,5 @@
 import { openCompiledForm } from './wasm.js';
-import { sameLocation } from './validation.js';
-import type { DisplayControl as Control, CompiledDescriptor, SubmissionError, ValidationError, Value, DisplayView as View } from './protocol.js';
+import type { DisplayControl as Control, CompiledDescriptor, Value, DisplayView as View } from './protocol.js';
 
 function required<T extends HTMLElement>(selector: string, type: { new(): T }): T {
   const node = document.querySelector(selector);
@@ -10,50 +9,6 @@ function required<T extends HTMLElement>(selector: string, type: { new(): T }): 
 
 function unsupported(value: never): never {
   throw new Error(`Unsupported variant: ${JSON.stringify(value)}`);
-}
-
-function isLocation(value: unknown): boolean {
-  return Array.isArray(value) && value.every(step => {
-    if (typeof step !== 'object' || step === null) return false;
-    switch (step.kind) {
-      case 'field': return typeof step.name === 'string';
-      case 'constructor': return typeof step.tag === 'string';
-      case 'item': return typeof step.index === 'string' && /^[0-9]+$/.test(step.index);
-      default: return false;
-    }
-  });
-}
-
-function isValidationError(value: unknown): value is ValidationError {
-  if (typeof value !== 'object' || value === null || !('message' in value) ||
-    typeof value.message !== 'string' || !('targets' in value)) return false;
-  const targets = value.targets;
-  if (typeof targets !== 'object' || targets === null || !('kind' in targets)) return false;
-  if (targets.kind === 'global') return true;
-  if (targets.kind === 'invalidTarget') return 'location' in targets && isLocation(targets.location);
-  return targets.kind === 'locations' && 'locations' in targets && Array.isArray(targets.locations) &&
-    targets.locations.length > 0 && targets.locations.every(isLocation);
-}
-
-async function submissionError(response: Response): Promise<SubmissionError> {
-  const fallback: SubmissionError = { kind: 'request', message: `Submission failed (HTTP ${response.status}).` };
-  try {
-    const body: unknown = await response.json();
-    if (typeof body !== 'object' || body === null || !('error' in body)) return fallback;
-    const error = body.error;
-    if (typeof error !== 'object' || error === null || !('kind' in error) ||
-      !('message' in error) || typeof error.message !== 'string' || !error.message) return fallback;
-    if (error.kind === 'request' || error.kind === 'replay') {
-      return { kind: error.kind, message: error.message };
-    }
-    if (error.kind === 'validation' && 'errors' in error && Array.isArray(error.errors) &&
-      error.errors.every(isValidationError)) {
-      return { kind: 'validation', message: error.message, errors: error.errors };
-    }
-  } catch {
-    return fallback;
-  }
-  return fallback;
 }
 
 function message(error: unknown): string {
@@ -81,8 +36,6 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, c
 
 function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
   let pending = false;
-  let validationErrors: ValidationError[] = [];
-  let validationStarted = false;
   const drafts = new Map<string, string>();
 
   function act(...[control, argument]:
@@ -99,7 +52,6 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
         return;
       }
       model.apply(control.key, argument);
-      validationErrors = validationStarted ? model.errors() : [];
       drafts.delete(control.key);
       result.hidden = true;
       announce('');
@@ -116,21 +68,15 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
     let errorId = 0;
     function renderNode(node: View | null): HTMLElement | DocumentFragment {
       const rendered = renderContent(node);
-      const path = node && (node.kind === 'actionWidget' && node.children.some(child => child.kind === 'editor') ? null
-        : 'location' in node ? node.location : null);
-      if (path && rendered instanceof HTMLElement) {
-        const messages = validationErrors.filter(error => error.targets.kind === 'locations' &&
-          error.targets.locations.some(location => sameLocation(location, path))).map(error => error.message);
-        if (messages.length > 0) {
-          const feedback = element('p', [...new Set(messages)].join('\n'), 'validation-error');
-          feedback.id = `validation-error-${errorId++}`;
-          rendered.append(feedback);
-          const inputs = node.kind === 'editor' || node.kind === 'choice' ? rendered.querySelectorAll('input, select') : [];
-          for (const input of inputs) {
-            input.setAttribute('aria-invalid', 'true');
-            const describedBy = input.getAttribute('aria-describedby');
-            input.setAttribute('aria-describedby', [describedBy, feedback.id].filter(Boolean).join(' '));
-          }
+      if (node && node.messages !== undefined && rendered instanceof HTMLElement) {
+        const feedback = element('p', node.messages, 'validation-error');
+        feedback.id = `validation-error-${errorId++}`;
+        rendered.append(feedback);
+        const inputs = node.kind === 'editor' || node.kind === 'choice' ? rendered.querySelectorAll('input, select') : [];
+        for (const input of inputs) {
+          input.setAttribute('aria-invalid', 'true');
+          const describedBy = input.getAttribute('aria-describedby');
+          input.setAttribute('aria-describedby', [describedBy, feedback.id].filter(Boolean).join(' '));
         }
       }
       return rendered;
@@ -310,11 +256,9 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
       render(drafts.keys().next().value);
       return;
     }
-    validationStarted = true;
-    validationErrors = model.errors();
-    if (validationErrors.length > 0) {
-      announce(validationErrors.map(error => error.targets.kind === 'invalidTarget'
-        ? 'Invalid validation target: ' + error.message : error.message).join('\n'), true);
+    model.validate();
+    if (model.submissionBlocked()) {
+      announce(model.summary(), true);
       render();
       return;
     }
@@ -327,9 +271,8 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submission),
       });
       if (!response.ok) {
-        const error = await submissionError(response);
-        if (error.kind === 'validation') validationErrors = error.errors;
-        throw new Error(error.message);
+        model.serverError(response.status, await response.text());
+        throw new Error(model.summary());
       }
       announce('Submitted successfully.');
       required('#result pre', HTMLPreElement).textContent = JSON.stringify(submission.value, null, 2);
@@ -345,8 +288,6 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
   reset.addEventListener('click', () => {
     if (pending) return;
     drafts.clear();
-    validationErrors = [];
-    validationStarted = false;
     model.reset();
     result.hidden = true;
     announce('Started over.');

@@ -26,6 +26,10 @@ export async function openCompiledForm(descriptor: CompiledDescriptor) {
     apply(key: string, argument?: unknown) {
       update('apply', { key, ...(argument === undefined ? {} : { argument }) });
     },
+    validate() { update('validate'); },
+    serverError(status: number, body: string) { update('serverError', { status, body }); },
+    summary() { check(); return snapshot.summary; },
+    submissionBlocked() { check(); return snapshot.submissionBlocked; },
     reset() { update('reset'); },
     dispose() {
       if (!disposed) { runtime.form({ operation: 'dispose', handle: opened.handle }); disposed = true; }
