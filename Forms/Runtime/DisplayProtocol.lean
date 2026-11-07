@@ -1,6 +1,7 @@
 module
 
 public import Forms.Runtime.DisplayLayout
+public import Forms.Runtime.EditorPresentation
 public import Forms.Runtime.FeedbackProtocol
 
 @[expose] public section
@@ -20,18 +21,39 @@ def controlKey (target : Target) (id : String) (index : Option Nat) : String :=
 def messageFields (messages : Option String) : List (String × Json) :=
   messages.toList.map fun message => ("messages", toJson message)
 
-def editorFields : Editor → List (String × Json)
-  | .text value => [("widget", toJson "textInput"), ("value", toJson value)]
-  | .natural value => [("widget", toJson "naturalInput"), ("value", toJson (toString value))]
-  | .date value => [("widget", toJson "dateInput"), ("value", toJson (Date.toString value))]
-  | .checkbox value => [("widget", toJson "checkbox"), ("value", toJson value)]
-  | .select value options => [("widget", toJson "select"), ("value", toJson value), ("options", toJson options)]
+def inputToJson (input : EditorPresentation.Presentation) : Json :=
+  let (tag, attributes, options, value, checked, immediate, argument) :
+      String × List (String × String) × List (String × String) × String × Bool × Bool × String := match input with
+    | .onApply (.text value) =>
+        ("input", [("type", "text")], [], value, false, false, "value")
+    | .onApply (.natural value) =>
+        ("input", [("type", "text"), ("inputmode", "numeric"), ("pattern", "[0-9]+"), ("required", "")],
+          [], toString value, false, false, "value")
+    | .onApply (.date value) =>
+        ("input", [("type", "date"), ("min", "0001-01-01"), ("max", "9999-12-31"), ("required", "")],
+          [], Date.toString value, false, false, "value")
+    | .onChange (.checkbox checked) =>
+        ("input", [("type", "checkbox")], [], "", checked, true, "checked")
+    | .onChange (.select selected options) =>
+        ("select", [], options.zipIdx.map (fun (label, index) => (toString index, label)),
+          toString selected, false, true, "index")
+  let pairs (values : List (String × String)) := toJson (values.map fun (name, value) => toJson [name, value])
+  Json.mkObj [("tag", toJson tag), ("attributes", pairs attributes), ("options", pairs options),
+    ("value", toJson value), ("checked", toJson checked), ("immediate", toJson immediate), ("argument", toJson argument)]
+
+def widgetName : Editor → String
+  | .text _ => "textInput"
+  | .natural _ => "naturalInput"
+  | .date _ => "dateInput"
+  | .checkbox _ => "checkbox"
+  | .select .. => "select"
 
 def controlToJson (control : Control) : Json :=
   let fields := match control.body with
     | .button keepDrafts => [("kind", toJson "button"), ("keepDrafts", toJson keepDrafts)]
     | .editor location input => [("kind", toJson "editor"),
-        ("location", FeedbackProtocol.locationToJson location)] ++ editorFields input
+        ("location", FeedbackProtocol.locationToJson location),
+        ("widget", toJson (widgetName input)), ("input", inputToJson (EditorPresentation.ofEditor input))]
     | .choice location value options => [("kind", toJson "choice"),
         ("location", FeedbackProtocol.locationToJson location), ("value", toJson value), ("options", toJson options)]
   Json.mkObj ([("key", toJson control.key), ("id", toJson control.id), ("target", targetToJson control.target),

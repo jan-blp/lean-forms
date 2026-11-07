@@ -38,8 +38,11 @@ def testFormatting : IO Unit := do
     | _ => false)
   check "ComputedHasNoSchema" (((DisplayProtocol.viewToJson computed.view).getObjVal? "schema").toOption.isNone)
   let editor := CompiledView.editor Widget.select (ty := Person.addressKind) .work [] [] "replace" "Kind" false
-  check "SelectOptionsAreLabels" (((DisplayProtocol.controlToJson editor.view).getObjVal? "options").toOption == some (toJson ["Home", "Work", "Other"]))
-  check "SelectValueRemainsIndex" (((DisplayProtocol.controlToJson editor.view).getObjVal? "value").toOption == some (toJson (1 : Nat)))
+  let input ← IO.ofExcept ((DisplayProtocol.controlToJson editor.view).getObjVal? "input")
+  check "SelectOptionsHaveValuesAndLabels" ((input.getObjVal? "options").toOption ==
+    some (toJson [["0", "Home"], ["1", "Work"], ["2", "Other"]]))
+  check "SelectValueIsDOMIndex" ((input.getObjValAs? String "value").toOption == some "1")
+  check "SelectArgumentIsNumeric" ((input.getObjValAs? String "argument").toOption == some "index")
   check "EditorHasNoSchema" (((DisplayProtocol.controlToJson editor.view).getObjVal? "schema").toOption.isNone)
 
 def testDisplay : IO Unit := do
@@ -50,7 +53,7 @@ def testDisplay : IO Unit := do
     | _ => false)
   let encoded := DisplayProtocol.controlToJson natural.view
   check "Natural serializes without precision loss"
-    ((encoded.getObjValAs? String "value").toOption == some "123456789012345678901234567890")
+    (((← IO.ofExcept (encoded.getObjVal? "input")).getObjValAs? String "value").toOption == some "123456789012345678901234567890")
   check "Control target distinguishes names and numeric indices"
     ((encoded.getObjVal? "target").toOption == some (toJson [toJson "items", toJson (2 : Nat)]))
   check "Absent messages remain absent" ((encoded.getObjVal? "messages").toOption.isNone)

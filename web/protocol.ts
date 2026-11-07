@@ -10,16 +10,23 @@ interface InvocationBase {
 
 export type Invocation = InvocationBase | (InvocationBase & { constructor: string });
 
+interface EditorInput {
+  tag: 'input' | 'select';
+  attributes: [string, string][];
+  options: [string, string][];
+  value: string;
+  checked: boolean;
+  argument: 'value' | 'checked' | 'index';
+  immediate: boolean;
+}
+
 // Compiled forms send display data and opaque control keys, never expression programs.
 interface DisplayIdentity { messages?: string; key: string; id: string; target: Path; label: string; disabled: boolean }
 export type DisplayControl = DisplayIdentity & (
   | { kind: 'button'; keepDrafts: boolean }
   | { kind: 'choice'; location: Location; value: string; options: string[] }
-  | ({ kind: 'editor'; location: Location } & (
-      | { widget: 'select'; value: number; options: string[] }
-      | { widget: 'checkbox'; value: boolean }
-      | { widget: 'textInput' | 'naturalInput' | 'dateInput'; value: string }
-    ))
+  | { kind: 'editor'; location: Location; input: EditorInput;
+      widget: 'select' | 'checkbox' | 'textInput' | 'naturalInput' | 'dateInput' }
 );
 export type DisplayView = DisplayControl | {
   kind: 'element';

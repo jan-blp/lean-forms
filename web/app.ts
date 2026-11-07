@@ -115,50 +115,21 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
       if (node.kind !== 'editor') return unsupported(node);
       const form = element('form', undefined, 'editor');
       const label = element('label', node.label);
-      let input: HTMLInputElement | HTMLSelectElement;
-      switch (node.widget) {
-        case 'select': {
-          const select = element('select');
-          input = select;
-          node.options.forEach((name, index) => {
-            const option = element('option', name);
-            option.value = String(index);
-            select.append(option);
-          });
-          input.value = String(node.value);
-          break;
-        }
-        case 'checkbox':
-          input = element('input');
-          input.type = 'checkbox';
-          if (typeof node.value !== 'boolean') throw new Error('Checkbox requires a boolean value.');
-          input.checked = node.value;
-          break;
-        case 'textInput':
-        case 'naturalInput':
-        case 'dateInput':
-          input = element('input');
-          input.type = node.widget === 'dateInput' ? 'date' : 'text';
-          input.value = node.value;
-          if (node.widget === 'naturalInput') {
-            input.inputMode = 'numeric';
-            input.pattern = '[0-9]+';
-            input.required = true;
-          }
-          if (node.widget === 'dateInput') {
-            input.min = '0001-01-01';
-            input.max = '9999-12-31';
-            input.required = true;
-          }
-          break;
-        default: return unsupported(node);
+      const input = element(node.input.tag);
+      for (const [name, value] of node.input.attributes) input.setAttribute(name, value);
+      for (const [value, label] of node.input.options) {
+        const option = element('option', label);
+        option.value = value;
+        input.append(option);
       }
+      input.value = node.input.value;
+      if (input instanceof HTMLInputElement) input.checked = node.input.checked;
       input.disabled = pending || node.disabled;
       label.append(input);
       form.append(label);
-      const argument = () => input instanceof HTMLInputElement && node.widget === 'checkbox' ? input.checked
-        : node.widget === 'select' ? Number(input.value) : input.value;
-      if (node.widget === 'checkbox' || node.widget === 'select') {
+      const argument = () => input instanceof HTMLInputElement && node.input.argument === 'checked' ? input.checked
+        : node.input.argument === 'index' ? Number(input.value) : input.value;
+      if (node.input.immediate) {
         input.addEventListener('change', () => act(node, argument()));
       } else {
         if (!input.disabled) {

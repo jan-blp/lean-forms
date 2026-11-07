@@ -162,7 +162,7 @@ test('compiled editor normalization preserves whitespace, precision, types, and 
     for (const raw of ['true', 1, 0, null]) assert.throws(() => person.apply(checkbox.key, raw));
     person.apply(checkbox.key, true);
     const select = person.controls().find(c => c.widget === 'select');
-    for (const raw of [-1, select.options.length, 0.5, '1', null, Infinity, NaN])
+    for (const raw of [-1, select.input.options.length, 0.5, '1', null, Infinity, NaN])
       assert.throws(() => person.apply(select.key, raw));
     person.apply(select.key, 1);
     assert.equal(person.submission().actions.at(-1).argument, 1);

@@ -203,8 +203,16 @@ try {
       console.log(`PASS: ${name} browser controls, layout, and server replay`);
     } finally { await stop(process); }
   }
-  for (const name of ['counter', 'counters', 'thermostat']) await example(name, '');
+  for (const name of ['counter', 'counters', 'thermostat']) await example(name, `
+    const input = document.querySelector('.editor input');
+    check(input.type === 'text' && input.inputMode === 'numeric' && input.pattern === '[0-9]+' && input.required,
+      'Natural editor lost its browser constraints');
+    check(input.closest('form').querySelector('button').textContent === 'Apply', 'Natural editor must require Apply');
+  `);
   await example('booking', `
+    const date = document.querySelector('input');
+    check(date.type === 'date' && date.min === '0001-01-01' && date.max === '9999-12-31' && date.required,
+      'Date editor lost its browser constraints');
     edit('End date (YYYY-MM-DD)', '2028-01-01');
     document.querySelector('#submit').click();
     await wait(() => document.querySelector('#status').textContent === 'End date must be on or after start date.');
