@@ -4,11 +4,8 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { runChecker, validationErrors } from './dist/validation.js';
 
-const evaluators = [['TypeScript', undefined]];
-if (process.env.FORMS_WASM_TEST === '1') {
-  const { loadWasmEvaluator } = await import('./dist/wasm.js');
-  evaluators.push(['Wasm', await loadWasmEvaluator()]);
-}
+import { loadWasmEvaluator } from './dist/wasm.js';
+const evaluators = [['Wasm', await loadWasmEvaluator()]];
 
 const cwd = fileURLToPath(new URL('..', import.meta.url));
 execFileSync('lake', ['build', 'Tests.ValidationCheckers', 'Forms.Runtime.JsonProtocol'], { cwd, stdio: 'pipe' });
@@ -32,50 +29,10 @@ for (const [backend, evaluator] of evaluators) {
   }
 }
 
-test('validation rejects malformed checker operations', () => {
-  const specification = fixtures.find(fixture => fixture.name === 'invoice').specification;
-  assert.throws(() => runChecker({ kind: 'unknown' }, specification.schema, []), /Unsupported/);
-  assert.throws(() => runChecker({
-    kind: 'ite', condition: { kind: 'value', value: 'true' },
-    thenBranch: { kind: 'pass' }, elseBranch: { kind: 'pass' },
-  }, specification.schema, []), /boolean/);
-  assert.throws(() => runChecker({
-    kind: 'each', items: { kind: 'value', value: 'not a list' }, body: { kind: 'pass' },
-  }, specification.schema, []), /list/);
-  assert.throws(() => runChecker({
-    kind: 'report', message: { kind: 'value', value: 'Empty targets' }, targets: { kind: 'locations', locations: [] },
-  }, specification.schema, []), /nonempty/);
-});
-
 test('locations distinguish fields, indices, and constructor tags', async () => {
   const { sameLocation } = await import('./dist/validation.js');
   assert.equal(sameLocation([{ kind: 'constructor', tag: 'value' }], [{ kind: 'field', name: 'value' }]), false);
   assert.equal(sameLocation([{ kind: 'item', index: '0' }], [{ kind: 'field', name: '0' }]), false);
   assert.equal(sameLocation([{ kind: 'constructor', tag: 'circle' }], [{ kind: 'constructor', tag: 'rectangle' }]), false);
   assert.equal(sameLocation([{ index: '0', kind: 'item' }], [{ kind: 'item', index: '0' }]), true);
-});
-
-
-test('ite evaluates only the selected branch', () => {
-  const schema = { kind: 'natural' };
-  const condition = value => ({ kind: 'value', value });
-  const report = { kind: 'report', message: condition('Selected'), targets: { kind: 'global' } };
-  const invalid = { kind: 'unknown' };
-  const expected = [{ message: 'Selected', targets: { kind: 'global' } }];
-  assert.deepEqual(runChecker({ kind: 'ite', condition: condition(true), thenBranch: report, elseBranch: invalid }, schema, '0'), expected);
-  assert.deepEqual(runChecker({ kind: 'ite', condition: condition(false), thenBranch: invalid, elseBranch: report }, schema, '0'), expected);
-});
-
-
-test('cases exposes payload and outer input and evaluates only the active branch', () => {
-  const project = (...path) => ({ kind: 'project', path });
-  const checker = { kind: 'cases', subject: project('shape'), branches: {
-    circle: { kind: 'report', message: { kind: 'textAppend', left: project('outer', 'label'),
-      right: { kind: 'natToText', operand: project('payload') } }, targets: { kind: 'global' } },
-    rectangle: { kind: 'unknown' },
-  } };
-  assert.deepEqual(runChecker(checker, { kind: 'natural' }, { label: 'Radius: ', shape: { tag: 'circle', value: '7' } }),
-    [{ message: 'Radius: 7', targets: { kind: 'global' } }]);
-  assert.throws(() => runChecker(checker, { kind: 'natural' }, { shape: 'invalid' }), /sum value/);
-  assert.throws(() => runChecker(checker, { kind: 'natural' }, { shape: { tag: 'dot', value: {} } }), /Missing validation branch/);
 });

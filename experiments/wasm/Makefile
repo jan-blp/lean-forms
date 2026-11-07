@@ -96,4 +96,4 @@ test: all
 	lake env lean --run experiments/wasm/ExportJsonCases.lean > $(OUT)/json-cases.jsonl
 	node experiments/wasm/json-test.mjs
 	npm --prefix web run build
-	FORMS_WASM_TEST=1 node --test web/wasm.test.mjs web/validation.test.mjs
+	node --test web/interpreter.test.mjs web/wasm.test.mjs web/validation.test.mjs

@@ -47,73 +47,6 @@ function set(value: Value, path: Path, replacement: Value): Value {
   return result;
 }
 
-// Lean compares Unicode scalar values and lowercases ASCII only.
-function compareText(left: string, right: string): number {
-  const a = Array.from(left, char => char.codePointAt(0)!);
-  const b = Array.from(right, char => char.codePointAt(0)!);
-  for (let i = 0; i < Math.min(a.length, b.length); i++) {
-    if (a[i] !== b[i]) return a[i] - b[i];
-  }
-  return a.length - b.length;
-}
-
-function lower(text: string): string {
-  return text.replace(/[A-Z]/g, char => char.toLowerCase());
-}
-
-export function evaluate(expression: Expr, current: Value): Value {
-  switch (expression.kind) {
-    case 'all': return array(evaluate(expression.items, current)).every((item, index) =>
-      evaluate(expression.predicate, { outer: get(current, expression.context), item, index: String(index) }));
-    case 'filter': return array(evaluate(expression.items, current)).filter(item => evaluate(expression.predicate, item));
-    case 'snoc': return [...array(evaluate(expression.items, current)), evaluate(expression.value, current)];
-    case 'cases': {
-      const selected = record(evaluate(expression.subject, current));
-      return evaluate(expression.branches[textValue(selected.tag)], selected.value);
-    }
-    case 'search': {
-      const query = lower(textValue(evaluate(expression.query, current)));
-      return array(evaluate(expression.items, current)).filter(item => lower(textValue(evaluate(expression.key, item))).includes(query));
-    }
-    case 'sortBy':
-    case 'sortNatBy': {
-      const rows = [...array(evaluate(expression.items, current))];
-      return rows.sort((left, right) => {
-        const a = evaluate(expression.key, left);
-        const b = evaluate(expression.key, right);
-        const order = expression.kind === 'sortBy' ? compareText(textValue(a), textValue(b))
-          : natural(a) < natural(b) ? -1 : natural(a) > natural(b) ? 1 : 0;
-        return expression.descending ? -order : order;
-      });
-    }
-    case 'value': return structuredClone(expression.value);
-    case 'project': return get(current, expression.path);
-    case 'natAdd': return (natural(evaluate(expression.left, current)) + natural(evaluate(expression.right, current))).toString();
-    case 'natSub': {
-      const result = natural(evaluate(expression.left, current)) - natural(evaluate(expression.right, current));
-      return (result < 0n ? 0n : result).toString();
-    }
-    case 'natMul': return (natural(evaluate(expression.left, current)) * natural(evaluate(expression.right, current))).toString();
-    case 'natLe': return natural(evaluate(expression.left, current)) <= natural(evaluate(expression.right, current));
-    case 'natToText': return natural(evaluate(expression.operand, current)).toString();
-    case 'textEq': return textValue(evaluate(expression.left, current)) === textValue(evaluate(expression.right, current));
-    case 'textAppend': return textValue(evaluate(expression.left, current)) + textValue(evaluate(expression.right, current));
-    case 'enumLabel': return expression.options[index(evaluate(expression.subject, current))];
-    case 'enumCases': return evaluate(expression.branches[index(evaluate(expression.subject, current))], current);
-    case 'enumEq': return evaluate(expression.left, current) === evaluate(expression.right, current);
-    case 'dateLe': return textValue(evaluate(expression.left, current)) <= textValue(evaluate(expression.right, current));
-    case 'length': return array(evaluate(expression.items, current)).length.toString();
-    case 'sum': return array(evaluate(expression.items, current))
-      .reduce((total, item) => total + natural(evaluate(expression.expression, item)), 0n).toString();
-    case 'not': return !evaluate(expression.operand, current);
-    case 'and': return evaluate(expression.left, current) && evaluate(expression.right, current);
-    case 'ifThenElse': return evaluate(evaluate(expression.condition, current) ? expression.whenTrue : expression.whenFalse, current);
-    default: return unsupported(expression);
-  }
-}
-
-export const typescriptEvaluator: Evaluator = (expression, current) => ({ value: evaluate(expression, current) });
-
 // Resolve scopes against the actual value so sum payloads use the active branch.
 function schemaAt(schema: Schema, path: Path, value: Value): Schema {
   for (const step of path) {
@@ -182,19 +115,19 @@ function fieldLocation(path: Path): Location {
     ? { kind: 'field', name: step } : { kind: 'item', index: step.toString() });
 }
 
-export function createModel(specification: Specification, evaluator: Evaluator = typescriptEvaluator) {
+export function createModel(specification: Specification, evaluator: Evaluator) {
   if (specification.version !== 8) throw new Error('Unsupported form specification version.');
   const spec = structuredClone(specification);
   let value = structuredClone(spec.value);
   let actions: Invocation[] = [];
 
-  const evaluateValue = (expression: Expr, current: Value, schema?: Schema) => evaluator(expression, current, schema).value;
+  const evaluateValue = (expression: Expr, current: Value, schema: Schema) => evaluator(expression, current, schema).value;
 
   function view(): View | null {
     // JSON payloads use "value"; error locations use the active constructor tag.
     function visit(component: Component, target: Path = [], disabled = false, scope: Path = [], location: Location = []): View | null {
       const current = get(value, scope);
-      const currentSchema = evaluator === typescriptEvaluator ? undefined : schemaAt(spec.schema, scope, value);
+      const currentSchema = schemaAt(spec.schema, scope, value);
       function identity(id: string, label: string, index?: number) {
         return { id, label, target, disabled, scope, key: JSON.stringify(index === undefined ? [target, id] : [target, id, index]) };
       }
@@ -237,8 +170,8 @@ export function createModel(specification: Specification, evaluator: Evaluator =
         }
         case 'table': {
           const rows = evaluator(component.rows, current, currentSchema);
-          if (rows.schema && rows.schema.kind !== 'list') throw new Error('Table rows require a list.');
-          const rowSchema = rows.schema?.kind === 'list' ? rows.schema.element : undefined;
+          if (rows.schema.kind !== 'list') throw new Error('Table rows require a list.');
+          const rowSchema = rows.schema.element;
           return { kind: 'table', columns: component.columns.map(column => column.label),
             rows: array(rows.value).map(row =>
               component.columns.map(column => textValue(evaluateValue(column.expression, row, rowSchema)))) };
@@ -287,7 +220,7 @@ export function createModel(specification: Specification, evaluator: Evaluator =
     if (!control || control.disabled) throw new Error('This action is unavailable.');
     let invocation: Invocation = { target: control.target, action: control.id };
     const current = get(value, control.scope);
-    const currentSchema = evaluator === typescriptEvaluator ? undefined : schemaAt(spec.schema, control.scope, value);
+    const currentSchema = schemaAt(spec.schema, control.scope, value);
     let next: Value;
     let path: Path;
     switch (control.kind) {
@@ -297,7 +230,7 @@ export function createModel(specification: Specification, evaluator: Evaluator =
         path = effect.path;
         switch (effect.kind) {
           case 'set': next = evaluateValue(effect.value, current, currentSchema); break;
-          case 'transform': next = evaluateValue(effect.body, get(current, path), currentSchema && schemaAt(currentSchema, path, current)); break;
+          case 'transform': next = evaluateValue(effect.body, get(current, path), schemaAt(currentSchema, path, current)); break;
           case 'appendDefault': next = [...array(get(current, path)), structuredClone(effect.defaultItem)]; break;
           case 'remove':
             invocation.index = effect.index;
@@ -320,12 +253,12 @@ export function createModel(specification: Specification, evaluator: Evaluator =
         path = control.path;
         const normalized = normalize(control.schema, argument);
         invocation.argument = normalized;
-        next = evaluateValue(control.body, { current: get(current, path), argument: normalized }, currentSchema ? {
+        next = evaluateValue(control.body, { current: get(current, path), argument: normalized }, {
           kind: 'record', fields: [
             { name: 'current', type: schemaAt(currentSchema, path, current) },
             { name: 'argument', type: control.schema },
           ],
-        } : undefined);
+        });
         break;
       }
       default: return unsupported(control);

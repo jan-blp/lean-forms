@@ -1,7 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createModel, evaluate, formatValue } from './dist/interpreter.js';
+import { createModel as modelWithEvaluator, formatValue } from './dist/interpreter.js';
+
+import { loadWasmEvaluator } from './dist/wasm.js';
+const wasm = await loadWasmEvaluator();
+const createModel = specification => modelWithEvaluator(specification, wasm);
+const evaluate = (expression, value, schema) => wasm(expression, value, schema).value;
+const natural = { kind: 'natural' };
+const text = { kind: 'text' };
+const list = element => ({ kind: 'list', element });
+const record = fields => ({ kind: 'record', fields: Object.entries(fields).map(([name, type]) => ({ name, type })) });
+const enumeration = { kind: 'enum', options: ['Home', 'Work'] };
 
 const fixture = name => JSON.parse(readFileSync(new URL(`../Tests/fixtures/${name}.json`, import.meta.url)));
 const press = (model, id, target = []) => model.apply(model.controls().find(c => c.id === id && JSON.stringify(c.target) === JSON.stringify(target)).key);
@@ -50,7 +60,7 @@ test('stack targets survive display reordering and shared submission objects can
 test('conditions are checked against the current value', () => {
   for (const kind of ['visibleWhen', 'disabledWhen']) {
     const spec = fixture('counter');
-    const zero = { kind: 'natLe', left: { kind: 'project', path: [] }, right: { kind: 'value', value: '0' } };
+    const zero = { kind: 'natLe', left: { kind: 'project', path: [] }, right: { kind: 'value', type: natural, value: '0' } };
     spec.form = { kind, condition: kind === 'visibleWhen' ? zero : { kind: 'not', operand: zero }, body: spec.form };
     const model = createModel(spec);
     const key = model.controls()[0].key;
@@ -116,7 +126,7 @@ test('standalone buttons evaluate in the enclosing state', () => {
 });
 
 test('action widgets support non-numeric values', () => {
-  const model = createModel({ version: 8, value: false, form: {
+  const model = createModel({ version: 8, schema: { kind: 'boolean' }, value: false, form: {
     kind: 'actionWidget', path: [], label: 'Enabled', schema: { kind: 'boolean' }, actions: [
       { id: 'toggle', label: 'Toggle', kind: 'button', body: { kind: 'not', operand: { kind: 'project', path: [] } } },
       { id: 'replace', label: 'Enabled', kind: 'editor', widget: 'checkbox', body: { kind: 'project', path: ['argument'] } },
@@ -129,13 +139,13 @@ test('action widgets support non-numeric values', () => {
   assert.throws(() => model.apply(model.controls()[1].key, 'false'));
 });
 
-const constant = value => ({ kind: 'value', value });
+const constant = (value, type = typeof value === 'boolean' ? { kind: 'boolean' } : typeof value === 'string' && /^[0-9]+$/.test(value) ? natural : text) => ({ kind: 'value', type, value });
 const project = (...path) => ({ kind: 'project', path });
 
 test('computed invoice subtotal updates without adding derived state or actions', () => {
   const spec = fixture('invoice');
   const item = spec.form.children.find(child => child.kind === 'list').item;
-  const model = createModel({ version: 8, value: spec.value[0], form: item });
+  const model = createModel({ version: 8, schema: spec.schema.element, value: spec.value[0], form: item });
   const subtotal = () => model.view().children.find(child => child.kind === 'computed').value;
   assert.equal(subtotal(), '100');
   const quantity = model.controls().find(control => control.path[0] === 'quantity');
@@ -164,7 +174,7 @@ test('text and computed displays respect visibility, update, and cannot be invok
   assert.equal(model.controls().length, 4);
   assert.throws(() => model.apply(undefined));
   assert.equal(model.submission().actions.length, 1);
-  const onlyText = createModel({ version: 8, value: '2', form: summary });
+  const onlyText = createModel({ version: 8, schema: natural, value: '2', form: summary });
   assert.deepEqual(onlyText.controls(), []);
   assert.equal(onlyText.view().value, 'Count: 2');
 });
@@ -172,14 +182,14 @@ test('text and computed displays respect visibility, update, and cannot be invok
 test('summary expressions preserve context and natural precision', () => {
   const spec = fixture('invoice');
   const total = spec.form.children.find(child => child.kind === 'computed').expression;
-  assert.equal(evaluate(total, []), '0');
-  assert.equal(evaluate(total, [{ quantity: '9007199254740993', unitPrice: '2' }, { quantity: '3', unitPrice: '5' }]), '18014398509482001');
-  assert.equal(evaluate({ kind: 'length', items: project() }, ['a', 'b']), '2');
-  assert.equal(evaluate({ kind: 'enumLabel', subject: constant(1), options: ['Home', 'Work'] }, {}), 'Work');
-  assert.equal(evaluate({ kind: 'enumCases', subject: project('choice'), branches: [constant('unused'), project('name')] }, { choice: 1, name: 'Ada' }), 'Ada');
-  assert.equal(evaluate({ kind: 'enumEq', left: constant(0), right: constant(1) }, {}), false);
+  assert.equal(evaluate(total, [], spec.schema), '0');
+  assert.equal(evaluate(total, [{ description: 'A', quantity: '9007199254740993', unitPrice: '2' }, { description: 'B', quantity: '3', unitPrice: '5' }], spec.schema), '18014398509482001');
+  assert.equal(evaluate({ kind: 'length', items: project() }, ['a', 'b'], list(text)), '2');
+  assert.equal(evaluate({ kind: 'enumLabel', subject: constant(1, enumeration), options: ['Home', 'Work'] }, {}, record({})), 'Work');
+  assert.equal(evaluate({ kind: 'enumCases', subject: project('choice'), branches: [constant('unused'), project('name')], type: text }, { choice: 1, name: 'Ada' }, record({ choice: enumeration, name: text })), 'Ada');
+  assert.equal(evaluate({ kind: 'enumEq', left: constant(0, enumeration), right: constant(1, enumeration) }, {}, record({})), false);
   for (const [left, right, expected] of [['2028-02-29', '2028-03-01', true], ['2028-03-01', '2028-03-01', true], ['2028-03-01', '2028-02-29', false]]) {
-    assert.equal(evaluate({ kind: 'dateLe', left: constant(left), right: constant(right) }, {}), expected);
+    assert.equal(evaluate({ kind: 'dateLe', left: constant(left, { kind: 'date' }), right: constant(right, { kind: 'date' }) }, {}, record({})), expected);
   }
 });
 
@@ -239,7 +249,7 @@ test('nested lists and sums evaluate guards and actions in local state', () => {
   const field = { kind: 'field', path: [], label: 'Value', widget: 'naturalInput', schema: { kind: 'natural' } };
   const choice = { kind: 'sum', path: [], label: 'Choice', schema: { kind: 'sum', constructors: [{ name: 'number', type: { kind: 'natural' } }] },
     defaults: { number: '1' }, branches: { number: { kind: 'disabledWhen', condition: { kind: 'natLe', left: constant('5'), right: project() }, body: field } } };
-  const model = createModel({ version: 8, value: [[{ tag: 'number', value: '1' }]], form: {
+  const model = createModel({ version: 8, schema: list(list(choice.schema)), value: [[{ tag: 'number', value: '1' }]], form: {
     kind: 'list', path: [], label: 'Outer', defaultItem: [], item: {
       kind: 'list', path: [], label: 'Inner', defaultItem: { tag: 'number', value: '1' }, item: choice,
     },
@@ -254,23 +264,23 @@ test('nested lists and sums evaluate guards and actions in local state', () => {
 test('tables update from filtered and sorted rows without reordering stored data', () => {
   const rows = [{ name: 'B', n: '2' }, { name: 'A', n: '1' }, { name: 'C', n: '2' }];
   const sort = { kind: 'sortNatBy', items: project(), key: project('n'), descending: true };
-  const model = createModel({ version: 8, value: rows, form: { kind: 'table', rows: sort,
+  const model = createModel({ version: 8, schema: list(record({ name: text, n: natural })), value: rows, form: { kind: 'table', rows: sort,
     columns: [{ label: 'Name', expression: project('name') }] } });
   assert.deepEqual(model.view().rows, [['B'], ['C'], ['A']]);
   assert.deepEqual(model.submission().value, rows);
   assert.deepEqual(model.controls(), []);
-  assert.deepEqual(evaluate({ kind: 'filter', items: project(), predicate: { kind: 'natLe', left: project('n'), right: constant('1') } }, rows), [rows[1]]);
-  assert.equal(evaluate({ kind: 'all', items: constant([]), predicate: constant(false), context: [] }, rows), true);
+  assert.deepEqual(evaluate({ kind: 'filter', items: project(), predicate: { kind: 'natLe', left: project('n'), right: constant('1') } }, rows, list(record({ name: text, n: natural }))), [rows[1]]);
+  assert.equal(evaluate({ kind: 'all', items: constant([], list(natural)), predicate: constant(false), context: [] }, rows, list(record({ name: text, n: natural }))), true);
 });
 
 test('query ordering and search match Lean Unicode and ASCII semantics', () => {
-  assert.deepEqual(evaluate({ kind: 'sortBy', items: project(), key: project(), descending: false }, ['\u{10000}', '\ue000', 'a']), ['a', '\ue000', '\u{10000}']);
-  const search = query => evaluate({ kind: 'search', items: project(), key: project(), query: constant(query) }, ['Alpha', 'ALP', 'Ä', 'ä']);
+  assert.deepEqual(evaluate({ kind: 'sortBy', items: project(), key: project(), descending: false }, ['\u{10000}', '\ue000', 'a'], list(text)), ['a', '\ue000', '\u{10000}']);
+  const search = query => evaluate({ kind: 'search', items: project(), key: project(), query: constant(query) }, ['Alpha', 'ALP', 'Ä', 'ä'], list(text));
   assert.deepEqual(search('alp'), ['Alpha', 'ALP']);
   assert.deepEqual(search('ä'), ['ä']);
-  assert.equal(evaluate({ kind: 'cases', subject: project(), branches: { number: { kind: 'natAdd', left: project(), right: constant('2') } } }, { tag: 'number', value: '3' }), '5');
+  assert.equal(evaluate({ kind: 'cases', subject: project(), type: natural, branches: { number: { kind: 'natAdd', left: project(), right: constant('2') } } }, { tag: 'number', value: '3' }, { kind: 'sum', constructors: [{ name: 'number', type: natural }] }), '5');
   const values = ['1'];
-  assert.deepEqual(evaluate({ kind: 'snoc', items: project(), value: constant('2') }, values), ['1', '2']);
+  assert.deepEqual(evaluate({ kind: 'snoc', items: project(), value: constant('2') }, values, list(natural)), ['1', '2']);
   assert.deepEqual(values, ['1']);
 });
 
@@ -293,6 +303,7 @@ test('hidden and disabled containers prevent structural actions', () => {
 test('buttons inside list items read and write only the item state', () => {
   const spec = fixture('counter');
   spec.value = ['1', '10'];
+  spec.schema = list(natural);
   spec.form = { kind: 'list', path: [], label: 'Counters', defaultItem: '0', item: {
     kind: 'button', label: 'Double', action: { kind: 'set', path: [], value: {
       kind: 'natMul', left: project(), right: constant('2'),
@@ -326,10 +337,11 @@ test('all predicates can access their outer value, item, and index', () => {
     predicate: { kind: 'and',
       left: { kind: 'natLe', left: project('item'), right: project('outer', 'limit') },
       right: { kind: 'natLe', left: project('index'), right: project('item') } } };
-  assert.equal(evaluate(expression, { limit: '5', items: ['2', '5'] }), true);
-  assert.equal(evaluate(expression, { limit: '4', items: ['2', '5'] }), false);
-  assert.equal(evaluate(expression, { limit: '5', items: ['2', '0'] }), false);
-  assert.equal(evaluate(expression, { limit: '0', items: [] }), true);
+  const schema = record({ limit: natural, items: list(natural) });
+  assert.equal(evaluate(expression, { limit: '5', items: ['2', '5'] }, schema), true);
+  assert.equal(evaluate(expression, { limit: '4', items: ['2', '5'] }, schema), false);
+  assert.equal(evaluate(expression, { limit: '5', items: ['2', '0'] }, schema), false);
+  assert.equal(evaluate(expression, { limit: '0', items: [] }, schema), true);
   const embedded = { ...expression, context: ['content'], items: project('content', 'items') };
-  assert.equal(evaluate(embedded, { limit: '0', content: { limit: '5', items: ['2', '5'] } }), true);
+  assert.equal(evaluate(embedded, { limit: '0', content: { limit: '5', items: ['2', '5'] } }, record({ limit: natural, content: schema })), true);
 });

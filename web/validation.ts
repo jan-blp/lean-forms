@@ -1,4 +1,3 @@
-import { evaluate, textValue } from './interpreter.js';
 import type { Evaluator, Expr, Schema, Value } from './protocol.js';
 
 export type LocationStep =
@@ -36,101 +35,13 @@ function object(value: Value): value is { [name: string]: Value } {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function locationExists(location: Location, schema: Schema, value: Value): boolean {
-  for (const step of location) {
-    switch (step.kind) {
-      case 'field': {
-        if (schema.kind !== 'record' || !object(value)) return false;
-        const field = schema.fields.find(field => field.name === step.name);
-        if (!field || !Object.hasOwn(value, step.name)) return false;
-        schema = field.type; value = value[step.name];
-        break;
-      }
-      case 'item': {
-        if (schema.kind !== 'list' || !Array.isArray(value) || !/^[0-9]+$/.test(step.index)) return false;
-        const index = BigInt(step.index);
-        if (index >= BigInt(value.length)) return false;
-        schema = schema.element; value = value[Number(index)];
-        break;
-      }
-      case 'constructor': {
-        if (schema.kind !== 'sum' || !object(value) || value.tag !== step.tag || !Object.hasOwn(value, 'value')) return false;
-        const branch = schema.constructors.find(branch => branch.name === step.tag);
-        if (!branch) return false;
-        schema = branch.type; value = value.value;
-        break;
-      }
-      default: return unsupported(step);
-    }
-  }
-  return true;
-}
-
 function locationTargets(locations: Location[]): Targets {
   if (locations.length === 0) throw new Error('Error locations must be nonempty.');
   return { kind: 'locations', locations: [locations[0], ...locations.slice(1)] };
 }
 
-function evaluateTargets(targets: TargetsExpr, value: Value): Targets {
-  switch (targets.kind) {
-    case 'global': return targets;
-    case 'locations': return locationTargets(targets.locations.map(location => location.map(step => {
-      switch (step.kind) {
-        case 'field': return step;
-        case 'item': {
-          const index = textValue(evaluate(step.index, value));
-          if (!/^[0-9]+$/.test(index)) throw new Error('Location index must be a natural number.');
-          return { kind: 'item', index: BigInt(index).toString() };
-        }
-        case 'constructor': return step;
-        default: return unsupported(step);
-      }
-    })));
-    default: return unsupported(targets);
-  }
-}
-
-function evaluateChecker(checker: Checker, value: Value): ValidationError[] {
-  switch (checker.kind) {
-    case 'pass': return [];
-    case 'report': return [{ message: textValue(evaluate(checker.message, value)), targets: evaluateTargets(checker.targets, value) }];
-    case 'ite': {
-      const condition = evaluate(checker.condition, value);
-      if (typeof condition !== 'boolean') throw new Error('Validation condition must be boolean.');
-      return evaluateChecker(condition ? checker.thenBranch : checker.elseBranch, value);
-    }
-    case 'cases': {
-      const selected = evaluate(checker.subject, value);
-      if (!object(selected) || typeof selected.tag !== 'string' || !Object.hasOwn(selected, 'value'))
-        throw new Error('Validation cases requires a sum value.');
-      if (!Object.hasOwn(checker.branches, selected.tag))
-        throw new Error(`Missing validation branch: ${selected.tag}`);
-      return evaluateChecker(checker.branches[selected.tag], { outer: value, payload: selected.value });
-    }
-    case 'seq': return [...evaluateChecker(checker.left, value), ...evaluateChecker(checker.right, value)];
-    case 'each': {
-      const items = evaluate(checker.items, value);
-      if (!Array.isArray(items)) throw new Error('Validation iteration requires a list.');
-      return items.flatMap((item, index) => evaluateChecker(checker.body, { outer: value, item, index: index.toString() }));
-    }
-    default: return unsupported(checker);
-  }
-}
-
-export function runChecker(checker: Checker, schema: Schema, value: Value, evaluator?: Evaluator): ResolvedError[] {
-  if (evaluator?.runChecker) return evaluator.runChecker(checker, schema, value);
-  return evaluateChecker(checker, value).map(error => {
-    switch (error.targets.kind) {
-      case 'global': return error;
-      case 'locations': {
-        locationTargets(error.targets.locations);
-        const invalid = error.targets.locations.find(location => !locationExists(location, schema, value));
-        return { message: error.message, targets: invalid === undefined ? error.targets
-          : { kind: 'invalidTarget', location: invalid } };
-      }
-      default: return unsupported(error.targets);
-    }
-  });
+export function runChecker(checker: Checker, schema: Schema, value: Value, evaluator: Evaluator): ResolvedError[] {
+  return evaluator.runChecker(checker, schema, value);
 }
 
 export type Refinement =
@@ -149,7 +60,7 @@ function prefix(error: ResolvedError, step: LocationStep): ResolvedError {
   }
 }
 
-export function validationErrors(refinement: Refinement, schema: Schema, value: Value, evaluator?: Evaluator): ResolvedError[] {
+export function validationErrors(refinement: Refinement, schema: Schema, value: Value, evaluator: Evaluator): ResolvedError[] {
   switch (refinement.kind) {
     case 'base': return [];
     case 'refine': return [...validationErrors(refinement.inner, schema, value, evaluator),

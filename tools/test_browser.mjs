@@ -9,8 +9,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const cwd = fileURLToPath(new URL('..', import.meta.url));
-const useWasm = process.env.FORMS_WASM_TEST === '1';
-const query = useWasm ? '?evaluator=wasm' : '';
+
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function freePort() {
   const listener = createServer();
@@ -74,7 +73,7 @@ try {
       assert.equal(result.result.value, true, `Horizontal page overflow at ${width}px`);
     }
   }
-  await call('browsingContext.navigate', { context, url: `http://127.0.0.1:${port}/${query}`, wait: 'complete' });
+  await call('browsingContext.navigate', { context, url: `http://127.0.0.1:${port}/`, wait: 'complete' });
   const result = await call('script.evaluate', { target: { context }, awaitPromise: true, expression: `(async () => {
     const check = (condition, message) => { if (!condition) throw Error(message); };
     const wait = async predicate => {
@@ -93,10 +92,8 @@ try {
     const apply = name => field(name).querySelector('button').click();
     const status = () => document.querySelector('#status').textContent;
     await wait(() => !document.querySelector('#submit').disabled);
-    if (${useWasm}) {
-      check(crossOriginIsolated, 'Shared-memory runtime requires cross-origin isolation');
-      check(document.querySelector('[data-evaluator=wasm]'), 'Compiled Lean evaluator was not loaded');
-    }
+    check(crossOriginIsolated, 'Shared-memory runtime requires cross-origin isolation');
+    check(document.querySelector('[data-evaluator=wasm]'), 'Compiled Lean evaluator was not loaded');
     let posts = 0;
     const originalFetch = window.fetch;
     window.fetch = (...args) => { if (args[0] === '/api/submit') posts++; return originalFetch(...args); };
@@ -176,7 +173,7 @@ try {
         catch { await delay(50); }
       }
       assert.ok(ready, `Server did not start: ${name}`);
-      await call('browsingContext.navigate', { context, url: `http://127.0.0.1:${examplePort}/${query}`, wait: 'complete' });
+      await call('browsingContext.navigate', { context, url: `http://127.0.0.1:${examplePort}/`, wait: 'complete' });
       const result = await call('script.evaluate', { target: { context }, awaitPromise: true, expression: `(async () => {
         const check = (condition, message) => { if (!condition) throw Error(message); };
         const wait = async predicate => {
@@ -194,10 +191,8 @@ try {
           input.value = value; input.dispatchEvent(new Event('change'));
         };
         await wait(() => !document.querySelector('#submit').disabled);
-        if (${useWasm}) {
-          check(crossOriginIsolated, 'Shared-memory runtime requires cross-origin isolation');
-          check(document.querySelector('[data-evaluator=wasm]'), 'Compiled Lean evaluator was not loaded');
-        }
+        check(crossOriginIsolated, 'Shared-memory runtime requires cross-origin isolation');
+        check(document.querySelector('[data-evaluator=wasm]'), 'Compiled Lean evaluator was not loaded');
         ${body}
         document.querySelector('#submit').click();
         await wait(() => document.querySelector('#status').textContent === 'Submitted successfully.');
