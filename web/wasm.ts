@@ -1,27 +1,30 @@
-import type { CompiledDescriptor, FormSnapshot, FormRequest } from './protocol.js';
+import type { CompiledDescriptor, FormRequest, Request, Response, Success, Failure } from './protocol.js';
 
 interface WasmModule {
   _forms_init(): void;
   ccall(name: string, result: string, types: string[], args: (string | number)[]): string;
 }
-interface Runtime { form(request: unknown): unknown }
+interface Runtime { form(request: Request): Response }
 let loading: Promise<Runtime> | undefined;
 
 export async function openCompiledForm(descriptor: CompiledDescriptor) {
   const runtime = await (loading ??= load());
-  const opened = runtime.form({ operation: 'open', ...descriptor }) as { handle: string; snapshot: FormSnapshot };
-  let snapshot = opened.snapshot;
+  const opened = runtime.form({ open: { descriptor } });
+  if (typeof opened !== 'object' || !('opened' in opened)) throw new Error('Expected an opened form.');
+  let snapshot = opened.opened.snapshot;
   let disposed = false;
   function check() { if (disposed) throw new Error('Form model is disposed.'); }
   return {
     snapshot() { check(); return structuredClone(snapshot); },
     send(request: FormRequest) {
       check();
-      snapshot = runtime.form({ ...request, handle: opened.handle }) as FormSnapshot;
+      const response = runtime.form({ send: { handle: opened.opened.handle, request } });
+      if (typeof response !== 'object' || !('updated' in response)) throw new Error('Expected an updated form.');
+      snapshot = response.updated.snapshot;
       return structuredClone(snapshot);
     },
     dispose() {
-      if (!disposed) { runtime.form({ operation: 'dispose', handle: opened.handle }); disposed = true; }
+      if (!disposed) { runtime.form({ dispose: { handle: opened.opened.handle } }); disposed = true; }
     },
   };
 }
@@ -34,7 +37,7 @@ async function load(): Promise<Runtime> {
   const module: WasmModule = await createModule();
   module._forms_init();
   const encoder = new TextEncoder();
-  function form(input: unknown): unknown {
+  function form(input: Request): Response {
     const request = JSON.stringify(input);
     if (request === undefined) throw new Error('Expected a JSON request.');
     let text: string;
@@ -46,8 +49,8 @@ async function load(): Promise<Runtime> {
       loading = undefined;
       throw error;
     }
-    const response = JSON.parse(text);
-    if (!response.ok) throw new Error(response.error);
+    const response = JSON.parse(text) as Success | Failure;
+    if ('error' in response) throw new Error(response.error);
     return response.value;
   }
   return { form };

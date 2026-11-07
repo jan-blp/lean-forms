@@ -3,10 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "check": "tsc -p tsconfig.json --noEmit",
+    "build": "npm run generate && tsc -p tsconfig.json",
+    "check": "npm run generate && tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test compiled.test.mjs",
-    "test:wasm": "cd .. && make -f experiments/wasm/Makefile test"
+    "test:wasm": "cd .. && make -f experiments/wasm/Makefile test",
+    "generate": "cd .. && lake build Forms.Runtime.Wire Forms.Protocol.TypeScript && lake env lean --run tools/GenerateProtocol.lean"
   },
   "devDependencies": {
     "typescript": "7.0.2"

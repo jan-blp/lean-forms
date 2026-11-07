@@ -9,6 +9,7 @@ import Tests.ServerRefinements
 import Tests.CompiledForms
 import Tests.InputProtocol
 import Tests.Web
+import Tests.Wire
 import Tests.SumHistory
 import Tests.ListHistory
 import Tests.ButtonHistory
@@ -296,6 +297,7 @@ public def main : IO Unit := do
   Tests.CompiledForms.run
   Tests.InputProtocol.run
   Tests.Web.run
+  Tests.Wire.run
   Tests.SumHistory.run
   Tests.ListHistory.run
   Tests.ButtonHistory.run

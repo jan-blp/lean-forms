@@ -12,15 +12,19 @@ def check (message : String) (condition : Bool) : IO Unit := do
   unless condition do throw (IO.userError message)
 
 def request (operation handle : String) (fields : List (String × Json) := []) : Json :=
-  Json.mkObj ([("operation", toJson operation), ("handle", toJson handle)] ++ fields)
+  if operation == "dispose" then toJson (Wire.Request.dispose handle)
+  else Json.mkObj [("send", Json.mkObj [("handle", toJson handle),
+    ("request", if fields.isEmpty then toJson operation else Json.mkObj [(operation, Json.mkObj fields)])])]
 
 def execute (store : CompiledForms.Store) (request : Json) : Except String (CompiledForms.Store × Json) := do
   let (store, response) ← CompiledFormsProtocol.execute compiledRevision store request
-  pure (store, CompiledFormsProtocol.responseToJson response)
+  pure (store, match response with
+    | .updated snapshot => CompiledFormsProtocol.snapshotToJson snapshot
+    | .opened .. => (CompiledFormsProtocol.responseToJson response).getObjValD "opened"
+    | .disposed => toJson "disposed")
 
 def openRequest (selected : Example) (revision := compiledRevision) : Json :=
-  Json.mkObj [("operation", toJson "open"), ("form", toJson selected.name),
-    ("revision", toJson revision), ("value", JsonProtocol.valueToJson selected.definition.initial)]
+  toJson (Wire.Request.open { form := selected.name, revision, value := JsonProtocol.valueToJson selected.definition.initial })
 
 def editorNode (control : Display.Control) : IO DisplayLayout.Node :=
   match DisplayLayout.control {} control with
@@ -45,9 +49,9 @@ def testFormatting : IO Unit := do
     | _ => false)
   check "ComputedHasNoSchema" (((DisplayProtocol.viewToJson computed.view).getObjVal? "schema").toOption.isNone)
   let editor := CompiledView.editor Widget.select (ty := Person.addressKind) .work [] [] "replace" "Kind" false
-  let input := DisplayProtocol.layoutToJson (← editorNode editor.view)
+  let input := (DisplayProtocol.layoutToJson (← editorNode editor.view)).getObjValD "element"
   let options ← IO.ofExcept (input.getObjValAs? (Array Json) "children")
-  check "SelectOptionsHaveLabels" (options.toList.map (fun option => (option.getObjValAs? String "text").toOption) ==
+  check "SelectOptionsHaveLabels" (options.toList.map (fun option => ((option.getObjValD "element").getObjValAs? String "text").toOption) ==
     [some "Home", some "Work", some "Other"])
   check "SelectValueIsDOMIndex" ((input.getObjValAs? String "value").toOption == some "1")
   let bindings ← IO.ofExcept (input.getObjValAs? (Array Json) "bindings")
@@ -62,7 +66,7 @@ def testDisplay : IO Unit := do
     | _ => false)
   let encoded := DisplayProtocol.controlToJson natural.view
   check "Natural serializes without precision loss"
-    (((DisplayProtocol.layoutToJson (← editorNode natural.view)).getObjValAs? String "value").toOption == some "123456789012345678901234567890")
+    ((((DisplayProtocol.layoutToJson (← editorNode natural.view)).getObjValD "element").getObjValAs? String "value").toOption == some "123456789012345678901234567890")
   check "Control target distinguishes names and numeric indices"
     ((encoded.getObjVal? "target").toOption == some (toJson [toJson "items", toJson (2 : Nat)]))
   check "Absent messages remain absent" ((encoded.getObjVal? "messages").toOption.isNone)
@@ -116,7 +120,7 @@ def run : IO Unit := do
   let (store, opened) ← IO.ofExcept (execute {} (openRequest .counter))
   let handle ← IO.ofExcept (opened.getObjValAs? String "handle")
   let key := (toJson [toJson ([] : List Json), toJson "plusOne"]).compress
-  let action := request "apply" handle [("key", toJson key)]
+  let action := request "apply" handle [("key", toJson key), ("argument", Json.null)]
   let (updated, snapshot) ← IO.ofExcept (execute store action)
   let submission ← IO.ofExcept (snapshot.getObjVal? "submission")
   discard <| IO.ofExcept ((ComponentHistoryProtocol.verify Counter.form 0 submission).mapError toString)
@@ -130,7 +134,7 @@ def run : IO Unit := do
   check "Handles are not reused" ((← IO.ofExcept (next.getObjValAs? String "handle")) != handle)
   check "Old handles stay invalid" ((execute reopened action).isOk == false)
   check "Failed actions are rejected" ((execute updated
-    (request "apply" handle [("key", toJson "missing")])).isOk == false)
+    (request "apply" handle [("key", toJson "missing"), ("argument", Json.null)])).isOk == false)
   check "Stale revisions are rejected" ((execute {} (openRequest .counter "stale")).isOk == false)
   check "Unknown operations are rejected" ((execute updated (request "unknown" handle)).isOk == false)
   check "Server-only checks stay on server" ((CompiledForms.clientErrors (Tests.ServerRefinements.even) 3).isEmpty)

@@ -3,6 +3,7 @@ module
 public import Forms.Runtime.DisplayLayout
 public import Forms.Runtime.EditorPresentation
 public import Forms.Runtime.FeedbackProtocol
+public import Forms.Runtime.Wire
 
 @[expose] public section
 
@@ -40,14 +41,6 @@ def controlToJson (control : Control) : Json :=
   Json.mkObj ([("key", toJson control.key.value), ("id", toJson control.id), ("target", targetToJson control.target),
     ("label", toJson control.label), ("disabled", toJson control.disabled)] ++ fields ++ messageFields control.messages)
 
-def tagName : DisplayLayout.Tag → String
-  | .header => "header" | .span => "span" | .h1 => "h1" | .section => "section"
-  | .details => "details" | .summary => "summary" | .pre => "pre"
-  | .div => "div" | .fieldset => "fieldset" | .legend => "legend" | .output => "output"
-  | .p => "p" | .label => "label" | .table => "table" | .thead => "thead"
-  | .tbody => "tbody" | .tr => "tr" | .th => "th" | .td => "td"
-  | .input => "input" | .select => "select" | .option => "option" | .button => "button" | .form => "form"
-
 def attributePair : DisplayLayout.Attribute → String × String
   | .hidden => ("hidden", "")
   | .ariaLive => ("aria-live", "polite")
@@ -72,35 +65,29 @@ def attributePair : DisplayLayout.Attribute → String × String
   | .invalid => ("aria-invalid", "true")
   | .describedBy id => ("aria-describedby", id.value)
 
-def sourceFields : DisplayLayout.Source → List (String × Json)
-  | .value id => [("source", toJson id.value), ("argument", toJson "value")]
-  | .checked id => [("source", toJson id.value), ("argument", toJson "checked")]
-  | .index id => [("source", toJson id.value), ("argument", toJson "index")]
+def sourceFields : DisplayLayout.Source → String × Wire.DomArgument
+  | .value id => (id.value, .value)
+  | .checked id => (id.value, .checked)
+  | .index id => (id.value, .index)
 
-def bindingToJson (binding : DisplayLayout.Binding) : Json :=
-  let (event, command, key, fields) := match binding with
-    | .page command => ("click", (match command with | .submit => "submit" | .reset => "reset"), "",
-        [("source", toJson ""), ("argument", toJson "none")])
-    | .press key => ("click", "apply", key.value, [("source", toJson ""), ("argument", toJson "none")])
-    | .draft key id => ("input", "draft", key.value, sourceFields (.value id))
-    | .change key source => ("change", "apply", key.value, sourceFields source)
-    | .submit key source => ("submit", "apply", key.value, sourceFields source)
-  Json.mkObj ([("event", toJson event), ("command", toJson command), ("key", toJson key)] ++ fields)
+def bindingToWire : DisplayLayout.Binding → Wire.Binding
+  | .page command => ⟨.click, (match command with | .submit => .submit | .reset => .reset), "", "", .none⟩
+  | .press key => ⟨.click, .apply, key.value, "", .none⟩
+  | .draft key id => ⟨.input, .draft, key.value, id.value, .value⟩
+  | .change key source => let (id, argument) := sourceFields source; ⟨.change, .apply, key.value, id, argument⟩
+  | .submit key source => let (id, argument) := sourceFields source; ⟨.submit, .apply, key.value, id, argument⟩
 
-def inputFields : DisplayLayout.InputValue → List (String × Json)
-  | .none => []
-  | .value text => [("value", toJson text)]
-  | .checked value => [("checked", toJson value)]
+def layoutToWire : DisplayLayout.Node → Option Wire.DisplayView
+  | .hidden => none
+  | .element tag attributes text children behavior =>
+    let (value, checked) := match behavior.input with
+      | .none => (none, none)
+      | .value value => (some value, none)
+      | .checked checked => (none, some checked)
+    some (.element tag (attributes.map attributePair) (children.map layoutToWire)
+      (behavior.bindings.map bindingToWire) text value checked (behavior.focusKey.map (·.value)))
 
-def layoutToJson : DisplayLayout.Node → Json
-  | .hidden => .null
-  | .element tag attributes text children behavior => Json.mkObj
-      ([("kind", toJson "element"), ("tag", toJson (tagName tag)),
-        ("attributes", toJson (attributes.map fun attr => let (name, value) := attributePair attr; toJson [name, value])),
-        ("children", toJson (children.map layoutToJson)), ("bindings", toJson (behavior.bindings.map bindingToJson))] ++
-        text.toList.map (fun value => ("text", toJson value)) ++
-        inputFields behavior.input ++
-        behavior.focusKey.toList.map (fun value => ("focusKey", toJson value.value)))
+def layoutToJson (node : DisplayLayout.Node) : Json := toJson (layoutToWire node)
 
 def viewToJson (view : View) (state : Interaction.State := {}) : Json := layoutToJson (DisplayLayout.ofView state view)
 

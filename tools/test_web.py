@@ -79,10 +79,10 @@ def session(example):
 import { openCompiledForm } from './web/dist/wasm.js';
 import { readFileSync } from 'node:fs';
 const model = await openCompiledForm(JSON.parse(readFileSync(0, 'utf8')));
-const edit = (widget, argument) => model.send({ operation: 'apply', key: model.snapshot().controls.find(c => c.widget === widget).key, argument: argument });
-const apply = (label, argument) => model.send({ operation: 'apply', key: model.snapshot().controls.find(c => c.label === label).key, argument: argument });
+const edit = (widget, argument) => model.send({ apply: { key: model.snapshot().controls.find(c => c.widget === widget).key, argument: argument } });
+const apply = (label, argument = null) => model.send({ apply: { key: model.snapshot().controls.find(c => c.label === label).key, argument: argument } });
 const quantity = (index, argument) =>
-  model.send({ operation: 'apply', key: model.snapshot().controls.find(c => c.label === 'Quantity' && c.target[1] === index).key, argument: argument });
+  model.send({ apply: { key: model.snapshot().controls.find(c => c.label === 'Quantity' && c.target[1] === index).key, argument: argument } });
 switch (process.argv[1]) {
   case 'person':
     edit('textInput', 'Grace'); edit('checkbox', true); edit('select', 2); break;
@@ -108,9 +108,9 @@ switch (process.argv[1]) {
   case 'counter':
   case 'counters': {
     const editor = model.snapshot().controls.find(c => c.kind === 'editor');
-    model.send({ operation: 'apply', key: editor.key, argument: '123456789012345678901234567890' });
+    model.send({ apply: { key: editor.key, argument: '123456789012345678901234567890' } });
     const button = model.snapshot().controls.find(c => c.id === 'plusOne');
-    model.send({ operation: 'apply', key: button.key }); model.send({ operation: 'apply', key: button.key });
+    model.send({ apply: { key: button.key, argument: null } }); model.send({ apply: { key: button.key, argument: null } });
     break;
   }
   default: throw new Error('Missing example test');

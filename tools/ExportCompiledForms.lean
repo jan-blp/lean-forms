@@ -21,13 +21,13 @@ private def actionArgument {α : Type} (control : CompiledView.Control α) : Exc
 public def main : IO Unit := do
   let fixtures ← (FinEnum.toList Example).mapM fun selected => do
     let descriptor := CompiledFormsProtocol.descriptor compiledRevision selected
-    let packed ← IO.ofExcept (CompiledFormsProtocol.openModel descriptor)
+    let packed ← IO.ofExcept ((fromJson? descriptor >>= CompiledFormsProtocol.openModel))
     let model := packed.2
     let controls := (CompiledView.render packed.1.definition.component model.history.value).controls
     let cases ← (controls.filter (! ·.disabled)).mapM fun control => do
       let fields ← IO.ofExcept (actionArgument control)
       let action := Json.mkObj (("key", toJson control.key.value) :: fields)
-      let updated ← IO.ofExcept (CompiledFormsProtocol.actionFromJson model action >>= CompiledForms.apply model)
+      let updated ← IO.ofExcept (CompiledForms.apply model (CompiledFormsProtocol.actionFromWire model control.key.value ((fields.lookup "argument").getD Json.null)))
       pure (Json.mkObj [("action", action), ("expected", CompiledFormsProtocol.snapshotToJson (CompiledForms.snapshot updated))])
     pure (Json.mkObj [("descriptor", descriptor), ("initial", CompiledFormsProtocol.snapshotToJson (CompiledForms.snapshot model)),
       ("cases", toJson cases)])

@@ -1,32 +1,18 @@
-type Binding = { key: string } & (
-  | { event: 'click'; command: 'apply' | 'submit' | 'reset'; source: ''; argument: 'none' }
-  | { event: 'input'; command: 'draft'; source: string; argument: 'value' }
-  | { event: 'change' | 'submit'; command: 'apply'; source: string; argument: 'value' | 'checked' | 'index' }
-);
-export type DisplayView = {
-  tag: 'header' | 'span' | 'h1' | 'section' | 'details' | 'summary' | 'pre'
-    | 'div' | 'fieldset' | 'legend' | 'output' | 'p' | 'label' | 'table' | 'thead' | 'tbody' | 'tr' | 'th' | 'td'
-    | 'input' | 'select' | 'option' | 'button' | 'form';
-  attributes: [string, string][];
-  text?: string;
-  focusKey?: string;
-  bindings: Binding[];
-  children: (DisplayView | null)[];
-} & ({ value: string; checked?: never } | { checked: boolean; value?: never } | { value?: never; checked?: never });
-export type FormEvent =
-  | { event: 'apply' | 'draft'; key: string; argument?: unknown }
-  | { event: 'submit' | 'reset' }
-  | { event: 'complete'; status: number; body: string }
-  | { event: 'failed'; message: string };
-export type FormRequest = ({ operation: 'event' } & FormEvent)
-  | { operation: 'apply'; key: string; argument?: unknown }
-  | { operation: 'reset' | 'validate' | 'inspect' }
-  | { operation: 'serverError'; status: number; body: string };
-export interface CompiledDescriptor { form: string; revision: string; value: unknown }
-export interface FormSnapshot {
-  title: string;
-  view: DisplayView | null;
-  render: boolean;
-  focus: string | null;
-  effects: { url: string; method: 'POST'; headers: Record<string, string>; body: string }[];
-}
+// Generated from Lean. Run npm --prefix web run generate.
+export type Request = { "open": { "descriptor": CompiledDescriptor } } | { "send": { "handle": string; "request": FormRequest } } | { "dispose": { "handle": string } };
+export type CompiledDescriptor = { "form": string; "revision": string; "value": unknown };
+export type FormRequest = { "event": { "message": FormEvent } } | { "apply": { "key": string; "argument": unknown } } | "reset" | "validate" | "inspect" | { "serverError": { "status": number; "body": string } };
+export type FormEvent = { "apply": { "key": string; "argument": unknown } } | { "draft": { "key": string; "argument": string } } | "submit" | "reset" | { "complete": { "status": number; "body": string } } | { "failed": { "message": string } };
+export type Success = { "ok": boolean; "value": Response };
+export type Response = { "opened": { "handle": string; "snapshot": FormSnapshot } } | { "updated": { "snapshot": FormSnapshot } } | "disposed";
+export type FormSnapshot = { "title": string; "view": (DisplayView | null); "render": boolean; "focus": (string | null); "effects": (HttpEffect)[]; "summary": string; "submissionBlocked": boolean; "controls": (unknown)[]; "submission": unknown; "errors": (unknown)[] };
+export type DisplayView = { "element": { "tag": Tag; "attributes": ([string, string])[]; "children": ((DisplayView | null))[]; "bindings": (Binding)[]; "text": (string | null); "value": (string | null); "checked": (boolean | null); "focusKey": (string | null) } };
+export type Tag = "header" | "span" | "h1" | "section" | "details" | "summary" | "pre" | "div" | "fieldset" | "legend" | "output" | "p" | "label" | "table" | "thead" | "tbody" | "tr" | "th" | "td" | "input" | "select" | "option" | "button" | "form";
+export type Binding = { "event": DomEvent; "command": BindingCommand; "key": string; "source": string; "argument": DomArgument };
+export type DomEvent = "click" | "input" | "change" | "submit";
+export type BindingCommand = "apply" | "draft" | "submit" | "reset";
+export type DomArgument = "none" | "value" | "checked" | "index";
+export type HttpEffect = { "url": string; "method": HttpMethod; "headers": HttpHeaders; "body": string };
+export type HttpMethod = "POST";
+export type HttpHeaders = { "Content-Type": string };
+export type Failure = { "ok": boolean; "error": string };
