@@ -33,12 +33,34 @@ def testFormatting : IO Unit := do
   let date ← IO.ofExcept (JsonProtocol.valueFromJson .date (.str "2028-02-29"))
   check "FormatDate" (CompiledView.formatValue date == "2028-02-29")
   let computed := CompiledView.render (.computed (state := .natural) "Person" (.value Person.draft)) 0
-  check "ComputedDisplayText" ((computed.view.getObjValAs? String "text").toOption == some (CompiledView.formatValue Person.draft))
-  check "ComputedHasNoSchema" ((computed.view.getObjVal? "schema").toOption.isNone)
+  check "ComputedDisplayText" (((DisplayProtocol.viewToJson computed.view).getObjValAs? String "text").toOption == some (CompiledView.formatValue Person.draft))
+  check "ComputedHasNoSchema" (((DisplayProtocol.viewToJson computed.view).getObjVal? "schema").toOption.isNone)
   let editor := CompiledView.editor Widget.select (ty := Person.addressKind) .work [] [] "replace" "Kind" false
-  check "SelectOptionsAreLabels" ((editor.view.getObjVal? "options").toOption == some (toJson ["Home", "Work", "Other"]))
-  check "SelectValueRemainsIndex" ((editor.view.getObjVal? "value").toOption == some (toJson (1 : Nat)))
-  check "EditorHasNoSchema" ((editor.view.getObjVal? "schema").toOption.isNone)
+  check "SelectOptionsAreLabels" (((DisplayProtocol.controlToJson editor.view).getObjVal? "options").toOption == some (toJson ["Home", "Work", "Other"]))
+  check "SelectValueRemainsIndex" (((DisplayProtocol.controlToJson editor.view).getObjVal? "value").toOption == some (toJson (1 : Nat)))
+  check "EditorHasNoSchema" (((DisplayProtocol.controlToJson editor.view).getObjVal? "schema").toOption.isNone)
+
+def testDisplay : IO Unit := do
+  let natural := CompiledView.editor Widget.naturalInput 123456789012345678901234567890
+    [.name "items", .index 2] [.field "items", .item 2] "replace" "Count" false
+  check "Natural display retains a typed value" (match natural.view.body with
+    | .editor _ (.natural value) => value == 123456789012345678901234567890
+    | _ => false)
+  let encoded := DisplayProtocol.controlToJson natural.view
+  check "Natural serializes without precision loss"
+    ((encoded.getObjValAs? String "value").toOption == some "123456789012345678901234567890")
+  check "Control target distinguishes names and numeric indices"
+    ((encoded.getObjVal? "target").toOption == some (toJson [toJson "items", toJson (2 : Nat)]))
+  check "Absent messages remain absent" ((encoded.getObjVal? "messages").toOption.isNone)
+  let withMessage := DisplayProtocol.controlToJson { natural.view with messages := some "" }
+  check "Empty messages remain present" ((withMessage.getObjValAs? String "messages").toOption == some "")
+  for view in [Display.View.hidden, .stack none [], .stack (some "") [], .text "Text", .table [] []] do
+    check "Unlabelled view uses fallback title" (view.title == "Form")
+  for view in [Display.View.control natural.view, .stack (some "Count") [], .computed "Count" "0"] do
+    check "Typed view supplies title" (view.title == "Count")
+  check "Hidden view serializes as null" (DisplayProtocol.viewToJson .hidden == Json.null)
+  let hidden := CompiledView.render (Component.visibleWhen (.value false) Counter.form) 0
+  check "Hidden rendering uses a typed hidden node" (hidden.view.isHidden)
 
 def testFeedback : IO Unit := do
   let invalid : Feedback.Error := { message := "Missing field", targets := .invalidTarget [] }
@@ -76,6 +98,7 @@ def testTypedDispatch : IO Unit := do
 
 def run : IO Unit := do
   testFormatting
+  testDisplay
   testTypedDispatch
   testFeedback
   let (store, opened) ← IO.ofExcept (execute {} (openRequest .counter))

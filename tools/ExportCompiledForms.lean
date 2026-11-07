@@ -6,23 +6,17 @@ meta import Forms.Runtime.CompiledRevision
 open Lean Forms Forms.Runtime Forms.ExampleForms
 
 private def actionArgument {α : Type} (control : CompiledView.Control α) : Except String (List (String × Json)) := do
-  if control.kind == .button then return []
-  if control.kind == .choice then
-    let options ← (← control.view.getObjVal? "options").getArr?
-    return [("argument", options.toList.getLast!)]
-  let current ← control.view.getObjVal? "value"
-  let kind ← control.view.getObjValAs? String "widget"
-  let value ← match kind with
-    | "naturalInput" => do
-      let n ← JsonProtocol.valueFromJson .natural current
-      pure (toJson ("00" ++ toString (n + 123456789012345678901234567890)))
-    | "textInput" => current.getStr?.map fun text => toJson (text ++ " 🌍\x00")
-    | "checkbox" => current.getBool?.map fun value => toJson (!value)
-    | "select" => do
-      let options ← (← control.view.getObjVal? "options").getArr?
-      pure (toJson (((← current.getNat?) + 1) % options.size))
-    | _ => pure current
-  return [("argument", value)]
+  match control.view.body with
+  | .button _ => return []
+  | .choice _ _ options => return [("argument", toJson options.getLast!)]
+  | .editor _ input =>
+    let value := match input with
+      | .natural n => toJson ("00" ++ toString (n + 123456789012345678901234567890))
+      | .text text => toJson (text ++ " 🌍\x00")
+      | .checkbox value => toJson (!value)
+      | .select value options => toJson ((value + 1) % options.length)
+      | .date value => toJson (Date.toString value)
+    return [("argument", value)]
 
 public def main : IO Unit := do
   let fixtures ← (FinEnum.toList Example).mapM fun selected => do

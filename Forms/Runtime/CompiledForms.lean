@@ -49,14 +49,13 @@ def snapshot {selected : Example} (model : Model selected) : Json :=
     | some feedback => feedback.errors
     | none => if model.validationStarted then errors.map Feedback.ofResolved else []
   let rendered := CompiledView.render selected.definition.component model.history.value (errors := visible)
-  let title := match rendered.view.getObjValAs? String "label" with
-    | .ok label => if label.isEmpty then "Form" else label
-    | .error _ => "Form"
+  let title := rendered.view.title
   let summary := match model.serverFeedback with
     | some feedback => feedback.message
     | none => Feedback.summary visible
   Json.mkObj [("summary", toJson summary), ("submissionBlocked", toJson (!visible.isEmpty)),
-    ("view", rendered.view), ("controls", toJson (rendered.controls.map (·.view))),
+    ("view", DisplayProtocol.viewToJson rendered.view),
+    ("controls", toJson (rendered.controls.map (fun c => DisplayProtocol.controlToJson c.view))),
     ("title", toJson title), ("submission", ComponentHistoryProtocol.encode model.history),
     ("errors", toJson (errors.map Validation.ResolvedError.toJson))]
 
