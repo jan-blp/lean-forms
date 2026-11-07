@@ -27,4 +27,14 @@ def ofEditor : Editor → Presentation
   | .checkbox value => .onChange (.checkbox value)
   | .select value options => .onChange (.select value options)
 
+def DraftInput.value : DraftInput → String
+  | .text value => value
+  | .natural value => toString value
+  | .date value => Date.toString value
+
+def draftValue (editor : Editor) : Option String :=
+  match ofEditor editor with
+  | .onApply input => some input.value
+  | .onChange _ => none
+
 end Forms.Runtime.EditorPresentation

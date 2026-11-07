@@ -21,26 +21,6 @@ def controlKey (target : Target) (id : String) (index : Option Nat) : String :=
 def messageFields (messages : Option String) : List (String × Json) :=
   messages.toList.map fun message => ("messages", toJson message)
 
-def inputToJson (input : EditorPresentation.Presentation) : Json :=
-  let (tag, attributes, options, value, checked, immediate, argument) :
-      String × List (String × String) × List (String × String) × String × Bool × Bool × String := match input with
-    | .onApply (.text value) =>
-        ("input", [("type", "text")], [], value, false, false, "value")
-    | .onApply (.natural value) =>
-        ("input", [("type", "text"), ("inputmode", "numeric"), ("pattern", "[0-9]+"), ("required", "")],
-          [], toString value, false, false, "value")
-    | .onApply (.date value) =>
-        ("input", [("type", "date"), ("min", "0001-01-01"), ("max", "9999-12-31"), ("required", "")],
-          [], Date.toString value, false, false, "value")
-    | .onChange (.checkbox checked) =>
-        ("input", [("type", "checkbox")], [], "", checked, true, "checked")
-    | .onChange (.select selected options) =>
-        ("select", [], options.zipIdx.map (fun (label, index) => (toString index, label)),
-          toString selected, false, true, "index")
-  let pairs (values : List (String × String)) := toJson (values.map fun (name, value) => toJson [name, value])
-  Json.mkObj [("tag", toJson tag), ("attributes", pairs attributes), ("options", pairs options),
-    ("value", toJson value), ("checked", toJson checked), ("immediate", toJson immediate), ("argument", toJson argument)]
-
 def widgetName : Editor → String
   | .text _ => "textInput"
   | .natural _ => "naturalInput"
@@ -53,7 +33,8 @@ def controlToJson (control : Control) : Json :=
     | .button keepDrafts => [("kind", toJson "button"), ("keepDrafts", toJson keepDrafts)]
     | .editor location input => [("kind", toJson "editor"),
         ("location", FeedbackProtocol.locationToJson location),
-        ("widget", toJson (widgetName input)), ("input", inputToJson (EditorPresentation.ofEditor input))]
+        ("widget", toJson (widgetName input))] ++
+        (match input with | .select _ options => [("options", toJson options)] | _ => [])
     | .choice location value options => [("kind", toJson "choice"),
         ("location", FeedbackProtocol.locationToJson location), ("value", toJson value), ("options", toJson options)]
   Json.mkObj ([("key", toJson control.key), ("id", toJson control.id), ("target", targetToJson control.target),
@@ -63,6 +44,7 @@ def tagName : DisplayLayout.Tag → String
   | .div => "div" | .fieldset => "fieldset" | .legend => "legend" | .output => "output"
   | .p => "p" | .label => "label" | .table => "table" | .thead => "thead"
   | .tbody => "tbody" | .tr => "tr" | .th => "th" | .td => "td"
+  | .input => "input" | .select => "select" | .option => "option" | .button => "button" | .form => "form"
 
 def attributePair : DisplayLayout.Attribute → String × String
   | .cssClass value => ("class", value)
@@ -71,16 +53,47 @@ def attributePair : DisplayLayout.Attribute → String × String
   | .ariaLabel value => ("aria-label", value)
   | .scope value => ("scope", value)
   | .colSpan value => ("colspan", toString value)
+  | .id value => ("id", value)
+  | .inputType value => ("type", match value with
+      | .text => "text" | .date => "date" | .checkbox => "checkbox" | .button => "button" | .submit => "submit")
+  | .numeric => ("inputmode", "numeric")
+  | .naturalPattern => ("pattern", "[0-9]+")
+  | .required => ("required", "")
+  | .minDate => ("min", "0001-01-01")
+  | .maxDate => ("max", "9999-12-31")
+  | .disabled => ("disabled", "")
+  | .optionValue value => ("value", value)
+  | .invalid => ("aria-invalid", "true")
+  | .describedBy id => ("aria-describedby", id)
+
+def sourceFields : DisplayLayout.Source → List (String × Json)
+  | .value id => [("source", toJson id), ("argument", toJson "value")]
+  | .checked id => [("source", toJson id), ("argument", toJson "checked")]
+  | .index id => [("source", toJson id), ("argument", toJson "index")]
+
+def bindingToJson (binding : DisplayLayout.Binding) : Json :=
+  let (event, command, key, fields) := match binding with
+    | .press key => ("click", "apply", key, [("source", toJson ""), ("argument", toJson "none")])
+    | .draft key id => ("input", "draft", key, sourceFields (.value id))
+    | .change key source => ("change", "apply", key, sourceFields source)
+    | .submit key source => ("submit", "apply", key, sourceFields source)
+  Json.mkObj ([("event", toJson event), ("command", toJson command), ("key", toJson key)] ++ fields)
+
+def inputFields : DisplayLayout.InputValue → List (String × Json)
+  | .none => []
+  | .value text => [("value", toJson text)]
+  | .checked value => [("checked", toJson value)]
 
 def layoutToJson : DisplayLayout.Node → Json
   | .hidden => .null
-  | .control c => controlToJson c
-  | .element tag attributes text children messages => Json.mkObj
+  | .element tag attributes text children behavior => Json.mkObj
       ([("kind", toJson "element"), ("tag", toJson (tagName tag)),
         ("attributes", toJson (attributes.map fun attr => let (name, value) := attributePair attr; toJson [name, value])),
-        ("children", toJson (children.map layoutToJson))] ++
-        text.toList.map (fun value => ("text", toJson value)) ++ messageFields messages)
+        ("children", toJson (children.map layoutToJson)), ("bindings", toJson (behavior.bindings.map bindingToJson))] ++
+        text.toList.map (fun value => ("text", toJson value)) ++
+        inputFields behavior.input ++
+        behavior.focusKey.toList.map (fun value => ("focusKey", toJson value)))
 
-def viewToJson (view : View) : Json := layoutToJson (DisplayLayout.ofView view)
+def viewToJson (view : View) (state : Interaction.State := {}) : Json := layoutToJson (DisplayLayout.ofView state view)
 
 end Forms.Runtime.DisplayProtocol

@@ -19,6 +19,8 @@ export async function openCompiledForm(descriptor: CompiledDescriptor) {
   }
   return {
     title: snapshot.title,
+    ui() { check(); return structuredClone(snapshot.ui); },
+    event(event: string, fields: object = {}) { update('event', { event, ...fields }); },
     view() { check(); return structuredClone(snapshot.view); },
     controls() { check(); return structuredClone(snapshot.controls); },
     errors() { check(); return structuredClone(snapshot.errors); },

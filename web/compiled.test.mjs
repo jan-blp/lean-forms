@@ -12,7 +12,7 @@ const fixtures = JSON.parse(execFileSync('lake', ['env', 'lean', '--run', 'tools
 const fixture = name => fixtures.find(f => f.descriptor.form === name);
 
 function snapshot(model) {
-  return { title: model.title, view: model.view(), controls: model.controls(),
+  return { ui: model.ui(), title: model.title, view: model.view(), controls: model.controls(),
     submission: model.submission(), errors: model.errors(), summary: model.summary(), submissionBlocked: model.submissionBlocked() };
 }
 for (const { descriptor, initial, cases } of fixtures) {
@@ -121,7 +121,8 @@ test('compiled model disposal releases memory and disposed handles stay invalid'
     assert.equal(call({ operation: 'inspect', handle }).ok, false);
     return handle;
   };
-  cycle();
+  // Warm the response buffer with four-digit handles before measuring disposal.
+  for (let i = 0; i < 1001; i++) cycle();
   const before = runtime.allocatedBytes();
   for (let i = 0; i < 1000; i++) cycle();
   assert.equal(runtime.allocatedBytes(), before);
@@ -162,7 +163,7 @@ test('compiled editor normalization preserves whitespace, precision, types, and 
     for (const raw of ['true', 1, 0, null]) assert.throws(() => person.apply(checkbox.key, raw));
     person.apply(checkbox.key, true);
     const select = person.controls().find(c => c.widget === 'select');
-    for (const raw of [-1, select.input.options.length, 0.5, '1', null, Infinity, NaN])
+    for (const raw of [-1, select.options.length, 0.5, '1', null, Infinity, NaN])
       assert.throws(() => person.apply(select.key, raw));
     person.apply(select.key, 1);
     assert.equal(person.submission().actions.at(-1).argument, 1);
@@ -201,7 +202,7 @@ test('Lean owns validation visibility, server feedback, and recovery', async () 
   const model = await openCompiledForm(fixture('invoice').descriptor);
   const messages = value => {
     if (!value || typeof value !== 'object') return [];
-    return [...(typeof value.messages === 'string' ? [value.messages] : []),
+    return [...(value.attributes?.some?.(([name, text]) => name === 'class' && text === 'validation-error') ? [value.text] : []),
       ...Object.values(value).flatMap(messages)];
   };
   try {
@@ -243,4 +244,81 @@ test('Lean owns validation visibility, server feedback, and recovery', async () 
     model.validate();
     assert.equal(model.submissionBlocked(), true);
   } finally { model.dispose(); }
+});
+
+test('Lean owns draft guards, submission effects, pending locks, and reset', async () => {
+  const model = await openCompiledForm(fixture('counter').descriptor);
+  try {
+    const editor = model.controls().find(c => c.kind === 'editor');
+    const button = model.controls().find(c => c.kind === 'button');
+    const send = (event, fields = {}) => model.event(event, fields);
+    send('draft', { key: editor.key, argument: '07' });
+    assert.equal(model.submission().actions.length, 0);
+    send('apply', { key: button.key });
+    assert.equal(model.ui().status, 'Apply your edits before using this control.');
+    assert.equal(model.ui().focus, editor.key);
+    send('submit');
+    assert.equal(model.ui().pending, false);
+    assert.equal(model.ui().send, false);
+    assert.equal(model.ui().status, 'Apply your edits before submitting.');
+    send('apply', { key: editor.key, argument: '07' });
+    assert.equal(model.submission().value, '7');
+    send('submit');
+    assert.equal(model.ui().send, true);
+    const submission = model.submission();
+    for (const [event, fields] of [['submit', {}], ['reset', {}], ['apply', { key: button.key }],
+      ['draft', { key: editor.key, argument: '99' }]]) {
+      send(event, fields);
+      assert.equal(model.ui().pending, true);
+      assert.equal(model.ui().send, false);
+      assert.deepEqual(model.submission(), submission);
+    }
+    assert.throws(() => model.apply(button.key), /progress/);
+    assert.throws(() => model.reset(), /progress/);
+    send('failed', { message: 'Network offline' });
+    assert.equal(model.ui().pending, false);
+    assert.equal(model.ui().status, 'Network offline');
+    send('submit');
+    send('complete', { status: 503, body: 'malformed' });
+    assert.equal(model.ui().status, 'Submission failed (HTTP 503).');
+    assert.equal(model.ui().pending, false);
+    send('submit');
+    send('complete', { status: 200, body: '' });
+    assert.equal(JSON.parse(model.ui().result), '7');
+    assert.equal(model.ui().error, false);
+    send('complete', { status: 500, body: '' });
+    assert.equal(model.ui().status, 'Submitted successfully.');
+    send('draft', { key: editor.key, argument: '8' });
+    send('draft', { key: editor.key, argument: '7' });
+    send('apply', { key: button.key });
+    assert.equal(model.ui().result, null);
+    assert.equal(model.submission().value, '8');
+    send('reset');
+    assert.equal(model.submission().value, '0');
+    assert.equal(model.ui().count, '0 actions');
+    send('submit');
+    assert.equal(model.ui().send, true);
+  } finally { model.dispose(); }
+});
+
+test('hidden drafts are discarded and UI state stays local to each model', async () => {
+  const a = await openCompiledForm(fixture('person').descriptor);
+  const b = await openCompiledForm(fixture('person').descriptor);
+  try {
+    const checkbox = a.controls().find(c => c.widget === 'checkbox');
+    a.event('apply', { key: checkbox.key, argument: true });
+    const street = a.controls().find(c => c.label === 'Street');
+    a.event('draft', { key: street.key, argument: 'Hidden draft' });
+    a.event('apply', { key: checkbox.key, argument: false });
+    a.event('submit');
+    assert.equal(a.ui().send, true);
+    assert.equal(b.ui().pending, false);
+    assert.equal(b.submission().actions.length, 0);
+    a.event('failed', { message: 'Offline' });
+    a.event('apply', { key: checkbox.key, argument: true });
+    const texts = value => !value || typeof value !== 'object' ? [] :
+      [value.value, ...Object.values(value).flatMap(texts)];
+    assert.ok(!texts(a.view()).includes('Hidden draft'));
+    assert.throws(() => a.event('draft', { key: checkbox.key, argument: 'false' }), /drafts/);
+  } finally { a.dispose(); b.dispose(); }
 });

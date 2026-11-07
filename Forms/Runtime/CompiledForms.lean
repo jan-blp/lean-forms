@@ -31,6 +31,7 @@ def descriptor (revision : String) (selected : Example) : Json :=
     ("value", JsonProtocol.valueToJson definition.initial)]
 
 structure Model (selected : Example) where
+  ui : Interaction.State := {}
   validationStarted : Bool := false
   serverFeedback : Option Feedback.ServerError := none
   initial : ⟦selected.definition.ty⟧
@@ -54,17 +55,88 @@ def snapshot {selected : Example} (model : Model selected) : Json :=
     | some feedback => feedback.message
     | none => Feedback.summary visible
   Json.mkObj [("summary", toJson summary), ("submissionBlocked", toJson (!visible.isEmpty)),
-    ("view", DisplayProtocol.viewToJson rendered.view),
+    ("view", DisplayProtocol.viewToJson rendered.view model.ui),
+    ("ui", Json.mkObj [("status", toJson model.ui.status), ("error", toJson model.ui.error),
+      ("pending", toJson model.ui.pending), ("send", toJson model.ui.send), ("focus", toJson model.ui.focus),
+      ("count", toJson (s!"{model.history.actions.size} " ++ if model.history.actions.size == 1 then "action" else "actions")),
+      ("result", if model.ui.resultVisible then toJson (JsonProtocol.valueToJson model.history.value).pretty else Json.null)]),
     ("controls", toJson (rendered.controls.map (fun c => DisplayProtocol.controlToJson c.view))),
     ("title", toJson title), ("submission", ComponentHistoryProtocol.encode model.history),
     ("errors", toJson (errors.map Validation.ResolvedError.toJson))]
 
+def blockedDraft {selected : Example} (model : Model selected) (key : String) : Option String := do
+  let c ← (CompiledView.render selected.definition.component model.history.value).controls.find? (·.key == key)
+  match c.view.body with
+  | .editor .. | .button true => none
+  | .choice .. | .button false => model.ui.drafts.head?.map Prod.fst
+
 def apply {selected : Example} (model : Model selected) (request : Json) : Except String (Model selected) := do
+  if model.ui.pending then throw "Submission is in progress."
   let key ← request.getObjValAs? String "key"
+  if (blockedDraft model key).isSome then throw "Apply your edits before using this control."
   let invocation ← CompiledView.invocation selected.definition.component model.history.value key
     (request.getObjVal? "argument").toOption
   let history ← (model.history.apply invocation).mapError toString
-  pure { model with history, serverFeedback := none }
+  let controls := (CompiledView.render selected.definition.component history.value).controls
+  let drafts := model.ui.drafts.filter fun draft => draft.1 != key && controls.any fun c =>
+    c.key == draft.1 && !c.disabled && match c.view.body with
+      | .editor _ input => (EditorPresentation.draftValue input).isSome
+      | _ => false
+  let ui := { model.ui with drafts, notice := .info "", resultVisible := false, focus := some key }
+  pure { model with history, serverFeedback := none, ui }
+
+def draft {selected : Example} (model : Model selected) (key value : String) : Except String (Model selected) := do
+  if model.ui.pending then return model
+  let controls := (CompiledView.render selected.definition.component model.history.value).controls
+  let some c := controls.find? (fun c => c.key == key && !c.disabled) | throw "This editor is unavailable."
+  let .editor _ input := c.view.body | throw "This control does not accept drafts."
+  let some initial := EditorPresentation.draftValue input | throw "This control does not accept drafts."
+  let drafts := if value == initial then model.ui.drafts.filter (·.1 != key)
+    else if model.ui.drafts.any (·.1 == key) then model.ui.drafts.map fun entry => if entry.1 == key then (key, value) else entry
+    else model.ui.drafts ++ [(key, value)]
+  pure { model with ui := { model.ui with drafts } }
+
+def startSubmission {selected : Example} (model : Model selected) : Model selected :=
+  if model.ui.pending then model else
+  match model.ui.drafts.head? with
+  | some (key, _) => { model with ui := { (model.ui.announce "Apply your edits before submitting." true) with focus := some key } }
+  | none =>
+    let errors := (clientErrors selected.definition.refined model.history.value).map Feedback.ofResolved
+    let ui := if errors.isEmpty then
+        { model.ui with submission := .requested, notice := .info "Submitting…", focus := none }
+      else { (model.ui.announce (Feedback.summary errors) true) with focus := none }
+    { model with validationStarted := true, serverFeedback := none, ui }
+
+def event {selected : Example} (model : Model selected) (request : Json) : Except String (Model selected) := do
+  let name ← request.getObjValAs? String "event"
+  let model := { model with ui := model.ui.acknowledge }
+  match name with
+  | "draft" => draft model (← request.getObjValAs? String "key") (← request.getObjValAs? String "argument")
+  | "apply" =>
+    if model.ui.pending then return model
+    match apply model request with
+    | .ok model => pure model
+    | .error error =>
+      let key := (request.getObjValAs? String "key").toOption
+      let focus := (key.bind (blockedDraft model)).or key
+      pure { model with ui := { (model.ui.announce error true) with focus } }
+  | "submit" => pure (startSubmission model)
+  | "reset" =>
+    if model.ui.pending then return model
+    pure { model with history := { value := model.initial }, validationStarted := false, serverFeedback := none, ui := { notice := .info "Started over." } }
+  | "complete" =>
+    if !model.ui.pending then return model
+    let status ← request.getObjValAs? Nat "status"
+    if 200 ≤ status && status < 300 then
+      pure { model with ui := { model.ui with submission := .idle, resultVisible := true, notice := .info "Submitted successfully." } }
+    else
+      let feedback := FeedbackProtocol.serverError status (← request.getObjValAs? String "body")
+      let ui := { (model.ui.announce feedback.message true) with submission := .idle }
+      pure { model with serverFeedback := some feedback, ui }
+  | "failed" =>
+    if !model.ui.pending then return model
+    pure { model with ui := { (model.ui.announce (← request.getObjValAs? String "message") true) with submission := .idle } }
+  | _ => throw s!"Unknown UI event: {name}"
 
 /-- IDs are never reused: disposed handles cannot address a later model. -/
 structure Store where
@@ -89,8 +161,11 @@ def execute (revision : String) (store : Store) (request : Json) : Except String
       pure ({ store with models := store.models.filter (·.1 != id) }, Json.null)
     else
       let model ← match operation with
+        | "event" => event model request
         | "apply" => apply model request
-        | "reset" => pure { model with history := { value := model.initial }, validationStarted := false, serverFeedback := none }
+        | "reset" => do
+          if model.ui.pending then throw "Submission is in progress."
+          pure { model with history := { value := model.initial }, validationStarted := false, serverFeedback := none, ui := {} }
         | "validate" => pure { model with validationStarted := true, serverFeedback := none }
         | "serverError" => do
           let status ← request.getObjValAs? Nat "status"

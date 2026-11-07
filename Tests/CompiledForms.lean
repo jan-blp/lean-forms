@@ -20,6 +20,11 @@ def openRequest (selected : Example) (revision := compiledRevision) : Json :=
   Json.mkObj [("operation", toJson "open"), ("form", toJson selected.name),
     ("revision", toJson revision), ("value", JsonProtocol.valueToJson selected.definition.initial)]
 
+def editorNode (control : Display.Control) : IO DisplayLayout.Node :=
+  match DisplayLayout.control {} control with
+  | .element .form _ _ (.element .label _ _ [input] _ :: _) _ => pure input
+  | _ => throw (IO.userError "Missing editor input")
+
 def testFormatting : IO Unit := do
   check "FormatTextIsLiteral" (CompiledView.formatValue (ty := .text) "<img src=x> 🌍\x00" == "<img src=x> 🌍\x00")
   check "FormatNaturalPrecision" (CompiledView.formatValue (ty := .natural) 123456789012345678901234567890 == "123456789012345678901234567890")
@@ -38,11 +43,13 @@ def testFormatting : IO Unit := do
     | _ => false)
   check "ComputedHasNoSchema" (((DisplayProtocol.viewToJson computed.view).getObjVal? "schema").toOption.isNone)
   let editor := CompiledView.editor Widget.select (ty := Person.addressKind) .work [] [] "replace" "Kind" false
-  let input ← IO.ofExcept ((DisplayProtocol.controlToJson editor.view).getObjVal? "input")
-  check "SelectOptionsHaveValuesAndLabels" ((input.getObjVal? "options").toOption ==
-    some (toJson [["0", "Home"], ["1", "Work"], ["2", "Other"]]))
+  let input := DisplayProtocol.layoutToJson (← editorNode editor.view)
+  let options ← IO.ofExcept (input.getObjValAs? (Array Json) "children")
+  check "SelectOptionsHaveLabels" (options.toList.map (fun option => (option.getObjValAs? String "text").toOption) ==
+    [some "Home", some "Work", some "Other"])
   check "SelectValueIsDOMIndex" ((input.getObjValAs? String "value").toOption == some "1")
-  check "SelectArgumentIsNumeric" ((input.getObjValAs? String "argument").toOption == some "index")
+  let bindings ← IO.ofExcept (input.getObjValAs? (Array Json) "bindings")
+  check "SelectArgumentIsNumeric" ((bindings[0]!.getObjValAs? String "argument").toOption == some "index")
   check "EditorHasNoSchema" (((DisplayProtocol.controlToJson editor.view).getObjVal? "schema").toOption.isNone)
 
 def testDisplay : IO Unit := do
@@ -53,7 +60,7 @@ def testDisplay : IO Unit := do
     | _ => false)
   let encoded := DisplayProtocol.controlToJson natural.view
   check "Natural serializes without precision loss"
-    (((← IO.ofExcept (encoded.getObjVal? "input")).getObjValAs? String "value").toOption == some "123456789012345678901234567890")
+    (((DisplayProtocol.layoutToJson (← editorNode natural.view)).getObjValAs? String "value").toOption == some "123456789012345678901234567890")
   check "Control target distinguishes names and numeric indices"
     ((encoded.getObjVal? "target").toOption == some (toJson [toJson "items", toJson (2 : Nat)]))
   check "Absent messages remain absent" ((encoded.getObjVal? "messages").toOption.isNone)
