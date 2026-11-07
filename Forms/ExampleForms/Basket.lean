@@ -60,11 +60,7 @@ def price : Product → Nat
 
 abbrev product : DataType := .enum products
 
-def productName : Expr product .text := .enumLabel (.project .self)
-def productPrice : Expr product .natural :=
-  .enumCases (.project .self) fun p => .value (price p)
-def productCategory : Expr product (.enum categories) :=
-  .enumCases (.project .self) fun p => .value (category p)
+def productName : ⟦product⟧ → String := products.label
 
 inductive CategoryFilter where
   | all
@@ -148,15 +144,13 @@ def line (p : Product) (quantity : Nat) : ⟦item⟧
   | .product => p
   | .quantity => quantity
 
-def unitPrice : Expr item .natural :=
-  .enumCases (.project (.field .product .self)) fun p => .value (price p)
-def subtotal : Expr item .natural :=
-  .natMul (.project (.field .quantity .self)) unitPrice
+def unitPrice (value : ⟦item⟧) : Nat := price (value .product)
+def subtotal (value : ⟦item⟧) : Nat := value .quantity * unitPrice value
 
 inductive Page where
   | catalogue
   | basket
-  deriving DecidableEq
+  deriving DecidableEq, BEq
 
 instance : FinEnum Page := FinEnum.ofList [.catalogue, .basket] (by grind [Page])
 def pages : Enum where
@@ -199,43 +193,43 @@ def initial : ⟦basket⟧
   | .selected => .notebook
   | .items => [line .notebook 2, line .pen 3]
 
-def categoryMatches : Expr basket (.list product) :=
-  .enumCases (.project (.field .filters (.field .category .self))) fun
-    | .all => .value (FinEnum.toList Product)
-    | .only c => .filter (.value (FinEnum.toList Product)) (.enumEq productCategory (.value c))
+def categoryMatches (value : ⟦basket⟧) : List Product :=
+  match value .filters .category with
+  | .all => FinEnum.toList Product
+  | .only c => (FinEnum.toList Product).filter fun p => category p == c
 
-def affordable : Expr basket (.list product) :=
-  .enumCases (.project (.field .filters (.field .budget .self))) fun
-    | .any => categoryMatches
-    | .ten => .filter categoryMatches (.natLe productPrice (.value 10))
-    | .twenty => .filter categoryMatches (.natLe productPrice (.value 20))
+def affordable (value : ⟦basket⟧) : List Product :=
+  match value .filters .budget with
+  | .any => categoryMatches value
+  | .ten => (categoryMatches value).filter fun p => price p ≤ 10
+  | .twenty => (categoryMatches value).filter fun p => price p ≤ 20
 
-def matchingProducts : Expr basket (.list product) :=
-  .search affordable productName (.project (.field .filters (.field .search .self)))
+def matchingProducts (value : ⟦basket⟧) : List Product :=
+  (affordable value).filter fun p =>
+    (productName p).toLower.contains (value .filters .search).toLower
 
-def visibleProducts : Expr basket (.list product) :=
-  .enumCases (.project (.field .filters (.field .sort .self))) fun
-    | .name => .sortBy matchingProducts productName false
-    | .priceLow => .sortNatBy matchingProducts productPrice false
-    | .priceHigh => .sortNatBy matchingProducts productPrice true
+def visibleProducts (value : ⟦basket⟧) : List Product :=
+  (matchingProducts value).mergeSort fun left right =>
+    match value .filters .sort with
+    | .name => productName left ≤ productName right
+    | .priceLow => price left ≤ price right
+    | .priceHigh => price right ≤ price left
 
-def total : Expr basket .natural := .sum (.project itemsPath) subtotal
+def total (value : ⟦basket⟧) : Nat := ((value .items).map subtotal).sum
 
-def totalText : Expr basket .text :=
-  .textAppend (.value "Basket total: EUR ") (.natToText total)
+def totalText (value : ⟦basket⟧) : String := s!"Basket total: EUR {total value}"
 
-def matchText : Expr basket .text :=
-  .textAppend (.natToText (.length visibleProducts)) (.value " products match")
+def matchText (value : ⟦basket⟧) : String := s!"{(visibleProducts value).length} products match"
 
 def catalogueColumns : List (Column product) :=
   [{ label := "Product", format := productName },
-   { label := "Category", format := .enumLabel productCategory },
-   { label := "Price (EUR)", format := .natToText productPrice }]
+   { label := "Category", format := categories.label ∘ category },
+   { label := "Price (EUR)", format := toString ∘ price }]
 
 def columns : List (Column item) :=
-  [{ label := "Product", format := .enumLabel (.project (.field .product .self)) },
-   { label := "Qty", format := .natToText (.project (.field .quantity .self)) },
-   { label := "Subtotal (EUR)", format := .natToText subtotal }]
+  [{ label := "Product", format := fun value => productName (value .product) },
+   { label := "Qty", format := fun value => toString (value .quantity) },
+   { label := "Subtotal (EUR)", format := toString ∘ subtotal }]
 
 def filtersEditor {state : DataType} : Component.Builder state filters :=
   Component.Builder.group "Find products" fun
@@ -272,19 +266,17 @@ def itemComponent : Component item :=
     | .quantity => .field (.field .quantity .self) "Quantity" .naturalInput
     | .decrement => .button "−1" (.decrement (.field .quantity .self))
     | .increment => .button "+1" (.increment (.field .quantity .self))
-    | .reset => .button "Reset quantity" (.set (.field .quantity .self) (.value 0))
-    | .price => .computed "Unit price (EUR)" unitPrice)
+    | .reset => .button "Reset quantity" (.set (.field .quantity .self) (fun _ => 0))
+    | .price => .computed (result := .natural) "Unit price (EUR)" unitPrice)
 
 def boundItems : Component basket :=
   .list itemsPath "Basket" itemComponent (line .notebook 1)
 
-def selectedItem : Expr basket item :=
-  .enumCases (.project (.field .selected .self)) fun p => .value (line p 1)
+def selectedItem (value : ⟦basket⟧) : ⟦item⟧ := line (value .selected) 1
 
 def addSelected : Component basket := .button "Add selected product" (.append itemsPath selectedItem)
 
-def onPage (page : Page) : Expr basket .boolean :=
-  .enumEq (.project (.field .page .self)) (.value page)
+def onPage (page : Page) (value : ⟦basket⟧) : Bool := page == value .page
 
 inductive Section where
   | total
@@ -318,11 +310,11 @@ def basketView : Component basket := .stack none (items := sections) fun
   | .page => .field (.field .page .self) "Page" .select
   | .filters => .visibleWhen (onPage .catalogue) (filtersEditor filtersPath)
   | .matches => .visibleWhen (onPage .catalogue) (.text matchText)
-  | .catalogue => .visibleWhen (onPage .catalogue) (.table visibleProducts catalogueColumns)
+  | .catalogue => .visibleWhen (onPage .catalogue) (.table (row := product) visibleProducts catalogueColumns)
   | .selected => .visibleWhen (onPage .catalogue)
       (.field (.field .selected .self) "Product to add" .select)
   | .add => .visibleWhen (onPage .catalogue) addSelected
   | .items => .visibleWhen (onPage .basket) boundItems
-  | .subtotals => .visibleWhen (onPage .basket) (.table (.project itemsPath) columns)
+  | .subtotals => .visibleWhen (onPage .basket) (.table (row := item) itemsPath.get columns)
 
 end Forms.ExampleForms.Basket

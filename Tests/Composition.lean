@@ -17,7 +17,7 @@ def check (name : String) (passed : Bool) : IO Unit := do
   else throw (IO.userError ("FAIL " ++ name))
 
 def names (value : ⟦reportShape⟧) : List String :=
-  (visibleResults.eval value).map fun entry => entry .name
+  (visibleResults value).map fun entry => entry .name
 
 def tableRows (snapshot : FormSnapshot) : List (List String) :=
   match snapshot with
@@ -92,15 +92,15 @@ def testFilteringAndSorting : IO Unit := do
   check "TestBoundStatusFiltersRows"
     (names filtered == ["Zulu"])
   check "TestStatusFilterPreservesSummaryDenominator"
-    (summary.eval selected == "1/2 passed" && summary.eval filtered == "1/2 passed")
+    (summary selected == "1/2 passed" && summary filtered == "1/2 passed")
   check "TestCombinedFiltersUseCurrentState"
     (filtered .filters .provider == .provider .bedrock && filtered .filters .failuresOnly)
   let reversed := selectProvider (enableFailures initial)
   check "TestIndependentFilterUpdatesCommute"
-    (names reversed == names filtered && summary.eval reversed == summary.eval filtered)
+    (names reversed == names filtered && summary reversed == summary filtered)
   let sorted := (setSortOrder .nameDescending) selected
   check "TestBoundSortPreservesFilters"
-    (names sorted == ["Zulu", "Beta"] && summary.eval sorted == summary.eval selected)
+    (names sorted == ["Zulu", "Beta"] && summary sorted == summary selected)
   let resetProvider := (setProviderFilter .all) filtered
   check "TestResetProviderPreservesStatusFilter"
     (names resetProvider == ["Delta", "Zulu"])
@@ -131,7 +131,7 @@ def testWeakenedRendering : IO Unit := do
      (labels (FormSnapshot.render mounted selected)).contains "Provider")
 
 def contextualSort : Component reportShape :=
-  (.visibleWhen (.project (.field .filters (.field .failuresOnly .self)))
+  (.visibleWhen (fun state => state .filters .failuresOnly)
       (.field sortPath "Contextual sort" .select))
 
 def testEditorBinding : IO Unit := do
@@ -140,15 +140,10 @@ def testEditorBinding : IO Unit := do
   check "TestEditorReadsSiblingOutsideBinding"
     (labels (FormSnapshot.render contextualSort enabled) == ["Contextual sort"])
 
-def testWeakenedQueries : IO Unit := do
-  let wrapped := (Expr.weaken (.field .report .self : Path outerShape reportShape) summary).eval outerInitial
-  check "TestReportQueriesWeakenIntoOuterState" (wrapped == "2/4 passed")
-
 def run : IO Unit := do
   testFilteringAndSorting
   testRendering
   testWeakenedRendering
   testEditorBinding
-  testWeakenedQueries
 
 end Tests.Composition

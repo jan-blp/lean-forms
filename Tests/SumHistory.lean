@@ -66,11 +66,11 @@ def run : IO Unit := do
   let dot ← IO.ofExcept (Shapes.form.applyInvocation Shapes.draft (.select .dot))
   expectError Shapes.form dot (.inPayload .circle ⟨.replace, (7 : Nat)⟩) .inactiveConstructor
   let hiddenBranch : Component Shapes.shape :=
-    .sum .self "Shape" (fun tag => .visibleWhen (.value false)
+    .sum .self "Shape" (fun tag => .visibleWhen (fun _ => false)
       (match tag with
-        | .dot => .text (.value "Dot")
+        | .dot => .text (fun _ => "Dot")
         | .circle => .field .self "Radius" .naturalInput
-        | .rectangle => .text (.value "Rectangle")))
+        | .rectangle => .text (fun _ => "Rectangle")))
       (fun tag => match tag with
         | .dot => fun i => nomatch i
         | .circle => 3

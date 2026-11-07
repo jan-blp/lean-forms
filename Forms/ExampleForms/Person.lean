@@ -92,14 +92,14 @@ def initial : RefinedDataType.ValidatedValue personType
 
 def draft : ⟦person⟧ := RefinedDataType.erase personType initial
 
-open Component.Builder Widget Expr in
+open Component.Builder Widget in
 def form : Component person :=
   (show Component.Builder person person from
     group "Registration" fun
       | .name => field "Name" textInput
       | .age => field "Age (18-120)" naturalInput
       | .subscribed => field "Send me postal mail" checkbox
-      | .address => visibleWhen (project subscribed) (group "Address" fun
+      | .address => visibleWhen subscribed.get (group "Address" fun
         | .street => field "Street" textInput
         | .kind => field "Kind" select)) .self
 

@@ -40,8 +40,8 @@ def applyArgument {ty : DataType}
   (current : ⟦ty⟧)
   : presentation.Argument → ⟦ty⟧ :=
   match presentation with
-  | .button body => fun () => body.eval current
-  | .editor _ body => fun argument => body.eval (fun
+  | .button body => fun () => body current
+  | .editor _ body => fun argument => body (fun
       | .current => current
       | .argument => argument)
 

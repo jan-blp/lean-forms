@@ -83,8 +83,8 @@ def render {ty : DataType} (component : Component ty) (value : ⟦ty⟧)
     (errors : List Feedback.Error := []) : Rendered component.Invocation :=
   match component with
   | .visibleWhen condition body =>
-    if condition.eval value then render body value target location disabled errors else ⟨.hidden, []⟩
-  | .disabledWhen condition body => render body value target location (disabled || condition.eval value) errors
+    if condition value then render body value target location disabled errors else ⟨.hidden, []⟩
+  | .disabledWhen condition body => render body value target location (disabled || condition value) errors
   | .stack (items := items) label children order =>
     let rendered := (FinEnum.toList items).map fun i =>
       (render (children (order i)) value (target ++ [.name (items.label (order i))]) location disabled errors).map
@@ -134,11 +134,11 @@ def render {ty : DataType} (component : Component ty) (value : ⟦ty⟧)
       (loc ++ [.constructor tag]) disabled errors).map (Action.Sum.inPayload current.tag)
     { view := .sum selector.view body.view
       controls := selector :: body.controls }
-  | .computed label expression => ⟨.computed label (formatValue (expression.eval value)), []⟩
-  | .text expression => ⟨.text (expression.eval value), []⟩
+  | .computed label expression => ⟨.computed label (formatValue (expression value)), []⟩
+  | .text expression => ⟨.text (expression value), []⟩
   | .table rows columns =>
     ⟨.table (columns.map (·.label))
-      ((rows.eval value).map fun row => columns.map fun column => column.format.eval row), []⟩
+      ((rows value).map fun row => columns.map fun column => column.format row), []⟩
 
 /-- The browser sends only a control key and raw argument. Resolve both against the current view. -/
 def invocation {ty : DataType} (component : Component ty) (value : ⟦ty⟧)

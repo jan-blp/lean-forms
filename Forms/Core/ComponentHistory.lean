@@ -50,9 +50,9 @@ def Component.ValidInvocation {ty : DataType}
       Action.List.ValidInvocation (path.get current).length fun index =>
         item.ValidInvocation ((path.get current).get index)
   | .visibleWhen condition body =>
-      { _invocation : body.ValidInvocation current // condition.eval current = true }
+      { _invocation : body.ValidInvocation current // condition current = true }
   | .disabledWhen condition body =>
-      { _invocation : body.ValidInvocation current // condition.eval current = false }
+      { _invocation : body.ValidInvocation current // condition current = false }
   | .sum (tags := tags) path _ branches _ =>
       Action.Sum.ValidInvocation tags ((branches (path.get current).tag).ValidInvocation (path.get current).payload)
   | .computed .. => Empty
@@ -86,12 +86,12 @@ def Component.validateInvocation {ty : DataType}
           let validated ← item.validateInvocation ((path.get current).get index) invocation
           return .item index validated
   | .visibleWhen condition body => do
-      if h : condition.eval current = true then
+      if h : condition current = true then
         let validated ← body.validateInvocation current invocation
         return ⟨validated, h⟩
       else .error .hidden
   | .disabledWhen condition body => do
-      if h : condition.eval current = false then
+      if h : condition current = false then
         let validated ← body.validateInvocation current invocation
         return ⟨validated, h⟩
       else .error .disabled

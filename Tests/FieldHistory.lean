@@ -37,7 +37,7 @@ def mixed : Component Counters.state :=
     | .right => .field (.field .right .self) "Right" .naturalInput)
 
 def visibleField : Component .natural :=
-  .visibleWhen (.natLe (.project .self) (.value 0))
+  .visibleWhen (fun n => n ≤ 0)
     (.field .self "Value" .naturalInput)
 
 def hideField : visibleField.ValidInvocation 0 :=
@@ -53,7 +53,7 @@ example (invocation : visibleField.ValidInvocation 1) : False := by
   contradiction
 
 def disabledField : Component .natural :=
-  .disabledWhen (.natLe (.value 1) (.project .self))
+  .disabledWhen (fun n => 1 ≤ n)
     (.field .self "Value" .naturalInput)
 
 example (invocation : disabledField.ValidInvocation 1) : False := by
@@ -64,7 +64,7 @@ example (invocation : disabledField.ValidInvocation 1) : False := by
 def testValidatedInvocation : IO Unit := do
   let validated ← IO.ofExcept (visibleField.validateInvocation 0 ⟨.replace, (1 : Nat)⟩)
   let current := visibleField.applyValidInvocation 0 validated
-  let disabled := Component.disabledWhen (.value true) visibleField
+  let disabled := Component.disabledWhen (fun _ => true) visibleField
   check "OuterConditionCheckedBeforeInnerCondition"
     (match disabled.validateInvocation current ⟨.replace, (0 : Nat)⟩ with
       | .error error => error == .disabled

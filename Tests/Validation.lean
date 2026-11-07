@@ -64,10 +64,6 @@ def run : IO Unit := do
     ((conservativeType.validate 2).map conservativeType.erase == some 2)
   check "OfCheckerKeepsOperationalGuarantee"
     (((RefinedDataType.refine (.base .natural) (.ofChecker (fun _ => []))).validate 0).map (·.val) == some 0)
-  let sameName : Expr .text .boolean := .textEq (.project .self) (.value "A")
-  let lifted : Expr Invoice.item .boolean := sameName.weaken (.field .description .self)
-  check "TextEqualityWeakensThroughRecord"
-    (lifted.eval (item "A" 1) && !lifted.eval (item "B" 1))
   check "DynamicPassAcceptsValue"
     (((fun _ => []) : Checker Invoice.invoice) [item "A" 0]).isEmpty
   let checker := Forms.Tests.ValidationCheckers.checker

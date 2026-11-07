@@ -35,17 +35,17 @@ def mixed : Component mixedState :=
   .stack (items := Counters.sides) none (fun
     | .left => .actionWidget (ids := Counter.actionIds) (.field .left .self) "Number" Counter.actions
     | .right => .actionWidget (ids := Counter.actionIds) (.field .right .self) "Text"
-        (fun _ => ⟨"Replace", .editor .textInput (.project (.field .argument .self))⟩))
+        (fun _ => ⟨"Replace", .editor .textInput (fun inputs => inputs .argument)⟩))
 
 def visible : Component .natural :=
-  .visibleWhen (.natLe (.project .self) (.value 0)) Counter.form
+  .visibleWhen (fun n => n ≤ 0) Counter.form
 
 def disabled : Component .natural :=
-  .disabledWhen (.natLe (.value 1) (.project .self)) Counter.form
+  .disabledWhen (fun n => 1 ≤ n) Counter.form
 
 def conditionalStack : Component .natural :=
   .stack (items := Counters.sides) none (fun
-    | .left => .visibleWhen (.natLe (.project .self) (.value 0)) disabled
+    | .left => .visibleWhen (fun n => n ≤ 0) disabled
     | .right => Counter.form)
 
 def testConditions : IO Unit := do
@@ -75,7 +75,7 @@ def testConditions : IO Unit := do
     ⟨.left, ⟨.plusOne, ()⟩⟩])
   check "SiblingRestoresAvailability" (restored.value == 1 && restored.actions.size == 3)
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify conditionalStack 0 (ComponentHistoryProtocol.encode restored))
-  let wrappedStack := Component.disabledWhen (Expr.value false) conditionalStack
+  let wrappedStack := Component.disabledWhen (fun _ => false) conditionalStack
   let _ ← IO.ofExcept (ComponentHistoryProtocol.verify wrappedStack 0 (ComponentHistoryProtocol.encode restored))
   let weakened := visible.weaken (Tests.Weakening.contentPath .natural)
   check "ConditionalWeakeningChecksLocalState"

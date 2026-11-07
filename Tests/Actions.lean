@@ -19,19 +19,19 @@ open Forms Forms.Composition Forms.ExampleForms.Basket
 #guard (Action.increment (.self : Path .natural .natural)).eval 0 == 1
 #guard (Action.decrement (.self : Path .natural .natural)).eval 0 == 0
 #guard (Action.decrement (.self : Path .natural .natural)).eval 2 == 1
-#guard (Action.set (.self : Path .natural .natural) (.value 7)).eval 2 == 7
+#guard (Action.set (.self : Path .natural .natural) (fun _ => 7)).eval 2 == 7
 
 def quantity : Path item .natural := .field .quantity .self
 def bump : Action item := .increment quantity
 #guard (bump.eval (line .pen 2)) .product == .pen
 #guard (bump.eval (line .pen 2)) .quantity == 3
-#guard ((Action.set quantity (.project quantity)).eval (line .pen 2)) .quantity == 2
+#guard ((Action.set quantity quantity.get).eval (line .pen 2)) .quantity == 2
 
 def nested : DataType := .record itemFields fun _ => item
 def parent : Path nested item := .field .quantity .self
 #guard ((bump.weaken parent).eval (fun _ => line .pen 2)) .quantity .quantity == 3
 #guard ((bump.weaken parent).eval (fun _ => line .pen 2)) .product .quantity == 2
-#guard (((Action.set quantity (.project quantity)).weaken parent).eval
+#guard (((Action.set quantity quantity.get).weaken parent).eval
   (fun _ => line .pen 2)) .quantity .quantity == 2
 
 open Forms.ExampleForms.Counter in
@@ -47,11 +47,10 @@ open Forms.ExampleForms.Counter in
 
 def addArgument : WidgetAction .natural :=
   ⟨"Add amount", .editor .naturalInput
-    (.natAdd (.project (.field .current .self)) (.project (.field .argument .self)))⟩
+    (fun inputs => inputs .current + inputs .argument)⟩
 #guard addArgument.eval (fun
   | .current => 5
   | .argument => 3) == 8
-#guard (Expr.natSub (.value 3) (.value 7) : Expr .natural .natural).eval 0 == 0
 
 open ExampleForms.Counter
 

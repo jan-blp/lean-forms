@@ -9,13 +9,13 @@ namespace Forms.ExampleForms.Counter
 open Composition
 
 def plusOne : WidgetAction .natural :=
-  ⟨"+1", .button (.natAdd (.project .self) (.value 1))⟩
+  ⟨"+1", .button (fun n => n + 1)⟩
 def plusFive : WidgetAction .natural :=
-  ⟨"+5", .button (.natAdd (.project .self) (.value 5))⟩
+  ⟨"+5", .button (fun n => n + 5)⟩
 def replace : WidgetAction .natural :=
-  ⟨"Value", .editor .naturalInput (.project (.field .argument .self))⟩
+  ⟨"Value", .editor .naturalInput (fun inputs => inputs .argument)⟩
 def minusOne : WidgetAction .natural :=
-  ⟨"−1", .button (.natSub (.project .self) (.value 1))⟩
+  ⟨"−1", .button (fun n => n - 1)⟩
 
 inductive CounterAction where
   | plusOne

@@ -111,7 +111,7 @@ private def testRefinedTypes : IO Unit := do
 
 private def testHiddenValidation : IO Unit := do
   let hidden : Component ExampleForms.Thermostat.thermostat :=
-    .visibleWhen (.value false) ExampleForms.Thermostat.form
+    .visibleWhen (fun _ => false) ExampleForms.Thermostat.form
   let draft := (temperatures 16 18)
   check "HiddenFieldsStillValidate"
     ((fieldRefs hidden draft).isEmpty &&
@@ -153,25 +153,6 @@ private def testSums : IO Unit := do
   let dot : ⟦ExampleForms.Shapes.shape⟧ := ⟨.dot, fun i => nomatch i⟩
   let valid : ⟦ExampleForms.Shapes.shape⟧ := ⟨.rectangle, fun | .width => 7 | .height => 2⟩
   let invalid : ⟦ExampleForms.Shapes.shape⟧ := ⟨.rectangle, fun | .width => 7 | .height => 0⟩
-  let dimension : Expr ExampleForms.Shapes.shape .natural :=
-    .cases (.project .self) fun
-      | .dot => .value 0
-      | .circle => .project .self
-      | .rectangle => .project (.field .height .self)
-  check "CasesReturnsSelectedPayloadValue" (Expr.eval dimension dot == 0 && Expr.eval dimension valid == 2)
-  let name : Expr ExampleForms.Shapes.shape .text :=
-    .cases (.project .self) fun
-      | .dot => .value "Dot"
-      | .circle => .value "Circle"
-      | .rectangle => .value "Rectangle"
-  check "CasesSupportsTextResult" (Expr.eval name dot == "Dot" && Expr.eval name valid == "Rectangle")
-  let withinLimit : Expr ExampleForms.Shapes.shape .boolean := .natLe dimension (.value 1)
-  check "CasesComposesWithExpressions" (Expr.eval withinLimit dot && !(Expr.eval withinLimit valid))
-  let outer : DataType := wrapper ExampleForms.Shapes.shape
-  let lifted : Expr outer .natural := Expr.weaken (.field .content .self) dimension
-  check "CasesWeakensSubjectOnly" (Expr.eval lifted (wrap false valid) == 2)
-
-
   for draft in [dot, valid, invalid] do
     let encoded := JsonProtocol.valueToJson draft
     check "SumDraftRoundTrip" (match JsonProtocol.valueFromJson ExampleForms.Shapes.shape encoded with
@@ -234,38 +215,33 @@ private def testDisplayOrder : IO Unit := do
     (Component.Builder.group (fields := ExampleForms.Thermostat.temperatureFields) "Thermostat"
       (fun
         | .home => Component.Builder.field "Home" .naturalInput
-        | .away => Component.Builder.visibleWhen (.value false) (Component.Builder.field "Away" .naturalInput))
+        | .away => Component.Builder.visibleWhen (fun _ => false) (Component.Builder.field "Away" .naturalInput))
       (displayOrder := Equiv.swap .home .away)) .self
   check "DisplayOrderRespectsVisibility" ((fieldRefs hidden draft).map (·.indices) == [[0]])
 
 private def testDisabled : IO Unit := do
-  let form : Component .text := .disabledWhen (.value true) (.field .self "Name" .textInput)
-  let enabled : Component .text := .disabledWhen (.value false) (.field .self "Name" .textInput)
+  let form : Component .text := .disabledWhen (fun _ => true) (.field .self "Name" .textInput)
+  let enabled : Component .text := .disabledWhen (fun _ => false) (.field .self "Name" .textInput)
   check "DisabledCondition" ((fieldRefs form "Ada").all (·.disabled))
   check "EnabledCondition" ((fieldRefs enabled "Ada").all (! ·.disabled))
-  let nested := Component.disabledWhen (.value true) enabled
+  let nested := Component.disabledWhen (fun _ => true) enabled
   check "ParentDisablesChildren" ((fieldRefs nested "Ada").all (·.disabled))
   check "DisabledStillVisible" ((fieldRefs nested "Ada").map (·.labels) == [["Name"]])
-  let hidden := Component.visibleWhen (.value false) nested
+  let hidden := Component.visibleWhen (fun _ => false) nested
   check "HiddenDisabledStaysHidden" ((fieldRefs hidden "Ada").isEmpty)
   check "DisabledView" ((CompiledView.render form "Ada").controls.all (·.disabled))
 
 private def testComputed : IO Unit := do
   let draft := ExampleForms.Invoice.draft
   let total := ExampleForms.Invoice.total
-  check "InvoiceTotal" (Expr.eval total draft == 100)
-  check "EmptyInvoiceTotal" (Expr.eval total [] == 0)
+  check "InvoiceTotal" (total draft == 100)
+  check "EmptyInvoiceTotal" (total [] == 0)
   let fields := fieldRefs ExampleForms.Invoice.form draft
   check "ComputedContent" (match fields.getLast? with
     | some field => match field.content with
       | .computed value => JsonProtocol.valueToJson value == Lean.toJson "100"
       | .input _ => false
     | none => false)
-  let nestedShape : DataType := .record ExampleForms.Thermostat.temperatureFields fun _ => ExampleForms.Invoice.invoice
-  let path : Path nestedShape ExampleForms.Invoice.invoice := .field .home .self
-  let nested : ⟦nestedShape⟧ := fun _ => draft
-  check "ComputedWeakening" (Expr.eval (Expr.weaken path total) nested == 100)
-
 private def testDates : IO Unit := do
   let cases ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "Tests/fixtures/dates.json"))
   let valid ← IO.ofExcept (cases.getObjValAs? (List String) "valid")
@@ -279,8 +255,8 @@ private def testDates : IO Unit := do
       | .ok _ => false)
   let early : Date := ⟨⟨2028, 2, 29, by decide⟩, by decide⟩
   let late : Date := ⟨⟨2028, 3, 1, by decide⟩, by decide⟩
-  check "DateComparison" (Expr.eval (input := .date) (.dateLe (.value early) (.project .self)) late)
-  check "DateComparisonReversed" (!Expr.eval (input := .date) (.dateLe (.value late) (.project .self)) early)
+  check "DateComparison" (decide (early ≤ late))
+  check "DateComparisonReversed" (!decide (late ≤ early))
   let range := RefinedDataType.dateRange early late
   for value in [early, late] do
     check "DateRangeIncludesEndpoints" ((RefinedDataType.validate range value).isSome)
@@ -289,8 +265,6 @@ private def testDates : IO Unit := do
     check "DateRangeRejectsOutside" ((RefinedDataType.validate range value).isNone)
   check "DateRangeSingleDay" ((RefinedDataType.validate (.dateRange early early) early).isSome)
   check "DateRangeReversed" ((RefinedDataType.validate (.dateRange late early) early).isNone)
-  let condition : Expr .date .boolean := .dateLe (.value early) (.project .self)
-  check "DateComparisonWeakening" (Expr.eval (Expr.weaken ExampleForms.Booking.endDate condition) ExampleForms.Booking.draft)
 
 public def main : IO Unit := do
   Tests.ServerRefinements.run

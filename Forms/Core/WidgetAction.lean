@@ -23,8 +23,8 @@ def actionInputs : Enum where
 abbrev ActionContext (ty : DataType) : DataType := .record actionInputs fun _ => ty
 
 inductive Action.Presentation (ty : DataType) where
-  | button (body : Expr ty ty)
-  | editor (widget : Widget ty) (body : Expr (ActionContext ty) ty)
+  | button (body : ⟦ty⟧ → ⟦ty⟧)
+  | editor (widget : Widget ty) (body : ⟦ActionContext ty⟧ → ⟦ty⟧)
 
 inductive Action.Field where
   | replace
@@ -32,7 +32,7 @@ inductive Action.Field where
 def Action.Presentation.replace {ty : DataType}
   (widget : Widget ty)
   : Action.Presentation ty :=
-  .editor widget (.project (.field .argument .self))
+  .editor widget (fun inputs => inputs .argument)
 
 structure WidgetAction (ty : DataType) where
   label : String
@@ -43,7 +43,7 @@ def WidgetAction.eval {ty : DataType}
   (inputs : ⟦ActionContext ty⟧)
   : ⟦ty⟧ :=
   match action.presentation with
-  | .button body => body.eval (inputs .current)
-  | .editor _ body => body.eval inputs
+  | .button body => body (inputs .current)
+  | .editor _ body => body inputs
 
 end Forms

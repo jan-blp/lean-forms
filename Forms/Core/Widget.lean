@@ -1,6 +1,6 @@
 module
 
-public import Forms.Core.Expr
+public import Forms.Core.Path
 
 @[expose] public section
 

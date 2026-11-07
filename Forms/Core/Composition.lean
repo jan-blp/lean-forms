@@ -10,7 +10,7 @@ namespace Forms.Composition
 
 structure Column (row : DataType) where
   label : String
-  format : Expr row .text
+  format : ⟦row⟧ → String
 
 inductive Component : (state : DataType) → Type 1 where
   | field
@@ -45,25 +45,25 @@ inductive Component : (state : DataType) → Type 1 where
   | computed
       {state result : DataType}
       (label : String)
-      (expression : Expr state result)
+      (expression : ⟦state⟧ → ⟦result⟧)
       : Component state
   | text
       {state : DataType}
-      (expression : Expr state .text)
+      (expression : ⟦state⟧ → String)
       : Component state
   | table
       {state row : DataType}
-      (rows : Expr state (.list row))
+      (rows : ⟦state⟧ → List ⟦row⟧)
       (columns : List (Column row))
       : Component state
   | visibleWhen
       {state : DataType}
-      (condition : Expr state .boolean)
+      (condition : ⟦state⟧ → Bool)
       (body : Component state)
       : Component state
   | disabledWhen
       {state : DataType}
-      (condition : Expr state .boolean)
+      (condition : ⟦state⟧ → Bool)
       (body : Component state)
       : Component state
   | actionWidget {state value : DataType} {ids : Enum}
@@ -85,11 +85,11 @@ def Component.weaken {outer inner : DataType}
   | .stack label children order => .stack label (fun index => (children index).weaken path) order
   | .list target label item defaultItem => .list (path.trans target) label item defaultItem
   | .sum target label branches defaults => .sum (path.trans target) label branches defaults
-  | .computed label expression => .computed label (expression.weaken path)
-  | .text expression => .text (expression.weaken path)
-  | .table rows columns => .table (rows.weaken path) columns
-  | .visibleWhen condition component => .visibleWhen (condition.weaken path) (component.weaken path)
-  | .disabledWhen condition component => .disabledWhen (condition.weaken path) (component.weaken path)
+  | .computed label expression => .computed label (expression ∘ path.get)
+  | .text expression => .text (expression ∘ path.get)
+  | .table rows columns => .table (rows ∘ path.get) columns
+  | .visibleWhen condition component => .visibleWhen (condition ∘ path.get) (component.weaken path)
+  | .disabledWhen condition component => .disabledWhen (condition ∘ path.get) (component.weaken path)
   | .actionWidget target label actions => .actionWidget (path.trans target) label actions
   | .button label action => .button label (action.weaken path)
 

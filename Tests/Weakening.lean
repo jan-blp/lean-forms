@@ -72,8 +72,8 @@ def run : IO Unit := do
   checkForm "WeakenDisabling" Thermostat.form Thermostat.draft
   -- Force context-dependent wrappers to read a sibling of the edited value.
   let form : Component TestReport.reportShape :=
-    .disabledWhen (.project (.field .filters (.field .failuresOnly .self)))
-      (.visibleWhen (.not (.project (.field .filters (.field .failuresOnly .self))))
+    .disabledWhen (fun state => state .filters .failuresOnly)
+      (.visibleWhen (fun state => !state .filters .failuresOnly)
         (.field TestReport.sortPath "Sort" .select))
   checkForm "WeakenContextOutsideEditorTarget" form TestReport.initial
 

@@ -43,7 +43,7 @@ def testFormatting : IO Unit := do
   check "FormatSumPayload" (CompiledView.formatValue (ty := Shapes.shape) ⟨.circle, 3⟩ == "circle: 3")
   let date ← IO.ofExcept (JsonProtocol.valueFromJson .date (.str "2028-02-29"))
   check "FormatDate" (CompiledView.formatValue date == "2028-02-29")
-  let computed := CompiledView.render (.computed (state := .natural) "Person" (.value Person.draft)) 0
+  let computed := CompiledView.render (.computed (state := .natural) (result := Person.person) "Person" (fun _ => Person.draft)) 0
   check "ComputedDisplayText" (match computed.view with
     | .computed _ text => text == CompiledView.formatValue Person.draft
     | _ => false)
@@ -77,7 +77,7 @@ def testDisplay : IO Unit := do
   for view in [Display.View.control natural.view, .stack (some "Count") [], .computed "Count" "0"] do
     check "Typed view supplies title" (view.title == "Count")
   check "Hidden view serializes as null" (DisplayProtocol.viewToJson .hidden == Json.null)
-  let hidden := CompiledView.render (Component.visibleWhen (.value false) Counter.form) 0
+  let hidden := CompiledView.render (Component.visibleWhen (fun _ => false) Counter.form) 0
   check "Hidden rendering uses a typed hidden node" (hidden.view.isHidden)
 
 def testFeedback : IO Unit := do
@@ -143,11 +143,11 @@ def run : IO Unit := do
   for selected in FinEnum.toList Example do
     let (_, result) ← IO.ofExcept (execute {} (openRequest selected))
     check "Compiled initialization returns a snapshot" ((result.getObjVal? "snapshot").isOk)
-  let guarded := Component.disabledWhen (.value true) Counter.form
+  let guarded := Component.disabledWhen (fun _ => true) Counter.form
   let blocked := CompiledView.render guarded 0
   check "Disabled controls are rendered disabled" (blocked.controls.all (·.disabled))
   check "Disabled controls cannot be invoked" ((CompiledView.invocation guarded 0 ⟨key⟩ none).isOk == false)
-  let hidden := Component.visibleWhen (.value false) Counter.form
+  let hidden := Component.visibleWhen (fun _ => false) Counter.form
   check "Hidden controls are omitted" ((CompiledView.render hidden 0).controls.isEmpty)
   check "Hidden controls cannot be invoked" ((CompiledView.invocation hidden 0 ⟨key⟩ none).isOk == false)
   IO.println "PASS: compiled model actions, replay, reset, disposal, guards, and server-only validation"

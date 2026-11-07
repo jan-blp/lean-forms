@@ -47,8 +47,8 @@ def FormSnapshot.render {state : DataType}
   match component with
   | .field path label widget =>
       .fields [{ content := .input widget, labels := [label], indices := pathIndices path }]
-  | .computed label expression =>
-      .fields [{ content := .computed (expression.eval value), labels := [label], indices := [] }]
+  | .computed (result := result) label expression =>
+      .fields [{ t := result, content := .computed (expression value), labels := [label], indices := [] }]
   | .list path label item _ =>
       .stack (((path.get value).zipIdx.map fun (entry, index) =>
         mapFields (fun field => { field with
@@ -60,13 +60,13 @@ def FormSnapshot.render {state : DataType}
         labels := label :: tags.label selected.tag :: field.labels
         indices := pathIndices path ++ ((FinEnum.equiv selected.tag).val :: field.indices) })
         (render (branches selected.tag) selected.payload)
-  | .text expression => .text (expression.eval value)
+  | .text expression => .text (expression value)
   | .table rows columns => .table (columns.map (·.label))
-      ((rows.eval value).map fun row => columns.map fun column => column.format.eval row)
+      ((rows value).map fun row => columns.map fun column => column.format row)
   | .visibleWhen condition body =>
-      if condition.eval value then render body value else .stack []
+      if condition value then render body value else .stack []
   | .disabledWhen condition body =>
-      if condition.eval value then disable (render body value) else render body value
+      if condition value then disable (render body value) else render body value
   | .actionWidget (ids := ids) path label actions => .stack ((FinEnum.toList ids).map fun id =>
       let action := actions id
       match action.presentation with

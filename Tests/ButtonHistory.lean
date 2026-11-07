@@ -17,14 +17,14 @@ def increment : Component .natural := .button "Increment" (.increment .self)
 
 def child : Counters.Side → Component Counters.state
   | .left => .field (.field .left .self) "Left" .naturalInput
-  | .right => .button "Copy left" (.set (.field .right .self) (.project (.field .left .self)))
+  | .right => .button "Copy left" (.set (.field .right .self) (fun state => state .left))
 
 def mixed : Component Counters.state := .stack (items := Counters.sides) none child
 
 example {state element : DataType}
   (target : Path state (.list element))
-  (value : Expr state element)
-  : Action.append target value = .set target (.snoc (.project target) value) := rfl
+  (value : ⟦state⟧ → ⟦element⟧)
+  : Action.append target value = .set target (fun state => target.get state ++ [value state]) := rfl
 
 def appendState : DataType := .record Counters.sides fun
   | .left => .natural
@@ -36,7 +36,7 @@ def appendInitial : ⟦appendState⟧
 
 def appendMixed : Component appendState := .stack (items := Counters.sides) none fun
   | .left => .field (.field .left .self) "Value" .naturalInput
-  | .right => .button "Append value" (.append (.field .right .self) (.project (.field .left .self)))
+  | .right => .button "Append value" (.append (.field .right .self) (fun state => state .left))
 
 def run : IO Unit := do
   let history ← IO.ofExcept (ComponentHistory.replay increment 0 #[.press, .press])

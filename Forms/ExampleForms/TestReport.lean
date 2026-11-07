@@ -122,33 +122,31 @@ def filtersPath : Path reportShape filtersShape := .field .filters .self
 
 def sortPath : Path reportShape (.enum sortOrderEnum) := .field .sort .self
 
-def providerResults : Expr reportShape (.list resultShape) :=
-  .enumCases (.project (.field .filters (.field .provider .self))) fun
-    | .all => .project (.field .results .self)
-    | .provider selected =>
-      .filter (.project (.field .results .self))
-        (.enumEq (.project (.field .provider .self)) (.value selected))
+def providerResults (value : ⟦reportShape⟧) : List ⟦resultShape⟧ :=
+  match value .filters .provider with
+  | .all => value .results
+  | .provider selected => (value .results).filter fun row => ((row .provider : Provider) == selected)
 
-def statusResults : Expr reportShape (.list resultShape) :=
-  .ifThenElse (.project (.field .filters (.field .failuresOnly .self)))
-    (.filter providerResults (.not (.project (.field .passed .self))))
-    providerResults
+def statusResults (value : ⟦reportShape⟧) : List ⟦resultShape⟧ :=
+  if value .filters .failuresOnly then
+    (providerResults value).filter fun row => !row .passed
+  else providerResults value
 
-def visibleResults : Expr reportShape (.list resultShape) :=
-  .enumCases (.project sortPath) fun
-    | .nameAscending => .sortBy statusResults (.project (.field .name .self)) false
-    | .nameDescending => .sortBy statusResults (.project (.field .name .self)) true
-    | .provider => .sortBy statusResults (.enumLabel (.project (.field .provider .self))) false
+def visibleResults (value : ⟦reportShape⟧) : List ⟦resultShape⟧ :=
+  (statusResults value).mergeSort fun left right =>
+    match value .sort with
+    | .nameAscending => left .name ≤ right .name
+    | .nameDescending => right .name ≤ left .name
+    | .provider => providerEnum.label (left .provider) ≤ providerEnum.label (right .provider)
 
-def summary : Expr reportShape .text :=
-  .textAppend
-    (.natToText (.length (.filter providerResults (.project (.field .passed .self)))))
-    (.textAppend (.value "/") (.textAppend (.natToText (.length providerResults)) (.value " passed")))
+def summary (value : ⟦reportShape⟧) : String :=
+  let results := providerResults value
+  s!"{(results.filter fun row => row .passed).length}/{results.length} passed"
 
 def columns : List (Column resultShape) :=
-  [{ label := "Test", format := .project (.field .name .self) },
-   { label := "Provider", format := .enumLabel (.project (.field .provider .self)) },
-   { label := "Result", format := .ifThenElse (.project (.field .passed .self)) (.value "PASS") (.value "FAIL") }]
+  [{ label := "Test", format := fun row => row .name },
+   { label := "Provider", format := fun row => providerEnum.label (row .provider) },
+   { label := "Result", format := fun row => if row .passed then "PASS" else "FAIL" }]
 
 inductive ReportSection where
   | filters

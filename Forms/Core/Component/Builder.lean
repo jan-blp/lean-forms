@@ -54,16 +54,16 @@ def sum {state : DataType} {tags : Enum} {constructors : tags → DataType}
     : Component.Builder state (.sum tags constructors) :=
   fun path => .sum path label (fun tag => branches tag .self) defaults
 
-def visibleWhen {state value : DataType} (condition : Expr state .boolean)
+def visibleWhen {state value : DataType} (condition : ⟦state⟧ → Bool)
     (body : Component.Builder state value) : Component.Builder state value :=
   fun path => .visibleWhen condition (body path)
 
-def disabledWhen {state value : DataType} (condition : Expr state .boolean)
+def disabledWhen {state value : DataType} (condition : ⟦state⟧ → Bool)
     (body : Component.Builder state value) : Component.Builder state value :=
   fun path => .disabledWhen condition (body path)
 
 def computed {state value result : DataType}
-    (label : String) (expression : Expr state result)
+    (label : String) (expression : ⟦state⟧ → ⟦result⟧)
     (body : Component.Builder state value) : Component.Builder state value :=
   fun path => .stack (items := pairFields) none fun
     | .body => body path

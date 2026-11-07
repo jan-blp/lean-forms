@@ -24,7 +24,7 @@ example (invocation : form.ValidInvocation []) : invocation = .appendDefault := 
 
 def conditionalItems : Component (.list .natural) :=
   .list .self "Numbers"
-    (.visibleWhen (.natLe (.project .self) (.value 0))
+    (.visibleWhen (fun n => n ≤ 0)
       (.field .self "Value" .naturalInput)) 0
 
 def testValidatedItems : IO Unit := do
@@ -94,7 +94,7 @@ def run : IO Unit := do
     check "RejectMalformedListAction" (ComponentHistoryProtocol.verify form [1]
       (Lean.Json.mkObj [("value", Lean.toJson (["1"] : List String)), ("actions", Lean.Json.arr #[entry])])).toOption.isNone
   let hiddenChild := Component.list Path.self "Numbers"
-    (Component.visibleWhen (Expr.value false) (Component.field Path.self "Value" Widget.naturalInput)) 7
+    (Component.visibleWhen (fun _ => false) (Component.field Path.self "Value" Widget.naturalInput)) 7
   let _ ← IO.ofExcept (hiddenChild.applyInvocation [1] (.remove 0))
   IO.println "PASS: list history, shifting indices, bounds, nested targets, and decoding"
 
