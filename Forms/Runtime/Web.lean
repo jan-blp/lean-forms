@@ -2,7 +2,7 @@ module
 
 public import Std.Http
 public import Forms.Runtime.TrafficLog
-public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.CompiledForms
 public import Forms.Runtime.SubmissionProtocol
 
 @[expose] public section
@@ -11,7 +11,6 @@ namespace Forms.Runtime.Web
 open Std Http Async
 
 structure ComponentEndpoint where
-  specification : Lean.Json
   submit : Lean.Json → Except Lean.Json Unit
 
 def ComponentEndpoint.ofComponent {ty : DataType}
@@ -19,35 +18,30 @@ def ComponentEndpoint.ofComponent {ty : DataType}
   (component : Composition.Component ty)
   (initial : ⟦ty⟧)
   : ComponentEndpoint where
-  specification := CompositionProtocol.specificationToJson refined component initial
   submit submission := do
     discard <| (SubmissionProtocol.verify refined component initial submission).mapError (·.toJson)
 
 inductive GetRoute where
   | index
   | script
-  | interpreter
   | display
   | validation
   | wasmAdapter
   | wasmLoader
   | wasmBinary
   | stylesheet
-  | specification
   | compiledSpecification
 
 def GetRoute.ofPath (path : String) : Option GetRoute :=
   if path == "/" then some .index
   else if path == "/app.js" then some .script
   else if path == "/display.js" then some .display
-  else if path == "/interpreter.js" then some .interpreter
   else if path == "/validation.js" then some .validation
   else if path == "/wasm.js" then some .wasmAdapter
-  else if path == "/wasm/json.mjs" then some .wasmLoader
-  else if path == "/wasm/json.wasm" then some .wasmBinary
+  else if path == "/wasm/forms.mjs" then some .wasmLoader
+  else if path == "/wasm/forms.wasm" then some .wasmBinary
   else if path == "/style.css" then some .stylesheet
   else if path == "/api/compiled-form" then some .compiledSpecification
-  else if path == "/api/form" then some .specification
   else none
 
 inductive Route where
@@ -114,13 +108,12 @@ structure Application where
   html : String
   script : String
   display : String
-  interpreter : String
   validation : String
   wasmAdapter : String
   wasmLoader : Option String
   wasmBinary : Option ByteArray
   style : String
-  compiledForm : Option Lean.Json := none
+  compiledForm : Lean.Json
 
 def Application.get
   (app : Application)
@@ -130,14 +123,12 @@ def Application.get
   | .index => some (.html app.html)
   | .script => some (.javascript app.script)
   | .display => some (.javascript app.display)
-  | .interpreter => some (.javascript app.interpreter)
   | .validation => some (.javascript app.validation)
   | .wasmAdapter => some (.javascript app.wasmAdapter)
   | .wasmLoader => app.wasmLoader.map .javascript
   | .wasmBinary => app.wasmBinary.map .wasm
   | .stylesheet => some (.css app.style)
-  | .compiledSpecification => app.compiledForm.map .json
-  | .specification => some (.json app.form.specification)
+  | .compiledSpecification => some (.json app.compiledForm)
 
 def Application.submit
   (app : Application)
@@ -188,28 +179,24 @@ def openDefaultBrowser (url : String) : IO Unit := do
   catch error =>
     IO.eprintln s!"Could not open browser: {error}. Open {url} manually."
 
-def run {ty : DataType}
-  (refined : RefinedDataType ty)
-  (component : Composition.Component ty)
-  (initial : ⟦ty⟧)
+def run (selected : ExampleForms.Example)
   (port : UInt16 := 8080)
   (openBrowser : Bool := false)
-  (compiledForm : Option Lean.Json := none)
   : IO Unit := do
+  let definition := selected.definition
   let app : Application := {
-    compiledForm
+    compiledForm := CompiledForms.descriptor selected
     logger := ← TrafficLog.Logger.create
-    form := .ofComponent refined component initial
+    form := .ofComponent definition.refined definition.component definition.initial
     html := ← IO.FS.readFile "web/index.html"
     script := ← IO.FS.readFile "web/dist/app.js"
     display := ← IO.FS.readFile "web/dist/display.js"
-    interpreter := ← IO.FS.readFile "web/dist/interpreter.js"
     validation := ← IO.FS.readFile "web/dist/validation.js"
     wasmAdapter := ← IO.FS.readFile "web/dist/wasm.js"
-    wasmLoader := ← if ← System.FilePath.pathExists "web/dist/wasm/json.mjs"
-      then some <$> IO.FS.readFile "web/dist/wasm/json.mjs" else pure none
-    wasmBinary := ← if ← System.FilePath.pathExists "web/dist/wasm/json.wasm"
-      then some <$> IO.FS.readBinFile "web/dist/wasm/json.wasm" else pure none
+    wasmLoader := ← if ← System.FilePath.pathExists "web/dist/wasm/forms.mjs"
+      then some <$> IO.FS.readFile "web/dist/wasm/forms.mjs" else pure none
+    wasmBinary := ← if ← System.FilePath.pathExists "web/dist/wasm/forms.wasm"
+      then some <$> IO.FS.readBinFile "web/dist/wasm/forms.wasm" else pure none
     style := ← IO.FS.readFile "web/style.css"
   }
   Async.block do

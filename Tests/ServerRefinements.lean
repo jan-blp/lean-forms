@@ -85,27 +85,19 @@ def run : IO Unit := do
     (evenShape.errors ⟨.rectangle, fun | .width => 2 | .height => 3⟩).map (·.toJson) ==
     [({ message := "Size must be even.", targets := .locations [.constructor .rectangle (.field .height .self)] }
       : ResolvedError Shapes.shape).toJson])
-  check "DependentTargetsStayServerSide" (evenShape.toJson == (RefinedDataType.base Shapes.shape).toJson)
 
   check "ServerPredicateAccepts" (((even positive).validate 2).map (even positive).erase == some 2)
   check "ServerPredicateRejects" (((even positive).validate 3).isNone)
   check "ServerKeepsInnerRefinement" (((even positive).validate 0).isNone)
-  check "ServerLayerNotSerialized" ((even positive).toJson == positive.toJson)
   let stacked := (even (.base .natural)).serverRefine {
     property := fun n => n < 3
     check := fun n => if h : n < 3 then .valid h else .invalid h "Below three" .global }
   check "ServerRulesAccumulate" ((stacked.errors 3).map (·.message) == ["Server rule: 3 must be even.", "Below three"])
-  check "ServerRulesDisappearRecursively" (stacked.toJson == (RefinedDataType.base .natural).toJson)
   let shapes : RefinedDataType Shapes.shape := .sum fun
     | .dot => .record (fun i => nomatch i)
     | .circle => even (.base .natural)
     | .rectangle => .record (fun _ => even (.base .natural))
   let nested := RefinedDataType.list shapes
-  let plain : RefinedDataType Shapes.shape := .sum fun
-    | .dot => .record (fun i => nomatch i)
-    | .circle => .base .natural
-    | .rectangle => .record (fun _ => .base .natural)
-  check "NestedServerRulesNotSerialized" (nested.toJson == (RefinedDataType.list plain).toJson)
   let rectangle : ⟦Shapes.shape⟧ := { tag := .rectangle, payload := fun | .width => 2 | .height => 3 }
   let expected : ResolvedError (.list Shapes.shape) :=
     ⟨"Server rule: 3 must be even.", .locations [.item 0 (.constructor .rectangle (.field .height .self))]⟩
@@ -116,7 +108,6 @@ def run : IO Unit := do
   -- The client receives no server rule, but replayed submissions still enforce it.
   let endpoint := Web.ComponentEndpoint.ofComponent (even (.base .natural)) Counter.form 0
   let client := Web.ComponentEndpoint.ofComponent (.base .natural) Counter.form 0
-  check "ServerRuleAbsentFromFullSpecification" (endpoint.specification == client.specification)
   let odd ← IO.ofExcept (ComponentHistory.replay Counter.form 0 #[⟨.plusOne, ()⟩])
   check "ClientCanSubmitValueWithoutServerRule" ((client.submit (ComponentHistoryProtocol.encode odd)).isOk)
   check "ServerRejectsReplayedOddValue" (match endpoint.submit (ComponentHistoryProtocol.encode odd) with

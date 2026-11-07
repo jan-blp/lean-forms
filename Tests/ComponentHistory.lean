@@ -4,7 +4,7 @@ public import Batteries.Data.Except
 
 public import Forms.ExampleForms.Counters
 public import Forms.ExampleForms.Shapes
-public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.CompiledView
 public import Forms.Runtime.ComponentHistoryProtocol
 public import Tests.Weakening
 
@@ -130,9 +130,6 @@ def run : IO Unit := do
     let submission := Lean.Json.mkObj [("value", JsonProtocol.valueToJson Counters.initial),
       ("actions", Lean.Json.arr #[json])]
     check "RejectMalformedInvocation" (ComponentHistoryProtocol.verify Counters.form Counters.initial submission).toOption.isNone
-  let expected ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "Tests/fixtures/counters.json"))
-  let actual ← IO.ofExcept (Lean.Json.parse (CompositionProtocol.encode (.base Counters.state) Counters.form Counters.initial))
-  check "CountersFixture" (actual == expected)
   IO.println "PASS: component targets, replay, display order, and weakening"
 
 end Tests.ComponentHistory

@@ -1,11 +1,11 @@
 module
 
-public import Forms.Runtime.ExpressionProtocol.Schema
+public import Forms.Runtime.JsonProtocol
 
 @[expose] public section
 
 namespace Forms.Runtime.InputProtocol
-open Lean ExpressionProtocol
+open Lean
 
 /-- The whitespace accepted by JavaScript's String.trim, preserved for editor inputs. -/
 def editorWhitespace (c : Char) : Bool :=
@@ -15,8 +15,8 @@ def editorWhitespace (c : Char) : Bool :=
     n == 0x202F || n == 0x205F || n == 0x3000 || n == 0xFEFF
 
 /-- Normalize editor input, keeping transport decoding strict elsewhere. -/
-def normalize (schema : Schema) (value : Json) : Except String Json := do
-  let (value, error) ← match schema with
+def normalize (ty : DataType) (value : Json) : Except String Json := do
+  let (value, error) ← match ty with
     | .natural => do
       let text ← value.getStr?.mapError (fun _ => "Expected text.")
       let text := ((text.dropWhile editorWhitespace).dropEndWhile editorWhitespace).toString
@@ -28,10 +28,7 @@ def normalize (schema : Schema) (value : Json) : Except String Json := do
     | .list .. => throw "Unsupported value type: list"
     | .record .. => throw "Unsupported value type: record"
     | .sum .. => throw "Unsupported value type: sum"
-  let decoded ← (JsonProtocol.valueFromJson schema.dataType value).mapError (fun _ => error)
+  let decoded ← (JsonProtocol.valueFromJson ty value).mapError (fun _ => error)
   pure (JsonProtocol.valueToJson decoded)
-
-def evaluate (schema value : Json) : Except String Json := do
-  normalize (← Schema.fromJson schema) value
 
 end Forms.Runtime.InputProtocol

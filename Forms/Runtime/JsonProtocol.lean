@@ -70,7 +70,7 @@ def valueFromJson (t : DataType) (json : Json) : Except String ⟦t⟧ :=
     if fields.size != 2 then throw "Expected only tag and value in sum"
     let name ← (← json.getObjVal? "tag").getStr?
     let some tag := (FinEnum.toList tags).find? (fun i => tags.label i == name)
-      | throw "Invalid sum tag in interpreter result"
+      | throw "Invalid sum tag in value"
     let payload ← valueFromJson (constructors tag) (← json.getObjVal? "value")
     return ⟨tag, payload⟩
   | .list element => do
@@ -87,15 +87,15 @@ def valueFromJson (t : DataType) (json : Json) : Except String ⟦t⟧ :=
     let text ← json.getStr?
     match text.toNat? with
     | some n => pure n
-    | none => throw "Invalid natural in interpreter result"
+    | none => throw "Invalid natural in value"
   | .enum domain => do
     let index ← json.getNat?
     if h : index < FinEnum.card domain then return FinEnum.equiv.symm ⟨index, h⟩
-    else throw "Invalid enum in interpreter result"
+    else throw "Invalid enum in value"
   | .record fieldNames fieldTypes => do
     let object ← json.getObj?
     if object.size != FinEnum.card fieldNames then
-      throw "Wrong number of record fields in interpreter result"
+      throw "Wrong number of record fields in value"
     sequence (fun i => do valueFromJson (fieldTypes i) (← json.getObjVal? (fieldNames.label i)))
 
 theorem valueFromJson_date_sound {json : Json} {date : Date}
@@ -115,51 +115,6 @@ def Path.toList {source target : DataType}
   match path with
   | .self => []
   | .field (fieldNames := fieldNames) fieldName rest => fieldNames.label fieldName :: Path.toList rest
-
-def Expr.toJson {input t} (expression : Expr input t) : Json :=
-  match expression with
-  | .value v => Json.mkObj [("kind", Lean.toJson "value"), ("type", DataType.toJson t), ("value", Runtime.JsonProtocol.valueToJson v)]
-  | .project p => Json.mkObj [("kind", Lean.toJson "project"), ("path", Lean.toJson (Path.toList p))]
-  | .all items predicate context => Json.mkObj [("kind", Lean.toJson "all"),
-      ("items", Expr.toJson items), ("predicate", Expr.toJson predicate),
-      ("context", Lean.toJson (Path.toList context))]
-  | .cases (tags := tags) subject branches => Json.mkObj [("kind", Lean.toJson "cases"),
-      ("type", DataType.toJson t), ("subject", Expr.toJson subject),
-      ("branches", Json.mkObj ((FinEnum.toList tags).map fun i => (tags.label i, Expr.toJson (branches i))))]
-  | .sum items expression => Json.mkObj [("kind", Lean.toJson "sum"),
-      ("items", Expr.toJson items), ("expression", Expr.toJson expression)]
-  | .filter items predicate => Json.mkObj [("kind", Lean.toJson "filter"),
-      ("items", Expr.toJson items), ("predicate", Expr.toJson predicate)]
-  | .sortBy items key descending => Json.mkObj [("kind", Lean.toJson "sortBy"),
-      ("items", Expr.toJson items), ("key", Expr.toJson key), ("descending", Lean.toJson descending)]
-  | .search items key query => Json.mkObj [("kind", Lean.toJson "search"),
-      ("items", Expr.toJson items), ("key", Expr.toJson key), ("query", Expr.toJson query)]
-  | .sortNatBy items key descending => Json.mkObj [("kind", Lean.toJson "sortNatBy"),
-      ("items", Expr.toJson items), ("key", Expr.toJson key), ("descending", Lean.toJson descending)]
-  | .snoc items expression => Json.mkObj [("kind", Lean.toJson "snoc"),
-      ("items", Expr.toJson items), ("value", Expr.toJson expression)]
-  | .length items => Json.mkObj [("kind", Lean.toJson "length"), ("items", Expr.toJson items)]
-  | .enumCases (domain := domain) subject branches => Json.mkObj [("kind", Lean.toJson "enumCases"),
-      ("type", DataType.toJson t), ("subject", Expr.toJson subject),
-      ("branches", Lean.toJson ((FinEnum.toList domain).map fun choice => Expr.toJson (branches choice)))]
-  | .enumEq left right => binary "enumEq" (Expr.toJson left) (Expr.toJson right)
-  | .enumLabel (domain := domain) subject => Json.mkObj [("kind", Lean.toJson "enumLabel"),
-      ("options", Lean.toJson (Enum.options domain)), ("subject", Expr.toJson subject)]
-  | .ifThenElse condition whenTrue whenFalse => Json.mkObj [("kind", Lean.toJson "ifThenElse"),
-      ("condition", Expr.toJson condition), ("whenTrue", Expr.toJson whenTrue), ("whenFalse", Expr.toJson whenFalse)]
-  | .natToText operand => Json.mkObj [("kind", Lean.toJson "natToText"), ("operand", Expr.toJson operand)]
-  | .textEq left right => binary "textEq" (Expr.toJson left) (Expr.toJson right)
-  | .textAppend left right => binary "textAppend" (Expr.toJson left) (Expr.toJson right)
-  | .natAdd l r => binary "natAdd" (Expr.toJson l) (Expr.toJson r)
-  | .natSub l r => binary "natSub" (Expr.toJson l) (Expr.toJson r)
-  | .natMul l r => binary "natMul" (Expr.toJson l) (Expr.toJson r)
-  | .not operand => Json.mkObj [("kind", Lean.toJson "not"), ("operand", Expr.toJson operand)]
-  | .and l r => binary "and" (Expr.toJson l) (Expr.toJson r)
-  | .dateLe l r => binary "dateLe" (Expr.toJson l) (Expr.toJson r)
-  | .natLe l r => binary "natLe" (Expr.toJson l) (Expr.toJson r)
-where
-  binary (kind : String) (left right : Json) : Json :=
-    Json.mkObj [("kind", Lean.toJson kind), ("left", left), ("right", right)]
 
 def Widget.name (widget : Widget t) : String :=
   match widget with
@@ -197,54 +152,4 @@ def TargetResolution.toJson {root : DataType} : TargetResolution root → Json
 def ResolvedError.toJson {root : DataType} (error : ResolvedError root) : Json :=
   Json.mkObj [("message", Lean.toJson error.message), ("targets", error.targets.toJson)]
 
-def LocationExpr.toJson {input root : DataType} : LocationExpr input root → List Json
-  | .self => []
-  | .field (fieldNames := names) name rest =>
-      Json.mkObj [("kind", Lean.toJson "field"), ("name", Lean.toJson (names.label name))] :: rest.toJson
-  | .item index rest => Json.mkObj [("kind", Lean.toJson "item"), ("index", index.toJson)] :: rest.toJson
-  | .constructor (tags := tags) tag rest =>
-      Json.mkObj [("kind", Lean.toJson "constructor"), ("tag", Lean.toJson (tags.label tag))] :: rest.toJson
-
-def TargetsExpr.toJson {root input : DataType} : TargetsExpr root input → Json
-  | .global => Json.mkObj [("kind", Lean.toJson "global")]
-  | .locations locs _ => Json.mkObj [
-      ("kind", Lean.toJson "locations"),
-      ("locations", Lean.toJson (locs.map LocationExpr.toJson))]
-
-def ScopedChecker.toJson {root input : DataType} : ScopedChecker root input → Json
-  | .pass => Json.mkObj [("kind", Lean.toJson "pass")]
-  | .report message targets => Json.mkObj [
-      ("kind", Lean.toJson "report"), ("message", message.toJson), ("targets", targets.toJson)]
-  | .ite condition thenBranch elseBranch => Json.mkObj [
-      ("kind", Lean.toJson "ite"), ("condition", condition.toJson),
-      ("thenBranch", thenBranch.toJson), ("elseBranch", elseBranch.toJson)]
-  | .cases (tags := tags) subject branches => Json.mkObj [
-      ("kind", Lean.toJson "cases"), ("subject", subject.toJson),
-      ("branches", Json.mkObj ((FinEnum.toList tags).map fun tag =>
-        (tags.label tag, (branches tag).toJson)))]
-  | .seq left right => Json.mkObj [
-      ("kind", Lean.toJson "seq"), ("left", left.toJson), ("right", right.toJson)]
-  | .each items body => Json.mkObj [
-      ("kind", Lean.toJson "each"), ("items", items.toJson), ("body", body.toJson)]
-
 end Forms.Validation
-
-namespace Forms
-
-def RefinedDataType.toJson {ty : DataType}
-  (refined : RefinedDataType ty)
-  : Lean.Json :=
-  match refined with
-  | .base _ => Lean.Json.mkObj [("kind", Lean.toJson "base")]
-  | .serverRefine inner _ => inner.toJson
-  | .refine inner checked => Lean.Json.mkObj [
-      ("kind", Lean.toJson "refine"), ("inner", inner.toJson), ("checker", checked.checker.toJson)]
-  | .list item => Lean.Json.mkObj [("kind", Lean.toJson "list"), ("item", item.toJson)]
-  | .record (fieldNames := names) fields => Lean.Json.mkObj [
-      ("kind", Lean.toJson "record"),
-      ("fields", Lean.Json.mkObj ((FinEnum.toList names).map fun name => (names.label name, (fields name).toJson)))]
-  | .sum (tags := tags) branches => Lean.Json.mkObj [
-      ("kind", Lean.toJson "sum"),
-      ("branches", Lean.Json.mkObj ((FinEnum.toList tags).map fun tag => (tags.label tag, (branches tag).toJson)))]
-
-end Forms

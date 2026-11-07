@@ -6,7 +6,7 @@ public import Forms.ExampleForms.Person
 public import Forms.ExampleForms.Invoice
 public import Forms.ExampleForms.Location
 public import Forms.ExampleForms.Thermostat
-public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.CompiledView
 public import Tests.FormSnapshot
 
 @[expose] public section
@@ -37,14 +37,6 @@ def wrap {inner : DataType} (value : ⟦inner⟧) : ⟦host inner⟧
   | .content => value
   | .title => "Keep this title"
 
-def reportSpec : String :=
-  CompositionProtocol.encode (.base (host TestReport.reportShape))
-    (TestReport.report.weaken (contentPath _)) (wrap TestReport.initial)
-
-def basketSpec : String :=
-  CompositionProtocol.encode (.base (host Basket.basket))
-    (Basket.basketView.weaken (contentPath _)) (wrap Basket.initial)
-
 def check (name : String) (passed : Bool) : IO Unit := do
   unless passed do throw (IO.userError ("FAIL " ++ name))
   IO.println ("PASS " ++ name)
@@ -61,18 +53,18 @@ def checkForm {state : DataType} (name : String)
   check name (signature (mounted.map fun field => { field with indices := field.indices.drop 1 }) ==
     signature original)
 
-def checkComponent {state : DataType} (component : Component state) : IO Unit := do
-  check "WeakenSelfPreservesComponent" (CompositionProtocol.componentToJson (component.weaken .self) ==
-    CompositionProtocol.componentToJson component)
+def checkComponent {state : DataType} (component : Component state) (value : ⟦state⟧) : IO Unit := do
+  check "WeakenSelfPreservesView" ((CompiledView.render (component.weaken .self) value).view ==
+    (CompiledView.render component value).view)
   let inner := contentPath state
   let outer := contentPath (host state)
   check "WeakenComposesPaths"
-    (CompositionProtocol.componentToJson ((component.weaken inner).weaken outer) ==
-     CompositionProtocol.componentToJson (component.weaken (outer.trans inner)))
+    ((CompiledView.render ((component.weaken inner).weaken outer) (wrap (wrap value))).view ==
+     (CompiledView.render (component.weaken (outer.trans inner)) (wrap (wrap value))).view)
 
 def run : IO Unit := do
-  checkComponent Basket.basketView
-  checkComponent TestReport.report
+  checkComponent Basket.basketView Basket.initial
+  checkComponent TestReport.report TestReport.initial
   checkForm "WeakenGroupsAndVisibility" Person.form Person.draft
   checkForm "WeakenListKeepsItemContext" Invoice.form Invoice.draft
   checkForm "WeakenSumKeepsPayloadContext" Location.form Location.draft
@@ -83,9 +75,5 @@ def run : IO Unit := do
       (.visibleWhen (.not (.project (.field .filters (.field .failuresOnly .self))))
         (.field TestReport.sortPath "Sort" .select))
   checkForm "WeakenContextOutsideEditorTarget" form TestReport.initial
-  for (name, exported) in [("weakened-report", reportSpec), ("weakened-basket", basketSpec)] do
-    let actual ← IO.ofExcept (Lean.Json.parse exported)
-    let expected ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile s!"Tests/fixtures/{name}.json"))
-    check (name ++ " fixture") (actual == expected)
 
 end Tests.Weakening

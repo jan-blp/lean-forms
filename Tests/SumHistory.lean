@@ -1,7 +1,7 @@
 module
 
 public import Forms.ExampleForms.Shapes
-public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.CompiledView
 public import Forms.Runtime.ComponentHistoryProtocol
 
 @[expose] public section

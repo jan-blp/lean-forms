@@ -40,7 +40,7 @@ try {
   for (let attempt = 0; attempt < 100; attempt++) {
     if (startupError) throw startupError;
     try {
-      await fetch(`http://127.0.0.1:${port}/api/form`);
+      await fetch(`http://127.0.0.1:${port}/api/compiled-form`);
       socket = new WebSocket(`ws://127.0.0.1:${debugPort}/session`);
       await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
       break;
@@ -93,7 +93,7 @@ try {
     const status = () => document.querySelector('#status').textContent;
     await wait(() => !document.querySelector('#submit').disabled);
     check(crossOriginIsolated, 'Shared-memory runtime requires cross-origin isolation');
-    check(document.querySelector('[data-evaluator=wasm][data-runtime=compiled]'), 'Compiled form runtime was not loaded');
+    check(document.querySelector('[data-runtime=compiled]'), 'Compiled form runtime was not loaded');
     let posts = 0;
     const originalFetch = window.fetch;
     window.fetch = (...args) => { if (args[0] === '/api/submit') posts++; return originalFetch(...args); };
@@ -169,7 +169,7 @@ try {
     try {
       let ready = false;
       for (let attempt = 0; attempt < 100; attempt++) {
-        try { await fetch(`http://127.0.0.1:${examplePort}/api/form`); ready = true; break; }
+        try { await fetch(`http://127.0.0.1:${examplePort}/api/compiled-form`); ready = true; break; }
         catch { await delay(50); }
       }
       assert.ok(ready, `Server did not start: ${name}`);
@@ -192,7 +192,7 @@ try {
         };
         await wait(() => !document.querySelector('#submit').disabled);
         check(crossOriginIsolated, 'Shared-memory runtime requires cross-origin isolation');
-        check(document.querySelector('[data-evaluator=wasm][data-runtime=compiled]'), 'Compiled form runtime was not loaded');
+        check(document.querySelector('[data-runtime=compiled]'), 'Compiled form runtime was not loaded');
         ${body}
         document.querySelector('#submit').click();
         await wait(() => document.querySelector('#status').textContent === 'Submitted successfully.');

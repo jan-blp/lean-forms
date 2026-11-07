@@ -14,7 +14,7 @@ structure Control where
   kind : String
   disabled : Bool
   invocation : List (String × Json)
-  schema : Option Json := none
+  normalize : Option (Json → Except String Json) := none
   view : Json
 
 structure Rendered where
@@ -23,11 +23,11 @@ structure Rendered where
 
 def control (target : List Json) (id label kind : String) (disabled : Bool)
     (fields : List (String × Json) := []) (index : Option Nat := none)
-    (schema : Option Json := none) : Control :=
+    (normalize : Option (Json → Except String Json) := none) : Control :=
   let key := (toJson ([toJson target, toJson id] ++ index.toList.map toJson)).compress
   let invocation := [("target", toJson target), ("action", toJson id)] ++
     index.toList.map fun n => ("index", toJson n)
-  { key, kind, disabled, invocation, schema
+  { key, kind, disabled, invocation, normalize
     view := Json.mkObj ([("key", toJson key), ("id", toJson id), ("target", toJson target),
       ("label", toJson label), ("kind", toJson kind), ("disabled", toJson disabled)] ++ fields) }
 
@@ -45,7 +45,7 @@ def editor {ty : DataType} (widget : Widget ty) (value : ⟦ty⟧)
   control target id label "editor" disabled
     [("widget", toJson widget.name), ("schema", ty.toJson),
      ("value", JsonProtocol.valueToJson value), ("location", toJson location)]
-    none (some ty.toJson)
+    none (some (InputProtocol.normalize ty))
 
 def presentation {ty : DataType} (action : WidgetAction ty) (value : ⟦ty⟧)
     (target location : List Json) (id : String) (disabled : Bool) : Control :=
@@ -116,8 +116,8 @@ def invocation {ty : DataType} (component : Component ty) (value : ⟦ty⟧)
   if c.disabled then throw "This action is unavailable."
   let fields ← match c.kind, argument with
     | "editor", some raw => do
-      let some schema := c.schema | throw "Missing editor schema"
-      let value ← InputProtocol.evaluate schema raw
+      let some normalize := c.normalize | throw "Missing editor schema"
+      let value ← normalize raw
       pure [("argument", value)]
     | "choice", some raw => do
       let tag ← raw.getStr?

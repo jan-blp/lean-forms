@@ -2,7 +2,7 @@ module
 
 public import Forms.ExampleForms.Example
 public import Forms.Runtime.CompiledView
-public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.CompiledRevision
 
 @[expose] public section
 
@@ -23,18 +23,9 @@ def clientErrors {ty : DataType} (refined : RefinedDataType ty) (value : ⟦ty�
   | .sum branches, value =>
       (clientErrors (branches value.tag) value.payload).map (·.mapLocations (.constructor value.tag))
 
-/-- A deterministic compatibility stamp, not a security hash. Excludes initial values. -/
-def revision (definition : Example.Definition) : String :=
-  let source := (Json.mkObj [("schema", definition.ty.toJson),
-    ("form", CompositionProtocol.componentToJson definition.component),
-    ("validation", definition.refined.toJson)]).compress
-  let digest := source.toUTF8.foldl (fun (h : UInt64) byte =>
-    (h ^^^ byte.toUInt64) * 1099511628211) 14695981039346656037
-  "compiled-1-" ++ toString digest
-
 def descriptor (selected : Example) : Json :=
   let definition := selected.definition
-  Json.mkObj [("form", toJson selected.name), ("revision", toJson (revision definition)),
+  Json.mkObj [("form", toJson selected.name), ("revision", toJson compiledRevision),
     ("value", JsonProtocol.valueToJson definition.initial)]
 
 structure Model (selected : Example) where
@@ -46,7 +37,7 @@ def openModel (request : Json) : Except String ((selected : Example) × Model se
   let some selected := Example.ofName name | throw s!"Unknown compiled form: {name}"
   let definition := selected.definition
   let expected ← request.getObjValAs? String "revision"
-  unless expected == revision definition do
+  unless expected == compiledRevision do
     throw "Compiled form version differs from the server. Rebuild Wasm and reload."
   let initial ← JsonProtocol.valueFromJson definition.ty (← request.getObjVal? "value")
   pure ⟨selected, { initial, history := { value := initial } }⟩

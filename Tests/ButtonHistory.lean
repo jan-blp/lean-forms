@@ -1,7 +1,7 @@
 module
 
 public import Forms.ExampleForms.Counters
-public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.CompiledView
 public import Forms.Runtime.ComponentHistoryProtocol
 public import Tests.Weakening
 

@@ -369,7 +369,6 @@ try {
   mount(model);
   window.addEventListener('pagehide', event => { if (!event.persisted) model.dispose(); });
   container.dataset.runtime = 'compiled';
-  container.dataset.evaluator = 'wasm';
 } catch (error) {
   container.setAttribute('aria-busy', 'false');
   count.textContent = '';

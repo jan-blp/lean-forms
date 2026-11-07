@@ -1,7 +1,7 @@
 module
 
 public import Forms.ExampleForms.Basket
-public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.CompiledView
 
 public meta import Forms.Core.DataType
 public meta import Forms.ExampleForms.Basket
@@ -41,9 +41,7 @@ def nested : DataType := .record basketFields fun _ => basket
   (fun _ => searchFor "PEN") == [.pen]
 
 def run : IO Unit := do
-  let exported := Runtime.CompositionProtocol.encode (.base basket) basketView initial
-  let expected ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "Tests/fixtures/basket.json"))
-  let actual ← IO.ofExcept (Lean.Json.parse exported)
-  unless actual == expected do throw (IO.userError "Basket fixture differs from Lean")
-  IO.println "PASS: basket queries, selected item, and protocol fixture"
+  let view := Runtime.CompiledView.render basketView initial
+  unless !view.controls.isEmpty do throw (IO.userError "Basket controls missing")
+  IO.println "PASS: basket queries, selected item, and compiled view"
 end Tests.Basket

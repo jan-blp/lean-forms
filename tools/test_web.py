@@ -41,30 +41,28 @@ def session(example):
             if process.poll() is not None:
                 raise AssertionError(process.stderr.read().decode())
             try:
-                status, _, body = request('/api/form')
+                status, _, body = request('/api/compiled-form')
                 break
             except URLError:
                 time.sleep(.05)
         else:
             raise AssertionError('HTTP server did not start')
         assert status == 200
-        spec = json.loads(body)
-        assert spec['version'] == 8
-        status, _, body = request('/api/compiled-form')
-        assert status == 200
         descriptor = json.loads(body)
         assert set(descriptor) == {'form', 'revision', 'value'}
-        assert descriptor['form'] == example and descriptor['value'] == spec['value']
-        assert descriptor['revision'].startswith('compiled-1-')
+        assert descriptor['form'] == example
+        assert descriptor['revision'].startswith('compiled-2-')
         for path, mime in [('/', 'text/html'), ('/app.js', 'text/javascript'),
-                           ('/display.js', 'text/javascript'), ('/interpreter.js', 'text/javascript'), ('/validation.js', 'text/javascript'), ('/style.css', 'text/css')]:
+                           ('/display.js', 'text/javascript'), ('/validation.js', 'text/javascript'), ('/style.css', 'text/css')]:
             status, headers, body = request(path)
             assert status == 200 and headers['Content-Type'].startswith(mime), (path, status, headers)
             assert body and headers['Cache-Control'] == 'no-store'
+        for retired in ['/api/form', '/interpreter.js', '/wasm/json.mjs', '/wasm/json.wasm']:
+            assert request(retired)[0] == 404
         for method in ['GET', 'POST', 'DELETE']:
             status, headers, _ = request('/missing', method=method)
             assert status == 404 and 'Allow' not in headers
-        for path in ['/', '/app.js', '/interpreter.js', '/validation.js', '/style.css', '/display.js', '/api/form', '/api/compiled-form']:
+        for path in ['/', '/app.js', '/validation.js', '/style.css', '/display.js', '/api/compiled-form']:
             for method in ['POST', 'DELETE']:
                 status, headers, _ = request(path, method=method)
                 assert status == 405 and headers['Allow'] == 'GET', (path, method, status, headers)
@@ -73,7 +71,7 @@ def session(example):
             assert status == 405 and headers['Allow'] == 'POST', (method, status, headers)
         assert request('/api/submit', raw=b'{')[0] == 400
         assert request('/api/submit', raw=b'x' * (1024 * 1024 + 1))[0] == 413
-        initial = {'value': spec['value'], 'actions': []}
+        initial = {'value': descriptor['value'], 'actions': []}
         status, headers, body = request('/api/submit', initial)
         assert status == 204 and body == ''
         assert 'Content-Type' not in headers
@@ -128,13 +126,13 @@ model.dispose();
         submission = run_client(example)
         status, _, accepted = request('/api/submit', submission)
         assert status == 204 and accepted == '', (status, accepted)
-        forged = {**submission, 'value': spec['value']}
+        forged = {**submission, 'value': descriptor['value']}
         status, _, body = request('/api/submit', forged)
         assert status == 422 and json.loads(body)['error']['kind'] == 'replay'
         assert request('/api/submit', {'value': submission['value'], 'actions': []})[0] == 422
-        unknown = {'value': spec['value'], 'actions': [{'target': [], 'action': 'unknown'}]}
+        unknown = {'value': descriptor['value'], 'actions': [{'target': [], 'action': 'unknown'}]}
         assert request('/api/submit', unknown)[0] == 422
-        assert request('/api/submit', raw=json.dumps(spec['value']).encode())[0] == 422
+        assert request('/api/submit', raw=json.dumps(descriptor['value']).encode())[0] == 422
         assert request('/api/submit', initial)[0] == 204
         if example == 'person':
             invalid = json.loads(json.dumps(initial))
@@ -172,8 +170,8 @@ model.dispose();
         traffic_log.seek(0)
         traffic = traffic_log.read().decode()
         assert '\x1b[' not in traffic
-        assert 'CLIENT → SERVER GET /api/form' in traffic
-        assert 'SERVER → CLIENT 200 GET /api/form' in traffic
+        assert 'CLIENT → SERVER GET /api/compiled-form' in traffic
+        assert 'SERVER → CLIENT 200 GET /api/compiled-form' in traffic
         assert 'CLIENT → SERVER POST /api/submit' in traffic
         assert 'SERVER → CLIENT 204 POST /api/submit\n' in traffic
         assert 'SERVER → CLIENT 422 POST /api/submit' in traffic
@@ -218,7 +216,7 @@ def terminal_colors(no_color=False, term='xterm-256color'):
             if process.poll() is not None:
                 raise AssertionError(process.stderr.read().decode())
             try:
-                with urlopen(f'http://127.0.0.1:{port}/api/form', timeout=5) as response:
+                with urlopen(f'http://127.0.0.1:{port}/api/compiled-form', timeout=5) as response:
                     assert response.status == 200
                     response.read()
                 break
@@ -257,7 +255,7 @@ def browser_flag(exit_code):
             'import sys\n'
             'from pathlib import Path\n'
             'from urllib.request import urlopen\n'
-            'with urlopen(sys.argv[1] + "/api/form", timeout=5) as response:\n'
+            'with urlopen(sys.argv[1] + "/api/compiled-form", timeout=5) as response:\n'
             '    assert response.status == 200\n'
             f'Path({str(marker)!r}).write_text(sys.argv[1])\n'
             f'sys.exit({exit_code})\n')
@@ -276,7 +274,7 @@ def browser_flag(exit_code):
                 else:
                     raise AssertionError('Browser opener was not called')
                 assert marker.read_text() == base
-                with urlopen(base + '/api/form', timeout=5) as response:
+                with urlopen(base + '/api/compiled-form', timeout=5) as response:
                     assert response.status == 200
                 if exit_code:
                     assert b'Could not open browser' in process.stderr.readline()

@@ -8,9 +8,6 @@ import Tests.Validation
 import Tests.ServerRefinements
 import Tests.CompiledForms
 import Tests.InputProtocol
-import Tests.ValidationProtocol
-import Tests.CheckerProtocol
-import Tests.ExpressionProtocol
 import Tests.Web
 import Tests.SumHistory
 import Tests.ListHistory
@@ -174,9 +171,7 @@ private def testSums : IO Unit := do
   let outer : DataType := wrapper ExampleForms.Shapes.shape
   let lifted : Expr outer .natural := Expr.weaken (.field .content .self) dimension
   check "CasesWeakensSubjectOnly" (Expr.eval lifted (wrap false valid) == 2)
-  check "CasesEncodesResultType" (match (Expr.toJson dimension).getObjVal? "type" with
-    | .ok ty => ty == DataType.toJson .natural
-    | _ => false)
+
 
   for draft in [dot, valid, invalid] do
     let encoded := JsonProtocol.valueToJson draft
@@ -231,9 +226,8 @@ private def testDisplayOrder : IO Unit := do
   let fields := fieldRefs form draft
   check "DisplayOrderReordersFields" (fields.map (·.labels) == [["Thermostat", "Away"], ["Thermostat", "Home"]])
   check "DisplayOrderPreservesFieldIdentity" (fields.map (·.indices) == [[1], [0]])
-  check "DisplayOrderEncodesPaths" (match (CompositionProtocol.componentToJson form).getObjVal? "children" with
-    | .ok (.arr children) => ((children[0]!).getObjVal? "path").toOption == some (Lean.toJson (["away"] : List String))
-    | _ => false)
+  check "DisplayOrderEncodesTargets" (((CompiledView.render form draft).controls.head?.map (·.invocation)) ==
+    some [("target", Lean.toJson (["away"] : List String)), ("action", Lean.toJson "replace")])
   let hidden : Component ExampleForms.Thermostat.thermostat :=
     (Component.Builder.group (fields := ExampleForms.Thermostat.temperatureFields) "Thermostat"
       (fun
@@ -252,7 +246,7 @@ private def testDisabled : IO Unit := do
   check "DisabledStillVisible" ((fieldRefs nested "Ada").map (·.labels) == [["Name"]])
   let hidden := Component.visibleWhen (.value false) nested
   check "HiddenDisabledStaysHidden" ((fieldRefs hidden "Ada").isEmpty)
-  check "DisabledJson" ((CompositionProtocol.componentToJson form).getObjValAs? String "kind" == .ok "disabledWhen")
+  check "DisabledView" ((CompiledView.render form "Ada").controls.all (·.disabled))
 
 private def testComputed : IO Unit := do
   let draft := ExampleForms.Invoice.draft
@@ -296,23 +290,10 @@ private def testDates : IO Unit := do
   let condition : Expr .date .boolean := .dateLe (.value early) (.project .self)
   check "DateComparisonWeakening" (Expr.eval (Expr.weaken ExampleForms.Booking.endDate condition) ExampleForms.Booking.draft)
 
-private def testProtocol : IO Unit := do
-  for (fixture, encoded) in [
-      ("Tests/fixtures/booking.json", CompositionProtocol.encode ExampleForms.Booking.bookingType ExampleForms.Booking.form ExampleForms.Booking.draft),
-      ("Tests/fixtures/location.json", CompositionProtocol.encode ExampleForms.Location.locationType ExampleForms.Location.form ExampleForms.Location.draft),
-      ("Tests/fixtures/shapes.json", CompositionProtocol.encode ExampleForms.Shapes.shapeType ExampleForms.Shapes.form ExampleForms.Shapes.draft),
-      ("Tests/fixtures/invoice.json", CompositionProtocol.encode ExampleForms.Invoice.invoiceType ExampleForms.Invoice.form ExampleForms.Invoice.draft),
-      ("Tests/fixtures/person.json", CompositionProtocol.encode ExampleForms.Person.personType ExampleForms.Person.form ExampleForms.Person.draft),
-      ("Tests/fixtures/thermostat.json", CompositionProtocol.encode ExampleForms.Thermostat.thermostatType ExampleForms.Thermostat.form ExampleForms.Thermostat.draft)] do
-    check "ProtocolFixtureMatchesLean" ((Lean.Json.parse (← IO.FS.readFile fixture)).toOption == (Lean.Json.parse encoded).toOption)
-
 public def main : IO Unit := do
   Tests.ServerRefinements.run
   Tests.CompiledForms.run
   Tests.InputProtocol.run
-  Tests.ValidationProtocol.run
-  Tests.CheckerProtocol.run
-  Tests.ExpressionProtocol.run
   Tests.Web.run
   Tests.SumHistory.run
   Tests.ListHistory.run
@@ -327,7 +308,6 @@ public def main : IO Unit := do
   Forms.Tests.ValidationExperiment.run
   testPathsAndChoices
   testHiddenValidation
-  testProtocol
   testLists
   testSums
   testRecords

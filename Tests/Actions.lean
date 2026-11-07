@@ -2,7 +2,7 @@ module
 
 public import Forms.ExampleForms.Counter
 public import Forms.ExampleForms.Basket
-public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.CompiledView
 public import Forms.Runtime.ComponentHistoryProtocol
 
 public meta import Forms.Core.DataType
@@ -121,10 +121,6 @@ def testHistory : IO Unit := do
 def run : IO Unit := do
   testHistory
   testDecodeErrors
-  let encoded := Runtime.CompositionProtocol.encode (.base .natural) ExampleForms.Counter.form 0
-  let expected ← IO.ofExcept (Lean.Json.parse (← IO.FS.readFile "Tests/fixtures/counter.json"))
-  let actual ← IO.ofExcept (Lean.Json.parse encoded)
-  unless actual == expected do throw (IO.userError "Counter fixture differs from Lean")
-  IO.println "PASS: expression actions, button history replay, and counter protocol fixture"
+  IO.println "PASS: expression actions and button history replay"
 
 end Tests.Actions

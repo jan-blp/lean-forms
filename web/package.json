@@ -5,7 +5,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test interpreter.test.mjs validation.test.mjs wasm.test.mjs compiled.test.mjs",
+    "test": "npm run build && node --test compiled.test.mjs display.test.mjs",
     "test:wasm": "cd .. && make -f experiments/wasm/Makefile test"
   },
   "devDependencies": {

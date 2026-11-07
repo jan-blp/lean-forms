@@ -2,69 +2,31 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { createModel } from './dist/interpreter.js';
-import { loadWasmEvaluator, openCompiledForm } from './dist/wasm.js';
+import { openCompiledForm } from './dist/wasm.js';
 
 const cwd = fileURLToPath(new URL('..', import.meta.url));
 execFileSync('lake', ['build', 'Forms.Runtime.CompiledForms'], { cwd, stdio: 'pipe' });
 const fixtures = JSON.parse(execFileSync('lake', ['env', 'lean', '--run', 'tools/ExportCompiledForms.lean'], {
   cwd, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
 }));
-const wasm = await loadWasmEvaluator();
 const fixture = name => fixtures.find(f => f.descriptor.form === name);
 
-// Compare only display data: compiled controls deliberately contain no programs or defaults.
-function display(node) {
-  if (!node) return null;
-  if (['button', 'editor', 'choice'].includes(node.kind)) {
-    const { key, id, target, label, kind, disabled } = node;
-    const common = { key, id, target, label, kind, disabled };
-    if (kind === 'button') return { ...common, keepDrafts: node.keepDrafts ?? node.effect.kind === 'appendDefault' };
-    const { location, value } = node;
-    if (kind === 'choice') return { ...common, location, value, options: node.options };
-    return { ...common, location, value, schema: node.schema, widget: node.widget };
-  }
-  const result = structuredClone(node);
-  if ('children' in node) result.children = node.children.map(display);
-  if (node.kind === 'list') {
-    result.append = display(node.append);
-    result.items = node.items.map(item => ({ body: display(item.body), remove: display(item.remove) }));
-  }
-  if (node.kind === 'sum') { result.selector = display(node.selector); result.body = display(node.body); }
-  return result;
+function snapshot(model) {
+  return { title: model.title, view: model.view(), controls: model.controls(),
+    submission: model.submission(), errors: model.errors() };
 }
-function compare(legacy, compiled) {
-  assert.deepEqual(compiled.view(), display(legacy.view()));
-  assert.deepEqual(compiled.controls(), legacy.controls().map(display));
-  assert.deepEqual(compiled.submission(), legacy.submission());
-  assert.deepEqual(compiled.errors(), legacy.errors());
-}
-function argument(control) {
-  if (control.kind === 'choice') return control.options.at(-1);
-  if (control.kind !== 'editor') return undefined;
-  switch (control.schema.kind) {
-    case 'natural': return '00' + (BigInt(control.value) + 123456789012345678901234567890n);
-    case 'text': return control.value + ' 🌍\0';
-    case 'boolean': return !control.value;
-    case 'enum': return (control.value + 1) % control.schema.options.length;
-    default: return control.value;
-  }
-}
-for (const { descriptor, specification } of fixtures) {
-  test(`compiled ${descriptor.form} matches JSON model through actions, views, validation, and reset`, async () => {
-    const compiled = await openCompiledForm(descriptor);
+for (const { descriptor, initial, cases } of fixtures) {
+  test(`compiled ${descriptor.form} matches native Lean through actions, views, validation, and reset`, async () => {
+    const model = await openCompiledForm(descriptor);
     try {
-      const legacy = createModel(specification, wasm);
-      compare(legacy, compiled);
-      for (const control of legacy.controls().filter(c => !c.disabled)) {
-        const raw = argument(control);
-        compiled.apply(control.key, raw);
-        legacy.apply(control.key, raw);
-        compare(legacy, compiled);
-        compiled.reset(); legacy.reset();
-        compare(legacy, compiled);
+      assert.deepEqual(snapshot(model), initial);
+      for (const { action, expected } of cases) {
+        model.apply(action.key, action.argument);
+        assert.deepEqual(snapshot(model), expected);
+        model.reset();
+        assert.deepEqual(snapshot(model), initial);
       }
-    } finally { compiled.dispose(); }
+    } finally { model.dispose(); }
   });
 }
 
@@ -113,10 +75,9 @@ test('rejected compiled actions leave state and history unchanged', async () => 
 
 test('compiled lists and sums reject stale controls and preserve action ordering', async () => {
   for (const name of ['invoice', 'location', 'person']) {
-    const { descriptor, specification } = fixture(name);
+    const { descriptor } = fixture(name);
     const model = await openCompiledForm(descriptor);
-    const legacy = createModel(specification, wasm);
-    const act = (control, value) => { model.apply(control.key, value); legacy.apply(control.key, value); compare(legacy, model); };
+    const act = (control, value) => model.apply(control.key, value);
     try {
       if (name === 'invoice') {
         act(model.controls().find(c => c.id === 'appendDefault'));
@@ -139,15 +100,15 @@ test('compiled lists and sums reject stale controls and preserve action ordering
         act(checkbox, false);
         assert.throws(() => model.apply(old.key, 0));
       }
-      compare(legacy, model);
+      assert.ok(model.submission().actions.length > 0);
     } finally { model.dispose(); }
   }
 });
 
 
 test('compiled model disposal releases memory and disposed handles stay invalid', async () => {
-  const { createEvaluator } = await import('../experiments/wasm/json-api.mjs');
-  const runtime = await createEvaluator();
+  const { createFormRuntime } = await import('../experiments/wasm/form-api.mjs');
+  const runtime = await createFormRuntime();
   const call = request => runtime.form(JSON.stringify(request));
   const cycle = () => {
     const opened = call({ operation: 'open', ...fixture('counter').descriptor });
@@ -162,7 +123,7 @@ test('compiled model disposal releases memory and disposed handles stay invalid'
   };
   cycle();
   const before = runtime.allocatedBytes();
-  for (let i = 0; i < 100; i++) cycle();
+  for (let i = 0; i < 1000; i++) cycle();
   assert.equal(runtime.allocatedBytes(), before);
   const next = call({ operation: 'open', ...fixture('counter').descriptor });
   const handle = next.value.handle;
@@ -172,4 +133,65 @@ test('compiled model disposal releases memory and disposed handles stay invalid'
   assert.equal(call({ operation: 'apply', handle, key: 'missing' }).ok, false);
   assert.deepEqual(call({ operation: 'inspect', handle }), initial);
   assert.equal(call({ operation: 'dispose', handle }).ok, true);
+});
+
+test('compiled editor normalization preserves whitespace, precision, types, and dates', async () => {
+  const counter = await openCompiledForm(fixture('counter').descriptor);
+  const person = await openCompiledForm(fixture('person').descriptor);
+  const booking = await openCompiledForm(fixture('booking').descriptor);
+  try {
+    const editor = counter.controls().find(c => c.kind === 'editor');
+    for (const code of [9, 10, 11, 12, 13, 32, 160, 0x1680,
+      ...Array.from({ length: 11 }, (_, i) => 0x2000 + i), 0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff]) {
+      const c = String.fromCodePoint(code);
+      counter.apply(editor.key, c + '00042' + c);
+      assert.equal(counter.submission().value, '42');
+      assert.equal(counter.submission().actions.at(-1).argument, '42');
+    }
+    for (const raw of ['', ' ', '-1', '+1', '1.5', '1e3', '0x10', '1 2', '١', '１',
+      '\u00851', '\u180e1', '\u200b1', '1\0', 1, false, null, undefined, {}, []]) {
+      const before = counter.submission();
+      assert.throws(() => counter.apply(editor.key, raw));
+      assert.deepEqual(counter.submission(), before);
+    }
+    const name = person.controls().find(c => c.widget === 'textInput');
+    person.apply(name.key, ' 🌍\0 ');
+    assert.equal(person.submission().actions.at(-1).argument, ' 🌍\0 ');
+    assert.throws(() => person.apply(name.key, 1));
+    const checkbox = person.controls().find(c => c.widget === 'checkbox');
+    for (const raw of ['true', 1, 0, null]) assert.throws(() => person.apply(checkbox.key, raw));
+    person.apply(checkbox.key, true);
+    const select = person.controls().find(c => c.widget === 'select');
+    for (const raw of [-1, select.schema.options.length, 0.5, '1', null, Infinity, NaN])
+      assert.throws(() => person.apply(select.key, raw));
+    person.apply(select.key, 1);
+    assert.equal(person.submission().actions.at(-1).argument, 1);
+    const date = booking.controls().find(c => c.widget === 'dateInput');
+    for (const raw of ['0001-01-01', '9999-12-31', '2000-02-29', '2028-02-29']) {
+      booking.apply(date.key, raw);
+      assert.equal(booking.submission().actions.at(-1).argument, raw);
+    }
+    for (const raw of ['0000-01-01', '10000-01-01', '1900-02-29', '2028-02-30',
+      '2028-13-01', '2028-01-00', '2028-2-29', ' 2028-02-29', '', null]) {
+      const before = booking.submission();
+      assert.throws(() => booking.apply(date.key, raw));
+      assert.deepEqual(booking.submission(), before);
+    }
+  } finally { counter.dispose(); person.dispose(); booking.dispose(); }
+});
+
+test('Wasm exposes only the compiled-form API and recovers using a fresh instance after a trap', async () => {
+  const { readFileSync } = await import('node:fs');
+  const binary = readFileSync(new URL('../.lake/wasm/forms.wasm', import.meta.url));
+  const exports = WebAssembly.Module.exports(await WebAssembly.compile(binary)).map(e => e.name);
+  for (const name of ['forms_init', 'forms_request', 'forms_allocated_bytes']) assert.ok(exports.includes(name));
+  assert.ok(!exports.some(name => /json_(run|evaluate|check|normalize|validate)/.test(name)));
+  const { createFormRuntime } = await import('../experiments/wasm/form-api.mjs');
+  const trapped = await createFormRuntime();
+  assert.throws(() => trapped.form('['.repeat(200000) + ']'.repeat(200000)), /stack overflow|maximum call stack size exceeded/i);
+  const fresh = await createFormRuntime();
+  const result = fresh.form(JSON.stringify({ operation: 'open', ...fixture('counter').descriptor }));
+  assert.equal(result.ok, true);
+  assert.equal(result.value.snapshot.submission.value, '0');
+  assert.equal(fresh.form(JSON.stringify({ operation: 'dispose', handle: result.value.handle })).ok, true);
 });

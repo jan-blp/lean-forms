@@ -16,7 +16,7 @@ def request (operation handle : String) (fields : List (String × Json) := []) :
 
 def openRequest (selected : Example) : Json :=
   Json.mkObj [("operation", toJson "open"), ("form", toJson selected.name),
-    ("revision", toJson (CompiledForms.revision selected.definition)),
+    ("revision", toJson (compiledRevision)),
     ("value", JsonProtocol.valueToJson selected.definition.initial)]
 
 def run : IO Unit := do

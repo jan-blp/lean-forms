@@ -36,12 +36,12 @@ lean_exe «forms-web» where
   extraDepTargets := #[`webAssets]
 
 lean_lib Browser where
-  roots := #[`JsonEval]
+  roots := #[`CompiledMain]
   srcDir := "experiments/wasm"
 
 -- Use Lake's dependency graph, without inspecting or rewriting generated C.
 target browserSources pkg : FilePath := do
-  let some root := pkg.findModule? `JsonEval
+  let some root := pkg.findModule? `CompiledMain
     | error "Missing browser entry module"
   let imports ← (← root.transImports.fetch).await
   let jobs ← (imports.push root).mapM fun mod => mod.c.fetch

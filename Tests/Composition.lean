@@ -1,6 +1,6 @@
 module
 
-public import Forms.Runtime.CompositionProtocol
+public import Forms.Runtime.CompiledView
 public import Forms.ExampleForms.TestReport
 public import Tests.FormSnapshot
 
@@ -140,12 +140,7 @@ def testEditorBinding : IO Unit := do
   check "TestEditorReadsSiblingOutsideBinding"
     (labels (FormSnapshot.render contextualSort enabled) == ["Contextual sort"])
 
-def testProtocol : IO Unit := do
-  let specification := CompositionProtocol.encode (.base reportShape) report initial
-  let fixture ← IO.FS.readFile "Tests/fixtures/report.json"
-  let fixtureJson ← IO.ofExcept (Lean.Json.parse fixture)
-  let specificationJson ← IO.ofExcept (Lean.Json.parse specification)
-  check "TestReportFixtureMatchesLean" (fixtureJson == specificationJson)
+def testWeakenedQueries : IO Unit := do
   let wrapped := (Expr.weaken (.field .report .self : Path outerShape reportShape) summary).eval outerInitial
   check "TestReportQueriesWeakenIntoOuterState" (wrapped == "2/4 passed")
 
@@ -154,6 +149,6 @@ def run : IO Unit := do
   testRendering
   testWeakenedRendering
   testEditorBinding
-  testProtocol
+  testWeakenedQueries
 
 end Tests.Composition

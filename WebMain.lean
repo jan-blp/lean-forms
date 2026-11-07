@@ -58,5 +58,4 @@ public def main (args : List String) : IO Unit := do
     return
   let options ← IO.ofExcept (parseOptions args)
   let selected := options.selected.getD .counter
-  let definition := selected.definition
-  Web.run definition.refined definition.component definition.initial options.port options.openBrowser (some (CompiledForms.descriptor selected))
+  Web.run selected options.port options.openBrowser
