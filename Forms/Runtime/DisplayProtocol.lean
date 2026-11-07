@@ -1,6 +1,6 @@
 module
 
-public import Forms.Runtime.Display
+public import Forms.Runtime.DisplayLayout
 public import Forms.Runtime.FeedbackProtocol
 
 @[expose] public section
@@ -37,33 +37,28 @@ def controlToJson (control : Control) : Json :=
   Json.mkObj ([("key", toJson control.key), ("id", toJson control.id), ("target", targetToJson control.target),
     ("label", toJson control.label), ("disabled", toJson control.disabled)] ++ fields ++ messageFields control.messages)
 
-def viewToJson : View → Json
+def tagName : DisplayLayout.Tag → String
+  | .div => "div" | .fieldset => "fieldset" | .legend => "legend" | .output => "output"
+  | .p => "p" | .label => "label" | .table => "table" | .thead => "thead"
+  | .tbody => "tbody" | .tr => "tr" | .th => "th" | .td => "td"
+
+def attributePair : DisplayLayout.Attribute → String × String
+  | .cssClass value => ("class", value)
+  | .tabIndex value => ("tabindex", toString value)
+  | .role value => ("role", value)
+  | .ariaLabel value => ("aria-label", value)
+  | .scope value => ("scope", value)
+  | .colSpan value => ("colspan", toString value)
+
+def layoutToJson : DisplayLayout.Node → Json
   | .hidden => .null
   | .control c => controlToJson c
-  | .stack label children => Json.mkObj [("kind", toJson "stack"), ("label", toJson label),
-      ("children", toJson (children.map viewToJson))]
-  | .actionWidget label text location children messages => Json.mkObj
-      ([("kind", toJson "actionWidget"), ("label", toJson label), ("text", toJson text),
-        ("location", FeedbackProtocol.locationToJson location),
-        ("children", toJson (children.map controlToJson))] ++ messageFields messages)
-  | .list label location items append messages => Json.mkObj
-      ([("kind", toJson "list"), ("label", toJson label), ("location", FeedbackProtocol.locationToJson location),
-        ("items", toJson (items.map fun item =>
-          Json.mkObj [("body", viewToJson item.1), ("remove", controlToJson item.2)])),
-        ("append", controlToJson append)] ++ messageFields messages)
-  | .sum selector body => Json.mkObj [("kind", toJson "sum"),
-      ("selector", controlToJson selector), ("body", viewToJson body)]
-  | .computed label text => Json.mkObj [("kind", toJson "computed"), ("label", toJson label), ("text", toJson text)]
-  | .text value => Json.mkObj [("kind", toJson "text"), ("value", toJson value)]
-  | .table columns rows => Json.mkObj [("kind", toJson "table"), ("columns", toJson columns), ("rows", toJson rows)]
+  | .element tag attributes text children messages => Json.mkObj
+      ([("kind", toJson "element"), ("tag", toJson (tagName tag)),
+        ("attributes", toJson (attributes.map fun attr => let (name, value) := attributePair attr; toJson [name, value])),
+        ("children", toJson (children.map layoutToJson))] ++
+        text.toList.map (fun value => ("text", toJson value)) ++ messageFields messages)
 
-termination_by view => sizeOf view
-decreasing_by
-  all_goals first
-    | decreasing_trivial
-    | have h := List.sizeOf_lt_of_mem ‹_ ∈ _›
-      have hp : sizeOf item.1 < sizeOf item := by cases item; simp +arith
-      simp_wf
-      omega
+def viewToJson (view : View) : Json := layoutToJson (DisplayLayout.ofView view)
 
 end Forms.Runtime.DisplayProtocol

@@ -83,33 +83,11 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
     }
     function renderContent(node: View | null): HTMLElement | DocumentFragment {
       if (!node) return document.createDocumentFragment();
-      if (node.kind === 'stack' || node.kind === 'actionWidget') {
-        const group = node.label
-          ? element('fieldset', undefined, 'component')
-          : element('div', undefined, 'stack');
-        if (node.label) group.append(element('legend', node.label));
-        if (node.kind === 'actionWidget') {
-          group.append(element('output', node.text, 'value'));
-        }
-        for (const child of node.children) group.append(renderNode(child));
-        return group;
-      }
-      if (node.kind === 'list') {
-        const group = element('fieldset', undefined, 'component');
-        group.append(element('legend', node.label));
-        if (node.items.length === 0) group.append(element('p', 'No items.', 'empty'));
-        node.items.forEach((item, index) => {
-          const row = element('fieldset', undefined, 'list-item');
-          row.append(element('legend', `Item ${index + 1}`), renderNode(item.body), renderNode(item.remove));
-          group.append(row);
-        });
-        group.append(renderNode(node.append));
-        return group;
-      }
-      if (node.kind === 'sum') {
-        const group = element('div', undefined, 'sum');
-        group.append(renderNode(node.selector), renderNode(node.body));
-        return group;
+      if (node.kind === 'element') {
+        const rendered = element(node.tag, node.text);
+        for (const [name, value] of node.attributes) rendered.setAttribute(name, value);
+        for (const child of node.children) rendered.append(renderNode(child));
+        return rendered;
       }
       if (node.kind === 'choice') {
         const label = element('label', node.label, 'choice');
@@ -125,45 +103,6 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
         label.append(select);
         if (focusKey === node.key) focus = select;
         return label;
-      }
-      if (node.kind === 'table') {
-        const wrapper = element('div', undefined, 'table-scroll');
-        wrapper.tabIndex = 0;
-        wrapper.setAttribute('role', 'region');
-        wrapper.setAttribute('aria-label', 'Table');
-        const table = element('table');
-        const head = element('thead');
-        const headings = element('tr');
-        for (const title of node.columns) {
-          const cell = element('th', title);
-          cell.scope = 'col';
-          headings.append(cell);
-        }
-        head.append(headings);
-        const body = element('tbody');
-        if (node.rows.length === 0 && node.columns.length > 0) {
-          const row = element('tr');
-          const cell = element('td', 'No rows.', 'empty');
-          cell.colSpan = node.columns.length;
-          row.append(cell);
-          body.append(row);
-        }
-        for (const cells of node.rows) {
-          const row = element('tr');
-          for (const text of cells) row.append(element('td', text));
-          body.append(row);
-        }
-        table.append(head, body);
-        wrapper.append(table);
-        return wrapper;
-      }
-      if (node.kind === 'text') return element('p', node.value, 'text');
-      if (node.kind === 'computed') {
-        const group = element('div', undefined, 'computed');
-        const label = element('label', node.label);
-        label.append(element('output', node.text));
-        group.append(label);
-        return group;
       }
       if (node.kind === 'button') {
         const button = element('button', node.label, 'action');

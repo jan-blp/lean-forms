@@ -21,15 +21,14 @@ export type DisplayControl = DisplayIdentity & (
       | { widget: 'textInput' | 'naturalInput' | 'dateInput'; value: string }
     ))
 );
-export type DisplayView = { messages?: string } & (
-  | { kind: 'stack'; label?: string | null; children: DisplayView[] }
-  | { kind: 'actionWidget'; location: Location; label: string; text: string; children: DisplayControl[] }
-  | { kind: 'list'; location: Location; label: string; items: { body: DisplayView | null; remove: DisplayControl }[]; append: DisplayControl }
-  | { kind: 'sum'; selector: DisplayControl; body: DisplayView | null }
-  | { kind: 'computed'; label: string; text: string }
-  | { kind: 'text'; value: string }
-  | { kind: 'table'; columns: string[]; rows: string[][] }
-  | DisplayControl);
+export type DisplayView = DisplayControl | {
+  kind: 'element';
+  tag: 'div' | 'fieldset' | 'legend' | 'output' | 'p' | 'label' | 'table' | 'thead' | 'tbody' | 'tr' | 'th' | 'td';
+  attributes: [string, string][];
+  text?: string;
+  messages?: string;
+  children: (DisplayView | null)[];
+};
 export interface CompiledDescriptor { form: string; revision: string; value: Value }
 export interface FormSnapshot {
   summary: string;

@@ -33,7 +33,9 @@ def testFormatting : IO Unit := do
   let date ← IO.ofExcept (JsonProtocol.valueFromJson .date (.str "2028-02-29"))
   check "FormatDate" (CompiledView.formatValue date == "2028-02-29")
   let computed := CompiledView.render (.computed (state := .natural) "Person" (.value Person.draft)) 0
-  check "ComputedDisplayText" (((DisplayProtocol.viewToJson computed.view).getObjValAs? String "text").toOption == some (CompiledView.formatValue Person.draft))
+  check "ComputedDisplayText" (match computed.view with
+    | .computed _ text => text == CompiledView.formatValue Person.draft
+    | _ => false)
   check "ComputedHasNoSchema" (((DisplayProtocol.viewToJson computed.view).getObjVal? "schema").toOption.isNone)
   let editor := CompiledView.editor Widget.select (ty := Person.addressKind) .work [] [] "replace" "Kind" false
   check "SelectOptionsAreLabels" (((DisplayProtocol.controlToJson editor.view).getObjVal? "options").toOption == some (toJson ["Home", "Work", "Other"]))

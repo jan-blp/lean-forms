@@ -297,6 +297,10 @@ try {
   await example('location', `select('Country', 'Japan'); select('City', '2');`);
   await example('report', `
     check(document.querySelectorAll('tbody tr').length === 4, 'Missing table rows');
+    const region = document.querySelector('.table-scroll');
+    check(region.tabIndex === 0 && region.getAttribute('role') === 'region' &&
+      region.getAttribute('aria-label') === 'Table', 'Table lost its accessible region');
+    check([...document.querySelectorAll('th')].every(cell => cell.scope === 'col'), 'Missing column header scope');
     document.querySelector('input[type=checkbox]').click();
     check(document.querySelectorAll('tbody tr').length === 2, 'Filter did not update table');
     select('Sort', '1');
@@ -305,6 +309,8 @@ try {
     check(document.querySelector('table'), 'Missing catalogue');
     edit('Search', 'no-such-product');
     check(document.querySelector('tbody .empty').textContent === 'No rows.', 'Empty table has no explanation');
+    check(document.querySelector('tbody .empty').colSpan === document.querySelectorAll('thead th').length,
+      'Empty state does not span the table columns');
     document.querySelector('#reset').click();
     const search = [...document.querySelectorAll('.editor')].find(form => form.querySelector('label').firstChild.textContent === 'Search');
     search.querySelector('input').value = 'pen'; search.querySelector('input').dispatchEvent(new Event('input'));
