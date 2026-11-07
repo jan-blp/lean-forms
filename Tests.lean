@@ -226,7 +226,7 @@ private def testDisplayOrder : IO Unit := do
   check "DisplayOrderPreservesFieldIdentity" (fields.map (·.indices) == [[1], [0]])
   let some first := (CompiledView.render form draft).controls.head?
     | throw (IO.userError "Missing reordered control")
-  let invocation ← IO.ofExcept (first.invoke (some (Lean.toJson "31")))
+  let invocation ← IO.ofExcept (first.invoke (some (.text "31")))
   let updated ← IO.ofExcept ((form.applyInvocation draft invocation).mapError toString)
   check "DisplayOrderDispatchesToCorrectField" (updated .away == 31 && updated .home == draft .home)
   let hidden : Component ExampleForms.Thermostat.thermostat :=

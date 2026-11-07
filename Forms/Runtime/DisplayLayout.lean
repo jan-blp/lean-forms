@@ -9,6 +9,7 @@ namespace Forms.Runtime.DisplayLayout
 open Display
 
 inductive Tag where
+  | header | span | h1 | section | details | summary | pre
   | div | fieldset | legend | output | p | label
   | table | thead | tbody | tr | th | td
   | input | select | option | button | form
@@ -17,13 +18,17 @@ inductive InputType where
   | text | date | checkbox | button | submit
 
 inductive Attribute where
+  | hidden
+  | ariaLive
+  | ariaBusy (value : Bool)
+  | runtime
   | cssClass (value : String)
   | tabIndex (value : Nat)
   | role (value : String)
   | ariaLabel (value : String)
   | scope (value : String)
   | colSpan (value : Nat)
-  | id (value : String)
+  | id (value : DomId)
   | inputType (value : InputType)
   | numeric
   | naturalPattern
@@ -32,18 +37,22 @@ inductive Attribute where
   | disabled
   | optionValue (value : String)
   | invalid
-  | describedBy (id : String)
+  | describedBy (id : DomId)
 
 inductive Source where
-  | value (id : String)
-  | checked (id : String)
-  | index (id : String)
+  | value (id : DomId)
+  | checked (id : DomId)
+  | index (id : DomId)
+
+inductive PageCommand where
+  | submit | reset
 
 inductive Binding where
-  | press (key : String)
-  | draft (key source : String)
-  | change (key : String) (source : Source)
-  | submit (key : String) (source : Source)
+  | page (command : PageCommand)
+  | press (key : ControlKey)
+  | draft (key : ControlKey) (source : DomId)
+  | change (key : ControlKey) (source : Source)
+  | submit (key : ControlKey) (source : Source)
 
 inductive InputValue where
   | none
@@ -52,7 +61,7 @@ inductive InputValue where
 
 structure Behavior where
   input : InputValue := .none
-  focusKey : Option String := none
+  focusKey : Option ControlKey := none
   bindings : List Binding := []
 
 inductive Node where
@@ -72,9 +81,9 @@ def text (tag : Tag) (value : String) (attributes : List Attribute := []) : Node
 def control (state : Interaction.State) (c : Control) : Node := Id.run do
   let disabled := state.pending || c.disabled
   let attrs := if disabled then [Attribute.disabled] else []
-  let token := String.intercalate "-" (c.key.toUTF8.toList.map fun byte => toString byte.toNat)
-  let inputId := "input-" ++ token
-  let feedbackId := "feedback-" ++ token
+  let token := String.intercalate "-" (c.key.value.toUTF8.toList.map fun byte => toString byte.toNat)
+  let inputId := DomId.mk ("input-" ++ token)
+  let feedbackId := DomId.mk ("feedback-" ++ token)
   let feedback := c.messages.toList.map fun message => text .p message [.cssClass "validation-error", .id feedbackId]
   let inputAttrs := [.id inputId] ++ attrs ++ if c.messages.isSome then [.invalid, .describedBy feedbackId] else []
   let select (value : String) (options : List (String × String)) (source : Source) :=
@@ -102,8 +111,8 @@ def control (state : Interaction.State) (c : Control) : Node := Id.run do
         (element .input [] (.inputType .checkbox :: inputAttrs)
           (behavior := { input := .checked checked, focusKey := some c.key, bindings := [.change c.key (.checked inputId)] }),
           Source.checked inputId, [])
-      | .onChange (.select selected options) =>
-        (select (toString selected) (options.zipIdx.map fun (label, index) => (toString index, label)) (.index inputId),
+      | .onChange (.select selection) =>
+        (select (toString selection.selected.val) (selection.options.zipIdx.map fun (label, index) => (toString index, label)) (.index inputId),
           Source.index inputId, [])
     return element .form (element .label [input] (text := some c.label) :: applyButton ++ feedback) [.cssClass "editor"]
       (behavior := { bindings := [.submit c.key argument] })
@@ -144,5 +153,25 @@ decreasing_by
       have hp : sizeOf item.1 < sizeOf item := by cases item; simp +arith
       simp_wf
       omega
+
+def page (view : View) (state : Interaction.State) (count : Nat) (result : String) : Node :=
+  let disabled := if state.pending then [Attribute.disabled] else []
+  element .div [
+    element .header [text .span "LEAN FORMS" [.cssClass "brand"]],
+    text .h1 view.title [.id ⟨"title"⟩],
+    element .section [ofView state view]
+      [.id ⟨"controls"⟩, .ariaLabel "Form controls", .ariaBusy state.pending, .runtime],
+    element .div [
+      element .button [] ([.id ⟨"submit"⟩, .cssClass "primary"] ++ disabled) (some "Submit")
+        (behavior := { bindings := [.page .submit] }),
+      element .button [] ([.id ⟨"reset"⟩] ++ disabled) (some "Start over")
+        (behavior := { bindings := [.page .reset] }),
+      text .span (s!"{count} " ++ if count == 1 then "action" else "actions") [.id ⟨"count"⟩]
+    ] [.cssClass "toolbar"],
+    text .p state.status ([.id ⟨"status"⟩, .role "status", .ariaLive] ++
+      if state.error then [.cssClass "error"] else []),
+    element .details [text .summary "Submitted value", text .pre (if state.resultVisible then result else "")]
+      ([.id ⟨"result"⟩] ++ if state.resultVisible then [] else [.hidden])
+  ]
 
 end Forms.Runtime.DisplayLayout

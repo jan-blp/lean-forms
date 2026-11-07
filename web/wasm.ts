@@ -1,4 +1,4 @@
-import type { CompiledDescriptor, FormSnapshot } from './protocol.js';
+import type { CompiledDescriptor, FormSnapshot, FormRequest } from './protocol.js';
 
 interface WasmModule {
   _forms_init(): void;
@@ -13,26 +13,13 @@ export async function openCompiledForm(descriptor: CompiledDescriptor) {
   let snapshot = opened.snapshot;
   let disposed = false;
   function check() { if (disposed) throw new Error('Form model is disposed.'); }
-  function update(operation: string, fields: object = {}) {
-    check();
-    snapshot = runtime.form({ operation, handle: opened.handle, ...fields }) as FormSnapshot;
-  }
   return {
-    title: snapshot.title,
-    ui() { check(); return structuredClone(snapshot.ui); },
-    event(event: string, fields: object = {}) { update('event', { event, ...fields }); },
-    view() { check(); return structuredClone(snapshot.view); },
-    controls() { check(); return structuredClone(snapshot.controls); },
-    errors() { check(); return structuredClone(snapshot.errors); },
-    submission() { check(); return structuredClone(snapshot.submission); },
-    apply(key: string, argument?: unknown) {
-      update('apply', { key, ...(argument === undefined ? {} : { argument }) });
+    snapshot() { check(); return structuredClone(snapshot); },
+    send(request: FormRequest) {
+      check();
+      snapshot = runtime.form({ ...request, handle: opened.handle }) as FormSnapshot;
+      return structuredClone(snapshot);
     },
-    validate() { update('validate'); },
-    serverError(status: number, body: string) { update('serverError', { status, body }); },
-    summary() { check(); return snapshot.summary; },
-    submissionBlocked() { check(); return snapshot.submissionBlocked; },
-    reset() { update('reset'); },
     dispose() {
       if (!disposed) { runtime.form({ operation: 'dispose', handle: opened.handle }); disposed = true; }
     },

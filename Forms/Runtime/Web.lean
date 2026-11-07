@@ -177,7 +177,7 @@ def run (selected : ExampleForms.Example)
   : IO Unit := do
   let definition := selected.definition
   let app : Application := {
-    compiledForm := CompiledForms.descriptor compiledRevision selected
+    compiledForm := CompiledFormsProtocol.descriptor compiledRevision selected
     logger := ← TrafficLog.Logger.create
     form := .ofComponent definition.refined definition.component definition.initial
     html := ← IO.FS.readFile "web/index.html"

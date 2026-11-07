@@ -91,13 +91,17 @@ try {
     };
     const apply = name => field(name).querySelector('button').click();
     const status = () => document.querySelector('#status').textContent;
-    await wait(() => !document.querySelector('#submit').disabled);
+    await wait(() => document.querySelector('#submit')?.disabled === false);
     check(crossOriginIsolated, 'Shared-memory runtime requires cross-origin isolation');
     check(document.querySelector('[data-runtime=compiled]'), 'Compiled form runtime was not loaded');
     let posts = 0;
     const originalFetch = window.fetch;
     window.fetch = (...args) => { if (args[0] === '/api/submit') posts++; return originalFetch(...args); };
+    const nameInput = field('Name').querySelector('input');
+    nameInput.focus();
     edit('Name', '<img src=x> Grace');
+    check(field('Name').querySelector('input') === nameInput && document.activeElement === nameInput,
+      'Draft replaced the editor or lost focus');
     edit('Age (18-120)', '35');
     apply('Name');
     check(field('Age (18-120)').querySelector('input').value === '35', 'Applying Name lost the Age draft');
@@ -121,7 +125,7 @@ try {
     edit('Age (18-120)', '17'); apply('Age (18-120)');
     document.querySelector('#submit').click();
     await wait(() => status() === 'Attendees must be between 18 and 120 years old.');
-    check(!document.querySelector('#submit').disabled, 'Rejected submission left controls disabled');
+    check(document.querySelector('#submit')?.disabled === false, 'Rejected submission left controls disabled');
     const ageInput = field('Age (18-120)').querySelector('input');
     check(ageInput.getAttribute('aria-invalid') === 'true', 'Invalid field not marked');
     check(document.getElementById(ageInput.getAttribute('aria-describedby')).textContent === status(), 'Missing inline feedback');
@@ -140,7 +144,7 @@ try {
     for (const body of ['null', '{"error": {"message": "wrong shape"}}', '<html>Unavailable</html>']) {
       window.fetch = async () => new Response(body, { status: 503 });
       document.querySelector('#submit').click();
-      await wait(() => !document.querySelector('#submit').disabled);
+      await wait(() => document.querySelector('#submit')?.disabled === false);
       check(status() === 'Submission failed (HTTP 503).', 'Malformed error response was not handled');
     }
     edit('Name', 'Retain me'); apply('Name');
@@ -155,7 +159,7 @@ try {
     check(pendingPosts === 1, 'Duplicate submission while pending');
     check(document.querySelector('#count').textContent === '1 action', 'History changed while pending');
     finish(new Response(null, { status: 204 }));
-    await wait(() => !document.querySelector('#submit').disabled);
+    await wait(() => document.querySelector('#submit')?.disabled === false);
     check(field('Name').querySelector('input').value === 'Retain me', 'Reset ran while pending');
     window.fetch = originalFetch;
     return 'PASS: Apply/Enter, drafts, validation, typed submission, reset, malformed errors, pending guards';
@@ -190,7 +194,7 @@ try {
           const input = [...document.querySelectorAll('label')].find(node => node.firstChild.textContent === label).querySelector('select');
           input.value = value; input.dispatchEvent(new Event('change'));
         };
-        await wait(() => !document.querySelector('#submit').disabled);
+        await wait(() => document.querySelector('#submit')?.disabled === false);
         check(crossOriginIsolated, 'Shared-memory runtime requires cross-origin isolation');
         check(document.querySelector('[data-runtime=compiled]'), 'Compiled form runtime was not loaded');
         ${body}

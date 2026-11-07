@@ -1,6 +1,7 @@
 module
 
 public import Forms.Runtime.InputProtocol
+public import Forms.Runtime.JsonProtocol
 
 @[expose] public section
 
@@ -8,13 +9,13 @@ namespace Tests.InputProtocol
 open Lean Forms.Runtime
 
 def expect (ty : Forms.DataType) (value expected : Json) : IO Unit := do
-  let actual ← IO.ofExcept (InputProtocol.decode ty value)
+  let actual ← IO.ofExcept (InputProtocol.fromJson value >>= Input.decode ty)
   let actual := JsonProtocol.valueToJson actual
   unless actual == expected do
     throw (IO.userError s!"Normalization: expected {expected.compress}, got {actual.compress}")
 
 def reject (ty : Forms.DataType) (value : Json) : IO Unit := do
-  match InputProtocol.decode ty value with
+  match InputProtocol.fromJson value >>= Input.decode ty with
   | .error _ => pure ()
   | .ok actual => throw (IO.userError s!"Unexpected normalization: {(JsonProtocol.valueToJson actual).compress}")
 

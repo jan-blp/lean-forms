@@ -14,7 +14,9 @@ def check (message : String) (condition : Bool) : IO Unit := do
 def request (operation handle : String) (fields : List (String × Json) := []) : Json :=
   Json.mkObj ([("operation", toJson operation), ("handle", toJson handle)] ++ fields)
 
-def execute := Forms.Runtime.CompiledForms.execute compiledRevision
+def execute (store : CompiledForms.Store) (request : Json) : Except String (CompiledForms.Store × Json) := do
+  let (store, response) ← CompiledFormsProtocol.execute compiledRevision store request
+  pure (store, CompiledFormsProtocol.responseToJson response)
 
 def openRequest (selected : Example) (revision := compiledRevision) : Json :=
   Json.mkObj [("operation", toJson "open"), ("form", toJson selected.name),
@@ -95,7 +97,7 @@ def testFeedback : IO Unit := do
 def testTypedDispatch : IO Unit := do
   let editor := (CompiledView.render Counter.form 0).controls.find? (·.kind == .editor)
   let some editor := editor | throw (IO.userError "Missing counter editor")
-  let invocation ← IO.ofExcept (editor.invoke (some (toJson " 003 ")))
+  let invocation ← IO.ofExcept (editor.invoke (some (.text " 003 ")))
   check "Editor builds the typed action directly" (invocation.name == .replace)
   check "Editor applies the decoded natural" (invocation.apply 0 == 3)
   check "Editor requires an argument" (!(editor.invoke none).isOk)
@@ -104,7 +106,7 @@ def testTypedDispatch : IO Unit := do
   let invocation ← IO.ofExcept (button.invoke none)
   check "Button builds the typed action directly" (invocation.name == .plusOne)
   check "Button applies its expression" (invocation.apply 5 == 6)
-  check "Button rejects even a null argument" (!(button.invoke (some Json.null)).isOk)
+  check "Button rejects an argument" (!(button.invoke (some (.text ""))).isOk)
 
 def run : IO Unit := do
   testFormatting
@@ -140,10 +142,10 @@ def run : IO Unit := do
   let guarded := Component.disabledWhen (.value true) Counter.form
   let blocked := CompiledView.render guarded 0
   check "Disabled controls are rendered disabled" (blocked.controls.all (·.disabled))
-  check "Disabled controls cannot be invoked" ((CompiledView.invocation guarded 0 key none).isOk == false)
+  check "Disabled controls cannot be invoked" ((CompiledView.invocation guarded 0 ⟨key⟩ none).isOk == false)
   let hidden := Component.visibleWhen (.value false) Counter.form
   check "Hidden controls are omitted" ((CompiledView.render hidden 0).controls.isEmpty)
-  check "Hidden controls cannot be invoked" ((CompiledView.invocation hidden 0 key none).isOk == false)
+  check "Hidden controls cannot be invoked" ((CompiledView.invocation hidden 0 ⟨key⟩ none).isOk == false)
   IO.println "PASS: compiled model actions, replay, reset, disposal, guards, and server-only validation"
 
 end Tests.CompiledForms

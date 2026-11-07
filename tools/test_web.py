@@ -79,10 +79,10 @@ def session(example):
 import { openCompiledForm } from './web/dist/wasm.js';
 import { readFileSync } from 'node:fs';
 const model = await openCompiledForm(JSON.parse(readFileSync(0, 'utf8')));
-const edit = (widget, argument) => model.apply(model.controls().find(c => c.widget === widget).key, argument);
-const apply = (label, argument) => model.apply(model.controls().find(c => c.label === label).key, argument);
+const edit = (widget, argument) => model.send({ operation: 'apply', key: model.snapshot().controls.find(c => c.widget === widget).key, argument: argument });
+const apply = (label, argument) => model.send({ operation: 'apply', key: model.snapshot().controls.find(c => c.label === label).key, argument: argument });
 const quantity = (index, argument) =>
-  model.apply(model.controls().find(c => c.label === 'Quantity' && c.target[1] === index).key, argument);
+  model.send({ operation: 'apply', key: model.snapshot().controls.find(c => c.label === 'Quantity' && c.target[1] === index).key, argument: argument });
 switch (process.argv[1]) {
   case 'person':
     edit('textInput', 'Grace'); edit('checkbox', true); edit('select', 2); break;
@@ -107,16 +107,16 @@ switch (process.argv[1]) {
   case 'thermostat': apply('Home temperature (C)', '23'); break;
   case 'counter':
   case 'counters': {
-    const editor = model.controls().find(c => c.kind === 'editor');
-    model.apply(editor.key, '123456789012345678901234567890');
-    const button = model.controls().find(c => c.id === 'plusOne');
-    model.apply(button.key); model.apply(button.key);
+    const editor = model.snapshot().controls.find(c => c.kind === 'editor');
+    model.send({ operation: 'apply', key: editor.key, argument: '123456789012345678901234567890' });
+    const button = model.snapshot().controls.find(c => c.id === 'plusOne');
+    model.send({ operation: 'apply', key: button.key }); model.send({ operation: 'apply', key: button.key });
     break;
   }
   default: throw new Error('Missing example test');
 }
-model.view();
-process.stdout.write(JSON.stringify(model.submission()));
+model.snapshot().view;
+process.stdout.write(JSON.stringify(model.snapshot().submission));
 model.dispose();
 '''
 

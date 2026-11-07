@@ -1,5 +1,7 @@
 module
 
+public import Forms.Runtime.Identity
+
 public section
 
 namespace Forms.Runtime.Interaction
@@ -13,11 +15,11 @@ inductive Notice where
   | error (message : String)
 
 structure State where
-  drafts : List (String × String) := []
+  drafts : List (ControlKey × String) := []
   submission : Submission := .idle
   notice : Notice := .info ""
   resultVisible : Bool := false
-  focus : Option String := none
+  focus : Option ControlKey := none
   deriving Inhabited
 
 def State.pending (state : State) : Bool :=

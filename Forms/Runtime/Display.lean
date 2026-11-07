@@ -1,5 +1,6 @@
 module
 
+public import Forms.Runtime.Identity
 public import Forms.Runtime.Feedback
 
 @[expose] public section
@@ -13,12 +14,22 @@ inductive TargetStep where
 
 abbrev Target := List TargetStep
 
+structure Selection where
+  options : List String
+  selected : Fin options.length
+  deriving BEq
+
+def Selection.ofEnum (domain : Enum) (value : domain) : Selection :=
+  { options := domain.options
+    selected := ⟨(FinEnum.equiv value).val, by
+      simp [Enum.options, FinEnum.toList]⟩ }
+
 inductive Editor where
   | text (value : String)
   | natural (value : Nat)
   | date (value : Date)
   | checkbox (value : Bool)
-  | select (value : Nat) (options : List String)
+  | select (selection : Selection)
   deriving BEq
 
 inductive ControlKind where
@@ -32,7 +43,7 @@ inductive ControlBody where
   deriving BEq
 
 structure Control where
-  key : String
+  key : ControlKey
   id : String
   target : Target
   label : String

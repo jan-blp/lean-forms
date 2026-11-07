@@ -1,20 +1,20 @@
 module
 
 public import Forms.Core.ComponentHistory
-public import Forms.Runtime.InputProtocol
+public import Forms.Runtime.Input
 public import Forms.Runtime.DisplayProtocol
 
 @[expose] public section
 
 namespace Forms.Runtime.CompiledView
-open Lean Composition
+open Composition
 
 /-- Each control decodes its boundary argument directly into a typed invocation. -/
 structure Control (invocation : Type) where
-  invoke : Option Json → Except String invocation
+  invoke : Option Input → Except String invocation
   view : Display.Control
 
-def Control.key {α : Type} (control : Control α) : String := control.view.key
+def Control.key {α : Type} (control : Control α) : ControlKey := control.view.key
 def Control.kind {α : Type} (control : Control α) : Display.ControlKind := control.view.kind
 def Control.disabled {α : Type} (control : Control α) : Bool := control.view.disabled
 
@@ -29,21 +29,23 @@ def Rendered.map {α β : Type} (f : α → β) (rendered : Rendered α) : Rende
   { rendered with controls := rendered.controls.map (Control.map f) }
 
 def control {α : Type} (target : Display.Target) (id label : String) (body : Display.ControlBody)
-    (disabled : Bool) (invoke : Option Json → Except String α)
+    (disabled : Bool) (invoke : Option Input → Except String α)
     (messages : Option String := none) (index : Option Nat := none) : Control α :=
   { invoke
     view := { key := DisplayProtocol.controlKey target id index, id, target, label, disabled, body, messages } }
 
-def noArgument {α : Type} (invocation : α) : Option Json → Except String α
+def noArgument {α : Type} (invocation : α) : Option Input → Except String α
   | none => .ok invocation
   | some _ => .error "Buttons do not accept an argument."
 
-def requiredArgument {α : Type} (decode : Json → Except String α) : Option Json → Except String α
+def requiredArgument {α : Type} (decode : Input → Except String α) : Option Input → Except String α
   | some raw => decode raw
   | none => .error "Missing action argument."
 
 def fieldSteps {a b : DataType} (path : Path a b) : Feedback.Location :=
-  path.toList.map Feedback.Step.field
+  match path with
+  | .self => []
+  | .field (fieldNames := names) name rest => .field (names.label name) :: fieldSteps rest
 
 /-- Display text is formatted from the Lean type, never from a schema in the browser. -/
 def formatValue {ty : DataType} (value : ⟦ty⟧) : String :=
@@ -66,8 +68,8 @@ def editor {ty : DataType} (widget : Widget ty) (value : ⟦ty⟧)
     | .naturalInput => .natural value
     | .dateInput => .date value
     | .checkbox => .checkbox value
-    | .select (domain := domain) => .select (FinEnum.equiv (α := domain) value).val (Enum.options domain)
-  control target id label (.editor location input) disabled (requiredArgument (InputProtocol.decode ty))
+    | .select (domain := domain) => .select (Display.Selection.ofEnum domain value)
+  control target id label (.editor location input) disabled (requiredArgument (Input.decode ty))
     (Feedback.messages errors location)
 
 def presentation {ty : DataType} (action : WidgetAction ty) (value : ⟦ty⟧)
@@ -123,7 +125,7 @@ def render {ty : DataType} (component : Component ty) (value : ⟦ty⟧)
     let tag := tags.label current.tag
     let loc := location ++ fieldSteps path
     let selector := control target "select" label (.choice loc tag (Enum.options tags)) disabled (requiredArgument fun raw => do
-      let name ← raw.getStr?
+      let .text name := raw | throw "Expected a constructor name."
       let some selected := (FinEnum.toList tags).find? (fun t => tags.label t == name)
         | throw s!"Unknown constructor: {name}"
       pure (Action.Sum.select selected))
@@ -140,7 +142,7 @@ def render {ty : DataType} (component : Component ty) (value : ⟦ty⟧)
 
 /-- The browser sends only a control key and raw argument. Resolve both against the current view. -/
 def invocation {ty : DataType} (component : Component ty) (value : ⟦ty⟧)
-    (key : String) (argument : Option Json) : Except String component.Invocation := do
+    (key : ControlKey) (argument : Option Input) : Except String component.Invocation := do
   let some c := (render component value).controls.find? (·.key == key)
     | throw "This action is unavailable."
   if c.disabled then throw "This action is unavailable."

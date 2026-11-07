@@ -1,6 +1,6 @@
 module
 
-public import Forms.Runtime.CompiledForms
+public import Forms.Runtime.CompiledFormsProtocol
 meta import Lean.Elab.Term
 
 open Lean Elab Term in

@@ -14,21 +14,21 @@ private def actionArgument {α : Type} (control : CompiledView.Control α) : Exc
       | .natural n => toJson ("00" ++ toString (n + 123456789012345678901234567890))
       | .text text => toJson (text ++ " 🌍\x00")
       | .checkbox value => toJson (!value)
-      | .select value options => toJson ((value + 1) % options.length)
+      | .select selection => toJson ((selection.selected.val + 1) % selection.options.length)
       | .date value => toJson (Date.toString value)
     return [("argument", value)]
 
 public def main : IO Unit := do
   let fixtures ← (FinEnum.toList Example).mapM fun selected => do
-    let descriptor := CompiledForms.descriptor compiledRevision selected
-    let packed ← IO.ofExcept (CompiledForms.openModel descriptor)
+    let descriptor := CompiledFormsProtocol.descriptor compiledRevision selected
+    let packed ← IO.ofExcept (CompiledFormsProtocol.openModel descriptor)
     let model := packed.2
     let controls := (CompiledView.render packed.1.definition.component model.history.value).controls
     let cases ← (controls.filter (! ·.disabled)).mapM fun control => do
       let fields ← IO.ofExcept (actionArgument control)
-      let action := Json.mkObj (("key", toJson control.key) :: fields)
-      let updated ← IO.ofExcept (CompiledForms.apply model action)
-      pure (Json.mkObj [("action", action), ("expected", CompiledForms.snapshot updated)])
-    pure (Json.mkObj [("descriptor", descriptor), ("initial", CompiledForms.snapshot model),
+      let action := Json.mkObj (("key", toJson control.key.value) :: fields)
+      let updated ← IO.ofExcept (CompiledFormsProtocol.actionFromJson model action >>= CompiledForms.apply model)
+      pure (Json.mkObj [("action", action), ("expected", CompiledFormsProtocol.snapshotToJson (CompiledForms.snapshot updated))])
+    pure (Json.mkObj [("descriptor", descriptor), ("initial", CompiledFormsProtocol.snapshotToJson (CompiledForms.snapshot model)),
       ("cases", toJson cases)])
   IO.println (toJson fixtures).compress

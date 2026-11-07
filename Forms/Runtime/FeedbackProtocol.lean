@@ -26,6 +26,13 @@ def locationFromJson (json : Json) : Except String Location := do
       pure (.item index)
     | _ => throw "Invalid location step"
 
+def errorToJson (error : Error) : Json :=
+  let targets := match error.targets with
+    | .global => Json.mkObj [("kind", toJson "global")]
+    | .locations first rest => Json.mkObj [("kind", toJson "locations"),
+        ("locations", toJson ((first :: rest).map locationToJson))]
+  Json.mkObj [("message", toJson error.message), ("targets", targets)]
+
 def errorFromJson (json : Json) : Except String Error := do
   let message ← json.getObjValAs? String "message"
   let targets ← json.getObjVal? "targets"

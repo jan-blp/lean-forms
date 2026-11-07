@@ -2,13 +2,12 @@ module
 
 public import Forms.ExampleForms.Example
 public import Forms.Runtime.CompiledView
-public import Forms.Runtime.ComponentHistoryProtocol
 public import Forms.Runtime.Feedback
 
 @[expose] public section
 
 namespace Forms.Runtime.CompiledForms
-open Lean Composition ExampleForms
+open Composition ExampleForms
 
 /-- Client validation deliberately excludes server-only checks. -/
 def clientErrors {ty : DataType} (refined : RefinedDataType ty) (value : ⟦ty⟧) :
@@ -27,12 +26,6 @@ def clientErrors {ty : DataType} (refined : RefinedDataType ty) (value : ⟦ty�
   | .sum branches, value =>
       (clientErrors (branches value.tag) value.payload).map (·.mapLocations .constructor)
 
-/-- `revision` is `compiledRevision`, passed in so that it can hash this module. -/
-def descriptor (revision : String) (selected : Example) : Json :=
-  let definition := selected.definition
-  Json.mkObj [("form", toJson selected.name), ("revision", toJson revision),
-    ("value", JsonProtocol.valueToJson definition.initial)]
-
 structure Model (selected : Example) where
   ui : Interaction.State := {}
   validationStarted : Bool := false
@@ -40,45 +33,80 @@ structure Model (selected : Example) where
   initial : ⟦selected.definition.ty⟧
   history : ComponentHistory selected.definition.component
 
-def openModel (request : Json) : Except String ((selected : Example) × Model selected) := do
-  let name ← request.getObjValAs? String "form"
-  let some selected := Example.ofName name | throw s!"Unknown compiled form: {name}"
-  let definition := selected.definition
-  let initial ← JsonProtocol.valueFromJson definition.ty (← request.getObjVal? "value")
-  pure ⟨selected, { initial, history := { value := initial } }⟩
+def openModel (selected : Example) (initial : ⟦selected.definition.ty⟧) : Model selected :=
+  { initial, history := { value := initial } }
 
-def snapshot {selected : Example} (model : Model selected) : Json :=
+structure Action (selected : Example) where
+  key : ControlKey
+  invocation : Except String selected.definition.component.Invocation
+
+inductive Completion where
+  | accepted
+  | rejected (feedback : Feedback.ServerError)
+
+inductive Event (selected : Example) where
+  | draft (key : ControlKey) (value : String)
+  | apply (action : Action selected)
+  | submit
+  | reset
+  | complete (result : Completion)
+  | failed (message : String)
+
+inductive Command (selected : Example) where
+  | event (event : Event selected)
+  | apply (action : Action selected)
+  | reset
+  | validate
+  | serverError (feedback : Feedback.ServerError)
+  | inspect
+
+def Command.render {selected : Example} : Command selected → Bool
+  | .event (.draft ..) => false
+  | _ => true
+
+inductive Effect (selected : Example) where
+  | submit (history : ComponentHistory selected.definition.component)
+
+structure Snapshot (selected : Example) where
+  view : Display.View
+  ui : Interaction.State
+  render : Bool
+  controls : List Display.Control
+  history : ComponentHistory selected.definition.component
+  errors : List Feedback.Error
+  summary : String
+  submissionBlocked : Bool
+  effects : List (Effect selected)
+
+def snapshot {selected : Example} (model : Model selected) (render := true) : Snapshot selected :=
   let errors := clientErrors selected.definition.refined model.history.value
   let visible := match model.serverFeedback with
     | some feedback => feedback.errors
     | none => if model.validationStarted then errors.map (fun error => Feedback.ofResolved error.erase) else []
   let rendered := CompiledView.render selected.definition.component model.history.value (errors := visible)
-  let title := rendered.view.title
-  let summary := match model.serverFeedback with
-    | some feedback => feedback.message
-    | none => Feedback.summary visible
-  Json.mkObj [("summary", toJson summary), ("submissionBlocked", toJson (!visible.isEmpty)),
-    ("view", DisplayProtocol.viewToJson rendered.view model.ui),
-    ("ui", Json.mkObj [("status", toJson model.ui.status), ("error", toJson model.ui.error),
-      ("pending", toJson model.ui.pending), ("send", toJson model.ui.send), ("focus", toJson model.ui.focus),
-      ("count", toJson (s!"{model.history.actions.size} " ++ if model.history.actions.size == 1 then "action" else "actions")),
-      ("result", if model.ui.resultVisible then toJson (JsonProtocol.valueToJson model.history.value).pretty else Json.null)]),
-    ("controls", toJson (rendered.controls.map (fun c => DisplayProtocol.controlToJson c.view))),
-    ("title", toJson title), ("submission", ComponentHistoryProtocol.encode model.history),
-    ("errors", toJson (errors.map (fun error => error.erase.toJson)))]
+  { view := rendered.view
+    ui := model.ui
+    render
+    controls := rendered.controls.map (·.view)
+    history := model.history
+    errors := errors.map (fun error => Feedback.ofResolved error.erase)
+    summary := match model.serverFeedback with
+      | some feedback => feedback.message
+      | none => Feedback.summary visible
+    submissionBlocked := !visible.isEmpty
+    effects := if model.ui.send then [.submit model.history] else [] }
 
-def blockedDraft {selected : Example} (model : Model selected) (key : String) : Option String := do
+def blockedDraft {selected : Example} (model : Model selected) (key : ControlKey) : Option ControlKey := do
   let c ← (CompiledView.render selected.definition.component model.history.value).controls.find? (·.key == key)
   match c.view.body with
   | .editor .. | .button true => none
   | .choice .. | .button false => model.ui.drafts.head?.map Prod.fst
 
-def apply {selected : Example} (model : Model selected) (request : Json) : Except String (Model selected) := do
+def apply {selected : Example} (model : Model selected) (action : Action selected) : Except String (Model selected) := do
   if model.ui.pending then throw "Submission is in progress."
-  let key ← request.getObjValAs? String "key"
+  let key := action.key
   if (blockedDraft model key).isSome then throw "Apply your edits before using this control."
-  let invocation ← CompiledView.invocation selected.definition.component model.history.value key
-    (request.getObjVal? "argument").toOption
+  let invocation ← action.invocation
   let history ← (model.history.apply invocation).mapError toString
   let controls := (CompiledView.render selected.definition.component history.value).controls
   let drafts := model.ui.drafts.filter fun draft => draft.1 != key && controls.any fun c =>
@@ -88,7 +116,7 @@ def apply {selected : Example} (model : Model selected) (request : Json) : Excep
   let ui := { model.ui with drafts, notice := .info "", resultVisible := false, focus := some key }
   pure { model with history, serverFeedback := none, ui }
 
-def draft {selected : Example} (model : Model selected) (key value : String) : Except String (Model selected) := do
+def draft {selected : Example} (model : Model selected) (key : ControlKey) (value : String) : Except String (Model selected) := do
   if model.ui.pending then return model
   let controls := (CompiledView.render selected.definition.component model.history.value).controls
   let some c := controls.find? (fun c => c.key == key && !c.disabled) | throw "This editor is unavailable."
@@ -110,80 +138,72 @@ def startSubmission {selected : Example} (model : Model selected) : Model select
       else { (model.ui.announce (Feedback.summary errors) true) with focus := none }
     { model with validationStarted := true, serverFeedback := none, ui }
 
-def event {selected : Example} (model : Model selected) (request : Json) : Except String (Model selected) := do
-  let name ← request.getObjValAs? String "event"
+def event {selected : Example} (model : Model selected) (event : Event selected) : Except String (Model selected) := do
   let model := { model with ui := model.ui.acknowledge }
-  match name with
-  | "draft" => draft model (← request.getObjValAs? String "key") (← request.getObjValAs? String "argument")
-  | "apply" =>
+  match event with
+  | .draft key value => draft model key value
+  | .apply action =>
     if model.ui.pending then return model
-    match apply model request with
+    match apply model action with
     | .ok model => pure model
     | .error error =>
-      let key := (request.getObjValAs? String "key").toOption
-      let focus := (key.bind (blockedDraft model)).or key
-      pure { model with ui := { (model.ui.announce error true) with focus } }
-  | "submit" => pure (startSubmission model)
-  | "reset" =>
+      let focus := (blockedDraft model action.key).getD action.key
+      pure { model with ui := { (model.ui.announce error true) with focus := some focus } }
+  | .submit => pure (startSubmission model)
+  | .reset =>
     if model.ui.pending then return model
     pure { model with history := { value := model.initial }, validationStarted := false, serverFeedback := none, ui := { notice := .info "Started over." } }
-  | "complete" =>
+  | .complete result =>
     if !model.ui.pending then return model
-    let status ← request.getObjValAs? Nat "status"
-    if 200 ≤ status && status < 300 then
+    match result with
+    | .accepted =>
       pure { model with ui := { model.ui with submission := .idle, resultVisible := true, notice := .info "Submitted successfully." } }
-    else
-      let feedback := FeedbackProtocol.serverError status (← request.getObjValAs? String "body")
+    | .rejected feedback =>
       let ui := { (model.ui.announce feedback.message true) with submission := .idle }
       pure { model with serverFeedback := some feedback, ui }
-  | "failed" =>
+  | .failed message =>
     if !model.ui.pending then return model
-    pure { model with ui := { (model.ui.announce (← request.getObjValAs? String "message") true) with submission := .idle } }
-  | _ => throw s!"Unknown UI event: {name}"
+    pure { model with ui := { (model.ui.announce message true) with submission := .idle } }
+
+def execute {selected : Example} (model : Model selected) : Command selected → Except String (Model selected)
+  | .event input => event model input
+  | .apply action => apply model action
+  | .reset => do
+    if model.ui.pending then throw "Submission is in progress."
+    pure { model with history := { value := model.initial }, validationStarted := false, serverFeedback := none, ui := {} }
+  | .validate => pure { model with validationStarted := true, serverFeedback := none }
+  | .serverError feedback => pure { model with serverFeedback := some feedback }
+  | .inspect => pure model
+
+structure Handle where
+  value : Nat
+  deriving BEq, DecidableEq
 
 /-- IDs are never reused: disposed handles cannot address a later model. -/
 structure Store where
   next : Nat := 0
-  models : List (Nat × ((selected : Example) × Model selected)) := []
+  models : List (Handle × ((selected : Example) × Model selected)) := []
   deriving Inhabited
 
-def execute (revision : String) (store : Store) (request : Json) : Except String (Store × Json) := do
-  let operation ← request.getObjValAs? String "operation"
-  if operation == "open" then
-    let expected ← request.getObjValAs? String "revision"
-    unless expected == revision do
-      throw "Compiled form version differs from the server. Rebuild Wasm and reload."
-    let model ← openModel request
-    pure ({ next := store.next + 1, models := (store.next, model) :: store.models },
-      Json.mkObj [("handle", toJson (toString store.next)), ("snapshot", snapshot model.2)])
-  else
-    let idText ← request.getObjValAs? String "handle"
-    let some id := idText.toNat? | throw "Invalid form handle"
-    let some (_, ⟨selected, model⟩) := store.models.find? (·.1 == id) | throw "Unknown or disposed form handle"
-    if operation == "dispose" then
-      pure ({ store with models := store.models.filter (·.1 != id) }, Json.null)
-    else
-      let model ← match operation with
-        | "event" => event model request
-        | "apply" => apply model request
-        | "reset" => do
-          if model.ui.pending then throw "Submission is in progress."
-          pure { model with history := { value := model.initial }, validationStarted := false, serverFeedback := none, ui := {} }
-        | "validate" => pure { model with validationStarted := true, serverFeedback := none }
-        | "serverError" => do
-          let status ← request.getObjValAs? Nat "status"
-          let body ← request.getObjValAs? String "body"
-          pure { model with serverFeedback := some (FeedbackProtocol.serverError status body) }
-        | "inspect" => pure model
-        | _ => throw s!"Unknown form operation: {operation}"
-      let response := snapshot model
-      pure ({ store with models := store.models.map fun (key, current) =>
-        (key, if key == id then ⟨selected, model⟩ else current) }, response)
+def Store.find (store : Store) (handle : Handle) : Except String ((selected : Example) × Model selected) :=
+  match store.models.find? (·.1 == handle) with
+  | some (_, model) => .ok model
+  | none => .error "Unknown or disposed form handle"
 
-/-- Wasm transport: JSON text in, `{ok, value}` or `{ok, error}` out. Failures keep the store. -/
-def respond (revision : String) (store : Store) (text : String) : Store × String :=
-  match Json.parse text >>= execute revision store with
-  | .error error => (store, (Json.mkObj [("ok", toJson false), ("error", toJson error)]).compress)
-  | .ok (store, value) => (store, (Json.mkObj [("ok", toJson true), ("value", value)]).compress)
+def Store.insert (store : Store) {selected : Example} (model : Model selected) : Store × Handle :=
+  let handle := Handle.mk store.next
+  ({ next := store.next + 1, models := (handle, ⟨selected, model⟩) :: store.models }, handle)
+
+def Store.replace (store : Store) (handle : Handle) {selected : Example} (model : Model selected) : Store :=
+  { store with models := store.models.map fun (key, current) =>
+    (key, if key == handle then ⟨selected, model⟩ else current) }
+
+def Store.dispose (store : Store) (handle : Handle) : Store :=
+  { store with models := store.models.filter (·.1 != handle) }
+
+inductive Response where
+  | opened {selected : Example} (handle : Handle) (snapshot : Snapshot selected)
+  | updated {selected : Example} (snapshot : Snapshot selected)
+  | disposed
 
 end Forms.Runtime.CompiledForms

@@ -11,7 +11,7 @@ initialize formStore : IO.Ref CompiledForms.Store ← IO.mkRef {}
 
 @[export forms_handle_request]
 def request (text : String) : IO String := do
-  let (store, response) := CompiledForms.respond compiledRevision (← formStore.get) text
+  let (store, response) := CompiledFormsProtocol.respond compiledRevision (← formStore.get) text
   formStore.set store
   return response
 

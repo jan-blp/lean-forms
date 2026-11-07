@@ -14,7 +14,7 @@ inductive DraftInput where
 
 inductive ImmediateInput where
   | checkbox (checked : Bool)
-  | select (selected : Nat) (options : List String)
+  | select (selection : Selection)
 
 inductive Presentation where
   | onApply (input : DraftInput)
@@ -25,7 +25,7 @@ def ofEditor : Editor → Presentation
   | .natural value => .onApply (.natural value)
   | .date value => .onApply (.date value)
   | .checkbox value => .onChange (.checkbox value)
-  | .select value options => .onChange (.select value options)
+  | .select selection => .onChange (.select selection)
 
 def DraftInput.value : DraftInput → String
   | .text value => value

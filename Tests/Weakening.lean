@@ -7,6 +7,7 @@ public import Forms.ExampleForms.Invoice
 public import Forms.ExampleForms.Location
 public import Forms.ExampleForms.Thermostat
 public import Forms.Runtime.CompiledView
+public import Forms.Runtime.JsonProtocol
 public import Tests.FormSnapshot
 
 @[expose] public section
