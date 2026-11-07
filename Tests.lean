@@ -226,8 +226,11 @@ private def testDisplayOrder : IO Unit := do
   let fields := fieldRefs form draft
   check "DisplayOrderReordersFields" (fields.map (·.labels) == [["Thermostat", "Away"], ["Thermostat", "Home"]])
   check "DisplayOrderPreservesFieldIdentity" (fields.map (·.indices) == [[1], [0]])
-  check "DisplayOrderEncodesTargets" (((CompiledView.render form draft).controls.head?.map (·.invocation)) ==
-    some [("target", Lean.toJson (["away"] : List String)), ("action", Lean.toJson "replace")])
+  let some first := (CompiledView.render form draft).controls.head?
+    | throw (IO.userError "Missing reordered control")
+  let invocation ← IO.ofExcept (first.invoke (some (Lean.toJson "31")))
+  let updated ← IO.ofExcept ((form.applyInvocation draft invocation).mapError toString)
+  check "DisplayOrderDispatchesToCorrectField" (updated .away == 31 && updated .home == draft .home)
   let hidden : Component ExampleForms.Thermostat.thermostat :=
     (Component.Builder.group (fields := ExampleForms.Thermostat.temperatureFields) "Thermostat"
       (fun

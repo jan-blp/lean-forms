@@ -60,8 +60,23 @@ def testFeedback : IO Unit := do
   let response := Json.mkObj [("error", Json.mkObj [("kind", toJson "replay"), ("message", toJson "Replay rejected")])]
   check "Replay message is preserved" ((FeedbackProtocol.serverError 400 response.compress).message == "Replay rejected")
 
+def testTypedDispatch : IO Unit := do
+  let editor := (CompiledView.render Counter.form 0).controls.find? (·.kind == .editor)
+  let some editor := editor | throw (IO.userError "Missing counter editor")
+  let invocation ← IO.ofExcept (editor.invoke (some (toJson " 003 ")))
+  check "Editor builds the typed action directly" (invocation.name == .replace)
+  check "Editor applies the decoded natural" (invocation.apply 0 == 3)
+  check "Editor requires an argument" (!(editor.invoke none).isOk)
+  let button := (CompiledView.render Counter.form 0).controls.find? (·.kind == .button)
+  let some button := button | throw (IO.userError "Missing counter button")
+  let invocation ← IO.ofExcept (button.invoke none)
+  check "Button builds the typed action directly" (invocation.name == .plusOne)
+  check "Button applies its expression" (invocation.apply 5 == 6)
+  check "Button rejects even a null argument" (!(button.invoke (some Json.null)).isOk)
+
 def run : IO Unit := do
   testFormatting
+  testTypedDispatch
   testFeedback
   let (store, opened) ← IO.ofExcept (execute {} (openRequest .counter))
   let handle ← IO.ofExcept (opened.getObjValAs? String "handle")

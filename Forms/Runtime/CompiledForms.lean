@@ -2,6 +2,7 @@ module
 
 public import Forms.ExampleForms.Example
 public import Forms.Runtime.CompiledView
+public import Forms.Runtime.ComponentHistoryProtocol
 public import Forms.Runtime.Feedback
 
 @[expose] public section

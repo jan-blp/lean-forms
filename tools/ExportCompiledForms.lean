@@ -5,9 +5,9 @@ meta import Forms.Runtime.CompiledRevision
 
 open Lean Forms Forms.Runtime Forms.ExampleForms
 
-private def actionArgument (control : CompiledView.Control) : Except String (List (String × Json)) := do
-  if control.kind == "button" then return []
-  if control.kind == "choice" then
+private def actionArgument {α : Type} (control : CompiledView.Control α) : Except String (List (String × Json)) := do
+  if control.kind == .button then return []
+  if control.kind == .choice then
     let options ← (← control.view.getObjVal? "options").getArr?
     return [("argument", options.toList.getLast!)]
   let current ← control.view.getObjVal? "value"

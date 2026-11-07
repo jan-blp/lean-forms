@@ -15,7 +15,7 @@ def editorWhitespace (c : Char) : Bool :=
     n == 0x202F || n == 0x205F || n == 0x3000 || n == 0xFEFF
 
 /-- Normalize editor input, keeping transport decoding strict elsewhere. -/
-def normalize (ty : DataType) (value : Json) : Except String Json := do
+def decode (ty : DataType) (value : Json) : Except String ⟦ty⟧ := do
   let (value, error) ← match ty with
     | .natural => do
       let text ← value.getStr?.mapError (fun _ => "Expected text.")
@@ -28,7 +28,6 @@ def normalize (ty : DataType) (value : Json) : Except String Json := do
     | .list .. => throw "Unsupported value type: list"
     | .record .. => throw "Unsupported value type: record"
     | .sum .. => throw "Unsupported value type: sum"
-  let decoded ← (JsonProtocol.valueFromJson ty value).mapError (fun _ => error)
-  pure (JsonProtocol.valueToJson decoded)
+  (JsonProtocol.valueFromJson ty value).mapError (fun _ => error)
 
 end Forms.Runtime.InputProtocol
