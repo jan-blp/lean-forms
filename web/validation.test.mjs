@@ -4,24 +4,32 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { runChecker, validationErrors } from './dist/validation.js';
 
+const evaluators = [['TypeScript', undefined]];
+if (process.env.FORMS_WASM_TEST === '1') {
+  const { loadWasmEvaluator } = await import('./dist/wasm.js');
+  evaluators.push(['Wasm', await loadWasmEvaluator()]);
+}
+
 const cwd = fileURLToPath(new URL('..', import.meta.url));
 execFileSync('lake', ['build', 'Tests.ValidationCheckers', 'Forms.Runtime.JsonProtocol'], { cwd, stdio: 'pipe' });
 const fixtures = JSON.parse(execFileSync('lake', ['env', 'lean', '--run', 'tools/ExportValidation.lean'], {
   cwd, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
 }));
 
-for (const fixture of fixtures) {
-  test(`serialized validation matches Lean: ${fixture.name}`, () => {
-    const original = structuredClone(fixture);
-    for (const sample of fixture.samples) {
-      const errors = fixture.specification.validation
-        ? validationErrors(fixture.specification.validation, fixture.specification.schema, sample.value)
-        : runChecker(fixture.specification.checker, fixture.specification.schema, sample.value);
-      assert.deepEqual(errors, sample.errors);
-      if ('accepted' in sample) assert.equal(errors.length === 0, sample.accepted);
-    }
-    assert.deepEqual(fixture, original);
-  });
+for (const [backend, evaluator] of evaluators) {
+  for (const fixture of fixtures) {
+    test(`${backend} validation matches Lean: ${fixture.name}`, () => {
+      const original = structuredClone(fixture);
+      for (const sample of fixture.samples) {
+        const errors = fixture.specification.validation
+          ? validationErrors(fixture.specification.validation, fixture.specification.schema, sample.value, evaluator)
+          : runChecker(fixture.specification.checker, fixture.specification.schema, sample.value, evaluator);
+        assert.deepEqual(errors, sample.errors);
+        if ('accepted' in sample) assert.equal(errors.length === 0, sample.accepted);
+      }
+      assert.deepEqual(fixture, original);
+    });
+  }
 }
 
 test('validation rejects malformed checker operations', () => {

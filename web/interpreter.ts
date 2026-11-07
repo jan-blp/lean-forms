@@ -1,6 +1,6 @@
 import type { Location } from './validation.js';
 import { validationErrors } from './validation.js';
-import type { Component, Control, Expr, Invocation, Path, Presentation, Schema, Specification, Value, View } from './protocol.js';
+import type { Component, Control, Evaluator, Expr, Invocation, Path, Presentation, Schema, Specification, Value, View } from './protocol.js';
 
 function natural(value: unknown) {
   if (typeof value !== 'string' || !/^[0-9]+$/.test(value)) {
@@ -112,6 +112,27 @@ export function evaluate(expression: Expr, current: Value): Value {
   }
 }
 
+export const typescriptEvaluator: Evaluator = (expression, current) => ({ value: evaluate(expression, current) });
+
+// Resolve scopes against the actual value so sum payloads use the active branch.
+function schemaAt(schema: Schema, path: Path, value: Value): Schema {
+  for (const step of path) {
+    if (schema.kind === 'record' && typeof step === 'string') {
+      const field = schema.fields.find(field => field.name === step);
+      if (!field) throw new Error(`Unknown schema field: ${step}`);
+      schema = field.type;
+    } else if (schema.kind === 'list' && typeof step === 'number') {
+      schema = schema.element;
+    } else if (schema.kind === 'sum' && step === 'value') {
+      const branch = schema.constructors.find(branch => branch.name === record(value).tag);
+      if (!branch) throw new Error('Unknown sum constructor.');
+      schema = branch.type;
+    } else throw new Error('Invalid schema path.');
+    value = get(value, [step]);
+  }
+  return schema;
+}
+
 export function formatValue(schema: Schema, value: Value): string {
   switch (schema.kind) {
     case 'text':
@@ -161,16 +182,19 @@ function fieldLocation(path: Path): Location {
     ? { kind: 'field', name: step } : { kind: 'item', index: step.toString() });
 }
 
-export function createModel(specification: Specification) {
+export function createModel(specification: Specification, evaluator: Evaluator = typescriptEvaluator) {
   if (specification.version !== 8) throw new Error('Unsupported form specification version.');
   const spec = structuredClone(specification);
   let value = structuredClone(spec.value);
   let actions: Invocation[] = [];
 
+  const evaluateValue = (expression: Expr, current: Value, schema?: Schema) => evaluator(expression, current, schema).value;
+
   function view(): View | null {
     // JSON payloads use "value"; error locations use the active constructor tag.
     function visit(component: Component, target: Path = [], disabled = false, scope: Path = [], location: Location = []): View | null {
       const current = get(value, scope);
+      const currentSchema = schemaAt(spec.schema, scope, value);
       function identity(id: string, label: string, index?: number) {
         return { id, label, target, disabled, scope, key: JSON.stringify(index === undefined ? [target, id] : [target, id, index]) };
       }
@@ -188,9 +212,9 @@ export function createModel(specification: Specification) {
             children: component.children.map((child, index) => visit(child, [...target, component.childIds[index]], disabled, scope, location))
               .filter((child): child is View => child !== null) };
         case 'visibleWhen':
-          return evaluate(component.condition, current) ? visit(component.body, target, disabled, scope, location) : null;
+          return evaluateValue(component.condition, current, currentSchema) ? visit(component.body, target, disabled, scope, location) : null;
         case 'disabledWhen':
-          return visit(component.body, target, disabled || Boolean(evaluate(component.condition, current)), scope, location);
+          return visit(component.body, target, disabled || Boolean(evaluateValue(component.condition, current, currentSchema)), scope, location);
         case 'list': {
           const items = array(get(current, component.path));
           return { kind: 'list', location: [...location, ...fieldLocation(component.path)], label: component.label,
@@ -211,15 +235,19 @@ export function createModel(specification: Specification) {
             body: visit(component.branches[tag], [...target, tag], disabled, [...scope, ...component.path, 'value'],
               [...location, ...fieldLocation(component.path), { kind: 'constructor', tag }]) };
         }
-        case 'table':
+        case 'table': {
+          const rows = evaluator(component.rows, current, currentSchema);
+          if (rows.schema && rows.schema.kind !== 'list') throw new Error('Table rows require a list.');
+          const rowSchema = rows.schema?.kind === 'list' ? rows.schema.element : undefined;
           return { kind: 'table', columns: component.columns.map(column => column.label),
-            rows: array(evaluate(component.rows, current)).map(row =>
-              component.columns.map(column => textValue(evaluate(column.expression, row)))) };
+            rows: array(rows.value).map(row =>
+              component.columns.map(column => textValue(evaluateValue(column.expression, row, rowSchema)))) };
+        }
         case 'computed':
           return { kind: 'computed', label: component.label, schema: component.type,
-            value: evaluate(component.expression, current) };
+            value: evaluateValue(component.expression, current, currentSchema) };
         case 'text':
-          return { kind: 'text', value: textValue(evaluate(component.expression, current)) };
+          return { kind: 'text', value: textValue(evaluateValue(component.expression, current, currentSchema)) };
         case 'field':
           return control({ kind: 'editor', id: 'replace', label: component.label, widget: component.widget,
             body: { kind: 'project', path: ['argument'] } }, component.path, component.schema);
@@ -259,6 +287,7 @@ export function createModel(specification: Specification) {
     if (!control || control.disabled) throw new Error('This action is unavailable.');
     let invocation: Invocation = { target: control.target, action: control.id };
     const current = get(value, control.scope);
+    const currentSchema = schemaAt(spec.schema, control.scope, value);
     let next: Value;
     let path: Path;
     switch (control.kind) {
@@ -267,8 +296,8 @@ export function createModel(specification: Specification) {
         const effect = control.effect;
         path = effect.path;
         switch (effect.kind) {
-          case 'set': next = evaluate(effect.value, current); break;
-          case 'transform': next = evaluate(effect.body, get(current, path)); break;
+          case 'set': next = evaluateValue(effect.value, current, currentSchema); break;
+          case 'transform': next = evaluateValue(effect.body, get(current, path), schemaAt(currentSchema, path, current)); break;
           case 'appendDefault': next = [...array(get(current, path)), structuredClone(effect.defaultItem)]; break;
           case 'remove':
             invocation.index = effect.index;
@@ -291,7 +320,12 @@ export function createModel(specification: Specification) {
         path = control.path;
         const normalized = normalize(control.schema, argument);
         invocation.argument = normalized;
-        next = evaluate(control.body, { current: get(current, path), argument: normalized });
+        next = evaluateValue(control.body, { current: get(current, path), argument: normalized }, {
+          kind: 'record', fields: [
+            { name: 'current', type: schemaAt(currentSchema, path, current) },
+            { name: 'argument', type: control.schema },
+          ],
+        });
         break;
       }
       default: return unsupported(control);
@@ -306,7 +340,7 @@ export function createModel(specification: Specification) {
     controls,
     apply,
     submission: () => structuredClone({ value, actions }),
-    errors() { return validationErrors(spec.validation, spec.schema, value); },
+    errors() { return validationErrors(spec.validation, spec.schema, value, evaluator); },
     reset() { value = structuredClone(spec.value); actions = []; },
   };
 }
