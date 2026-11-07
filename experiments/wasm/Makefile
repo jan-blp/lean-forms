@@ -1,4 +1,4 @@
-# Run from the repository root: make -f experiments/wasm/Makefile [all|test|setup]
+# Run from the repository root: make -f experiments/wasm/Makefile [all|test|setup|size|size-gzip|size-brotli]
 .DEFAULT_GOAL := all
 .DELETE_ON_ERROR:
 
@@ -26,7 +26,7 @@ LIBRARIES := $(addprefix $(RUNTIME)/lib/lean/,libInit.a libStd.a libLean.a lible
 # Upstream's lean_initialize without initialize_Lean; linked first so it wins over libleancpp's.
 MINIMAL_INIT := $(RUNTIME)/lib/lean/libinitialize_minimal.a
 
-.PHONY: all setup link test FORCE
+.PHONY: all setup link test size size-gzip size-brotli FORCE
 # Lake writes the source list, so linking runs in a second pass that reads it.
 all: $(MINIMAL_INIT) $(LIBRARIES)
 	lake build browserSources
@@ -89,7 +89,7 @@ FORCE:
 
 link: $(OUT)/json.mjs $(OUT)/json.wasm
 $(OUT)/json.mjs $(OUT)/json.wasm &: $(WORK)/json-bridge.o $(LEAN_OBJECTS) $(MINIMAL_INIT) $(LIBRARIES) .lake/build/browser-sources.txt $(MAKEFILE)
-	$(SDK)/em++ $(FLAGS) $(WORK)/json-bridge.o $(LEAN_OBJECTS) $(MINIMAL_INIT) -Wl,--start-group $(LIBRARIES) -Wl,--end-group --no-entry -Wl,--fatal-warnings -sMODULARIZE -sEXPORT_ES6 -sENVIRONMENT=node,web,worker -sALLOW_MEMORY_GROWTH -sSTACK_SIZE=8388608 -sSTACK_OVERFLOW_CHECK=2 '-sEXPORTED_FUNCTIONS=["_json_init","_json_run_typed","_json_run_checker","_wasm_allocated_bytes"]' '-sEXPORTED_RUNTIME_METHODS=["ccall"]' -o $(OUT)/json.mjs
+	$(SDK)/em++ $(FLAGS) $(WORK)/json-bridge.o $(LEAN_OBJECTS) $(MINIMAL_INIT) -Wl,--start-group $(LIBRARIES) -Wl,--end-group --no-entry -Wl,--fatal-warnings -sMODULARIZE -sEXPORT_ES6 -sENVIRONMENT=node,web,worker -sALLOW_MEMORY_GROWTH -sSTACK_SIZE=8388608 -sSTACK_OVERFLOW_CHECK=2 '-sEXPORTED_FUNCTIONS=["_json_init","_json_run_typed","_json_run_checker","_json_run_validation","_json_run_normalize","_wasm_allocated_bytes"]' '-sEXPORTED_RUNTIME_METHODS=["ccall"]' -o $(OUT)/json.mjs
 
 test: all
 	lake build Tests.ExpressionProtocol
@@ -97,3 +97,15 @@ test: all
 	node experiments/wasm/json-test.mjs
 	npm --prefix web run build
 	node --test web/interpreter.test.mjs web/wasm.test.mjs web/validation.test.mjs
+
+# Report the existing binary without rebuilding it.
+size:
+	@python3 -c 'from pathlib import Path; import sys; p = Path("$(OUT)/json.wasm"); p.is_file() or sys.exit("Wasm binary missing; run make -f $(MAKEFILE) first."); n = p.stat().st_size; print(f"{p}: {n / 1024:.2f} KiB ({n / 1048576:.2f} MiB)")'
+
+# Measure deterministic gzip level 9 compression without writing an archive.
+size-gzip:
+	@python3 -c 'from pathlib import Path; import gzip, sys; p = Path("$(OUT)/json.wasm"); p.is_file() or sys.exit("Wasm binary missing; run make -f $(MAKEFILE) first."); n = len(gzip.compress(p.read_bytes(), compresslevel=9, mtime=0)); print(f"{p} (gzip -9): {n / 1024:.2f} KiB ({n / 1048576:.2f} MiB)")'
+
+# Measure Brotli quality 11 using Node.js without writing an archive.
+size-brotli:
+	@node --input-type=commonjs -e 'const fs = require("node:fs"), z = require("node:zlib"), p = "$(OUT)/json.wasm"; if (!fs.existsSync(p)) { console.error("Wasm binary missing; run make -f $(MAKEFILE) first."); process.exit(1); } const n = z.brotliCompressSync(fs.readFileSync(p), { params: { [z.constants.BROTLI_PARAM_QUALITY]: 11 } }).length; console.log(p + " (Brotli quality 11): " + (n / 1024).toFixed(2) + " KiB (" + (n / 1048576).toFixed(2) + " MiB)");'

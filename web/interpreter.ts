@@ -2,13 +2,6 @@ import type { Location } from './validation.js';
 import { validationErrors } from './validation.js';
 import type { Component, Control, Evaluator, Expr, Invocation, Path, Presentation, Schema, Specification, Value, View } from './protocol.js';
 
-function natural(value: unknown) {
-  if (typeof value !== 'string' || !/^[0-9]+$/.test(value)) {
-    throw new Error('Enter a non-negative whole number.');
-  }
-  return BigInt(value);
-}
-
 export function get(value: Value, path: Path): Value {
   return path.reduce((current, name) => typeof name === 'number' ? array(current)[name] : record(current)[name], value);
 }
@@ -83,31 +76,6 @@ export function formatValue(schema: Schema, value: Value): string {
     }
     default: return unsupported(schema);
   }
-}
-
-function normalize(schema: Schema, value: unknown): Value {
-  switch (schema.kind) {
-    case 'natural': return natural(textValue(value).trim()).toString();
-    case 'text':
-      if (typeof value === 'string') return value;
-      break;
-    case 'boolean':
-      if (typeof value === 'boolean') return value;
-      break;
-    case 'enum':
-      if (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < schema.options.length) return value;
-      break;
-    case 'date': {
-      if (typeof value !== 'string' || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) break;
-      const [year, month, day] = value.split('-').map(Number);
-      const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-      const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-      if (year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= days[month - 1]) return value;
-      break;
-    }
-    default: throw new Error(`Unsupported value type: ${schema.kind}`);
-  }
-  throw new Error(`Invalid ${schema.kind} value.`);
 }
 
 function fieldLocation(path: Path): Location {
@@ -251,7 +219,7 @@ export function createModel(specification: Specification, evaluator: Evaluator) 
       }
       case 'editor': {
         path = control.path;
-        const normalized = normalize(control.schema, argument);
+        const normalized = evaluator.normalize(control.schema, argument);
         invocation.argument = normalized;
         next = evaluateValue(control.body, { current: get(current, path), argument: normalized }, {
           kind: 'record', fields: [

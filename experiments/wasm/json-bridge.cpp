@@ -4,6 +4,8 @@
 #include <malloc.h>
 
 extern "C" lean_object * json_evaluate_typed(lean_object *, lean_object *, lean_object *);
+extern "C" lean_object * json_validate(lean_object *, lean_object *, lean_object *);
+extern "C" lean_object * json_normalize(lean_object *, lean_object *);
 extern "C" lean_object * json_check(lean_object *, lean_object *, lean_object *);
 extern "C" lean_object * runtime_initialize_lean_x2dforms_JsonEval(uint8_t);
 
@@ -27,17 +29,21 @@ extern "C" unsigned wasm_allocated_bytes() { return mallinfo().uordblks; }
 // rather than silently truncating a malformed request. The response is JSON text.
 using Runner = lean_object * (*)(lean_object *, lean_object *, lean_object *);
 
+static const char * save_response(lean_object * result) {
+    static std::string response;
+    response.assign(lean_string_cstr(result), lean_string_size(result) - 1);
+    lean_dec(result);
+    return response.c_str();
+}
+
 static const char * run(Runner evaluate, const char * schema, size_t schema_len,
                                  const char * expression, size_t expression_len,
                                  const char * value, size_t value_len) {
-    static std::string response;
     lean_object * result = evaluate(
         lean_mk_string_from_bytes(schema, schema_len),
         lean_mk_string_from_bytes(expression, expression_len),
         lean_mk_string_from_bytes(value, value_len));
-    response.assign(lean_string_cstr(result), lean_string_size(result) - 1);
-    lean_dec(result);
-    return response.c_str();
+    return save_response(result);
 }
 
 extern "C" const char * json_run_typed(const char * schema, size_t schema_len,
@@ -50,4 +56,17 @@ extern "C" const char * json_run_checker(const char * schema, size_t schema_len,
                                          const char * checker, size_t checker_len,
                                          const char * value, size_t value_len) {
     return run(json_check, schema, schema_len, checker, checker_len, value, value_len);
+}
+
+extern "C" const char * json_run_validation(const char * schema, size_t schema_len,
+                                            const char * refinement, size_t refinement_len,
+                                            const char * value, size_t value_len) {
+    return run(json_validate, schema, schema_len, refinement, refinement_len, value, value_len);
+}
+
+extern "C" const char * json_run_normalize(const char * schema, size_t schema_len,
+                                           const char * value, size_t value_len) {
+    return save_response(json_normalize(
+        lean_mk_string_from_bytes(schema, schema_len),
+        lean_mk_string_from_bytes(value, value_len)));
 }

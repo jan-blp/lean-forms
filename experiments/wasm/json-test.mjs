@@ -113,3 +113,51 @@ const malformed = structuredClone(activeShape);
 malformed.branches.rectangle.message = project('missing');
 assert.equal(checkShape(malformed, { tag: 'circle', value: '5' }).ok, false);
 console.log('PASS: checker cases, conditional outcomes, and validation of inactive branches');
+
+// Recursive validation prefixes local errors while preserving global errors.
+const base = { kind: 'base' };
+const nestedSchema = { kind: 'list', element: { kind: 'list', element: natural } };
+const refinement = { kind: 'list', item: { kind: 'refine', inner: base, checker: {
+  kind: 'seq', left: report(literal({ kind: 'text' }, 'missing 🌍\0'),
+    [{ kind: 'item', index: literal(natural, '999999999999999999999') }]),
+  right: { kind: 'report', message: literal({ kind: 'text' }, 'global'), targets: { kind: 'global' } },
+} } };
+const validationArgs = [nestedSchema, refinement, [[], ['1']]].map(value => JSON.stringify(value));
+const expectedValidation = { ok: true, value: ['0', '1'].flatMap(index => [
+  { message: 'missing 🌍\0', targets: { kind: 'invalidTarget', location: [
+    { kind: 'item', index }, { kind: 'item', index: '999999999999999999999' },
+  ] } },
+  { message: 'global', targets: { kind: 'global' } },
+]) };
+assert.deepEqual(evaluator.validate(...validationArgs), expectedValidation);
+const validationBefore = evaluator.allocatedBytes();
+for (let i = 0; i < 1000; i++) assert.deepEqual(evaluator.validate(...validationArgs), expectedValidation);
+assert.equal(evaluator.allocatedBytes(), validationBefore);
+assert.deepEqual(independent.validate(...validationArgs), expectedValidation);
+for (const [index, prefix] of [[0, 'schema:'], [1, 'refinement:'], [2, 'value:']]) {
+  const args = [...validationArgs];
+  args[index] += '\0';
+  const result = evaluator.validate(...args);
+  assert.equal(result.ok, false);
+  assert.ok(result.error.startsWith(prefix), result.error);
+}
+assert.deepEqual(evaluator.validate(...validationArgs), expectedValidation);
+console.log('PASS: recursive validation, prefixed invalid targets, global errors, Unicode/NUL, recovery, and 1000 calls without retained allocations');
+
+const normalizationArgs = [schema, JSON.stringify(' \t000123456789012345678901234567890\n')];
+const normalized = { ok: true, value: '123456789012345678901234567890' };
+assert.deepEqual(evaluator.normalize(...normalizationArgs), normalized);
+const normalizationBefore = evaluator.allocatedBytes();
+for (let i = 0; i < 1000; i++) assert.deepEqual(evaluator.normalize(...normalizationArgs), normalized);
+assert.equal(evaluator.allocatedBytes(), normalizationBefore);
+assert.deepEqual(independent.normalize(...normalizationArgs), normalized);
+for (const [index, prefix] of [[0, 'schema:'], [1, 'value:']]) {
+  const args = [...normalizationArgs];
+  args[index] += '\0';
+  const result = evaluator.normalize(...args);
+  assert.equal(result.ok, false);
+  assert.ok(result.error.startsWith(prefix), result.error);
+}
+assert.deepEqual(evaluator.normalize(...normalizationArgs), normalized);
+assert.deepEqual(evaluator.normalize('{"kind":"text"}', JSON.stringify('🌍\0')), { ok: true, value: '🌍\0' });
+console.log('PASS: input normalization, two-argument transport, Unicode/NUL, recovery, and 1000 calls without retained allocations');

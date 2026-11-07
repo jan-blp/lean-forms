@@ -1,0 +1,37 @@
+module
+
+public import Forms.Runtime.ExpressionProtocol.Schema
+
+@[expose] public section
+
+namespace Forms.Runtime.InputProtocol
+open Lean ExpressionProtocol
+
+/-- The whitespace accepted by JavaScript's String.trim, preserved for editor inputs. -/
+def editorWhitespace (c : Char) : Bool :=
+  let n := c.toNat
+  (0x09 ≤ n && n ≤ 0x0D) || n == 0x20 || n == 0xA0 || n == 0x1680 ||
+    (0x2000 ≤ n && n ≤ 0x200A) || n == 0x2028 || n == 0x2029 ||
+    n == 0x202F || n == 0x205F || n == 0x3000 || n == 0xFEFF
+
+/-- Normalize editor input, keeping transport decoding strict elsewhere. -/
+def normalize (schema : Schema) (value : Json) : Except String Json := do
+  let (value, error) ← match schema with
+    | .natural => do
+      let text ← value.getStr?.mapError (fun _ => "Expected text.")
+      let text := ((text.dropWhile editorWhitespace).dropEndWhile editorWhitespace).toString
+      pure (toJson text, "Enter a non-negative whole number.")
+    | .text => pure (value, "Invalid text value.")
+    | .boolean => pure (value, "Invalid boolean value.")
+    | .date => pure (value, "Invalid date value.")
+    | .enum .. => pure (value, "Invalid enum value.")
+    | .list .. => throw "Unsupported value type: list"
+    | .record .. => throw "Unsupported value type: record"
+    | .sum .. => throw "Unsupported value type: sum"
+  let decoded ← (JsonProtocol.valueFromJson schema.dataType value).mapError (fun _ => error)
+  pure (JsonProtocol.valueToJson decoded)
+
+def evaluate (schema value : Json) : Except String Json := do
+  normalize (← Schema.fromJson schema) value
+
+end Forms.Runtime.InputProtocol

@@ -6,14 +6,14 @@ export async function createEvaluator(options) {
   const module = await createModule(options);
   module._json_init();
   const encoder = new TextEncoder();
-  function request(entry, inputSchemaJson, programJson, valueJson) {
+  function request(entry, ...items) {
     const args = [];
-    for (const text of [inputSchemaJson, programJson, valueJson]) {
+    for (const text of items) {
       if (typeof text !== 'string') throw new TypeError('Expected JSON text');
       args.push(text, encoder.encode(text).length);
     }
     return JSON.parse(module.ccall(entry, 'string',
-      ['string', 'number', 'string', 'number', 'string', 'number'], args));
+      items.flatMap(() => ['string', 'number']), args));
   }
   return {
     // Compares against native results, which carry no result schema.
@@ -22,6 +22,8 @@ export async function createEvaluator(options) {
       return result;
     },
     check: (...args) => request('json_run_checker', ...args),
+    normalize: (...args) => request('json_run_normalize', ...args),
+    validate: (...args) => request('json_run_validation', ...args),
     // Experiment instrumentation, not part of the evaluation protocol.
     allocatedBytes: () => module._wasm_allocated_bytes(),
   };

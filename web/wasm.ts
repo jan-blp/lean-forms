@@ -19,16 +19,17 @@ async function load(): Promise<Evaluator> {
   const module: WasmModule = await createModule();
   module._json_init();
   const encoder = new TextEncoder();
-  function request(name: string, schema: Schema, program: unknown, value: Value): unknown {
+  function request(name: string, ...items: unknown[]): unknown {
     const args: (string | number)[] = [];
-    for (const item of [schema, program, value]) {
+    for (const item of items) {
       const text = JSON.stringify(item);
+      if (text === undefined) throw new Error('Expected a JSON value.');
       args.push(text, encoder.encode(text).length);
     }
     let text: string;
     try {
       text = module.ccall(name, 'string',
-        ['string', 'number', 'string', 'number', 'string', 'number'], args);
+        items.flatMap(() => ['string', 'number']), args);
     } catch (error) {
       // An aborted instance (e.g. stack overflow) is unusable; reload on next use.
       loading = undefined;
@@ -45,5 +46,9 @@ async function load(): Promise<Evaluator> {
   };
   evaluator.runChecker = (checker, schema, value) =>
     (request('json_run_checker', schema, checker, value) as { value: ResolvedError[] }).value;
+  evaluator.validate = (refinement, schema, value) =>
+    (request('json_run_validation', schema, refinement, value) as { value: ResolvedError[] }).value;
+  evaluator.normalize = (schema, value) =>
+    (request('json_run_normalize', schema, value) as { value: Value }).value;
   return evaluator;
 }

@@ -95,5 +95,7 @@ export type SubmissionError =
 export interface Evaluation { value: Value; schema: Schema }
 export interface Evaluator {
   (expression: Expr, value: Value, schema: Schema): Evaluation;
+  normalize: (schema: Schema, value: unknown) => Value;
+  validate: (refinement: Refinement, schema: Schema, value: Value) => ResolvedError[];
   runChecker: (checker: Checker, schema: Schema, value: Value) => ResolvedError[];
 }
