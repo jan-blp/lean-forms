@@ -31,9 +31,8 @@ inductive RefinedDataType : (unrefined : DataType) → Type 1 where
 def RefinedDataType.dateRange (earliest latest : Date) : RefinedDataType .date :=
   .refine (.base .date)
     (.require (fun value => earliest ≤ value ∧ value ≤ latest)
-      (.and (.dateLe (.value earliest) (.project .self)) (.dateLe (.project .self) (.value latest)))
-      (.value s!"Date must be between {Date.toString earliest} and {Date.toString latest}.")
-      (.locations [.self]))
+      (fun _ => s!"Date must be between {Date.toString earliest} and {Date.toString latest}.")
+      (fun _ _ => .locations [.self]))
 
 structure RefinedDataType.Denotation (t : DataType) where
   ValidatedValue : Type
@@ -103,7 +102,7 @@ def RefinedDataType.validate {t}
   | .record fields => sequence (fun i => RefinedDataType.validate (fields i) (draft i))
   | .refine refined checked => do
     let value ← RefinedDataType.validate refined draft
-    if h : (checked.checker.run (RefinedDataType.erase refined value)).isEmpty = true then
+    if h : (checked.checker (RefinedDataType.erase refined value)).isEmpty = true then
       return { val := value, property := checked.sound _ h }
     else none
 
@@ -113,22 +112,26 @@ def RefinedDataType.validate {t}
     | .valid h => return ⟨value, h⟩
     | .invalid .. => none
 
-def RefinedDataType.errors {t : DataType}
-  (refined : RefinedDataType t)
-  (draft : ⟦t⟧)
-  : List (ResolvedError t) :=
+def RefinedDataType.checkedErrors {t : DataType}
+    (refined : RefinedDataType t) (draft : ⟦t⟧) : List (CheckedError t draft) :=
   match refined, draft with
   | .base _, _ => []
-  | .refine inner checked, draft => inner.errors draft ++ checked.checker.run draft
-  | .serverRefine inner checked, draft => inner.errors draft ++ checked.errors draft
+  | .refine inner checked, draft => inner.checkedErrors draft ++ checked.checker draft
+  | .serverRefine inner checked, draft => inner.checkedErrors draft ++ checked.errors draft
   | .record fields, draft =>
       (FinEnum.toList _).flatMap fun name =>
-        ((fields name).errors (draft name)).map (·.mapLocations (.field name))
+        ((fields name).checkedErrors (draft name)).map (·.mapLocations (.field name))
   | .list item, draft =>
-      draft.zipIdx.flatMap fun (value, index) =>
-        (item.errors value).map (·.mapLocations (.item index))
+      let values := draft.toArray
+      (List.finRange draft.length).flatMap fun index =>
+        (item.checkedErrors values[index.val]).map fun error =>
+          error.mapLocations (fun location => .item index (by simpa [values] using location))
   | .sum branches, draft =>
-      ((branches draft.tag).errors draft.payload).map (·.mapLocations (.constructor draft.tag))
+      ((branches draft.tag).checkedErrors draft.payload).map (·.mapLocations .constructor)
+
+def RefinedDataType.errors {t : DataType}
+    (refined : RefinedDataType t) (draft : ⟦t⟧) : List (ResolvedError t) :=
+  (refined.checkedErrors draft).map CheckedError.erase
 
 /-- All checkers are complete. -/
 def RefinedDataType.Complete {t} (refined : RefinedDataType t) : Prop :=

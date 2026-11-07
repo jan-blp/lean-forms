@@ -29,8 +29,8 @@ abbrev invoice : DataType := .list item
 
 def positive : RefinedDataType .natural :=
   .refine (.base .natural)
-    (.require (fun n => 0 < n) (.natLe (.value 1) (.project .self))
-      (.value "Quantity and unit price must be at least 1.") (.locations [.self]))
+    (.require (fun n => 0 < n)
+      (fun _ => "Quantity and unit price must be at least 1.") (fun _ _ => .locations [.self]))
 
 def itemType : RefinedDataType item :=
   .record fun

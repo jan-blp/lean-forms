@@ -42,8 +42,7 @@ def testPreciseErrors : IO Unit := do
 def run : IO Unit := do
   testPreciseErrors
   let refined : RefinedDataType .natural := .refine (.base .natural)
-    (.ofChecker <| .when (.not (.natLe (.project .self) (.value 5)))
-      (.report (.value "At most five") (.global)))
+    (.ofChecker fun value => if value ≤ 5 then [] else [{ message := "At most five", targets := .global }])
   let form := Runtime.Web.ComponentEndpoint.ofComponent refined Counter.form 0
   let history ← IO.ofExcept (ComponentHistory.replay Counter.form 0 #[⟨.plusFive, ()⟩])
   discard <| IO.ofExcept (form.submit (ComponentHistoryProtocol.encode history))
@@ -57,11 +56,13 @@ def run : IO Unit := do
   check "ValidationSerializesNoTarget"
     ((unlocated.toJson.getObjValAs? (List Lean.Json) "errors").toOption ==
       some [Lean.Json.mkObj [("message", Lean.toJson "Rule"), ("targets", Validation.TargetResolution.toJson (root := .natural) .global)]])
-  let targets : Validation.TargetResolution Person.person :=
+  let targets : Validation.ValidTargets Person.person Person.draft :=
     .locations [.field .name .self, .field .age .self]
-  let error : Validation.ResolvedError Person.person := { message := "Both fields", targets := targets }
+  let error : Validation.CheckedError Person.person Person.draft := { message := "Both fields", targets := targets }
+  let lifted : Validation.CheckedError (.list Person.person) [Person.draft, Person.draft, Person.draft] :=
+    error.mapLocations (.item ⟨2, by decide⟩)
   check "ValidationLiftsEveryTarget"
-    ((error.mapLocations (.item 2)).targets.toJson ==
+    (lifted.erase.targets.toJson ==
       (Validation.TargetResolution.locations [
         .item 2 (.field .name .self), .item 2 (.field .age .self)]
         (root := .list Person.person)).toJson)

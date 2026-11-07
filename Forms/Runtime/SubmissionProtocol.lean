@@ -16,11 +16,7 @@ instance {ty : DataType} : ToString (Error ty) where
     | .invocation error => toString error
     | .invalidValue [] => "Invalid form value"
     | .invalidValue (error :: errors) =>
-        String.intercalate "\n" ((error :: errors).map fun error =>
-          match error.targets with
-          | .global => error.message
-          | .locations _ _ => error.message
-          | .invalidTarget _ => "Invalid validation target: " ++ error.message).eraseDups
+        String.intercalate "\n" ((error :: errors).map (·.message)).eraseDups
 
 def Error.toJson {ty : DataType} (error : Error ty) : Json :=
   let details := match error with

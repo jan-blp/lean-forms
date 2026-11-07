@@ -151,14 +151,14 @@ theorem RefinedDataType.validate_erase
       | cons head tail tailIH => simp_all [validate, erase, Complete]
 
 /-- No errors iff valid. -/
-theorem RefinedDataType.errors_eq_nil_iff
+theorem RefinedDataType.checkedErrors_eq_nil_iff
   (refined : RefinedDataType t)
   (draft : ⟦t⟧)
-  : refined.errors draft = [] ↔ (refined.validate draft).isSome := by
+  : refined.checkedErrors draft = [] ↔ (refined.validate draft).isSome := by
   induction refined with
-  | base => simp [errors, validate]
+  | base => simp [checkedErrors, validate]
   | refine inner checked ih =>
-      simp only [errors, List.append_eq_nil_iff, ih, validate, bind]
+      simp only [checkedErrors, List.append_eq_nil_iff, ih, validate, bind]
       cases found : inner.validate draft with
       | none => simp
       | some innerValue =>
@@ -168,7 +168,7 @@ theorem RefinedDataType.errors_eq_nil_iff
           next valid => simpa [pure] using List.isEmpty_iff.mp valid
           next invalid => simpa using invalid
   | serverRefine inner checked ih =>
-      simp only [errors, ServerProperty.errors, List.append_eq_nil_iff, ih, validate, bind]
+      simp only [checkedErrors, ServerProperty.errors, List.append_eq_nil_iff, ih, validate, bind]
       cases found : inner.validate draft with
       | none => simp
       | some innerValue =>
@@ -177,9 +177,9 @@ theorem RefinedDataType.errors_eq_nil_iff
           split <;> simp_all
   | sum branches ih =>
       rcases draft with ⟨tag, payload⟩
-      simp [errors, validate, ih, ResolvedError.mapLocations]
+      simp [checkedErrors, validate, ih, CheckedError.mapLocations]
   | record fields ih =>
-      simp only [errors, validate, List.flatMap_eq_nil_iff, List.map_eq_nil_iff, ih]
+      simp only [checkedErrors, validate, List.flatMap_eq_nil_iff, List.map_eq_nil_iff, ih]
       rw [sequence_isSome]
       exact ⟨fun h i => h i (FinEnum.mem_toList _), fun h i _ => h i⟩
   | list item ih =>
@@ -190,12 +190,17 @@ theorem RefinedDataType.errors_eq_nil_iff
         | cons head tail ihItems =>
             simp only [List.mapM_cons, List.forall_mem_cons, ← ihItems]
             cases item.validate head <;> cases tail.mapM item.validate <;> simp
-      simp only [errors, validate, mapM_isSome, List.flatMap_eq_nil_iff, List.map_eq_nil_iff, ← ih, Prod.forall]
+      simp only [checkedErrors, validate, mapM_isSome, List.flatMap_eq_nil_iff, List.map_eq_nil_iff, ← ih]
+      simp only [List.mem_finRange, forall_const]
       constructor
       · intro h x hx
-        obtain ⟨index, hindex⟩ := List.mem_iff_getElem?.mp hx
-        exact h x index (List.mem_zipIdx_iff_getElem?.mpr hindex)
-      · intro h x index hx
-        exact h x (List.mem_iff_getElem?.mpr ⟨index, List.mem_zipIdx_iff_getElem?.mp hx⟩)
+        obtain ⟨index, bound, rfl⟩ := List.mem_iff_getElem.mp hx
+        exact h ⟨index, bound⟩
+      · intro h index
+        exact h _ (List.getElem_mem index.isLt)
+
+theorem RefinedDataType.errors_eq_nil_iff (refined : RefinedDataType t) (draft : ⟦t⟧) :
+    refined.errors draft = [] ↔ (refined.validate draft).isSome := by
+  simpa [errors] using refined.checkedErrors_eq_nil_iff draft
 
 end Forms

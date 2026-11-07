@@ -31,7 +31,6 @@ def errorFromJson (json : Json) : Except String Error := do
   let targets ← json.getObjVal? "targets"
   let targets ← match ← targets.getObjValAs? String "kind" with
     | "global" => pure Targets.global
-    | "invalidTarget" => pure (.invalidTarget (← locationFromJson (← targets.getObjVal? "location")))
     | "locations" => do
       let locations ← (← (← targets.getObjVal? "locations").getArr?).toList.mapM locationFromJson
       let first :: rest := locations | throw "Empty locations"

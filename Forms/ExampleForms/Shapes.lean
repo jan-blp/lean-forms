@@ -51,8 +51,8 @@ abbrev shape : DataType := .sum shapeTags constructors
 def size : RefinedDataType .natural :=
   let minimum : Nat := 1
   .refine (.base .natural)
-    (.require (fun n => minimum ≤ n) (.natLe (.value minimum) (.project .self))
-      (.value s!"Size must be at least {minimum}.") (.locations [.self]))
+    (.require (fun n => minimum ≤ n)
+      (fun _ => s!"Size must be at least {minimum}.") (fun _ _ => .locations [.self]))
 
 def shapeType : RefinedDataType shape :=
   .sum fun

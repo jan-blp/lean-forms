@@ -24,8 +24,7 @@ example : (even (.base .natural)).ValidatedValue = { n : Nat // n % 2 = 0 } := r
 
 def positive : RefinedDataType .natural :=
   .refine (.base .natural)
-    (.require (fun n => 0 < n) (.not (.natLe (.project .self) (.value 0)))
-      (.value "Must be positive") (.locations [.self]))
+    (.require (fun n => 0 < n) (fun _ => "Must be positive") (fun _ _ => .locations [.self]))
 
 -- Failure proves that the list has a first element; no fallback target is needed.
 def evenFirst : RefinedDataType (.list .natural) :=
@@ -62,10 +61,6 @@ example : True := by
     have invalid : ValidLocation Shapes.shape ⟨.circle, 2⟩ :=
       .constructor (.field .width .self)
   trivial
-
-example {t : DataType} {value : ⟦t⟧} (targets : ValidTargets t value)
-    (location : Location t) : targets.toTargetResolution ≠ .invalidTarget location := by
-  cases targets <;> simp [ValidTargets.toTargetResolution]
 
 example {t : DataType} (checked : ServerProperty t) (value : ⟦t⟧) :
     checked.errors value = [] ↔ checked.property value := by

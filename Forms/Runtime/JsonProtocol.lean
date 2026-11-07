@@ -132,8 +132,6 @@ def TargetResolution.toJson {root : DataType} : TargetResolution root → Json
   | .global => Json.mkObj [("kind", Lean.toJson "global")]
   | .locations locs _ => Json.mkObj [
       ("kind", Lean.toJson "locations"), ("locations", Lean.toJson (locs.map Location.toJson))]
-  | .invalidTarget location => Json.mkObj [
-      ("kind", Lean.toJson "invalidTarget"), ("location", Location.toJson location)]
 
 def ResolvedError.toJson {root : DataType} (error : ResolvedError root) : Json :=
   Json.mkObj [("message", Lean.toJson error.message), ("targets", error.targets.toJson)]

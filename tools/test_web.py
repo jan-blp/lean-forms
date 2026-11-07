@@ -53,16 +53,16 @@ def session(example):
         assert descriptor['form'] == example
         assert descriptor['revision'].startswith('compiled-2-')
         for path, mime in [('/', 'text/html'), ('/app.js', 'text/javascript'),
-                           ('/validation.js', 'text/javascript'), ('/style.css', 'text/css')]:
+                           ('/style.css', 'text/css')]:
             status, headers, body = request(path)
             assert status == 200 and headers['Content-Type'].startswith(mime), (path, status, headers)
             assert body and headers['Cache-Control'] == 'no-store'
-        for retired in ['/display.js', '/api/form', '/interpreter.js', '/wasm/json.mjs', '/wasm/json.wasm']:
+        for retired in ['/validation.js', '/display.js', '/api/form', '/interpreter.js', '/wasm/json.mjs', '/wasm/json.wasm']:
             assert request(retired)[0] == 404
         for method in ['GET', 'POST', 'DELETE']:
             status, headers, _ = request('/missing', method=method)
             assert status == 404 and 'Allow' not in headers
-        for path in ['/', '/app.js', '/validation.js', '/style.css', '/api/compiled-form']:
+        for path in ['/', '/app.js', '/style.css', '/api/compiled-form']:
             for method in ['POST', 'DELETE']:
                 status, headers, _ = request(path, method=method)
                 assert status == 405 and headers['Allow'] == 'GET', (path, method, status, headers)

@@ -75,14 +75,12 @@ def testDisplay : IO Unit := do
   check "Hidden rendering uses a typed hidden node" (hidden.view.isHidden)
 
 def testFeedback : IO Unit := do
-  let invalid : Feedback.Error := { message := "Missing field", targets := .invalidTarget [] }
-  check "Invalid targets remain in summary"
-    (Feedback.summary [invalid] == "Invalid validation target: Missing field")
   let error : Feedback.Error := { message := "List error", targets := .locations [] [] }
+  let global : Feedback.Error := { message := "Global", targets := .global }
   check "Root location messages deduplicate"
-    (Feedback.messages [error, error, invalid] [] == some "List error")
-  check "Global and invalid targets do not attach to fields"
-    (Feedback.messages [invalid, { message := "Global", targets := .global }] [] == none)
+    (Feedback.messages [error, error, global] [] == some "List error")
+  check "Global targets do not attach to fields"
+    (Feedback.messages [global] [] == none)
   let path : Feedback.Location := [.field "items", .item 2, .constructor "circle"]
   let nested : Feedback.Error := { message := "Nested", targets := .locations path [] }
   check "Typed locations preserve item and constructor identity"

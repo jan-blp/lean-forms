@@ -1,4 +1,12 @@
-import type { Location, ResolvedError } from './validation.js';
+type Location = (
+  | { kind: 'field'; name: string }
+  | { kind: 'item'; index: string }
+  | { kind: 'constructor'; tag: string }
+)[];
+interface ResolvedError {
+  message: string;
+  targets: { kind: 'global' } | { kind: 'locations'; locations: [Location, ...Location[]] };
+}
 export type Value = string | number | boolean | Value[] | { [name: string]: Value };
 export type Path = (string | number)[];
 interface InvocationBase {

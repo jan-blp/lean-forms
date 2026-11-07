@@ -1,30 +1,11 @@
 module
 
-public import Forms.Core.Expr
+public import Forms.Core.Path
 
 @[expose] public section
 
 namespace Forms.Validation
 
-/-- A location in `root`, with list indices computed from a value of type `input`. -/
-inductive LocationExpr (input : DataType) : (root : DataType) → Type 1 where
-  | self {root : DataType} : LocationExpr input root
-  | field
-      {fieldNames : Enum} {fieldTypes : fieldNames → DataType}
-      (fieldName : fieldNames)
-      (rest : LocationExpr input (fieldTypes fieldName))
-      : LocationExpr input (.record fieldNames fieldTypes)
-  | item {element : DataType}
-      (index : Expr input .natural)
-      (rest : LocationExpr input element)
-      : LocationExpr input (.list element)
-  | constructor
-      {tags : Enum} {constructors : tags → DataType}
-      (tag : tags)
-      (rest : LocationExpr input (constructors tag))
-      : LocationExpr input (.sum tags constructors)
-
-/-- `LocationExpr` with evaluated indices. -/
 inductive Location : (root : DataType) → Type 1 where
   | self {root : DataType} : Location root
   | field
@@ -41,16 +22,6 @@ inductive Location : (root : DataType) → Type 1 where
       (tag : tags)
       (rest : Location (constructors tag))
       : Location (.sum tags constructors)
-
-def LocationExpr.eval {input root : DataType}
-  (location : LocationExpr input root)
-  (context : ⟦input⟧)
-  : Location root :=
-  match location with
-  | .self => .self
-  | .field name rest => .field name (rest.eval context)
-  | .item index rest => .item (index.eval context) (rest.eval context)
-  | .constructor tag rest => .constructor tag (rest.eval context)
 
 def Location.exists {root : DataType}
   (location : Location root)
@@ -71,7 +42,6 @@ inductive TargetResolution (root : DataType) where
   | locations
       (locations : List (Location root))
       (nonempty : locations ≠ [] := by simp)
-  | invalidTarget (location : Location root)
 
 /-- A location that exists in a particular value. -/
 inductive ValidLocation : (root : DataType) → (value : ⟦root⟧) → Type 1 where
@@ -115,114 +85,27 @@ def ValidTargets.toTargetResolution {root : DataType} {value : ⟦root⟧}
   | .global => .global
   | .locations locs nonempty => .locations (locs.map (·.erase)) (by simpa using nonempty)
 
-inductive TargetsExpr (root input : DataType) where
-  | global
-  | locations
-      (locations : List (LocationExpr input root))
-      (nonempty : locations ≠ [] := by simp)
-
-def TargetsExpr.resolve {root input : DataType}
-  (targets : TargetsExpr root input)
-  (value : ⟦root⟧)
-  (context : ⟦input⟧)
-  : TargetResolution root :=
-  match targets with
-  | .global => .global
-  | .locations locs nonempty =>
-      let resolved := locs.map (·.eval context)
-      match resolved.find? (fun location => !location.exists value) with
-      | some location => .invalidTarget location
-      | none => .locations resolved (by simpa [resolved] using nonempty)
-
 structure ResolvedError (root : DataType) where
   message : String
   targets : TargetResolution root
 
-def ResolvedError.mapLocations {child parent : DataType}
-  (step : Location child → Location parent)
-  (error : ResolvedError child)
-  : ResolvedError parent :=
+structure CheckedError (root : DataType) (value : ⟦root⟧) where
+  message : String
+  targets : ValidTargets root value
+
+def CheckedError.mapLocations {child parent : DataType} {value : ⟦child⟧} {outer : ⟦parent⟧}
+    (step : ValidLocation child value → ValidLocation parent outer)
+    (error : CheckedError child value) : CheckedError parent outer :=
   { message := error.message
     targets := match error.targets with
       | .global => .global
-      | .locations locs _ => .locations (locs.map step) (by simpa)
-      | .invalidTarget location => .invalidTarget (step location) }
+      | .locations locations nonempty => .locations (locations.map step) (by simpa using nonempty) }
 
-inductive BranchField where
-  | outer | payload
-  deriving DecidableEq
+def CheckedError.erase {root : DataType} {value : ⟦root⟧}
+    (error : CheckedError root value) : ResolvedError root :=
+  { message := error.message, targets := error.targets.toTargetResolution }
 
-instance : FinEnum BranchField :=
-  FinEnum.ofList [.outer, .payload] (by grind [BranchField])
-
-def branchFields : Enum where
-  type := BranchField
-  label | .outer => "outer" | .payload => "payload"
-
-/-- The selected constructor payload together with the enclosing input. -/
-abbrev BranchContext (outer payload : DataType) : DataType :=
-  .record branchFields fun
-    | .outer => outer
-    | .payload => payload
-
-inductive ScopedChecker (root : DataType) : (input : DataType) → Type 1 where
-  | pass {input : DataType} : ScopedChecker root input
-  | report {input : DataType}
-      (message : Expr input .text)
-      (targets : TargetsExpr root input)
-      : ScopedChecker root input
-  | ite {input : DataType}
-      (condition : Expr input .boolean)
-      (thenBranch elseBranch : ScopedChecker root input)
-      : ScopedChecker root input
-  | seq {input : DataType}
-      (left right : ScopedChecker root input)
-      : ScopedChecker root input
-  | each {input element : DataType}
-      (items : Expr input (.list element))
-      (body : ScopedChecker root (IterationContext input element))
-      : ScopedChecker root input
-
-  | cases {input : DataType} {tags : Enum} {constructors : tags → DataType}
-      (subject : Expr input (.sum tags constructors))
-      (branches : (tag : tags) → ScopedChecker root (BranchContext input (constructors tag)))
-      : ScopedChecker root input
-
-def ScopedChecker.when {root input : DataType}
-    (condition : Expr input .boolean)
-    (body : ScopedChecker root input) : ScopedChecker root input :=
-  .ite condition body .pass
-
-abbrev Checker (ty : DataType) := ScopedChecker ty ty
-
-def ScopedChecker.eval {root input : DataType}
-  (checker : ScopedChecker root input)
-  (value : ⟦root⟧)
-  (context : ⟦input⟧)
-  : List (ResolvedError root) :=
-  match checker with
-  | .pass => []
-  | .report message targets => [{ message := message.eval context, targets := targets.resolve value context }]
-  | .ite condition thenBranch elseBranch =>
-    if condition.eval context then thenBranch.eval value context else elseBranch.eval value context
-  | .cases subject branches =>
-    let selected := subject.eval context
-    (branches selected.tag).eval value fun
-      | .outer => context
-      | .payload => selected.payload
-  | .seq left right => left.eval value context ++ right.eval value context
-  | .each items body =>
-      (items.eval context).zipIdx.flatMap fun (item, index) =>
-        body.eval value fun
-          | .outer => context
-          | .item => item
-          | .index => index
-
-def Checker.run {ty : DataType}
-  (checker : Checker ty)
-  (value : ⟦ty⟧)
-  : List (ResolvedError ty) :=
-  checker.eval value value
+abbrev Checker (ty : DataType) := (value : ⟦ty⟧) → List (CheckedError ty value)
 
 /-- A server decision carries either validity or a refutation with an error. -/
 inductive ServerDecision {t : DataType}
@@ -239,23 +122,23 @@ structure ServerProperty (ty : DataType) where
   check : DecidableServerPred property
 
 def ServerProperty.errors {ty : DataType} (checked : ServerProperty ty)
-    (value : ⟦ty⟧) : List (ResolvedError ty) :=
+    (value : ⟦ty⟧) : List (CheckedError ty value) :=
   match checked.check value with
   | .valid _ => []
-  | .invalid _ message targets => [{ message, targets := targets.toTargetResolution }]
+  | .invalid _ message targets => [{ message, targets }]
 
 structure CheckedProperty (ty : DataType) where
   property : ⟦ty⟧ → Prop
   checker : Checker ty
-  sound : ∀ value, (checker.run value).isEmpty = true → property value
+  sound : ∀ value, (checker value).isEmpty = true → property value
 
 def CheckedProperty.Complete {ty : DataType} (checked : CheckedProperty ty) : Prop :=
-  ∀ value, checked.property value → (checked.checker.run value).isEmpty = true
+  ∀ value, checked.property value → (checked.checker value).isEmpty = true
 
 def CheckedProperty.ofChecker {ty : DataType}
   (checker : Checker ty)
   : CheckedProperty ty :=
-  { property := fun value => (checker.run value).isEmpty = true
+  { property := fun value => (checker value).isEmpty = true
     checker := checker
     sound := fun _ h => h }
 
@@ -263,36 +146,30 @@ theorem CheckedProperty.ofChecker_complete {ty : DataType} (checker : Checker ty
     (CheckedProperty.ofChecker checker).Complete :=
   fun _ h => h
 
-/-- Builds a checked property from an equivalent Boolean condition. -/
 @[reducible] def CheckedProperty.require {ty : DataType}
-  (property : ⟦ty⟧ → Prop)
-  (condition : Expr ty .boolean)
-  (message : Expr ty .text)
-  (targets : TargetsExpr ty ty)
-  (spec : ∀ value, condition.eval value = true ↔ property value := by
-    intro value; grind [Expr.eval, Path.get])
-  : CheckedProperty ty :=
+    (property : ⟦ty⟧ → Prop) [DecidablePred property]
+    (message : (value : ⟦ty⟧) → String)
+    (targets : (value : ⟦ty⟧) → ¬ property value → ValidTargets ty value) : CheckedProperty ty :=
   { property
-    checker := .when (.not condition) (.report message targets)
-    sound := fun value h => (spec value).mp (by
-      simpa [Checker.run, ScopedChecker.eval, ScopedChecker.when, Expr.eval] using h) }
+    checker := fun value => if h : property value then [] else [{ message := message value, targets := targets value h }]
+    sound := by intro value h; simpa using h }
 
 @[simp] theorem CheckedProperty.require_complete {ty : DataType}
-    {property : ⟦ty⟧ → Prop} {condition : Expr ty .boolean} {message : Expr ty .text}
-    {targets : TargetsExpr ty ty} {spec : ∀ value, condition.eval value = true ↔ property value} :
-    (CheckedProperty.require property condition message targets spec).Complete := by
+    {property : ⟦ty⟧ → Prop} [DecidablePred property]
+    {message : (value : ⟦ty⟧) → String} {targets : (value : ⟦ty⟧) → ¬ property value → ValidTargets ty value} :
+    (CheckedProperty.require property message targets).Complete := by
   intro value h
-  simp [Checker.run, ScopedChecker.eval, ScopedChecker.when, Expr.eval, (spec value).mpr h]
+  change property value at h
+  simp [h]
 
 end Forms.Validation
 
 namespace Forms
 
-def Path.locationExpr {source target input : DataType}
-  (path : Path source target)
-  : Validation.LocationExpr input source :=
+def Path.validLocation {source target : DataType} (path : Path source target) :
+    (value : ⟦source⟧) → Validation.ValidLocation source value :=
   match path with
-  | .self => .self
-  | .field name rest => .field name rest.locationExpr
+  | .self => fun _ => .self
+  | .field name rest => fun value => .field name (rest.validLocation (value name))
 
 end Forms

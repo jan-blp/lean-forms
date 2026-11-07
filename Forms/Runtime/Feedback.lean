@@ -18,7 +18,6 @@ abbrev Location := List Step
 inductive Targets where
   | global
   | locations (first : Location) (rest : List Location)
-  | invalidTarget (location : Location)
 
 structure Error where
   message : String
@@ -38,12 +37,10 @@ def ofResolved {ty : DataType} (error : Validation.ResolvedError ty) : Error :=
   { message := error.message
     targets := match error.targets with
       | .global => .global
-      | .invalidTarget path => .invalidTarget (location path)
       | .locations (first :: rest) _ => .locations (location first) (rest.map location) }
 
 def summary (errors : List Error) : String :=
-  String.intercalate "\n" (errors.map fun error =>
-    (match error.targets with | .invalidTarget _ => "Invalid validation target: " | _ => "") ++ error.message)
+  String.intercalate "\n" (errors.map (·.message))
 
 /-- Messages are matched and deduplicated before the view is serialized. -/
 def messages (errors : List Error) (path : Location) : Option String :=

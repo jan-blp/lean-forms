@@ -24,7 +24,6 @@ def ComponentEndpoint.ofComponent {ty : DataType}
 inductive GetRoute where
   | index
   | script
-  | validation
   | wasmAdapter
   | wasmLoader
   | wasmBinary
@@ -34,7 +33,6 @@ inductive GetRoute where
 def GetRoute.ofPath (path : String) : Option GetRoute :=
   if path == "/" then some .index
   else if path == "/app.js" then some .script
-  else if path == "/validation.js" then some .validation
   else if path == "/wasm.js" then some .wasmAdapter
   else if path == "/wasm/forms.mjs" then some .wasmLoader
   else if path == "/wasm/forms.wasm" then some .wasmBinary
@@ -105,7 +103,6 @@ structure Application where
   form : ComponentEndpoint
   html : String
   script : String
-  validation : String
   wasmAdapter : String
   wasmLoader : Option String
   wasmBinary : Option ByteArray
@@ -119,7 +116,6 @@ def Application.get
   match route with
   | .index => some (.html app.html)
   | .script => some (.javascript app.script)
-  | .validation => some (.javascript app.validation)
   | .wasmAdapter => some (.javascript app.wasmAdapter)
   | .wasmLoader => app.wasmLoader.map .javascript
   | .wasmBinary => app.wasmBinary.map .wasm
@@ -186,7 +182,6 @@ def run (selected : ExampleForms.Example)
     form := .ofComponent definition.refined definition.component definition.initial
     html := ← IO.FS.readFile "web/index.html"
     script := ← IO.FS.readFile "web/dist/app.js"
-    validation := ← IO.FS.readFile "web/dist/validation.js"
     wasmAdapter := ← IO.FS.readFile "web/dist/wasm.js"
     wasmLoader := ← if ← System.FilePath.pathExists "web/dist/wasm/forms.mjs"
       then some <$> IO.FS.readFile "web/dist/wasm/forms.mjs" else pure none

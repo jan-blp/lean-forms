@@ -12,17 +12,20 @@ open Lean Composition ExampleForms
 
 /-- Client validation deliberately excludes server-only checks. -/
 def clientErrors {ty : DataType} (refined : RefinedDataType ty) (value : ⟦ty⟧) :
-    List (Validation.ResolvedError ty) :=
+    List (Validation.CheckedError ty value) :=
   match refined, value with
   | .base _, _ => []
-  | .refine inner checked, value => clientErrors inner value ++ checked.checker.run value
+  | .refine inner checked, value => clientErrors inner value ++ checked.checker value
   | .serverRefine inner _, value => clientErrors inner value
-  | .list item, values => values.zipIdx.flatMap fun (value, index) =>
-      (clientErrors item value).map (·.mapLocations (.item index))
+  | .list item, values =>
+      let items := values.toArray
+      (List.finRange values.length).flatMap fun index =>
+        (clientErrors item items[index.val]).map fun error =>
+          error.mapLocations (fun location => .item index (by simpa [items] using location))
   | .record fields, value => (FinEnum.toList _).flatMap fun name =>
       (clientErrors (fields name) (value name)).map (·.mapLocations (.field name))
   | .sum branches, value =>
-      (clientErrors (branches value.tag) value.payload).map (·.mapLocations (.constructor value.tag))
+      (clientErrors (branches value.tag) value.payload).map (·.mapLocations .constructor)
 
 /-- `revision` is `compiledRevision`, passed in so that it can hash this module. -/
 def descriptor (revision : String) (selected : Example) : Json :=
@@ -48,7 +51,7 @@ def snapshot {selected : Example} (model : Model selected) : Json :=
   let errors := clientErrors selected.definition.refined model.history.value
   let visible := match model.serverFeedback with
     | some feedback => feedback.errors
-    | none => if model.validationStarted then errors.map Feedback.ofResolved else []
+    | none => if model.validationStarted then errors.map (fun error => Feedback.ofResolved error.erase) else []
   let rendered := CompiledView.render selected.definition.component model.history.value (errors := visible)
   let title := rendered.view.title
   let summary := match model.serverFeedback with
@@ -62,7 +65,7 @@ def snapshot {selected : Example} (model : Model selected) : Json :=
       ("result", if model.ui.resultVisible then toJson (JsonProtocol.valueToJson model.history.value).pretty else Json.null)]),
     ("controls", toJson (rendered.controls.map (fun c => DisplayProtocol.controlToJson c.view))),
     ("title", toJson title), ("submission", ComponentHistoryProtocol.encode model.history),
-    ("errors", toJson (errors.map Validation.ResolvedError.toJson))]
+    ("errors", toJson (errors.map (fun error => error.erase.toJson)))]
 
 def blockedDraft {selected : Example} (model : Model selected) (key : String) : Option String := do
   let c ← (CompiledView.render selected.definition.component model.history.value).controls.find? (·.key == key)
@@ -101,7 +104,7 @@ def startSubmission {selected : Example} (model : Model selected) : Model select
   match model.ui.drafts.head? with
   | some (key, _) => { model with ui := { (model.ui.announce "Apply your edits before submitting." true) with focus := some key } }
   | none =>
-    let errors := (clientErrors selected.definition.refined model.history.value).map Feedback.ofResolved
+    let errors := (clientErrors selected.definition.refined model.history.value).map (fun error => Feedback.ofResolved error.erase)
     let ui := if errors.isEmpty then
         { model.ui with submission := .requested, notice := .info "Submitting…", focus := none }
       else { (model.ui.announce (Feedback.summary errors) true) with focus := none }

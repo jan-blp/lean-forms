@@ -99,11 +99,9 @@ private def testRefinedTypes : IO Unit := do
   check "ErrorLocationIsLifted"
     (constraint.targets.toJson == (Validation.TargetResolution.locations [lifted]).toJson)
   let atLeastTen : Validation.Checker .natural :=
-    (.when (.not (.natLe (.value 10) (.project .self)))
-      (.report (.value "At least ten") (.global)))
+    fun value => if 10 ≤ value then [] else [{ message := "At least ten", targets := .global }]
   let atMostTwenty : Validation.Checker .natural :=
-    (.when (.not (.natLe (.project .self) (.value 20)))
-      (.report (.value "At most twenty") (.global)))
+    fun value => if value ≤ 20 then [] else [{ message := "At most twenty", targets := .global }]
   let stacked := RefinedDataType.refine (.refine (.base .natural) (.ofChecker atLeastTen)) (.ofChecker atMostTwenty)
   check "StackedRefinementsAccumulate"
     ((RefinedDataType.validate stacked 9).isNone && (RefinedDataType.validate stacked 21).isNone && (RefinedDataType.validate stacked 15).isSome)
