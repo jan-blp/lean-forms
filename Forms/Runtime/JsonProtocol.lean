@@ -14,21 +14,6 @@ open Lean
 
 variable {root input context t : DataType}
 
-def DataType.toJson (t : DataType) : Json :=
-  match t with
-  | .sum tags constructors => Json.mkObj [("kind", Lean.toJson "sum"),
-      ("constructors", Json.arr ((FinEnum.toList tags).map fun i =>
-        Json.mkObj [("name", Lean.toJson (tags.label i)), ("type", DataType.toJson (constructors i))]).toArray)]
-  | .list element => Json.mkObj [("kind", Lean.toJson "list"), ("element", DataType.toJson element)]
-  | .text => Json.mkObj [("kind", Lean.toJson "text")]
-  | .boolean => Json.mkObj [("kind", Lean.toJson "boolean")]
-  | .date => Json.mkObj [("kind", Lean.toJson "date")]
-  | .natural => Json.mkObj [("kind", Lean.toJson "natural")]
-  | .enum domain => Json.mkObj [("kind", Lean.toJson "enum"), ("options", Lean.toJson (Enum.options domain))]
-  | .record fieldNames fieldTypes => Json.mkObj [("kind", Lean.toJson "record"),
-      ("fields", Json.arr ((FinEnum.toList fieldNames).map fun i =>
-        Json.mkObj [("name", Lean.toJson (fieldNames.label i)), ("type", DataType.toJson (fieldTypes i))]).toArray)]
-
 namespace Runtime.JsonProtocol
 
 def valueToJson {t} (value : ⟦t⟧) : Json :=
@@ -85,7 +70,8 @@ def valueFromJson (t : DataType) (json : Json) : Except String ⟦t⟧ :=
     | none => throw "Expected a valid date in YYYY-MM-DD format (0001–9999)"
   | .natural => do
     let text ← json.getStr?
-    match text.toNat? with
+    -- `String.toNat?` also accepts `_` separators.
+    match if text.all Char.isDigit then text.toNat? else none with
     | some n => pure n
     | none => throw "Invalid natural in value"
   | .enum domain => do

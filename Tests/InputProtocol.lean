@@ -20,7 +20,7 @@ def reject (ty : Forms.DataType) (value : Json) : IO Unit := do
 def run : IO Unit := do
   expect .natural (toJson " \t003\r\n") (toJson "3")
   expect .natural (toJson "000123456789012345678901234567890") (toJson "123456789012345678901234567890")
-  for input in ["", " ", "-1", "+1", "1.5", "1e3", "0x10", "1 2", "١", "1\x00"] do
+  for input in ["", " ", "-1", "+1", "1.5", "1e3", "0x10", "1 2", "1_000", "_1", "1_", "١", "1\x00"] do
     reject .natural (toJson input)
   reject .natural (toJson (1 : Nat))
   for input in ["0001-01-01", "9999-12-31", "2000-02-29", "2028-02-29"] do

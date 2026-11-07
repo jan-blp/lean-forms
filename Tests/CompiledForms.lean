@@ -1,6 +1,6 @@
 module
 
-public import Forms.Runtime.CompiledForms
+public import Forms.Runtime.CompiledRevision
 public import Tests.ServerRefinements
 
 @[expose] public section
@@ -14,36 +14,59 @@ def check (message : String) (condition : Bool) : IO Unit := do
 def request (operation handle : String) (fields : List (String × Json) := []) : Json :=
   Json.mkObj ([("operation", toJson operation), ("handle", toJson handle)] ++ fields)
 
-def openRequest (selected : Example) : Json :=
+def execute := Forms.Runtime.CompiledForms.execute compiledRevision
+
+def openRequest (selected : Example) (revision := compiledRevision) : Json :=
   Json.mkObj [("operation", toJson "open"), ("form", toJson selected.name),
-    ("revision", toJson (compiledRevision)),
-    ("value", JsonProtocol.valueToJson selected.definition.initial)]
+    ("revision", toJson revision), ("value", JsonProtocol.valueToJson selected.definition.initial)]
+
+def testFormatting : IO Unit := do
+  check "FormatTextIsLiteral" (CompiledView.formatValue (ty := .text) "<img src=x> 🌍\x00" == "<img src=x> 🌍\x00")
+  check "FormatNaturalPrecision" (CompiledView.formatValue (ty := .natural) 123456789012345678901234567890 == "123456789012345678901234567890")
+  check "FormatBooleanList" (CompiledView.formatValue (ty := .list .boolean) [true, false] == "[true, false]")
+  check "FormatEmptyList" (CompiledView.formatValue (ty := .list .text) [] == "[]")
+  check "FormatNestedList" (CompiledView.formatValue (ty := .list (.list .natural)) [[], [1, 2]] == "[[], [1, 2]]")
+  check "FormatEnumLabel" (CompiledView.formatValue (ty := Person.addressKind) .work == "Work")
+  check "FormatNestedRecord" (CompiledView.formatValue Person.draft ==
+    "{name: Ada, age: 28, subscribed: false, address: {street: Lambda Lane, kind: Home}}")
+  check "FormatSumPayload" (CompiledView.formatValue (ty := Shapes.shape) ⟨.circle, 3⟩ == "circle: 3")
+  let date ← IO.ofExcept (JsonProtocol.valueFromJson .date (.str "2028-02-29"))
+  check "FormatDate" (CompiledView.formatValue date == "2028-02-29")
+  let computed := CompiledView.render (.computed (state := .natural) "Person" (.value Person.draft)) 0
+  check "ComputedDisplayText" ((computed.view.getObjValAs? String "text").toOption == some (CompiledView.formatValue Person.draft))
+  check "ComputedHasNoSchema" ((computed.view.getObjVal? "schema").toOption.isNone)
+  let editor := CompiledView.editor Widget.select (ty := Person.addressKind) .work [] [] "replace" "Kind" false
+  check "SelectOptionsAreLabels" ((editor.view.getObjVal? "options").toOption == some (toJson ["Home", "Work", "Other"]))
+  check "SelectValueRemainsIndex" ((editor.view.getObjVal? "value").toOption == some (toJson (1 : Nat)))
+  check "EditorHasNoSchema" ((editor.view.getObjVal? "schema").toOption.isNone)
 
 def run : IO Unit := do
-  let (store, opened) ← IO.ofExcept (CompiledForms.execute {} (openRequest .counter))
+  testFormatting
+  let (store, opened) ← IO.ofExcept (execute {} (openRequest .counter))
   let handle ← IO.ofExcept (opened.getObjValAs? String "handle")
   let key := (toJson [toJson ([] : List Json), toJson "plusOne"]).compress
   let action := request "apply" handle [("key", toJson key)]
-  let (updated, snapshot) ← IO.ofExcept (CompiledForms.execute store action)
+  let (updated, snapshot) ← IO.ofExcept (execute store action)
   let submission ← IO.ofExcept (snapshot.getObjVal? "submission")
   discard <| IO.ofExcept ((ComponentHistoryProtocol.verify Counter.form 0 submission).mapError toString)
   check "Compiled action changes value" ((← IO.ofExcept (submission.getObjValAs? String "value")) == "1")
-  let (_, reset) ← IO.ofExcept (CompiledForms.execute updated (request "reset" handle))
+  let (_, reset) ← IO.ofExcept (execute updated (request "reset" handle))
   check "Compiled reset restores initial value"
     ((← IO.ofExcept ((← IO.ofExcept (reset.getObjVal? "submission")).getObjValAs? String "value")) == "0")
-  let (disposed, _) ← IO.ofExcept (CompiledForms.execute updated (request "dispose" handle))
-  check "Disposed handles reject actions" ((CompiledForms.execute disposed action).isOk == false)
-  let (reopened, next) ← IO.ofExcept (CompiledForms.execute disposed (openRequest .counter))
+  let (disposed, _) ← IO.ofExcept (execute updated (request "dispose" handle))
+  check "Disposed handles reject actions" ((execute disposed action).isOk == false)
+  let (reopened, next) ← IO.ofExcept (execute disposed (openRequest .counter))
   check "Handles are not reused" ((← IO.ofExcept (next.getObjValAs? String "handle")) != handle)
-  check "Old handles stay invalid" ((CompiledForms.execute reopened action).isOk == false)
-  check "Failed actions are rejected" ((CompiledForms.execute updated
+  check "Old handles stay invalid" ((execute reopened action).isOk == false)
+  check "Failed actions are rejected" ((execute updated
     (request "apply" handle [("key", toJson "missing")])).isOk == false)
-  check "Unknown operations are rejected" ((CompiledForms.execute updated (request "unknown" handle)).isOk == false)
+  check "Stale revisions are rejected" ((execute {} (openRequest .counter "stale")).isOk == false)
+  check "Unknown operations are rejected" ((execute updated (request "unknown" handle)).isOk == false)
   check "Server-only checks stay on server" ((CompiledForms.clientErrors (Tests.ServerRefinements.even) 3).isEmpty)
   check "Client checks still run inside server refinements"
     (!(CompiledForms.clientErrors (Tests.ServerRefinements.even Tests.ServerRefinements.positive) 0).isEmpty)
   for selected in FinEnum.toList Example do
-    let (_, result) ← IO.ofExcept (CompiledForms.execute {} (openRequest selected))
+    let (_, result) ← IO.ofExcept (execute {} (openRequest selected))
     check "Compiled initialization returns a snapshot" ((result.getObjVal? "snapshot").isOk)
   let guarded := Component.disabledWhen (.value true) Counter.form
   let blocked := CompiledView.render guarded 0

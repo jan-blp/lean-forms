@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { openCompiledForm } from './dist/wasm.js';
 
 const cwd = fileURLToPath(new URL('..', import.meta.url));
-execFileSync('lake', ['build', 'Forms.Runtime.CompiledForms'], { cwd, stdio: 'pipe' });
+execFileSync('lake', ['build', 'Forms.Runtime.CompiledRevision'], { cwd, stdio: 'pipe' });
 const fixtures = JSON.parse(execFileSync('lake', ['env', 'lean', '--run', 'tools/ExportCompiledForms.lean'], {
   cwd, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
 }));
@@ -148,7 +148,7 @@ test('compiled editor normalization preserves whitespace, precision, types, and 
       assert.equal(counter.submission().value, '42');
       assert.equal(counter.submission().actions.at(-1).argument, '42');
     }
-    for (const raw of ['', ' ', '-1', '+1', '1.5', '1e3', '0x10', '1 2', '١', '１',
+    for (const raw of ['', ' ', '-1', '+1', '1.5', '1e3', '0x10', '1 2', '1_000', '_1', '1_', '١', '１',
       '\u00851', '\u180e1', '\u200b1', '1\0', 1, false, null, undefined, {}, []]) {
       const before = counter.submission();
       assert.throws(() => counter.apply(editor.key, raw));
@@ -162,7 +162,7 @@ test('compiled editor normalization preserves whitespace, precision, types, and 
     for (const raw of ['true', 1, 0, null]) assert.throws(() => person.apply(checkbox.key, raw));
     person.apply(checkbox.key, true);
     const select = person.controls().find(c => c.widget === 'select');
-    for (const raw of [-1, select.schema.options.length, 0.5, '1', null, Infinity, NaN])
+    for (const raw of [-1, select.options.length, 0.5, '1', null, Infinity, NaN])
       assert.throws(() => person.apply(select.key, raw));
     person.apply(select.key, 1);
     assert.equal(person.submission().actions.at(-1).argument, 1);

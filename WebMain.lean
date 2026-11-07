@@ -1,7 +1,6 @@
 module
 
 import Forms.ExampleForms.Example
-import Forms.Runtime.CompiledForms
 import Forms.Runtime.Web
 
 open Forms Forms.Runtime Forms.ExampleForms

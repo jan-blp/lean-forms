@@ -1,7 +1,7 @@
 module
 
-import Forms.Runtime.CompiledForms
-meta import Forms.Runtime.CompiledForms
+import Forms.Runtime.CompiledRevision
+meta import Forms.Runtime.CompiledRevision
 
 open Lean Forms Forms.Runtime Forms.ExampleForms
 
@@ -10,24 +10,23 @@ private def actionArgument (control : CompiledView.Control) : Except String (Lis
   if control.kind == "choice" then
     let options ← (← control.view.getObjVal? "options").getArr?
     return [("argument", options.toList.getLast!)]
-  let schema ← control.view.getObjVal? "schema"
   let current ← control.view.getObjVal? "value"
-  let kind ← schema.getObjValAs? String "kind"
+  let kind ← control.view.getObjValAs? String "widget"
   let value ← match kind with
-    | "natural" => do
+    | "naturalInput" => do
       let n ← JsonProtocol.valueFromJson .natural current
       pure (toJson ("00" ++ toString (n + 123456789012345678901234567890)))
-    | "text" => current.getStr?.map fun text => toJson (text ++ " 🌍\x00")
-    | "boolean" => current.getBool?.map fun value => toJson (!value)
-    | "enum" => do
-      let options ← (← schema.getObjVal? "options").getArr?
+    | "textInput" => current.getStr?.map fun text => toJson (text ++ " 🌍\x00")
+    | "checkbox" => current.getBool?.map fun value => toJson (!value)
+    | "select" => do
+      let options ← (← control.view.getObjVal? "options").getArr?
       pure (toJson (((← current.getNat?) + 1) % options.size))
     | _ => pure current
   return [("argument", value)]
 
 public def main : IO Unit := do
   let fixtures ← (FinEnum.toList Example).mapM fun selected => do
-    let descriptor := CompiledForms.descriptor selected
+    let descriptor := CompiledForms.descriptor compiledRevision selected
     let packed ← IO.ofExcept (CompiledForms.openModel descriptor)
     let model := packed.2
     let controls := (CompiledView.render packed.1.definition.component model.history.value).controls

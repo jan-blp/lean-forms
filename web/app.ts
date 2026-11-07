@@ -1,6 +1,5 @@
 import { openCompiledForm } from './wasm.js';
 import { sameLocation } from './validation.js';
-import { formatValue, textValue } from './display.js';
 import type { DisplayControl as Control, CompiledDescriptor, SubmissionError, ValidationError, Value, DisplayView as View } from './protocol.js';
 
 function required<T extends HTMLElement>(selector: string, type: { new(): T }): T {
@@ -144,8 +143,7 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
           : element('div', undefined, 'stack');
         if (node.label) group.append(element('legend', node.label));
         if (node.kind === 'actionWidget') {
-          const display = formatValue(node.schema, node.value);
-          group.append(element('output', display, 'value'));
+          group.append(element('output', node.text, 'value'));
         }
         for (const child of node.children) group.append(renderNode(child));
         return group;
@@ -217,7 +215,7 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
       if (node.kind === 'computed') {
         const group = element('div', undefined, 'computed');
         const label = element('label', node.label);
-        label.append(element('output', formatValue(node.schema, node.value)));
+        label.append(element('output', node.text));
         group.append(label);
         return group;
       }
@@ -235,10 +233,9 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
       let input: HTMLInputElement | HTMLSelectElement;
       switch (node.widget) {
         case 'select': {
-          if (node.schema.kind !== 'enum') throw new Error('Select requires an enum schema.');
           const select = element('select');
           input = select;
-          node.schema.options.forEach((name, index) => {
+          node.options.forEach((name, index) => {
             const option = element('option', name);
             option.value = String(index);
             select.append(option);
@@ -257,7 +254,7 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
         case 'dateInput':
           input = element('input');
           input.type = node.widget === 'dateInput' ? 'date' : 'text';
-          input.value = textValue(node.value);
+          input.value = node.value;
           if (node.widget === 'naturalInput') {
             input.inputMode = 'numeric';
             input.pattern = '[0-9]+';
@@ -269,7 +266,7 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
             input.required = true;
           }
           break;
-        default: return unsupported(node.widget);
+        default: return unsupported(node);
       }
       input.disabled = pending || node.disabled;
       label.append(input);

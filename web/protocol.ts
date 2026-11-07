@@ -1,15 +1,6 @@
 import type { Location, ResolvedError } from './validation.js';
 export type Value = string | number | boolean | Value[] | { [name: string]: Value };
 export type Path = (string | number)[];
-export type Schema =
-  | { kind: 'text' | 'natural' | 'date' | 'boolean' }
-  | { kind: 'enum'; options: string[] }
-  | { kind: 'list'; element: Schema }
-  | { kind: 'record'; fields: { name: string; type: Schema }[] }
-  | { kind: 'sum'; constructors: { name: string; type: Schema }[] };
-
-export type Widget = 'textInput' | 'naturalInput' | 'checkbox' | 'dateInput' | 'select';
-
 interface InvocationBase {
   target: Path;
   action: string;
@@ -30,14 +21,18 @@ interface DisplayIdentity { key: string; id: string; target: Path; label: string
 export type DisplayControl = DisplayIdentity & (
   | { kind: 'button'; keepDrafts: boolean }
   | { kind: 'choice'; location: Location; value: string; options: string[] }
-  | { kind: 'editor'; location: Location; schema: Schema; value: Value; widget: Widget }
+  | ({ kind: 'editor'; location: Location } & (
+      | { widget: 'select'; value: number; options: string[] }
+      | { widget: 'checkbox'; value: boolean }
+      | { widget: 'textInput' | 'naturalInput' | 'dateInput'; value: string }
+    ))
 );
 export type DisplayView =
   | { kind: 'stack'; label?: string | null; children: DisplayView[] }
-  | { kind: 'actionWidget'; location: Location; label: string; schema: Schema; value: Value; children: DisplayControl[] }
+  | { kind: 'actionWidget'; location: Location; label: string; text: string; children: DisplayControl[] }
   | { kind: 'list'; location: Location; label: string; items: { body: DisplayView | null; remove: DisplayControl }[]; append: DisplayControl }
   | { kind: 'sum'; selector: DisplayControl; body: DisplayView | null }
-  | { kind: 'computed'; label: string; schema: Schema; value: Value }
+  | { kind: 'computed'; label: string; text: string }
   | { kind: 'text'; value: string }
   | { kind: 'table'; columns: string[]; rows: string[][] }
   | DisplayControl;

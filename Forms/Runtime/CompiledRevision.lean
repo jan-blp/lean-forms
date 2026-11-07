@@ -1,11 +1,11 @@
 module
 
-public import Forms.ExampleForms.Example
-public import Forms.Runtime.CompiledView
+public import Forms.Runtime.CompiledForms
 meta import Lean.Elab.Term
 
 open Lean Elab Term in
-/-- Hash compiled declarations during elaboration; no definition encoder is linked into Wasm. -/
+/-- Hash compiled declarations during elaboration; no definition encoder is linked into Wasm.
+Imports everything the Wasm entry point runs, so `CompiledForms` itself is covered. -/
 elab "compiled_revision%" : term => do
   let env ← getEnv
   let declarations := env.constants.toList.filter fun (name, _) =>

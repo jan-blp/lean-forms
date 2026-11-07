@@ -2,7 +2,6 @@ module
 
 public import Forms.ExampleForms.Example
 public import Forms.Runtime.CompiledView
-public import Forms.Runtime.CompiledRevision
 
 @[expose] public section
 
@@ -23,9 +22,10 @@ def clientErrors {ty : DataType} (refined : RefinedDataType ty) (value : ⟦ty�
   | .sum branches, value =>
       (clientErrors (branches value.tag) value.payload).map (·.mapLocations (.constructor value.tag))
 
-def descriptor (selected : Example) : Json :=
+/-- `revision` is `compiledRevision`, passed in so that it can hash this module. -/
+def descriptor (revision : String) (selected : Example) : Json :=
   let definition := selected.definition
-  Json.mkObj [("form", toJson selected.name), ("revision", toJson compiledRevision),
+  Json.mkObj [("form", toJson selected.name), ("revision", toJson revision),
     ("value", JsonProtocol.valueToJson definition.initial)]
 
 structure Model (selected : Example) where
@@ -36,9 +36,6 @@ def openModel (request : Json) : Except String ((selected : Example) × Model se
   let name ← request.getObjValAs? String "form"
   let some selected := Example.ofName name | throw s!"Unknown compiled form: {name}"
   let definition := selected.definition
-  let expected ← request.getObjValAs? String "revision"
-  unless expected == compiledRevision do
-    throw "Compiled form version differs from the server. Rebuild Wasm and reload."
   let initial ← JsonProtocol.valueFromJson definition.ty (← request.getObjVal? "value")
   pure ⟨selected, { initial, history := { value := initial } }⟩
 
@@ -64,9 +61,12 @@ structure Store where
   models : List (Nat × ((selected : Example) × Model selected)) := []
   deriving Inhabited
 
-def execute (store : Store) (request : Json) : Except String (Store × Json) := do
+def execute (revision : String) (store : Store) (request : Json) : Except String (Store × Json) := do
   let operation ← request.getObjValAs? String "operation"
   if operation == "open" then
+    let expected ← request.getObjValAs? String "revision"
+    unless expected == revision do
+      throw "Compiled form version differs from the server. Rebuild Wasm and reload."
     let model ← openModel request
     pure ({ next := store.next + 1, models := (store.next, model) :: store.models },
       Json.mkObj [("handle", toJson (toString store.next)), ("snapshot", snapshot model.2)])
@@ -85,5 +85,11 @@ def execute (store : Store) (request : Json) : Except String (Store × Json) := 
       let response := snapshot model
       pure ({ store with models := store.models.map fun (key, current) =>
         (key, if key == id then ⟨selected, model⟩ else current) }, response)
+
+/-- Wasm transport: JSON text in, `{ok, value}` or `{ok, error}` out. Failures keep the store. -/
+def respond (revision : String) (store : Store) (text : String) : Store × String :=
+  match Json.parse text >>= execute revision store with
+  | .error error => (store, (Json.mkObj [("ok", toJson false), ("error", toJson error)]).compress)
+  | .ok (store, value) => (store, (Json.mkObj [("ok", toJson true), ("value", value)]).compress)
 
 end Forms.Runtime.CompiledForms

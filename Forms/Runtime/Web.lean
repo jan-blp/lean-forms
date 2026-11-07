@@ -2,7 +2,7 @@ module
 
 public import Std.Http
 public import Forms.Runtime.TrafficLog
-public import Forms.Runtime.CompiledForms
+public import Forms.Runtime.CompiledRevision
 public import Forms.Runtime.SubmissionProtocol
 
 @[expose] public section
@@ -24,7 +24,6 @@ def ComponentEndpoint.ofComponent {ty : DataType}
 inductive GetRoute where
   | index
   | script
-  | display
   | validation
   | wasmAdapter
   | wasmLoader
@@ -35,7 +34,6 @@ inductive GetRoute where
 def GetRoute.ofPath (path : String) : Option GetRoute :=
   if path == "/" then some .index
   else if path == "/app.js" then some .script
-  else if path == "/display.js" then some .display
   else if path == "/validation.js" then some .validation
   else if path == "/wasm.js" then some .wasmAdapter
   else if path == "/wasm/forms.mjs" then some .wasmLoader
@@ -107,7 +105,6 @@ structure Application where
   form : ComponentEndpoint
   html : String
   script : String
-  display : String
   validation : String
   wasmAdapter : String
   wasmLoader : Option String
@@ -122,7 +119,6 @@ def Application.get
   match route with
   | .index => some (.html app.html)
   | .script => some (.javascript app.script)
-  | .display => some (.javascript app.display)
   | .validation => some (.javascript app.validation)
   | .wasmAdapter => some (.javascript app.wasmAdapter)
   | .wasmLoader => app.wasmLoader.map .javascript
@@ -185,12 +181,11 @@ def run (selected : ExampleForms.Example)
   : IO Unit := do
   let definition := selected.definition
   let app : Application := {
-    compiledForm := CompiledForms.descriptor selected
+    compiledForm := CompiledForms.descriptor compiledRevision selected
     logger := ← TrafficLog.Logger.create
     form := .ofComponent definition.refined definition.component definition.initial
     html := ← IO.FS.readFile "web/index.html"
     script := ← IO.FS.readFile "web/dist/app.js"
-    display := ← IO.FS.readFile "web/dist/display.js"
     validation := ← IO.FS.readFile "web/dist/validation.js"
     wasmAdapter := ← IO.FS.readFile "web/dist/wasm.js"
     wasmLoader := ← if ← System.FilePath.pathExists "web/dist/wasm/forms.mjs"

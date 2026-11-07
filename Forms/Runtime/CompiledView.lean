@@ -8,7 +8,7 @@ public import Forms.Runtime.InputProtocol
 namespace Forms.Runtime.CompiledView
 open Lean Composition
 
-/-- A rendered control retains only its invocation and input schema, not expression JSON. -/
+/-- A rendered control retains its invocation and typed input normalizer. -/
 structure Control where
   key : String
   kind : String
@@ -40,11 +40,27 @@ def itemStep (index : Nat) : Json :=
 def constructorStep (tag : String) : Json :=
   Json.mkObj [("kind", toJson "constructor"), ("tag", toJson tag)]
 
+/-- Display text is formatted from the Lean type, never from a schema in the browser. -/
+def formatValue {ty : DataType} (value : ⟦ty⟧) : String :=
+  match ty with
+  | .text => value
+  | .natural => toString value
+  | .boolean => if value then "true" else "false"
+  | .date => Date.toString value
+  | .enum domain => domain.label value
+  | .list _ => "[" ++ String.intercalate ", " (value.map formatValue) ++ "]"
+  | .record names _ => "{" ++ String.intercalate ", " ((FinEnum.toList names).map fun name =>
+      names.label name ++ ": " ++ formatValue (value name)) ++ "}"
+  | .sum tags _ => tags.label value.tag ++ ": " ++ formatValue value.payload
+
 def editor {ty : DataType} (widget : Widget ty) (value : ⟦ty⟧)
     (target location : List Json) (id label : String) (disabled : Bool) : Control :=
   control target id label "editor" disabled
-    [("widget", toJson widget.name), ("schema", ty.toJson),
-     ("value", JsonProtocol.valueToJson value), ("location", toJson location)]
+    ([("widget", toJson widget.name),
+      ("value", JsonProtocol.valueToJson value), ("location", toJson location)] ++
+      match widget with
+      | .select (domain := domain) => [("options", toJson (Enum.options domain))]
+      | _ => [])
     none (some (InputProtocol.normalize ty))
 
 def presentation {ty : DataType} (action : WidgetAction ty) (value : ⟦ty⟧)
@@ -71,12 +87,12 @@ def render {ty : DataType} (component : Component ty) (value : ⟦ty⟧)
   | .button label _ =>
     let c := control target "press" label "button" disabled [("keepDrafts", toJson false)]
     ⟨c.view, [c]⟩
-  | .actionWidget (value := fieldTy) (ids := ids) path label actions =>
+  | .actionWidget (ids := ids) path label actions =>
     let current := path.get value
     let controls := (FinEnum.toList ids).map fun id =>
       presentation (actions id) current target (location ++ fieldSteps path) (ids.label id) disabled
     { view := Json.mkObj [("kind", toJson "actionWidget"), ("label", toJson label),
-        ("schema", fieldTy.toJson), ("value", JsonProtocol.valueToJson current),
+        ("text", toJson (formatValue current)),
         ("location", toJson (location ++ fieldSteps path)), ("children", toJson (controls.map (·.view)))]
       controls }
   | .list path label item _ =>
@@ -100,9 +116,9 @@ def render {ty : DataType} (component : Component ty) (value : ⟦ty⟧)
       (loc ++ [constructorStep tag]) disabled
     { view := Json.mkObj [("kind", toJson "sum"), ("selector", selector.view), ("body", body.view)]
       controls := selector :: body.controls }
-  | .computed (result := result) label expression =>
-    ⟨Json.mkObj [("kind", toJson "computed"), ("label", toJson label), ("schema", result.toJson),
-      ("value", JsonProtocol.valueToJson (expression.eval value))], []⟩
+  | .computed label expression =>
+    ⟨Json.mkObj [("kind", toJson "computed"), ("label", toJson label),
+      ("text", toJson (formatValue (expression.eval value)))], []⟩
   | .text expression => ⟨Json.mkObj [("kind", toJson "text"), ("value", toJson (expression.eval value))], []⟩
   | .table rows columns =>
     ⟨Json.mkObj [("kind", toJson "table"), ("columns", toJson (columns.map (·.label))),
@@ -116,7 +132,7 @@ def invocation {ty : DataType} (component : Component ty) (value : ⟦ty⟧)
   if c.disabled then throw "This action is unavailable."
   let fields ← match c.kind, argument with
     | "editor", some raw => do
-      let some normalize := c.normalize | throw "Missing editor schema"
+      let some normalize := c.normalize | throw "Missing editor normalizer"
       let value ← normalize raw
       pure [("argument", value)]
     | "choice", some raw => do
