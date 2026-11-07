@@ -26,13 +26,16 @@ LIBRARIES := $(addprefix $(RUNTIME)/lib/lean/,libInit.a libStd.a libLean.a lible
 # Upstream's lean_initialize without initialize_Lean; linked first so it wins over libleancpp's.
 MINIMAL_INIT := $(RUNTIME)/lib/lean/libinitialize_minimal.a
 
-.PHONY: all setup link test size size-gzip size-brotli ts-lines FORCE
+.PHONY: all setup runtime-imports link test size size-gzip size-brotli ts-lines FORCE
 # Lake writes the source list, so linking runs in a second pass that reads it.
-all: $(MINIMAL_INIT) $(LIBRARIES)
+all: runtime-imports $(MINIMAL_INIT) $(LIBRARIES)
 	lake build browserSources
 	$(MAKE) -f $(MAKEFILE) -j$(JOBS) link
 	install -d web/dist/wasm
 	install -m 644 $(OUT)/forms.mjs $(OUT)/forms.wasm web/dist/wasm/
+
+runtime-imports:
+	python3 experiments/wasm/prepare-runtime-imports.py
 
 # Downloads roughly 470 MB; everything stays under the ignored .lake directory.
 setup: $(LEAN_TREE)/.patched $(EMSDK)/.activated

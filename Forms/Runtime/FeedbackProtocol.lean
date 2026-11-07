@@ -1,7 +1,7 @@
 module
 
 public import Forms.Runtime.Feedback
-public import Lean
+public import Lean.Data.Json
 
 @[expose] public section
 

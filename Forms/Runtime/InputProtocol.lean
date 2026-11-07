@@ -1,7 +1,7 @@
 module
 
 public import Forms.Runtime.Input
-public import Lean
+public import Lean.Data.Json
 
 @[expose] public section
 
