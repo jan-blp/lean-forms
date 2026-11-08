@@ -42,6 +42,7 @@ def attributePair : DisplayLayout.Attribute → String × String
   | .numeric => ("inputmode", "numeric")
   | .naturalPattern => ("pattern", "[0-9]+")
   | .required => ("required", "")
+  | .noValidate => ("novalidate", "")
   | .disabled => ("disabled", "")
   | .invalid => ("aria-invalid", "true")
   | .describedBy id => ("aria-describedby", id.value)

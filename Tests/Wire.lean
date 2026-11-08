@@ -1,6 +1,7 @@
 module
 
 public import Forms.Runtime.Wire
+import Forms.Runtime.DisplayProtocol
 import Forms.Protocol.TypeScriptAst
 meta import Forms.Protocol.TypeScript
 
@@ -36,6 +37,14 @@ def run : IO Unit := do
     Json.mkObj [("key", toJson "key"), ("argument", toJson "12")])
   check "Missing draft argument accepted" (!(fromJson? (Json.mkObj [
     ("draft", Json.mkObj [("key", toJson "key")])]) : Except String FormEvent).isOk)
+  -- Intentionally bypass browser validation: Lean accepts " 8" and owns input errors.
+  let editor := Forms.Runtime.DisplayLayout.control {} {
+    key := ⟨"age"⟩, target := {}, label := "Age", disabled := false,
+    location := [], input := .natural 8 }
+  let noValidate := match Forms.Runtime.DisplayProtocol.layoutToWire editor with
+    | some (.element .form attrs _ _ _ _ _ _) => attrs.contains ("novalidate", "")
+    | _ => false
+  check "Editor forms must leave validation to Lean" noValidate
   let child := DisplayView.element .input [] [] [] none (some "hello") none (some "key")
   roundtrip (DisplayView.element .div [("class", "form")] [none, some child]
     [⟨.input, .draft, "key", "input", .value⟩] (some "title") none none none)

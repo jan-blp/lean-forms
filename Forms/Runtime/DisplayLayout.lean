@@ -29,6 +29,7 @@ inductive Attribute where
   | numeric
   | naturalPattern
   | required
+  | noValidate
   | disabled
   | invalid
   | describedBy (id : DomId)
@@ -91,7 +92,7 @@ def control (state : Interaction.State) (c : Control) : Node := Id.run do
       (element .input [] (.inputType .checkbox :: inputAttrs)
         (behavior := { input := .checked checked, focusKey := some c.key, bindings := [.change c.key (.checked inputId)] }),
         Source.checked inputId, [])
-  return element .form (element .label [input] (text := some c.label) :: applyButton ++ feedback) [.cssClass "editor"]
+  return element .form (element .label [input] (text := some c.label) :: applyButton ++ feedback) [.cssClass "editor", .noValidate]
     (behavior := { bindings := [.submit c.key argument] })
 
 def group (label : String) (children : List Node) (messages : Option String := none) : Node :=
