@@ -102,7 +102,8 @@ test('compiled model disposal releases memory and disposed handles stay invalid'
   const next = call({ operation: 'open', ...fixture('person').descriptor });
   const handle = next.value.opened.handle;
   const initial = call({ operation: 'inspect', handle });
-  for (const text of ['{', '{}', JSON.stringify({ inspect: { handle } }) + '\0'])
+  // The prefix must be valid so truncating at NUL would incorrectly succeed.
+  for (const text of ['{', '{}', JSON.stringify({ send: { handle, request: 'inspect' } }) + '\0'])
     assert.equal(runtime.form(text).ok, false);
   assert.equal(call({ operation: 'apply', handle, key: 'missing', argument: null }).ok, false);
   assert.deepEqual(call({ operation: 'inspect', handle }), initial);
