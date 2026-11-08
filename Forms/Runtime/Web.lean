@@ -150,7 +150,7 @@ instance : Server.Handler Application where
         app.logger.write (TrafficLog.request label)
         match app.get route with
         | some body => respond .ok body
-        | none => respond .notFound (.text "WebAssembly assets are not built. Run make -f experiments/wasm/Makefile.")
+        | none => respond .notFound (.text "WebAssembly assets are not built. Run make -f experiments/wasm/Makefile, restart forms-web, then reload.")
     | .submit => app.submit label request
 
 def openDefaultBrowser (url : String) : IO Unit := do

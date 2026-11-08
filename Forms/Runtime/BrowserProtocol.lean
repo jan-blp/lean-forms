@@ -20,7 +20,7 @@ def execute (revision : String) (store : Store) (json : Json) : Except String (S
   | .open descriptor =>
     unless descriptor.form == PersonProtocol.name do throw "Unknown compiled form"
     unless descriptor.revision == revision do
-      throw "Compiled form version differs from the server. Rebuild Wasm and reload."
+      throw "Compiled form version differs from the server. Rebuild Wasm, restart forms-web, then reload."
     let initial ← fromJson? descriptor.value
     let state := ModelForm.openState initial
     let handle := store.next
