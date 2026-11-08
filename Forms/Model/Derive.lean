@@ -76,8 +76,10 @@ private def inspect (name : Name) : MetaM (Bool × Array Constructor) := do
   return (record, ctors)
 
 private def fieldType (ctor : Constructor) (field : FieldInfo) : CommandElabM TermSyntax :=
+  -- Preserve names and coercion targets when re-elaborating generated code.
   liftTermElabM <| withLCtx ctor.context ctor.instances <|
-    PrettyPrinter.delab field.type
+    withOptions (fun opts => opts.setBool `pp.fullNames true |>.setBool `pp.coercions.types true) <|
+      PrettyPrinter.delab field.type
 
 private def app (fn : TermSyntax) (args : Array TermSyntax) : CommandElabM TermSyntax :=
   `($fn $args*)

@@ -240,4 +240,25 @@ private structure PrivateModel where
 #guard_msgs in
 deriving instance FormModel for PrivateModel
 
+-- Field types must retain their meaning inside generated namespaces.
+namespace TypeRoundTrip
+
+structure Parts where
+  count : Nat
+  deriving FormModel
+
+structure Order where
+  parts : Parts
+  deriving FormModel
+
+structure Balance where
+  amount : Nat
+  ok : (amount : Int) - 5 ≥ 0
+  deriving FormModel
+
+example (parts : Balance.Parts) :
+    Constraints.holds Balance.Constraint.ok parts ↔ (parts.amount : Int) - 5 ≥ 0 := Iff.rfl
+
+end TypeRoundTrip
+
 end Tests.FormModel
