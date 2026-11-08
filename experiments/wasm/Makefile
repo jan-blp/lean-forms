@@ -58,7 +58,7 @@ PATCH_CHANGED := $(shell cmp -s $(PATCH) $(LEAN_TREE)/.patched || echo FORCE)
 $(LEAN_TREE)/.patched: $(TOOLCHAINS)/lean-$(LEAN_VERSION).tar.gz $(PATCH_CHANGED)
 	rm -rf $(LEAN_TREE) $(LEAN_TREE).tmp
 	mkdir $(LEAN_TREE).tmp
-	tar -xzf $< -C $(LEAN_TREE).tmp
+	tar -mxzf $< -C $(LEAN_TREE).tmp
 	patch --batch -s -d $(LEAN_TREE).tmp/lean4-$(LEAN_VERSION) -p1 < $(PATCH)
 	mv $(LEAN_TREE).tmp/lean4-$(LEAN_VERSION) $(LEAN_TREE)
 	rmdir $(LEAN_TREE).tmp
