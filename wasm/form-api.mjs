@@ -1,4 +1,4 @@
-import createModule from '../../.lake/wasm/forms.mjs';
+import createModule from '../.lake/wasm/forms.mjs';
 
 // Raw transport and allocation instrumentation for integration tests.
 export async function createFormRuntime() {

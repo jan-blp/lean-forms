@@ -34,7 +34,7 @@ private def RuntimePatch.apply (patch : RuntimePatch) (manifest : Manifest) : IO
   unless entry.rev? == some revision do
     throw (IO.userError s!"{name}: update the runtime import patch for the new dependency revision")
   let package := System.FilePath.mk ".lake/packages" / name
-  let patchPath ← IO.FS.realPath (System.FilePath.mk "experiments/wasm" / s!"{name}-runtime-imports.patch")
+  let patchPath ← IO.FS.realPath (System.FilePath.mk "wasm" / s!"{name}-runtime-imports.patch")
   let checkout ← git package #["rev-parse", "HEAD"]
   unless checkout.exitCode == 0 do
     throw (IO.userError checkout.stderr)

@@ -1,4 +1,4 @@
-# Run from the repository root: make -f experiments/wasm/makefile [all|test|setup|size|size-gzip|size-brotli|ts-lines]
+# Run from the repository root: make -f wasm/makefile [all|test|setup|size|size-gzip|size-brotli|ts-lines]
 .DEFAULT_GOAL := all
 .DELETE_ON_ERROR:
 
@@ -15,9 +15,9 @@ LEAN_TREE := $(TOOLCHAINS)/lean4-$(LEAN_VERSION)
 SOURCE := $(LEAN_TREE)/src
 EMSDK := $(TOOLCHAINS)/emsdk-$(EMSDK_VERSION)
 SDK := $(EMSDK)/upstream/emscripten
-PATCH := experiments/wasm/lean-$(LEAN_VERSION).patch
+PATCH := wasm/lean-$(LEAN_VERSION).patch
 RUNTIME := $(OUT)/full-runtime-lean-$(LEAN_VERSION)-emsdk-$(EMSDK_VERSION)
-MAKEFILE := experiments/wasm/makefile
+MAKEFILE := wasm/makefile
 JOBS ?= 8
 FLAGS := -O2 -DNDEBUG -DLEAN_EMSCRIPTEN -I$(RUNTIME)/include -pthread -fwasm-exceptions
 LEAN_SOURCES := $(patsubst $(CURDIR)/%,%,$(shell cat .lake/build/browser-sources.txt 2>/dev/null))
@@ -82,7 +82,7 @@ $(WORK)/objects/%.o: %.c $(MAKEFILE)
 	@mkdir -p $(@D)
 	$(SDK)/emcc $(FLAGS) -MMD -MP -c $< -o $@
 
-$(WORK)/forms-bridge.o: experiments/wasm/forms-bridge.cpp $(MAKEFILE)
+$(WORK)/forms-bridge.o: wasm/forms-bridge.cpp $(MAKEFILE)
 	@mkdir -p $(@D)
 	$(SDK)/em++ -std=c++20 $(FLAGS) -MMD -MP -c $< -o $@
 

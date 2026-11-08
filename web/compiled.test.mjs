@@ -78,7 +78,7 @@ test('hidden and disabled controls reject stale edits', async () => {
 });
 
 test('compiled model disposal releases memory and disposed handles stay invalid', async () => {
-  const { createFormRuntime } = await import('../experiments/wasm/form-api.mjs');
+  const { createFormRuntime } = await import('../wasm/form-api.mjs');
   const runtime = await createFormRuntime();
   const call = ({ operation, handle, ...fields }) => runtime.form(JSON.stringify(
     operation === 'open' ? { open: { descriptor: fields } } : operation === 'dispose' ? { dispose: { handle } }
@@ -143,7 +143,7 @@ test('Wasm exposes only the compiled-form API and recovers using a fresh instanc
   const exports = WebAssembly.Module.exports(await WebAssembly.compile(binary)).map(e => e.name);
   for (const name of ['forms_init', 'forms_request', 'forms_allocated_bytes']) assert.ok(exports.includes(name));
   assert.ok(!exports.some(name => /json_(run|evaluate|check|normalize|validate)/.test(name)));
-  const { createFormRuntime } = await import('../experiments/wasm/form-api.mjs');
+  const { createFormRuntime } = await import('../wasm/form-api.mjs');
   const trapped = await createFormRuntime();
   assert.throws(() => trapped.form('['.repeat(200000) + ']'.repeat(200000)), /stack overflow|maximum call stack size exceeded/i);
   const fresh = await createFormRuntime();

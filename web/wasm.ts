@@ -31,7 +31,7 @@ export async function openCompiledForm(descriptor: CompiledDescriptor) {
 
 async function load(): Promise<Runtime> {
   // A variable URL keeps the generated Emscripten module outside TypeScript's
-  // source graph. It is packaged by experiments/wasm/makefile.
+  // source graph. It is packaged by wasm/makefile.
   const url = new URL('./wasm/forms.mjs', import.meta.url).href;
   const { default: createModule } = await import(url);
   const module: WasmModule = await createModule();

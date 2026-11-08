@@ -43,7 +43,7 @@ lean_exe «forms-web» where
 
 lean_lib Browser where
   roots := #[`CompiledMain]
-  srcDir := "experiments/wasm"
+  srcDir := "wasm"
 
 -- Use Lake's dependency graph, without inspecting or rewriting generated C.
 target browserSources pkg : FilePath := do

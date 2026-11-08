@@ -7,7 +7,7 @@
     "build:prepared": "npm run generate:prepared && tsc -p tsconfig.json",
     "check": "npm run generate && tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test compiled.test.mjs",
-    "test:wasm": "cd .. && make -f experiments/wasm/makefile test",
+    "test:wasm": "cd .. && make -f wasm/makefile test",
     "generate": "(cd .. && lake build Forms.Runtime.Wire Forms.Protocol.TypeScript) && npm run generate:prepared",
     "generate:prepared": "cd .. && lake env lean --run tools/GenerateProtocol.lean"
   },
