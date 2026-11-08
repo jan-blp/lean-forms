@@ -145,7 +145,10 @@ private def emitFields (ns raw : Name) (fields : Array (FieldInfo × TermSyntax)
     Field := $field
     lens := $lens
     lawful := $lawful
-    key := $keyName))
+    key := $keyName
+    key_injective := by
+      intro α β a b h
+      cases a <;> cases b <;> simp_all [$keyName:term]))
 
 private structure ModelInfo where
   name : Name

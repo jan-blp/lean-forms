@@ -8,24 +8,24 @@ namespace Tests.Dependencies
 open Forms.Model Tests.FormModel
 
 def visible : Computation Person.Raw Bool :=
-  .of (inputs[.field Person.Field.age .self, .field Person.Field.subscribed .self])
+  .mk (inputs[.field Person.Field.age, .field Person.Field.subscribed])
     (fun age subscribed => subscribed && age ≥ 18)
 
 def disabled : Computation Person.Raw Bool :=
-  .of (inputs[.field Person.Field.age .self]) (fun age => decide (age > 120))
+  .mk (inputs[.field Person.Field.age]) (fun age => decide (age > 120))
 
 def summary : Computation Person.Raw String :=
-  .of (inputs[.field Person.Field.address (.field Address.Field.street .self), .field Person.Field.age .self])
+  .mk (inputs[.stepField (field := Person.Field.address) (rest := .field Address.Field.street), .field Person.Field.age])
     (fun street age => s!"{street}: {age}")
 
 def whole : Computation Delivery.Raw String :=
-  .of (inputs[.self]) fun
+  .mk (inputs[.self]) fun
     | .pickup => "Pickup"
     | .home payload => payload.instructions
     | .campus payload => s!"Campus: {payload.age}"
 
 def campusAge : Computation Delivery.campus.Raw Nat :=
-  .of (inputs[.field Delivery.campus.Field.age .self]) (fun age => age + 1)
+  .mk (inputs[.field Delivery.campus.Field.age]) (fun age => age + 1)
 
 def run : IO Unit := do
   let person : Person.Raw := ⟨⟨"Campus"⟩, 20, true⟩
@@ -44,11 +44,11 @@ def run : IO Unit := do
     | _ => 0
   check "DependenciesConstructorSelectionOutsidePaths"
     (renderBranch .pickup == 0 && renderBranch (.campus ⟨20⟩) == 21)
-  let constant : Computation Person.Raw String := .of (inputs[]) "Hello"
+  let constant : Computation Person.Raw String := .mk (inputs[]) "Hello"
   check "DependenciesConstant" (constant.eval person == "Hello")
   let street : Computation Address.Raw String :=
-    .of (inputs[.field Address.Field.street .self]) (fun street => street ++ "!")
-  let embedded := street.weaken (.field Person.Field.address .self)
+    .mk (inputs[.field Address.Field.street]) (fun street => street ++ "!")
+  let embedded := street.weaken (.field Person.Field.address)
   check "DependenciesComposeWhenEmbedded" (embedded.eval person == street.eval person.address)
 
 end Tests.Dependencies

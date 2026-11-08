@@ -2,16 +2,18 @@ module
 
 public import Forms.Model.Basic
 
-/-! Computations declare typed input paths and receive only the selected values.
-Paths contain only total field steps; sum constructors are handled outside computations. -/
+/-! Computations declare typed input paths and receive only the selected values. -/
 
 @[expose] public section
 namespace Forms.Model
 
 inductive Inputs (source : Type) : List Type → Type 1 where
   | nil : Inputs source []
-  | cons {value : Type} {rest : List Type}
-      (path : Path source value) (inputs : Inputs source rest) : Inputs source (value :: rest)
+  | cons {value : Type}
+      {rest : List Type}
+      (path : Path source value)
+      (inputs : Inputs source rest)
+      : Inputs source (value :: rest)
 
 macro "inputs[" paths:term,* "]" : term => do
   let mut result ← `(Inputs.nil)
@@ -29,9 +31,10 @@ def Inputs.Values : List Type → Type
   | [] => Unit
   | value :: rest => value × Values rest
 
-def Inputs.Function (result : Type) : List Type → Type
+def Inputs.Function (types : List Type) (result : Type) : Type :=
+  match types with
   | [] => result
-  | value :: rest => value → Function result rest
+  | value :: rest => value → Function rest result
 
 def Inputs.read {source : Type} {types : List Type}
     (inputs : Inputs source types) (sourceValue : source) : Values types :=
@@ -40,19 +43,15 @@ def Inputs.read {source : Type} {types : List Type}
   | .cons path rest => (path.get sourceValue, rest.read sourceValue)
 
 def Inputs.apply {result : Type} {types : List Type}
-    (fn : Function result types) (values : Values types) : result :=
+    (fn : Function types result) (values : Values types) : result :=
   match types with
   | [] => fn
   | _ :: _ => apply (fn values.1) values.2
 
 structure Computation (source result : Type) where
-  types : List Type
+  {types : List Type}
   inputs : Inputs source types
-  run : Inputs.Function result types
-
-def Computation.of {source result : Type} {types : List Type}
-    (inputs : Inputs source types) (run : Inputs.Function result types) : Computation source result :=
-  ⟨types, inputs, run⟩
+  run : Inputs.Function types result
 
 def Computation.eval {source result : Type} (computation : Computation source result)
     (value : source) : result :=
@@ -66,6 +65,6 @@ theorem Computation.eval_eq_of_inputs_eq {source result : Type}
 
 def Computation.weaken {outer source result : Type}
     (path : Path outer source) (computation : Computation source result) : Computation outer result :=
-  ⟨computation.types, computation.inputs.weaken path, computation.run⟩
+  ⟨computation.inputs.weaken path, computation.run⟩
 
 end Forms.Model

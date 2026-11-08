@@ -5,19 +5,19 @@ public import Forms.Runtime.ModelProtocol
 
 @[expose] public section
 namespace Forms.Runtime.PersonProtocol
-open Lean Forms.ExampleForms.Person
+open Lean Forms.ExampleForms
 
 def name := "person"
 abbrev State := ModelForm.State Person.Raw
 
 def descriptor (revision : String) : Json :=
-  toJson ({ form := name, revision, value := toJson initial } : Wire.CompiledDescriptor)
+  toJson ({ form := name, revision, value := toJson Person.initial } : Wire.CompiledDescriptor)
 
 def submission (value : Person.Raw) : Json :=
   .mkObj [("form", toJson name), ("value", toJson value)]
 
 def snapshot (state : State) (render := true) : Wire.FormSnapshot :=
-  let snapshot := ModelForm.snapshot (model := Person) form state render
+  let snapshot := ModelForm.snapshot (model := Person) Person.form state render
   { title := snapshot.view.title
     view := DisplayProtocol.layoutToWire (DisplayLayout.page snapshot.view snapshot.ui snapshot.actions
       (toJson snapshot.value).pretty)
@@ -34,7 +34,7 @@ def snapshot (state : State) (render := true) : Wire.FormSnapshot :=
 
 def execute (state : State) (request : Wire.FormRequest) : Except String (State × Wire.FormSnapshot) := do
   let command ← ModelProtocol.commandFromWire request
-  let state ← ModelForm.execute (model := Person) form state command
+  let state ← ModelForm.execute (model := Person) Person.form state command
   pure (state, snapshot state command.render)
 
 def verifySubmission (json : Json) : Except Json Unit := do

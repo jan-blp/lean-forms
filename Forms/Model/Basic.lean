@@ -10,7 +10,9 @@ class Fields (raw : Type) where
   Field : Type → Type
   lens : {value : Type} → Field value → LeanLens.Lens' raw value
   lawful : ∀ {value} (field : Field value), LeanLens.LawfulLens (lens field)
+  /-- The field name used in serialization . -/
   key : {value : Type} → Field value → String
+  key_injective : ∀ {α β : Type} (a : Field α) (b : Field β), key a = key b → a ≍ b
 
 attribute [reducible] Fields.Field
 
@@ -29,31 +31,37 @@ attribute [reducible] Constructors.Constructor
 
 inductive Path : Type → Type → Type 1 where
   | self {value : Type} : Path value value
-  | field {source child target : Type} [Fields source]
-      (field : Fields.Field source child) (rest : Path child target) : Path source target
+  | stepField {source child target : Type} [Fields source]
+      (field : Fields.Field source child)
+      (rest : Path child target)
+      : Path source target
+
+def Path.field {source value : Type} [Fields source]
+    (field : Fields.Field source value) : Path source value :=
+  .stepField (field := field) (rest := .self)
 
 def Path.get {source target : Type} (path : Path source target) (value : source) : target :=
   match path with
   | .self => value
-  | @field _ _ _ inst f rest => rest.get (@Fields.get _ _ inst f value)
+  | @stepField _ _ _ inst f rest => rest.get (@Fields.get _ _ inst f value)
 
 def Path.set {source target : Type} (path : Path source target) (new : target) (value : source) : source :=
   match path with
   | .self => new
-  | @field _ _ _ inst f rest =>
+  | @stepField _ _ _ inst f rest =>
     @Fields.set _ _ inst f (rest.set new (@Fields.get _ _ inst f value)) value
 
 def Path.trans {source middle target : Type} (first : Path source middle)
     (second : Path middle target) : Path source target :=
   match first with
   | .self => second
-  | @field _ _ _ inst f rest => @Path.field _ _ _ inst f (rest.trans second)
+  | @stepField _ _ _ inst f rest => @Path.stepField _ _ _ inst f (rest.trans second)
 
 theorem Path.get_set {source target : Type} (path : Path source target) (new : target) (value : source) :
     path.get (path.set new value) = new := by
   induction path with
   | self => rfl
-  | @field source child target inst f rest ih =>
+  | @stepField source child target inst f rest ih =>
     simp only [get, set, Fields.get, Fields.set, (Fields.lawful f).view_set]
     exact ih _ _
 
@@ -61,7 +69,7 @@ theorem Path.set_get {source target : Type} (path : Path source target) (value :
     path.set (path.get value) value = value := by
   induction path with
   | self => rfl
-  | @field source child target inst f rest ih =>
+  | @stepField source child target inst f rest ih =>
     simp only [get, set, ih, Fields.get, Fields.set, (Fields.lawful f).set_view]
 
 theorem Path.set_set {source target : Type} (path : Path source target)
@@ -69,7 +77,7 @@ theorem Path.set_set {source target : Type} (path : Path source target)
     path.set second (path.set first value) = path.set second value := by
   induction path with
   | self => rfl
-  | @field source child target inst f rest ih =>
+  | @stepField source child target inst f rest ih =>
     simp only [set, Fields.get, Fields.set, (Fields.lawful f).view_set, ih,
       (Fields.lawful f).set_set]
 

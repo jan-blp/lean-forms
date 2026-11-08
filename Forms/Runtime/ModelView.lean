@@ -53,7 +53,7 @@ def error {raw : Type} {value : raw} (error : Model.Error value) : Feedback.Erro
 
 def pathLocation {source target : Type} : Model.Path source target → Feedback.Location
   | .self => []
-  | @Model.Path.field _ _ _ inst f rest => .field (@Fields.key _ inst _ f) :: pathLocation rest
+  | @Model.Path.stepField _ _ _ inst f rest => .field (@Fields.key _ inst _ f) :: pathLocation rest
 
 def render {raw : Type} (component : Model.Component raw) (value : raw)
     (errors : List Feedback.Error := []) (disabled := false) (target : Display.Target := {}) :
