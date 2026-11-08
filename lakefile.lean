@@ -56,6 +56,8 @@ target browserSources pkg : FilePath := do
     let files ← jobs.mapM fun job => job.await
     let path := pkg.buildDir / "browser-sources.txt"
     let contents := String.intercalate "\n" (files.toList.map (·.toString)) ++ "\n"
-    unless (← path.pathExists) && (← IO.FS.readFile path) == contents do
-      IO.FS.writeFile path contents
+    if ← path.pathExists then
+      if (← IO.FS.readFile path) == contents then return path
+    IO.FS.createDirAll pkg.buildDir
+    IO.FS.writeFile path contents
     return path
