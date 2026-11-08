@@ -1,4 +1,4 @@
-# Run from the repository root: make -f wasm/makefile [all|test|setup|size|size-gzip|size-brotli|ts-lines]
+# Run from the repository root:
 .DEFAULT_GOAL := all
 .DELETE_ON_ERROR:
 

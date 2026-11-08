@@ -46,12 +46,35 @@ lean_lib Browser where
   roots := #[`CompiledMain]
   srcDir := "wasm"
 
+/-- Collect the modules needed to run the form in the browser.
+Unlike Lake's `transImports`, this skips `meta import` dependencies.
+Excluding them avoids compiling their generated C to Wasm and saves compilation time. -/
+private def runtimeModules (root : Module) : FetchM (Array Module) := do
+  let mut pending := [root]
+  let mut visited := Lean.NameSet.empty
+  let mut modules := #[]
+  while let mod :: rest := pending do
+    pending := rest
+    if visited.contains mod.name then continue
+    visited := visited.insert mod.name
+    modules := modules.push mod
+    let input ← (← mod.input.fetch).await
+    -- Non-`module` init functions call every import, meta ones included.
+    unless input.header.isModule do
+      error s!"{mod.name}: runtime import filtering requires `module`"
+    for imp in input.imports do
+      -- Skipped modules stay referenced by unused init functions; wasm-ld drops those.
+      unless imp.isMeta do
+        if let some dependency := imp.module? then
+          pending := dependency :: pending
+  return modules
+
 -- Use Lake's dependency graph, without inspecting or rewriting generated C.
 target browserSources pkg : FilePath := do
   let some root := pkg.findModule? `CompiledMain
     | error "Missing browser entry module"
-  let imports ← (← root.transImports.fetch).await
-  let jobs ← (imports.push root).mapM fun mod => mod.c.fetch
+  let modules ← runtimeModules root
+  let jobs ← modules.mapM fun mod => mod.c.fetch
   Job.async do
     let files ← jobs.mapM fun job => job.await
     let path := pkg.buildDir / "browser-sources.txt"
