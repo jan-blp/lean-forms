@@ -10,7 +10,7 @@ open Lean
 deriving instance ToJson, FromJson for DisplayLayout.Tag
 
 inductive DomArgument where
-  | none | value | checked | index
+  | none | value | checked
   deriving ToJson, FromJson
 
 inductive BindingCommand where

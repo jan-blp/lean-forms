@@ -236,7 +236,7 @@ structure BinderNames where
 private structure PrivateModel where
   value : Nat
 
-/-- error: FormModel currently requires public model declarations -/
+/-- error: FormModel requires public model declarations -/
 #guard_msgs in
 deriving instance FormModel for PrivateModel
 

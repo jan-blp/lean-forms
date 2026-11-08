@@ -30,7 +30,7 @@ async function stop(process) {
 const port = await freePort();
 const debugPort = await freePort();
 const profile = await mkdtemp(join(tmpdir(), 'forms-firefox-'));
-const server = spawn('.lake/build/bin/forms-web', ['person', '--port', String(port)], { cwd, stdio: 'ignore' });
+const server = spawn('.lake/build/bin/forms-web', ['typed-person', '--port', String(port)], { cwd, stdio: 'ignore' });
 const firefox = spawn('firefox', ['--headless', '--no-remote', '--profile', profile,
   '--remote-debugging-port', String(debugPort)], { stdio: 'ignore' });
 let startupError;
@@ -73,100 +73,6 @@ try {
       assert.equal(result.result.value, true, `Horizontal page overflow at ${width}px`);
     }
   }
-  await call('browsingContext.navigate', { context, url: `http://127.0.0.1:${port}/`, wait: 'complete' });
-  const result = await call('script.evaluate', { target: { context }, awaitPromise: true, expression: `(async () => {
-    const check = (condition, message) => { if (!condition) throw Error(message); };
-    const wait = async predicate => {
-      for (let i = 0; i < 100; i++) {
-        if (predicate()) return;
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-      throw Error('Timed out: ' + document.querySelector('#status').textContent);
-    };
-    const field = name => [...document.querySelectorAll('.editor')].find(form => form.querySelector('label').firstChild.textContent === name);
-    const edit = (name, value) => {
-      const input = field(name).querySelector('input');
-      input.value = value;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    };
-    const apply = name => field(name).querySelector('button').click();
-    const status = () => document.querySelector('#status').textContent;
-    await wait(() => document.querySelector('#submit')?.disabled === false);
-    check(crossOriginIsolated, 'Shared-memory runtime requires cross-origin isolation');
-    check(document.querySelector('[data-runtime=compiled]'), 'Compiled form runtime was not loaded');
-    let posts = 0;
-    const originalFetch = window.fetch;
-    window.fetch = (...args) => { if (args[0] === '/api/submit') posts++; return originalFetch(...args); };
-    const nameInput = field('Name').querySelector('input');
-    nameInput.focus();
-    edit('Name', '<img src=x> Grace');
-    check(field('Name').querySelector('input') === nameInput && document.activeElement === nameInput,
-      'Draft replaced the editor or lost focus');
-    edit('Age (18-120)', '35');
-    apply('Name');
-    check(field('Age (18-120)').querySelector('input').value === '35', 'Applying Name lost the Age draft');
-    check(document.querySelector('#count').textContent === '1 action', 'Draft entered history');
-    document.querySelector('#submit').click();
-    check(posts === 0 && status() === 'Apply your edits before submitting.', 'Submitted unapplied draft');
-    check(document.activeElement === field('Age (18-120)').querySelector('input'), 'Draft not focused');
-    edit('Age (18-120)', '-1');
-    apply('Age (18-120)');
-    check(document.querySelector('#count').textContent === '1 action', 'Invalid draft applied');
-    edit('Age (18-120)', '35');
-    field('Age (18-120)').requestSubmit();
-    document.querySelector('input[type=checkbox]').click();
-    const select = document.querySelector('select');
-    select.value = '2'; select.dispatchEvent(new Event('change'));
-    document.querySelector('#submit').click();
-    await wait(() => status() === 'Submitted successfully.');
-    const submitted = JSON.parse(document.querySelector('#result pre').textContent);
-    check(submitted.name === '<img src=x> Grace' && submitted.age === '35' && submitted.address.kind === 2, 'Wrong submitted value');
-    check(!document.querySelector('#result img'), 'Value interpreted as HTML');
-    edit('Age (18-120)', '17'); apply('Age (18-120)');
-    document.querySelector('#submit').click();
-    await wait(() => status() === 'Attendees must be between 18 and 120 years old.');
-    check(document.querySelector('#submit')?.disabled === false, 'Rejected submission left controls disabled');
-    const ageInput = field('Age (18-120)').querySelector('input');
-    check(ageInput.getAttribute('aria-invalid') === 'true', 'Invalid field not marked');
-    check(document.getElementById(ageInput.getAttribute('aria-describedby')).textContent === status(), 'Missing inline feedback');
-    check(!field('Name').querySelector('[aria-invalid]'), 'Error attached to unrelated field');
-    edit('Age (18-120)', '36'); apply('Age (18-120)');
-    check(!document.querySelector('.validation-error, [aria-invalid]'), 'Applied edit kept stale errors');
-    document.querySelector('#submit').click();
-    await wait(() => status() === 'Submitted successfully.');
-    edit('Name', 'Discard me');
-    document.querySelector('#reset').click();
-    check(field('Name').querySelector('input').value === 'Ada', 'Reset kept draft');
-    check(document.querySelector('#count').textContent === '0 actions', 'Reset kept history');
-    document.querySelector('#submit').click();
-    await wait(() => status() === 'Submitted successfully.');
-    check(posts === 3, 'Invalid value reached the server');
-    for (const body of ['null', '{"error": {"message": "wrong shape"}}', '<html>Unavailable</html>']) {
-      window.fetch = async () => new Response(body, { status: 503 });
-      document.querySelector('#submit').click();
-      await wait(() => document.querySelector('#submit')?.disabled === false);
-      check(status() === 'Submission failed (HTTP 503).', 'Malformed error response was not handled');
-    }
-    edit('Name', 'Retain me'); apply('Name');
-    let finish;
-    let pendingPosts = 0;
-    window.fetch = () => { pendingPosts++; return new Promise(resolve => { finish = resolve; }); };
-    document.querySelector('#submit').click();
-    document.querySelector('#submit').dispatchEvent(new Event('click'));
-    document.querySelector('#reset').dispatchEvent(new Event('click'));
-    const checkbox = document.querySelector('input[type=checkbox]');
-    checkbox.dispatchEvent(new Event('change'));
-    check(pendingPosts === 1, 'Duplicate submission while pending');
-    check(document.querySelector('#count').textContent === '1 action', 'History changed while pending');
-    finish(new Response(null, { status: 204 }));
-    await wait(() => document.querySelector('#submit')?.disabled === false);
-    check(field('Name').querySelector('input').value === 'Retain me', 'Reset ran while pending');
-    window.fetch = originalFetch;
-    return 'PASS: Apply/Enter, drafts, validation, typed submission, reset, malformed errors, pending guards';
-  })()` });
-  assert.notEqual(result.type, 'exception', JSON.stringify(result.exceptionDetails));
-  console.log(result.result.value);
-  await checkLayout();
   async function example(name, body) {
     const examplePort = await freePort();
     const process = spawn('.lake/build/bin/forms-web', [name, '--port', String(examplePort)], { cwd, stdio: 'ignore' });
@@ -184,15 +90,10 @@ try {
           for (let i = 0; i < 100; i++) { if (predicate()) return; await new Promise(resolve => setTimeout(resolve, 50)); }
           throw Error(document.querySelector('#status').textContent || 'Timeout');
         };
-        const button = label => [...document.querySelectorAll('button')].find(button => button.textContent === label);
         const edit = (label, value) => {
           const form = [...document.querySelectorAll('.editor')].find(form => form.querySelector('label').firstChild.textContent === label);
           const input = form.querySelector('input');
           input.value = value; input.dispatchEvent(new Event('input')); form.requestSubmit();
-        };
-        const select = (label, value) => {
-          const input = [...document.querySelectorAll('label')].find(node => node.firstChild.textContent === label).querySelector('select');
-          input.value = value; input.dispatchEvent(new Event('change'));
         };
         await wait(() => document.querySelector('#submit')?.disabled === false);
         check(crossOriginIsolated, 'Shared-memory runtime requires cross-origin isolation');
@@ -204,135 +105,66 @@ try {
       })()` });
       assert.notEqual(result.type, 'exception', JSON.stringify(result.exceptionDetails));
       await checkLayout();
-      console.log(`PASS: ${name} browser controls, layout, and server replay`);
+      console.log(`PASS: ${name} browser controls, layout, and server validation`);
     } finally { await stop(process); }
   }
-  for (const name of ['counter', 'counters', 'thermostat']) await example(name, `
-    const input = document.querySelector('.editor input');
-    check(input.type === 'text' && input.inputMode === 'numeric' && input.pattern === '[0-9]+' && input.required,
-      'Natural editor lost its browser constraints');
-    check(input.closest('form').querySelector('button').textContent === 'Apply', 'Natural editor must require Apply');
-  `);
-  await example('booking', `
-    const date = document.querySelector('input');
-    check(date.type === 'date' && date.min === '0001-01-01' && date.max === '9999-12-31' && date.required,
-      'Date editor lost its browser constraints');
-    edit('End date (YYYY-MM-DD)', '2028-01-01');
+  await example('typed-person', `
+    const field = label => [...document.querySelectorAll('.editor')].find(form =>
+      form.querySelector('label').firstChild.textContent === label);
+    const originalName = field('Name').querySelector('input');
+    originalName.focus();
+    originalName.value = '<img src=x> Grace';
+    originalName.dispatchEvent(new Event('input'));
+    check(field('Name').querySelector('input') === originalName && document.activeElement === originalName,
+      'Draft replaced the editor or lost focus');
     document.querySelector('#submit').click();
-    await wait(() => document.querySelector('#status').textContent === 'End date must be on or after start date.');
-    check(document.querySelectorAll('input[aria-invalid="true"]').length === 2, 'Both dates should be marked invalid');
-    check(document.querySelectorAll('.validation-error').length === 2, 'Both dates should show feedback');
-    edit('End date (YYYY-MM-DD)', '2028-03-01');
-    check(!document.querySelector('.validation-error'), 'Correction kept stale feedback');
-  `);
-  await example('invoice', `
-    button('Add item').click();
-    check(document.querySelectorAll('.list-item').length === 2, 'Append failed');
-    const quantity = [...document.querySelectorAll('.editor')].filter(form => form.querySelector('label').firstChild.textContent === 'Quantity')[1];
-    const input = quantity.querySelector('input'); input.value = '7'; input.dispatchEvent(new Event('input'));
-    button('Remove item').click();
-    check(document.querySelectorAll('.list-item').length === 2, 'Removal accepted pending draft');
-    const pending = [...document.querySelectorAll('.editor')].filter(form => form.querySelector('label').firstChild.textContent === 'Quantity')[1];
-    pending.requestSubmit();
-    button('Remove item').click();
-    check(document.querySelectorAll('.list-item').length === 1, 'Remove failed');
-    check([...document.querySelectorAll('.computed output')].at(-1).textContent === '700', 'Total did not update');
-    edit('Description', '<b>literal</b>');
-    button('Remove item').click();
-    check(document.querySelector('.empty').textContent === 'No items.', 'Empty list has no explanation');
-    button('Add item').click();
-  `);
-  await example('invoice', `
-    button('Add item').click();
-    button('Add item').click();
-    function quantity(index, value) {
-      const editor = [...document.querySelectorAll('.editor')].filter(form => form.querySelector('label').firstChild.textContent === 'Quantity')[index];
-      const input = editor.querySelector('input');
-      input.value = value; input.dispatchEvent(new Event('input'));
-      editor.requestSubmit();
-    }
-    quantity(1, '0'); quantity(2, '0');
-    document.querySelector('#submit').click();
-    await wait(() => document.querySelectorAll('input[aria-invalid="true"]').length === 2);
-    const items = [...document.querySelectorAll('.list-item')];
-    check(!items[0].querySelector('.validation-error'), 'Valid item marked invalid');
-    for (const item of items.slice(1)) {
-      const invalid = item.querySelectorAll('.editor:has(input[aria-invalid="true"])');
-      check(invalid.length === 1 && invalid[0].querySelector('label').firstChild.textContent === 'Quantity', 'Error attached to wrong field');
-    }
-    quantity(1, '1'); quantity(2, '1');
-  `);
-  await example('invoice', `
-    const originalFetch = window.fetch;
-    try {
-      window.fetch = async () => new Response(JSON.stringify({ error: {
-        kind: 'validation', message: 'List error',
-        errors: [{ message: 'List error', targets: { kind: 'locations', locations: [[]] } }],
-      } }), { status: 422, headers: { 'Content-Type': 'application/json' } });
-      document.querySelector('#submit').click();
-      await wait(() => document.querySelector('#status').textContent === 'List error');
-      check(document.querySelectorAll('.validation-error').length === 1, 'Missing list feedback');
-      check(!document.querySelector('[aria-invalid]'), 'List error marked child fields invalid');
-    } finally { window.fetch = originalFetch; }
-  `);
-  await example('shapes', `
-    select('Shape', 'rectangle'); edit('Width', '8');
-    select('Shape', 'dot'); check(!document.querySelector('input'), 'Inactive payload remains');
-    select('Shape', 'rectangle');
-    check(document.querySelector('input').value === '4', 'Old payload was restored');
-    edit('Height', '7');
-    edit('Width', '0');
-    document.querySelector('#submit').click();
-    await wait(() => document.querySelector('#status').textContent === 'Size must be at least 1.');
-    const width = [...document.querySelectorAll('.editor')].find(form => form.querySelector('label').firstChild.textContent === 'Width');
-    const invalid = [...document.querySelectorAll('[aria-invalid="true"]')];
-    check(invalid.length === 1 && invalid[0] === width.querySelector('input'), 'Only the width input should be marked invalid');
-    check(!document.querySelector('select[aria-invalid]'), 'Constructor selector marked invalid');
-    check(document.querySelectorAll('.validation-error').length === 1 && width.querySelector('.validation-error'),
-      'Active constructor error did not attach to width');
-    edit('Width', '8');
-    const originalFetch = window.fetch;
-    try {
-      window.fetch = async () => new Response(JSON.stringify({ error: {
-        kind: 'validation', message: 'Wrong constructor',
-        errors: [
-          { message: 'Inactive payload', targets: { kind: 'locations', locations: [[{ kind: 'constructor', tag: 'circle' }, { kind: 'field', name: 'width' }]] } },
-          { message: 'Untagged payload', targets: { kind: 'locations', locations: [[{ kind: 'field', name: 'value' }, { kind: 'field', name: 'width' }]] } },
-        ],
-      } }), { status: 422, headers: { 'Content-Type': 'application/json' } });
-      document.querySelector('#submit').click();
-      await wait(() => document.querySelector('#status').textContent === 'Wrong constructor');
-      check(!document.querySelector('.validation-error, [aria-invalid]'),
-        'Inactive or untagged payload error attached to active constructor');
-    } finally { window.fetch = originalFetch; }
-  `);
-  await example('location', `select('Country', 'Japan'); select('City', '2');`);
-  await example('report', `
-    check(document.querySelectorAll('tbody tr').length === 4, 'Missing table rows');
-    const region = document.querySelector('.table-scroll');
-    check(region.tabIndex === 0 && region.getAttribute('role') === 'region' &&
-      region.getAttribute('aria-label') === 'Table', 'Table lost its accessible region');
-    check([...document.querySelectorAll('th')].every(cell => cell.scope === 'col'), 'Missing column header scope');
-    document.querySelector('input[type=checkbox]').click();
-    check(document.querySelectorAll('tbody tr').length === 2, 'Filter did not update table');
-    select('Sort', '1');
-  `);
-  await example('basket', `
-    check(document.querySelector('table'), 'Missing catalogue');
-    edit('Search', 'no-such-product');
-    check(document.querySelector('tbody .empty').textContent === 'No rows.', 'Empty table has no explanation');
-    check(document.querySelector('tbody .empty').colSpan === document.querySelectorAll('thead th').length,
-      'Empty state does not span the table columns');
+    check(document.querySelector('#status').textContent === 'Apply your edits before submitting.',
+      'Submitted an unapplied draft');
+    field('Name').requestSubmit();
+    check(!document.querySelector('#controls img'), 'Name interpreted as HTML');
     document.querySelector('#reset').click();
-    const search = [...document.querySelectorAll('.editor')].find(form => form.querySelector('label').firstChild.textContent === 'Search');
-    search.querySelector('input').value = 'pen'; search.querySelector('input').dispatchEvent(new Event('input'));
-    button('Add selected product').click();
-    check(document.querySelector('#count').textContent === '0 actions', 'Action accepted pending draft');
-    edit('Search', 'pen');
-    button('Add selected product').click();
-    select('Page', '1');
-    check(document.querySelector('table'), 'Missing basket table');
-    check(document.querySelectorAll('tbody tr').length === 3, 'Append did not update basket');
+    check(field('Name').querySelector('input').value === 'Ada', 'Reset kept edit');
+    const text = () => document.body.textContent;
+    check(text().includes('Ada, age 20'), 'Missing computed summary');
+    check(!field('Street'), 'Hidden nested field rendered');
+    edit('Name', 'Grace');
+    check(text().includes('Grace, age 20'), 'Computed summary did not update');
+    document.querySelector('input[type=checkbox]').click();
+    check(field('Street').querySelector('input').value === 'Lambda Lane', 'Missing nested value');
+    edit('Age', '17');
+    check(field('Street').querySelector('input').disabled, 'Dependent field not disabled');
+    check(text().includes('Delivery details require an adult.'), 'Dependent text did not update');
+    edit('Age', '150');
+    document.querySelector('#submit').click();
+    await wait(() => document.querySelector('#status').textContent === 'Age must be at most 120.');
+    check(field('Age').querySelector('input').getAttribute('aria-invalid') === 'true', 'Missing age feedback');
+    edit('Age', '20');
+    edit('Street', '');
+    document.querySelector('#submit').click();
+    await wait(() => document.querySelector('#status').textContent === 'Enter your delivery street.');
+    check(field('Street').querySelector('input').getAttribute('aria-invalid') === 'true', 'Missing nested feedback');
+    edit('Street', 'Campus');
+    edit('Age', '17');
+    document.querySelector('#submit').click();
+    await wait(() => document.querySelector('#status').textContent === 'Campus delivery requires an adult.');
+    edit('Age', '21');
+    const originalFetch = window.fetch;
+    let finish;
+    let posts = 0;
+    window.fetch = () => { posts++; return new Promise(resolve => { finish = resolve; }); };
+    document.querySelector('#submit').click();
+    document.querySelector('#submit').dispatchEvent(new Event('click'));
+    document.querySelector('#reset').dispatchEvent(new Event('click'));
+    check(posts === 1, 'Duplicate submission while pending');
+    finish(new Response(null, { status: 204 }));
+    await wait(() => document.querySelector('#status').textContent === 'Submitted successfully.');
+    check(field('Age').querySelector('input').value === '21', 'Reset ran while pending');
+    window.fetch = originalFetch;
+    const forged = await fetch('/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ form: 'typed-person', value: { name: 'Forged', age: 150,
+        delivery: false, address: { street: 'Campus' } } }) });
+    check(forged.status === 422, 'Server accepted an invalid model');
+    check((await forged.json()).error.message === 'Age must be at most 120.', 'Server validation did not run');
   `);
 
 } finally {

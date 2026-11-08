@@ -3,7 +3,6 @@ module
 public import Std.Http
 public import Forms.Runtime.TrafficLog
 public import Forms.Runtime.CompiledRevision
-public import Forms.Runtime.SubmissionProtocol
 
 @[expose] public section
 
@@ -12,14 +11,6 @@ open Std Http Async
 
 structure ComponentEndpoint where
   submit : Lean.Json → Except Lean.Json Unit
-
-def ComponentEndpoint.ofComponent {ty : DataType}
-  (refined : RefinedDataType ty)
-  (component : Composition.Component ty)
-  (initial : ⟦ty⟧)
-  : ComponentEndpoint where
-  submit submission := do
-    discard <| (SubmissionProtocol.verify refined component initial submission).mapError (·.toJson)
 
 inductive GetRoute where
   | index
@@ -171,15 +162,14 @@ def openDefaultBrowser (url : String) : IO Unit := do
   catch error =>
     IO.eprintln s!"Could not open browser: {error}. Open {url} manually."
 
-def run (selected : ExampleForms.Example)
+def run
   (port : UInt16 := 8080)
   (openBrowser : Bool := false)
   : IO Unit := do
-  let definition := selected.definition
   let app : Application := {
-    compiledForm := CompiledFormsProtocol.descriptor compiledRevision selected
+    compiledForm := TypedPersonProtocol.descriptor compiledRevision
     logger := ← TrafficLog.Logger.create
-    form := .ofComponent definition.refined definition.component definition.initial
+    form := { submit := TypedPersonProtocol.verifySubmission }
     html := ← IO.FS.readFile "web/index.html"
     script := ← IO.FS.readFile "web/dist/app.js"
     wasmAdapter := ← IO.FS.readFile "web/dist/wasm.js"

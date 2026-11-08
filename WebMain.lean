@@ -1,14 +1,13 @@
 module
 
-import Forms.ExampleForms.Example
 import Forms.Runtime.Web
 
 open Forms Forms.Runtime Forms.ExampleForms
 
-private def usage := "Usage: forms-web [" ++ String.intercalate "|" Example.names ++ "] [--port PORT] [--open]"
+private def usage := "Usage: forms-web [" ++ String.intercalate "|" [TypedPersonProtocol.name] ++ "] [--port PORT] [--open]"
 
 private structure Options where
-  selected : Option Example := none
+  selected : Bool := false
   port : UInt16 := 8080
   openBrowser : Bool := false
 
@@ -31,11 +30,9 @@ private def parseOptions
                 else .error "Port must be between 1 and 65535"
             | none => .error "Expected a port number"
       else
-        match Example.ofName arg, options.selected with
-        | some selected, none => parseOptions rest { options with selected := some selected }
-        | none, none => .error usage
-        | none, some _ => .error usage
-        | some _, some _ => .error usage
+        if arg == TypedPersonProtocol.name && !options.selected then
+          parseOptions rest { options with selected := true }
+        else .error usage
 
 private def complete (words : List String) : List String :=
   let previous := words.dropLast
@@ -44,7 +41,7 @@ private def complete (words : List String) : List String :=
     match parseOptions previous with
     | .error _ => []
     | .ok options =>
-        let candidates := (if options.selected.isNone then Example.names else []) ++
+        let candidates := (if !options.selected then [TypedPersonProtocol.name] else []) ++
           (if options.openBrowser then [] else ["--open"]) ++ ["--port", "--help"]
         candidates.filter (fun candidate => candidate.startsWith (words.getLast?.getD ""))
 
@@ -56,5 +53,4 @@ public def main (args : List String) : IO Unit := do
     IO.println usage
     return
   let options ← IO.ofExcept (parseOptions args)
-  let selected := options.selected.getD .counter
-  Web.run selected options.port options.openBrowser
+  Web.run options.port options.openBrowser

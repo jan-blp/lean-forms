@@ -25,19 +25,13 @@ def messageFields (messages : Option String) : List (String × Json) :=
 def widgetName : Editor → String
   | .text _ => "textInput"
   | .natural _ => "naturalInput"
-  | .date _ => "dateInput"
   | .checkbox _ => "checkbox"
-  | .select .. => "select"
 
 def controlToJson (control : Control) : Json :=
   let fields := match control.body with
-    | .button keepDrafts => [("kind", toJson "button"), ("keepDrafts", toJson keepDrafts)]
     | .editor location input => [("kind", toJson "editor"),
         ("location", FeedbackProtocol.locationToJson location),
-        ("widget", toJson (widgetName input))] ++
-        (match input with | .select selection => [("options", toJson selection.options)] | _ => [])
-    | .choice location value options => [("kind", toJson "choice"),
-        ("location", FeedbackProtocol.locationToJson location), ("value", toJson value), ("options", toJson options)]
+        ("widget", toJson (widgetName input))]
   Json.mkObj ([("key", toJson control.key.value), ("id", toJson control.id), ("target", targetToJson control.target),
     ("label", toJson control.label), ("disabled", toJson control.disabled)] ++ fields ++ messageFields control.messages)
 
@@ -47,32 +41,24 @@ def attributePair : DisplayLayout.Attribute → String × String
   | .ariaBusy value => ("aria-busy", toString value)
   | .runtime => ("data-runtime", "compiled")
   | .cssClass value => ("class", value)
-  | .tabIndex value => ("tabindex", toString value)
   | .role value => ("role", value)
   | .ariaLabel value => ("aria-label", value)
-  | .scope value => ("scope", value)
-  | .colSpan value => ("colspan", toString value)
   | .id value => ("id", value.value)
   | .inputType value => ("type", match value with
-      | .text => "text" | .date => "date" | .checkbox => "checkbox" | .button => "button" | .submit => "submit")
+      | .text => "text" | .checkbox => "checkbox")
   | .numeric => ("inputmode", "numeric")
   | .naturalPattern => ("pattern", "[0-9]+")
   | .required => ("required", "")
-  | .minDate => ("min", "0001-01-01")
-  | .maxDate => ("max", "9999-12-31")
   | .disabled => ("disabled", "")
-  | .optionValue value => ("value", value)
   | .invalid => ("aria-invalid", "true")
   | .describedBy id => ("aria-describedby", id.value)
 
 def sourceFields : DisplayLayout.Source → String × Wire.DomArgument
   | .value id => (id.value, .value)
   | .checked id => (id.value, .checked)
-  | .index id => (id.value, .index)
 
 def bindingToWire : DisplayLayout.Binding → Wire.Binding
   | .page command => ⟨.click, (match command with | .submit => .submit | .reset => .reset), "", "", .none⟩
-  | .press key => ⟨.click, .apply, key.value, "", .none⟩
   | .draft key id => ⟨.input, .draft, key.value, id.value, .value⟩
   | .change key source => let (id, argument) := sourceFields source; ⟨.change, .apply, key.value, id, argument⟩
   | .submit key source => let (id, argument) := sourceFields source; ⟨.submit, .apply, key.value, id, argument⟩
