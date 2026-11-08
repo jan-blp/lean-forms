@@ -1,4 +1,4 @@
-# Run from the repository root: make -f experiments/wasm/Makefile [all|test|setup|size|size-gzip|size-brotli|ts-lines]
+# Run from the repository root: make -f experiments/wasm/makefile [all|test|setup|size|size-gzip|size-brotli|ts-lines]
 .DEFAULT_GOAL := all
 .DELETE_ON_ERROR:
 
@@ -17,7 +17,7 @@ EMSDK := $(TOOLCHAINS)/emsdk-$(EMSDK_VERSION)
 SDK := $(EMSDK)/upstream/emscripten
 PATCH := experiments/wasm/lean-$(LEAN_VERSION).patch
 RUNTIME := $(OUT)/full-runtime-lean-$(LEAN_VERSION)-emsdk-$(EMSDK_VERSION)
-MAKEFILE := experiments/wasm/Makefile
+MAKEFILE := experiments/wasm/makefile
 JOBS ?= 8
 FLAGS := -O2 -DNDEBUG -DLEAN_EMSCRIPTEN -I$(RUNTIME)/include -pthread -fwasm-exceptions
 LEAN_SOURCES := $(patsubst $(CURDIR)/%,%,$(shell cat .lake/build/browser-sources.txt 2>/dev/null))

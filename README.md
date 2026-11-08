@@ -6,8 +6,8 @@ npm, CMake, Make, a C++ compiler, Python 3, curl, Git, and patch.
 ```sh
 lake exe cache get
 npm --prefix web ci
-make -f experiments/wasm/Makefile setup
-make -f experiments/wasm/Makefile
+make -f experiments/wasm/makefile setup
+make -f experiments/wasm/makefile
 lake -q exe forms-web person --open
 ```
 
