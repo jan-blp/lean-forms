@@ -37,7 +37,7 @@ for (const { descriptor, initial, cases } of fixtures) {
 }
 
 test('models preserve independent values and reset', async () => {
-  const descriptor = fixture('typed-person').descriptor;
+  const descriptor = fixture('person').descriptor;
   const a = await openCompiledForm({ ...descriptor, value: { ...descriptor.value, age: 25 } });
   const b = await openCompiledForm(descriptor);
   try {
@@ -54,7 +54,7 @@ test('models preserve independent values and reset', async () => {
 });
 
 test('initialization rejects unknown forms, incompatible revisions, and malformed raw values', async () => {
-  const descriptor = fixture('typed-person').descriptor;
+  const descriptor = fixture('person').descriptor;
   await assert.rejects(openCompiledForm({ ...descriptor, form: 'missing' }), /Unknown compiled form/);
   await assert.rejects(openCompiledForm({ ...descriptor, revision: 'old' }), /version differs/);
   for (const value of [false, {}, { ...descriptor.value, age: '20' }])
@@ -62,7 +62,7 @@ test('initialization rejects unknown forms, incompatible revisions, and malforme
 });
 
 test('hidden and disabled controls reject stale edits', async () => {
-  const model = await openCompiledForm(fixture('typed-person').descriptor);
+  const model = await openCompiledForm(fixture('person').descriptor);
   const apply = (label, argument) => model.send({ apply: {
     key: model.snapshot().controls.find(c => c.label === label).key, argument } });
   try {
@@ -84,7 +84,7 @@ test('compiled model disposal releases memory and disposed handles stay invalid'
     operation === 'open' ? { open: { descriptor: fields } } : operation === 'dispose' ? { dispose: { handle } }
       : { send: { handle, request: Object.keys(fields).length ? { [operation]: fields } : operation } }));
   const cycle = () => {
-    const opened = call({ operation: 'open', ...fixture('typed-person').descriptor });
+    const opened = call({ operation: 'open', ...fixture('person').descriptor });
     assert.equal(opened.ok, true);
     const { handle, snapshot } = opened.value.opened;
     const key = snapshot.controls.find(c => c.label === 'Age').key;
@@ -99,7 +99,7 @@ test('compiled model disposal releases memory and disposed handles stay invalid'
   const before = runtime.allocatedBytes();
   for (let i = 0; i < 1000; i++) cycle();
   assert.equal(runtime.allocatedBytes(), before);
-  const next = call({ operation: 'open', ...fixture('typed-person').descriptor });
+  const next = call({ operation: 'open', ...fixture('person').descriptor });
   const handle = next.value.opened.handle;
   const initial = call({ operation: 'inspect', handle });
   for (const text of ['{', '{}', JSON.stringify({ inspect: { handle } }) + '\0'])
@@ -110,7 +110,7 @@ test('compiled model disposal releases memory and disposed handles stay invalid'
 });
 
 test('editor normalization preserves whitespace, types, and natural precision', async () => {
-  const model = await openCompiledForm(fixture('typed-person').descriptor);
+  const model = await openCompiledForm(fixture('person').descriptor);
   const edit = (label, argument) => model.send({ apply: {
     key: model.snapshot().controls.find(c => c.label === label).key, argument } });
   try {
@@ -146,7 +146,7 @@ test('Wasm exposes only the compiled-form API and recovers using a fresh instanc
   const trapped = await createFormRuntime();
   assert.throws(() => trapped.form('['.repeat(200000) + ']'.repeat(200000)), /stack overflow|maximum call stack size exceeded/i);
   const fresh = await createFormRuntime();
-  const result = fresh.form(JSON.stringify({ open: { descriptor: fixture('typed-person').descriptor } }));
+  const result = fresh.form(JSON.stringify({ open: { descriptor: fixture('person').descriptor } }));
   assert.equal(result.ok, true);
   assert.equal(result.value.opened.snapshot.submission.value.age, 20);
   assert.equal(fresh.form(JSON.stringify({ dispose: { handle: result.value.opened.handle } })).ok, true);
@@ -154,7 +154,7 @@ test('Wasm exposes only the compiled-form API and recovers using a fresh instanc
 
 
 test('Lean owns validation visibility, server feedback, and recovery', async () => {
-  const model = await openCompiledForm(fixture('typed-person').descriptor);
+  const model = await openCompiledForm(fixture('person').descriptor);
   const messages = value => {
     if (!value || typeof value !== 'object') return [];
     return [...(value.attributes?.some?.(([name, text]) => name === 'class' && text === 'validation-error') ? [value.text] : []),
@@ -202,7 +202,7 @@ test('Lean owns validation visibility, server feedback, and recovery', async () 
 });
 
 test('Lean owns draft guards, submission effects, pending locks, and reset', async () => {
-  const model = await openCompiledForm(fixture('typed-person').descriptor);
+  const model = await openCompiledForm(fixture('person').descriptor);
   try {
     const editor = model.snapshot().controls.find(c => c.label === 'Age');
     const send = (event, fields = {}) => model.send({ event: { message: event === 'submit' || event === 'reset' ? event : { [event]: fields } } });
@@ -258,8 +258,8 @@ test('Lean owns draft guards, submission effects, pending locks, and reset', asy
 });
 
 test('hidden drafts are discarded and UI state stays local to each model', async () => {
-  const a = await openCompiledForm(fixture('typed-person').descriptor);
-  const b = await openCompiledForm(fixture('typed-person').descriptor);
+  const a = await openCompiledForm(fixture('person').descriptor);
+  const b = await openCompiledForm(fixture('person').descriptor);
   try {
     const checkbox = a.snapshot().controls.find(c => c.widget === 'checkbox');
     a.send({ event: { message: { apply: { key: checkbox.key, argument: true } } } });

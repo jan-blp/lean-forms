@@ -30,7 +30,7 @@ async function stop(process) {
 const port = await freePort();
 const debugPort = await freePort();
 const profile = await mkdtemp(join(tmpdir(), 'forms-firefox-'));
-const server = spawn('.lake/build/bin/forms-web', ['typed-person', '--port', String(port)], { cwd, stdio: 'ignore' });
+const server = spawn('.lake/build/bin/forms-web', ['person', '--port', String(port)], { cwd, stdio: 'ignore' });
 const firefox = spawn('firefox', ['--headless', '--no-remote', '--profile', profile,
   '--remote-debugging-port', String(debugPort)], { stdio: 'ignore' });
 let startupError;
@@ -108,7 +108,7 @@ try {
       console.log(`PASS: ${name} browser controls, layout, and server validation`);
     } finally { await stop(process); }
   }
-  await example('typed-person', `
+  await example('person', `
     const field = label => [...document.querySelectorAll('.editor')].find(form =>
       form.querySelector('label').firstChild.textContent === label);
     const originalName = field('Name').querySelector('input');
@@ -161,7 +161,7 @@ try {
     check(field('Age').querySelector('input').value === '21', 'Reset ran while pending');
     window.fetch = originalFetch;
     const forged = await fetch('/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ form: 'typed-person', value: { name: 'Forged', age: 150,
+      body: JSON.stringify({ form: 'person', value: { name: 'Forged', age: 150,
         delivery: false, address: { street: 'Campus' } } }) });
     check(forged.status === 422, 'Server accepted an invalid model');
     check((await forged.json()).error.message === 'Age must be at most 120.', 'Server validation did not run');

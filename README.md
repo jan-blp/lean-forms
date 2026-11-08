@@ -8,7 +8,7 @@ lake exe cache get
 npm --prefix web ci
 make -f experiments/wasm/Makefile setup
 make -f experiments/wasm/Makefile
-lake -q exe forms-web typed-person --open
+lake -q exe forms-web person --open
 ```
 
 Rebuild Wasm after changing a form. The first build downloads toolchains and takes time.

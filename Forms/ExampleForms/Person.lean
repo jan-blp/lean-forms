@@ -4,7 +4,7 @@ public import Forms.Model.Component
 public meta import Forms.Model.Derive
 
 @[expose] public section
-namespace Forms.ExampleForms.TypedPerson
+namespace Forms.ExampleForms.Person
 open Forms.Model
 
 structure Address where
@@ -44,7 +44,7 @@ instance : ConstraintRule Person.Constraint.campus_valid where
 
 def initial : Person.Raw := ⟨"Ada", 20, false, ⟨"Lambda Lane"⟩⟩
 
-def form : Component Person.Raw := .group "Typed person" [
+def form : Component Person.Raw := .group "Person" [
   .field (.field Person.Field.name .self) "Name" .text,
   .field (.field Person.Field.age .self) "Age" .natural,
   .field (.field Person.Field.delivery .self) "Request delivery" .checkbox,
@@ -59,4 +59,4 @@ def form : Component Person.Raw := .group "Typed person" [
     ])
 ]
 
-end Forms.ExampleForms.TypedPerson
+end Forms.ExampleForms.Person

@@ -4,7 +4,7 @@ import Forms.Runtime.Web
 
 open Forms Forms.Runtime Forms.ExampleForms
 
-private def usage := "Usage: forms-web [" ++ String.intercalate "|" [TypedPersonProtocol.name] ++ "] [--port PORT] [--open]"
+private def usage := "Usage: forms-web [" ++ String.intercalate "|" [PersonProtocol.name] ++ "] [--port PORT] [--open]"
 
 private structure Options where
   selected : Bool := false
@@ -30,7 +30,7 @@ private def parseOptions
                 else .error "Port must be between 1 and 65535"
             | none => .error "Expected a port number"
       else
-        if arg == TypedPersonProtocol.name && !options.selected then
+        if arg == PersonProtocol.name && !options.selected then
           parseOptions rest { options with selected := true }
         else .error usage
 
@@ -41,7 +41,7 @@ private def complete (words : List String) : List String :=
     match parseOptions previous with
     | .error _ => []
     | .ok options =>
-        let candidates := (if !options.selected then [TypedPersonProtocol.name] else []) ++
+        let candidates := (if !options.selected then [PersonProtocol.name] else []) ++
           (if options.openBrowser then [] else ["--open"]) ++ ["--port", "--help"]
         candidates.filter (fun candidate => candidate.startsWith (words.getLast?.getD ""))
 

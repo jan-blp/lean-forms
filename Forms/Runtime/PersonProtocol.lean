@@ -1,14 +1,14 @@
 module
 
-public import Forms.ExampleForms.TypedPerson
+public import Forms.ExampleForms.Person
 public import Forms.Runtime.ModelForm
 public import Forms.Runtime.InputProtocol
 
 @[expose] public section
-namespace Forms.Runtime.TypedPersonProtocol
-open Lean Forms.ExampleForms.TypedPerson
+namespace Forms.Runtime.PersonProtocol
+open Lean Forms.ExampleForms.Person
 
-def name := "typed-person"
+def name := "person"
 abbrev State := ModelForm.State Person.Raw
 
 def descriptor (revision : String) : Json :=
@@ -71,4 +71,4 @@ def verifySubmission (json : Json) : Except Json Unit := do
     throw (.mkObj [("kind", toJson "validation"), ("message", toJson (Feedback.summary errors)),
       ("errors", toJson (errors.map FeedbackProtocol.errorToJson))])
 
-end Forms.Runtime.TypedPersonProtocol
+end Forms.Runtime.PersonProtocol

@@ -14,15 +14,15 @@ private def actionArgument {α : Type} (control : ModelView.Control α) : Except
   return [("argument", value)]
 
 public def main : IO Unit := do
-  let state := ModelForm.openState TypedPerson.initial
-  let controls := (ModelView.render TypedPerson.form state.value).controls
+  let state := ModelForm.openState Person.initial
+  let controls := (ModelView.render Person.form state.value).controls
   let cases ← controls.mapM fun control => do
     let fields ← IO.ofExcept (actionArgument control)
     let action := Json.mkObj (("key", toJson control.key.value) :: fields)
-    let (updated, _) ← IO.ofExcept (TypedPersonProtocol.execute state
+    let (updated, _) ← IO.ofExcept (PersonProtocol.execute state
       (.apply control.key.value ((fields.lookup "argument").getD Json.null)))
-    pure (Json.mkObj [("action", action), ("expected", toJson (TypedPersonProtocol.snapshot updated))])
+    pure (Json.mkObj [("action", action), ("expected", toJson (PersonProtocol.snapshot updated))])
   let typed := Json.mkObj [
-    ("descriptor", TypedPersonProtocol.descriptor compiledRevision),
-    ("initial", toJson (TypedPersonProtocol.snapshot state)), ("cases", toJson cases)]
+    ("descriptor", PersonProtocol.descriptor compiledRevision),
+    ("initial", toJson (PersonProtocol.snapshot state)), ("cases", toJson cases)]
   IO.println (toJson [typed]).compress

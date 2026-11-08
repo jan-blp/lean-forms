@@ -167,9 +167,9 @@ def run
   (openBrowser : Bool := false)
   : IO Unit := do
   let app : Application := {
-    compiledForm := TypedPersonProtocol.descriptor compiledRevision
+    compiledForm := PersonProtocol.descriptor compiledRevision
     logger := ← TrafficLog.Logger.create
-    form := { submit := TypedPersonProtocol.verifySubmission }
+    form := { submit := PersonProtocol.verifySubmission }
     html := ← IO.FS.readFile "web/index.html"
     script := ← IO.FS.readFile "web/dist/app.js"
     wasmAdapter := ← IO.FS.readFile "web/dist/wasm.js"

@@ -61,14 +61,14 @@ for name in examples:
     assert name in invoke(['--help']).stdout
     assert candidates([name, '']) == ['--open', '--port', '--help']
     assert invoke([name, name]).returncode != 0
-assert candidates(['t']) == ['typed-person']
+assert candidates(['p']) == ['person']
 assert candidates(['--port', '']) == []
 assert candidates(['--port', 'invalid', '']) == []
-assert candidates(['typed-person', '']) == ['--open', '--port', '--help']
+assert candidates(['person', '']) == ['--open', '--port', '--help']
 assert '--open' not in candidates(['--open', ''])
 assert candidates(['--help', '']) == []
-for words in [[''], ['t'], ['--'], ['typed-person', ''], ['--port', ''],
-              ['--port', '8081', ''], ['--open', 't'], ['typed-person', '--open', '']]:
+for words in [[''], ['p'], ['--'], ['person', ''], ['--port', ''],
+              ['--port', '8081', ''], ['--open', 'p'], ['person', '--open', '']]:
     expected = sorted(candidates(words))
     for adapter in [bash_candidates, fish_candidates]:
         for lake in [False, True]:

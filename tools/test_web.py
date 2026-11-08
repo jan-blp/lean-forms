@@ -207,7 +207,7 @@ def browser_flag(exit_code):
         environment = dict(os.environ, PATH=directory + os.pathsep + os.environ['PATH'])
         with tempfile.TemporaryFile() as traffic:
             process = subprocess.Popen(
-                [str(BINARY), '--open', 'typed-person', '--port', str(port)],
+                [str(BINARY), '--open', 'person', '--port', str(port)],
                 cwd=ROOT, env=environment, stdout=traffic, stderr=subprocess.PIPE)
             try:
                 for _ in range(100):
@@ -236,7 +236,7 @@ browser_flag(0)
 browser_flag(1)
 
 
-session('typed-person')
+session('person')
 terminal_colors()
 terminal_colors(no_color=True)
 terminal_colors(term='dumb')
