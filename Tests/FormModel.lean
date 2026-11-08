@@ -203,6 +203,13 @@ structure Container where
 #guard_msgs in
 deriving instance FormModel for Container
 
+structure FunctionField where
+  value : Nat → Nat
+
+/-- error: Unsupported FormModel field type: ℕ → ℕ -/
+#guard_msgs in
+deriving instance FormModel for FunctionField
+
 structure Unsupported where
   value : Int
 

@@ -63,7 +63,8 @@ private def inspect (name : Name) : MetaM (Bool × Array Constructor) := do
           proofIds := proofIds.push arg.fvarId!
         else
           if decl.type.hasFVar then throwError "FormModel data fields cannot be dependent"
-          let fn := decl.type.getAppFn.constName!
+          let some fn := decl.type.getAppFn.constName?
+            | throwError "Unsupported FormModel field type: {decl.type}"
           unless [``String, ``Bool, ``Nat].contains fn do
             unless decl.type.getAppArgs.isEmpty do
               throwError "Unsupported FormModel field type: {decl.type}"
