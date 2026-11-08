@@ -98,7 +98,8 @@ test('compiled model disposal releases memory and disposed handles stay invalid'
   for (let i = 0; i < 1001; i++) cycle();
   const before = runtime.allocatedBytes();
   for (let i = 0; i < 1000; i++) cycle();
-  assert.equal(runtime.allocatedBytes(), before);
+  // Disposal must not grow allocations; allocator bookkeeping may shrink them.
+  assert.ok(runtime.allocatedBytes() <= before, 'Repeated disposal grew allocated memory');
   const next = call({ operation: 'open', ...fixture('person').descriptor });
   const handle = next.value.opened.handle;
   const initial = call({ operation: 'inspect', handle });
