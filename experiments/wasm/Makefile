@@ -99,16 +99,23 @@ test: all
 
 # Report the existing binary without rebuilding it.
 size:
-	@python3 -c 'from pathlib import Path; import sys; p = Path("$(OUT)/forms.wasm"); p.is_file() or sys.exit("Wasm binary missing; run make -f $(MAKEFILE) first."); n = p.stat().st_size; print(f"{p}: {n / 1024:.2f} KiB ({n / 1048576:.2f} MiB)")'
+	@test -f $(OUT)/forms.wasm || { echo 'Wasm binary missing; run make -f $(MAKEFILE) first.' >&2; exit 1; }
+	@wc -c < $(OUT)/forms.wasm | awk '{ printf "$(OUT)/forms.wasm: %.2f KiB (%.2f MiB)\n", $$1 / 1024, $$1 / 1048576 }'
 
-# Measure deterministic gzip level 9 compression without writing an archive.
+# Measure deterministic gzip level 9 compression.
 size-gzip:
-	@python3 -c 'from pathlib import Path; import gzip, sys; p = Path("$(OUT)/forms.wasm"); p.is_file() or sys.exit("Wasm binary missing; run make -f $(MAKEFILE) first."); n = len(gzip.compress(p.read_bytes(), compresslevel=9, mtime=0)); print(f"{p} (gzip -9): {n / 1024:.2f} KiB ({n / 1048576:.2f} MiB)")'
+	@tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT HUP INT TERM; \
+	gzip -n -9 -c $(OUT)/forms.wasm > "$$tmp" && \
+	wc -c < "$$tmp" | awk '{ printf "$(OUT)/forms.wasm (gzip -9): %.2f KiB (%.2f MiB)\n", $$1 / 1024, $$1 / 1048576 }'
 
-# Measure Brotli quality 11 using Node.js without writing an archive.
+# Measure Brotli quality 11 (requires the brotli CLI).
 size-brotli:
-	@node --input-type=commonjs -e 'const fs = require("node:fs"), z = require("node:zlib"), p = "$(OUT)/forms.wasm"; if (!fs.existsSync(p)) { console.error("Wasm binary missing; run make -f $(MAKEFILE) first."); process.exit(1); } const n = z.brotliCompressSync(fs.readFileSync(p), { params: { [z.constants.BROTLI_PARAM_QUALITY]: 11 } }).length; console.log(p + " (Brotli quality 11): " + (n / 1024).toFixed(2) + " KiB (" + (n / 1048576).toFixed(2) + " MiB)");'
+	@tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT HUP INT TERM; \
+	brotli -q 11 -c $(OUT)/forms.wasm > "$$tmp" && \
+	wc -c < "$$tmp" | awk '{ printf "$(OUT)/forms.wasm (Brotli quality 11): %.2f KiB (%.2f MiB)\n", $$1 / 1024, $$1 / 1048576 }'
 
 # Count physical source lines, including comments and blank lines.
 ts-lines:
-	@python3 -c 'from pathlib import Path; files = sorted(p for p in Path("web").rglob("*") if p.suffix in {".ts", ".tsx"} and not {"node_modules", "dist", "tests", "__tests__"}.intersection(p.parts) and not p.stem.endswith((".test", ".spec"))); counts = [(p, len(p.read_text().splitlines())) for p in files]; [print(f"{n:6} {p}") for p, n in counts]; print(f"{sum(n for _, n in counts):6} total")'
+	@find web -type d \( -name node_modules -o -name dist -o -name tests -o -name __tests__ \) -prune -o \
+	-type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.test.*' ! -name '*.spec.*' \
+	-exec wc -l {} +
