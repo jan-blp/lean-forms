@@ -10,7 +10,8 @@ package «lean-forms» where
     { name := `relaxedAutoImplicit
       value := false }]
 
-require mathlib from git "https://github.com/leanprover-community/mathlib4" @ "v4.35.0"
+require batteries from git "https://github.com/jan-blp/batteries" @ "v4.35.0-wasm.1"
+require mathlib from git "https://github.com/jan-blp/mathlib4" @ "v4.35.0-wasm.1"
 require «lean-lens» from git "https://github.com/janmasrovira/lean-lens" @ "816a71f8264c700c200d01149ac43e96ae5d694a"
 
 @[default_target]
