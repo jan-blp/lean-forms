@@ -11,6 +11,7 @@ package «lean-forms» where
       value := false }]
 
 require mathlib from git "https://github.com/leanprover-community/mathlib4" @ "v4.35.0"
+require «lean-lens» from "../../lean-lens"
 
 @[default_target]
 lean_lib Forms

@@ -4,6 +4,7 @@ import all Std.Time.Date.Unit.Month -- for concrete date validity proofs
 import all Std.Time.Date.Unit.Year
 
 import Forms.Core.RefinedDataType.Theorems
+import Tests.FormModel
 import Tests.Validation
 import Tests.ServerRefinements
 import Tests.CompiledForms
@@ -267,6 +268,7 @@ private def testDates : IO Unit := do
   check "DateRangeReversed" ((RefinedDataType.validate (.dateRange late early) early).isNone)
 
 public def main : IO Unit := do
+  Tests.FormModel.run
   Tests.ServerRefinements.run
   Tests.CompiledForms.run
   Tests.InputProtocol.run
