@@ -2,7 +2,7 @@ module
 
 public import Forms.Runtime.Identity
 
-public section
+@[expose] public section
 
 namespace Forms.Runtime.Interaction
 

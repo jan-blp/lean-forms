@@ -4,8 +4,8 @@ public import Forms.Runtime.BrowserProtocol
 meta import Lean.Elab.Term
 
 open Lean Elab Term in
-/-- Hash compiled declarations during elaboration; no definition encoder is linked into Wasm.
-Imports everything the Wasm entry point runs, so `CompiledForms` itself is covered. -/
+/-- Hash imported Forms declarations and their exposed bodies during elaboration.
+No definition encoder is linked into Wasm. -/
 elab "compiled_revision%" : term => do
   let env ← getEnv
   let declarations := env.constants.toList.filter fun (name, _) =>
