@@ -8,24 +8,24 @@ namespace Tests.Dependencies
 open Forms.Model Tests.FormModel
 
 def visible : Computation Person.Raw Bool :=
-  .mk (inputs[.field Person.Field.age, .field Person.Field.subscribed])
+  .mk (inputs[path[Person.Field.age], path[Person.Field.subscribed]])
     (fun age subscribed => subscribed && age ≥ 18)
 
 def disabled : Computation Person.Raw Bool :=
-  .mk (inputs[.field Person.Field.age]) (fun age => decide (age > 120))
+  .mk (inputs[path[Person.Field.age]]) (fun age => decide (age > 120))
 
 def summary : Computation Person.Raw String :=
-  .mk (inputs[.stepField (field := Person.Field.address) (rest := .field Address.Field.street), .field Person.Field.age])
+  .mk (inputs[path[Person.Field.address, Address.Field.street], path[Person.Field.age]])
     (fun street age => s!"{street}: {age}")
 
 def whole : Computation Delivery.Raw String :=
-  .mk (inputs[.self]) fun
+  .mk (inputs[path[]]) fun
     | .pickup => "Pickup"
     | .home payload => payload.instructions
     | .campus payload => s!"Campus: {payload.age}"
 
 def campusAge : Computation Delivery.campus.Raw Nat :=
-  .mk (inputs[.field Delivery.campus.Field.age]) (fun age => age + 1)
+  .mk (inputs[path[Delivery.campus.Field.age]]) (fun age => age + 1)
 
 def run : IO Unit := do
   let person : Person.Raw := ⟨⟨"Campus"⟩, 20, true⟩
@@ -47,8 +47,8 @@ def run : IO Unit := do
   let constant : Computation Person.Raw String := .mk (inputs[]) "Hello"
   check "DependenciesConstant" (constant.eval person == "Hello")
   let street : Computation Address.Raw String :=
-    .mk (inputs[.field Address.Field.street]) (fun street => street ++ "!")
-  let embedded := street.weaken (.field Person.Field.address)
+    .mk (inputs[path[Address.Field.street]]) (fun street => street ++ "!")
+  let embedded := street.weaken (path[Person.Field.address])
   check "DependenciesComposeWhenEmbedded" (embedded.eval person == street.eval person.address)
 
 end Tests.Dependencies

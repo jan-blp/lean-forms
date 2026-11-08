@@ -47,47 +47,45 @@ def Person.initial : Person.Raw := ⟨"Ada", 20, false, ⟨"Lambda Lane"⟩⟩
 def Person.form : Component Person.Raw :=
   .group (label := "Person") (children := [
     .field
-      (path := .field Person.Field.name)
+      (path := path[Person.Field.name])
       (label := "Name")
       (editor := .text),
     .field
-      (path := .field Person.Field.age)
+      (path := path[Person.Field.age])
       (label := "Age")
       (editor := .natural),
     .field
-      (path := .field Person.Field.delivery)
+      (path := path[Person.Field.delivery])
       (label := "Request delivery")
       (editor := .checkbox),
     .computed
       (label := "Summary")
       (value := {
         inputs := inputs[
-          .field Person.Field.name,
-          .field Person.Field.age]
+          path[Person.Field.name],
+          path[Person.Field.age]]
         run := fun name age => s!"{name}, age {age}"
       }),
     .visibleWhen
       (condition := {
-        inputs := inputs[.field Person.Field.delivery]
+        inputs := inputs[path[Person.Field.delivery]]
         run := id
       })
       (body := .group (label := "Delivery") (children := [
         .computed
           (label := "Eligibility")
           (value := {
-            inputs := inputs[.field Person.Field.age]
+            inputs := inputs[path[Person.Field.age]]
             run := fun age =>
               if age < 18 then "Delivery details require an adult." else "Ready for delivery."
           }),
         .disabledWhen
           (condition := {
-            inputs := inputs[.field Person.Field.age]
+            inputs := inputs[path[Person.Field.age]]
             run := fun age => decide (age < 18)
           })
           (body := .field
-            (path := .stepField
-              (field := Person.Field.address)
-              (rest := .field Address.Field.street))
+            (path := path[Person.Field.address, Address.Field.street])
             (label := "Street")
             (editor := .text))
       ]))

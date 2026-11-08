@@ -36,9 +36,11 @@ inductive Path : Type → Type → Type 1 where
       (rest : Path child target)
       : Path source target
 
-def Path.field {source value : Type} [Fields source]
-    (field : Fields.Field source value) : Path source value :=
-  .stepField (field := field) (rest := .self)
+macro "path[" fields:term,* "]" : term => do
+  let mut result ← `(Path.self)
+  for field in fields.getElems.reverse do
+    result ← `(Path.stepField (field := $field) (rest := $result))
+  return result
 
 def Path.get {source target : Type} (path : Path source target) (value : source) : target :=
   match path with

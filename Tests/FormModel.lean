@@ -140,7 +140,7 @@ public def run : IO Unit := do
   check "ModelTypedFieldUpdate"
     (updated.age == 40 && updated.address.street == "Campus" && updated.subscribed)
   let street : Forms.Model.Path Person.Raw String :=
-    .stepField (field := Person.Field.address) (rest := .field Address.Field.street)
+    path[Person.Field.address, Address.Field.street]
   let updated := street.set "Road" good
   check "ModelNestedPathUpdate" (street.get updated == "Road" && updated.age == 20)
   check "ModelPathLensUpdate"
