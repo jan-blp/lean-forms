@@ -35,7 +35,7 @@ all: runtime-imports $(MINIMAL_INIT) $(LIBRARIES)
 	install -m 644 $(OUT)/forms.mjs $(OUT)/forms.wasm web/dist/wasm/
 
 runtime-imports:
-	python3 experiments/wasm/prepare-runtime-imports.py
+	lake env lean --run tools/PrepareRuntimeImports.lean
 
 # Downloads roughly 470 MB; everything stays under the ignored .lake directory.
 setup: $(LEAN_TREE)/.patched $(EMSDK)/.activated
