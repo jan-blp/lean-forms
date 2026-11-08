@@ -79,8 +79,7 @@ def draft {raw : Type} (form : Model.Component raw) (state : State raw)
   if state.ui.pending then return state
   let some control := (ModelView.render form state.value).controls.find? (fun c => c.key == key && !c.disabled)
     | throw "This editor is unavailable."
-  let .editor _ editor := control.view.body
-  let some initial := EditorPresentation.draftValue editor | throw "This control does not accept drafts."
+  let some initial := EditorPresentation.draftValue control.view.input | throw "This control does not accept drafts."
   let drafts := if value == initial then state.ui.drafts.filter (·.1 != key)
     else if state.ui.drafts.any (·.1 == key) then
       state.ui.drafts.map fun entry => if entry.1 == key then (key, value) else entry

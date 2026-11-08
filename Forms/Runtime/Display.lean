@@ -7,12 +7,14 @@ public import Forms.Runtime.Feedback
 
 namespace Forms.Runtime.Display
 
-inductive TargetStep where
-  | name (value : String)
-  | index (value : Nat)
+/-- A control's layout position, represented by zero-based child indices through nested groups.
+Used to generate its browser key. -/
+structure Target where
+  indices : List Nat := []
   deriving BEq
 
-abbrev Target := List TargetStep
+def Target.child (target : Target) (index : Nat) : Target :=
+  ⟨target.indices ++ [index]⟩
 
 inductive Editor where
   | text (value : String)
@@ -20,17 +22,13 @@ inductive Editor where
   | checkbox (value : Bool)
   deriving BEq
 
-inductive ControlBody where
-  | editor (location : Feedback.Location) (input : Editor)
-  deriving BEq
-
 structure Control where
   key : ControlKey
-  id : String
   target : Target
   label : String
   disabled : Bool
-  body : ControlBody
+  location : Feedback.Location
+  input : Editor
   messages : Option String := none
   deriving BEq
 

@@ -78,23 +78,21 @@ def control (state : Interaction.State) (c : Control) : Node := Id.run do
   let feedbackId := DomId.mk ("feedback-" ++ token)
   let feedback := c.messages.toList.map fun message => text .p message [.cssClass "validation-error", .id feedbackId]
   let inputAttrs := [.id inputId] ++ attrs ++ if c.messages.isSome then [.invalid, .describedBy feedbackId] else []
-  match c.body with
-  | .editor _ editor =>
-    let (input, argument, applyButton) := match EditorPresentation.ofEditor editor with
-      | .onApply draft =>
-        let constraints := match draft with
-          | .text _ => [Attribute.inputType .text]
-          | .natural _ => [.inputType .text, .numeric, .naturalPattern, .required]
-        let value := (state.drafts.find? (·.1 == c.key)).map Prod.snd |>.getD draft.value
-        (element .input [] (constraints ++ inputAttrs)
-          (behavior := { input := .value value, focusKey := some c.key, bindings := if disabled then [] else [.draft c.key inputId] }), Source.value inputId,
-          [element .button [] attrs (some "Apply")])
-      | .onChange (.checkbox checked) =>
-        (element .input [] (.inputType .checkbox :: inputAttrs)
-          (behavior := { input := .checked checked, focusKey := some c.key, bindings := [.change c.key (.checked inputId)] }),
-          Source.checked inputId, [])
-    return element .form (element .label [input] (text := some c.label) :: applyButton ++ feedback) [.cssClass "editor"]
-      (behavior := { bindings := [.submit c.key argument] })
+  let (input, argument, applyButton) := match EditorPresentation.ofEditor c.input with
+    | .onApply draft =>
+      let constraints := match draft with
+        | .text _ => [Attribute.inputType .text]
+        | .natural _ => [.inputType .text, .numeric, .naturalPattern, .required]
+      let value := (state.drafts.find? (·.1 == c.key)).map Prod.snd |>.getD draft.value
+      (element .input [] (constraints ++ inputAttrs)
+        (behavior := { input := .value value, focusKey := some c.key, bindings := if disabled then [] else [.draft c.key inputId] }), Source.value inputId,
+        [element .button [] attrs (some "Apply")])
+    | .onChange checked =>
+      (element .input [] (.inputType .checkbox :: inputAttrs)
+        (behavior := { input := .checked checked, focusKey := some c.key, bindings := [.change c.key (.checked inputId)] }),
+        Source.checked inputId, [])
+  return element .form (element .label [input] (text := some c.label) :: applyButton ++ feedback) [.cssClass "editor"]
+    (behavior := { bindings := [.submit c.key argument] })
 
 def group (label : String) (children : List Node) (messages : Option String := none) : Node :=
   if label.isEmpty then element .div children [.cssClass "stack"] (messages := messages)

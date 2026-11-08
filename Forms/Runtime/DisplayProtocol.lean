@@ -10,14 +10,8 @@ public import Forms.Runtime.Wire
 namespace Forms.Runtime.DisplayProtocol
 open Lean Display
 
-def targetToJson (target : Target) : Json :=
-  toJson (target.map fun step => match step with
-    | .name name => toJson name
-    | .index index => toJson index)
-
-/-- Preserve the opaque browser key format independently of internal view structure. -/
-def controlKey (target : Target) (id : String) (index : Option Nat) : ControlKey :=
-  ⟨(toJson ([targetToJson target, toJson id] ++ index.toList.map toJson)).compress⟩
+def controlKey (target : Target) : ControlKey :=
+  ⟨(toJson target.indices).compress⟩
 
 def messageFields (messages : Option String) : List (String × Json) :=
   messages.toList.map fun message => ("messages", toJson message)
@@ -28,12 +22,11 @@ def widgetName : Editor → String
   | .checkbox _ => "checkbox"
 
 def controlToJson (control : Control) : Json :=
-  let fields := match control.body with
-    | .editor location input => [("kind", toJson "editor"),
-        ("location", FeedbackProtocol.locationToJson location),
-        ("widget", toJson (widgetName input))]
-  Json.mkObj ([("key", toJson control.key.value), ("id", toJson control.id), ("target", targetToJson control.target),
-    ("label", toJson control.label), ("disabled", toJson control.disabled)] ++ fields ++ messageFields control.messages)
+  Json.mkObj ([
+    ("key", toJson control.key.value), ("target", toJson control.target.indices),
+    ("label", toJson control.label), ("disabled", toJson control.disabled),
+    ("kind", toJson "editor"), ("location", FeedbackProtocol.locationToJson control.location),
+    ("widget", toJson (widgetName control.input))] ++ messageFields control.messages)
 
 def attributePair : DisplayLayout.Attribute → String × String
   | .hidden => ("hidden", "")
@@ -72,9 +65,5 @@ def layoutToWire : DisplayLayout.Node → Option Wire.DisplayView
       | .checked checked => (none, some checked)
     some (.element tag (attributes.map attributePair) (children.map layoutToWire)
       (behavior.bindings.map bindingToWire) text value checked (behavior.focusKey.map (·.value)))
-
-def layoutToJson (node : DisplayLayout.Node) : Json := toJson (layoutToWire node)
-
-def viewToJson (view : View) (state : Interaction.State := {}) : Json := layoutToJson (DisplayLayout.ofView state view)
 
 end Forms.Runtime.DisplayProtocol

@@ -23,25 +23,21 @@ structure Rendered (invocation : Type) where
   view : Display.View
   controls : List (Control invocation) := []
 
-def control {α : Type} (target : Display.Target) (id label : String) (body : Display.ControlBody)
-    (disabled : Bool) (invoke : Option Input → Except String α)
-    (messages : Option String := none) (index : Option Nat := none) : Control α :=
-  { invoke
-    view := { key := DisplayProtocol.controlKey target id index, id, target, label, disabled, body, messages } }
-
 def requiredArgument {α : Type} (decode : Input → Except String α) : Option Input → Except String α
   | some raw => decode raw
   | none => .error "Missing action argument."
 
 def editor {α : Type} (widget : Model.Editor α) (value : α)
-    (target : Display.Target) (location : Feedback.Location) (id label : String) (disabled : Bool)
+    (target : Display.Target) (location : Feedback.Location) (label : String) (disabled : Bool)
     (errors : List Feedback.Error := []) : Control α :=
   let input : Display.Editor := match widget with
     | .text => .text value
     | .natural => .natural value
     | .checkbox => .checkbox value
-  control target id label (.editor location input) disabled (requiredArgument (Input.decode widget))
-    (Feedback.messages errors location)
+  { invoke := requiredArgument (Input.decode widget)
+    view := {
+      key := DisplayProtocol.controlKey target, target, label, disabled, location, input
+      messages := Feedback.messages errors location } }
 
 
 def location {raw : Type} {value : raw} : Model.Location raw value → Feedback.Location
@@ -60,16 +56,16 @@ def pathLocation {source target : Type} : Model.Path source target → Feedback.
   | @Model.Path.field _ _ _ inst f rest => .field (@Fields.key _ inst _ f) :: pathLocation rest
 
 def render {raw : Type} (component : Model.Component raw) (value : raw)
-    (errors : List Feedback.Error := []) (disabled := false) (target : Display.Target := []) :
+    (errors : List Feedback.Error := []) (disabled := false) (target : Display.Target := {}) :
     Rendered raw :=
   match component with
   | .field path label widget =>
-    let control := (editor widget (path.get value) target (pathLocation path) "replace" label disabled errors).map
+    let control := (editor widget (path.get value) target (pathLocation path) label disabled errors).map
       (fun replacement => path.set replacement value)
     ⟨.control control.view, [control]⟩
   | .group label children =>
     let children := children.attach.zipIdx.map fun (child, index) =>
-      render child.val value errors disabled (target ++ [Display.TargetStep.index index])
+      render child.val value errors disabled (target.child index)
     { view := .stack (some label) (children.map (·.view))
       controls := children.flatMap (·.controls) }
   | .computed label computation => ⟨.computed label (computation.eval value), []⟩
