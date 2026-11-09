@@ -1,25 +1,36 @@
 import Forms.Runtime.Wire
+import Forms.Runtime.Web
 import FormsReact.Component
 import Forms.Protocol.TypeScript
 
-open Forms.Protocol Forms.Runtime.Wire
+open Lean Forms.Protocol Forms.Runtime.Wire Forms.Runtime.Web
 
-def directory : System.FilePath := "packages/react/src/protocol"
+/-- Server paths, keyed by route name. -/
+def routesModule : String :=
+  let entries := GetRoute.all.map fun route => s!"  {(toJson route).compress}: {(toJson route.path).compress},\n"
+  "export const routes = {\n" ++ String.join entries ++ "} as const;\n"
 
-def files : List (System.FilePath × String) :=
-  (typescript% [Request, Success, Failure, FormsReact.Component]).modules.map fun module =>
-    (directory / module.file,
-      "// Generated from Lean. Run npm --prefix web run generate.\n" ++ module.pretty)
+/-- Each output directory is replaced wholesale by its files. -/
+def outputs : List (System.FilePath × List (System.FilePath × String)) := [
+  ("packages/react/src/protocol",
+    (typescript% [Request, Success, Failure, FormsReact.Component]).modules.map
+      fun module => (module.file, module.pretty)),
+  ("web/generated", [("routes.ts", routesModule)])]
+
+def banner : String := "// Generated from Lean. Run npm --prefix web run generate.\n"
 
 def main (args : List String) : IO Unit := do
-  if args == ["--check"] then
-    let existing ← if ← directory.pathExists then directory.walkDir else pure #[]
-    let existing ← existing.filterM fun path => return !(← path.isDir)
-    let stale ← files.anyM fun (path, content) => return !(← path.pathExists) || (← IO.FS.readFile path) != content
-    if stale || existing.size != files.length then
-      throw (IO.userError "Generated protocol is stale; run npm --prefix web run generate")
-  else
-    if ← directory.pathExists then IO.FS.removeDirAll directory
-    for (path, content) in files do
-      if let some parent := path.parent then IO.FS.createDirAll parent
-      IO.FS.writeFile path content
+  for (directory, files) in outputs do
+    let files := files.map fun (path, content) => (directory / path, banner ++ content)
+    if args == ["--check"] then
+      let existing ← if ← directory.pathExists then directory.walkDir else pure #[]
+      let existing ← existing.filterM fun path => return !(← path.isDir)
+      let stale ← files.anyM fun (path, content) =>
+        return !(← path.pathExists) || (← IO.FS.readFile path) != content
+      if stale || existing.size != files.length then
+        throw (IO.userError s!"Generated {directory} is stale; run npm --prefix web run generate")
+    else
+      if ← directory.pathExists then IO.FS.removeDirAll directory
+      for (path, content) in files do
+        if let some parent := path.parent then IO.FS.createDirAll parent
+        IO.FS.writeFile path content

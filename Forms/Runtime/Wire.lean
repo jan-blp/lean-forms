@@ -57,6 +57,8 @@ structure Snapshot where
   view : FormsReact.Component
   /-- Why the last `apply` event was rejected. -/
   rejection : Option String
+  /-- Names of the fields whose drafts React keeps. -/
+  draftFields : List String
   effects : List HttpEffect
   summary : String
   submissionBlocked : Bool

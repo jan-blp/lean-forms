@@ -55,8 +55,11 @@ def expected : FormsReact.Component :=
 
 def run : IO Unit := do
   check "Lowering changed" (view.toReact false == some expected)
+  check "Draft fields changed" (expected.draftFields == ["name", "age"])
   check "Hidden view must lower to nothing" (Display.View.hidden.toReact false == none)
-  let pending := match view.toReactPage { Interaction.State.initial with submission := .pending } 3 "{}" with
+  let pendingPage := view.toReactPage { Interaction.State.initial with submission := .pending } 3 "{}"
+  check "Pending page must have no draft fields" pendingPage.draftFields.isEmpty
+  let pending := match pendingPage with
     | .page page => page.busy && page.result.isNone && page.actions == 3 &&
         page.toolbar.all (fun
           | .button button => button.disabled

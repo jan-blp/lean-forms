@@ -28,7 +28,7 @@ lean_exe tests where
   root := `Tests
 
 target webAssets pkg : Unit := do
-  let jobs ← #[`Forms.Runtime.Wire, `FormsReact.Component, `Forms.Protocol.TypeScript].mapM fun name => do
+  let jobs ← #[`Forms.Runtime.Wire, `Forms.Runtime.Web, `FormsReact.Component, `Forms.Protocol.TypeScript].mapM fun name => do
     let some mod := pkg.findModule? name | error s!"Missing protocol module {name}"
     mod.leanArts.fetch
   Job.async do

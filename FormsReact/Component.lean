@@ -95,4 +95,20 @@ end
 
 deriving instance ToJson, FromJson, BEq, Repr for Group, Page, Component
 
+mutual
+/-- Names of the enabled fields that commit typed text, whose drafts React keeps. -/
+def Component.draftFields : Component → List String
+  | .textField field => if field.disabled then [] else [field.name]
+  | .naturalField field => if field.disabled then [] else [field.name]
+  | .checkbox _ => []
+  | .output _ => []
+  | .button _ => []
+  | .group { children, .. } => draftFieldsOf children
+  | .page { body, toolbar, .. } => draftFieldsOf body ++ draftFieldsOf toolbar
+
+def draftFieldsOf : List Component → List String
+  | [] => []
+  | component :: rest => component.draftFields ++ draftFieldsOf rest
+end
+
 end FormsReact

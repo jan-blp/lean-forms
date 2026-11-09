@@ -19,15 +19,25 @@ inductive GetRoute where
   | wasmBinary
   | stylesheet
   | compiledSpecification
+  deriving DecidableEq, Lean.ToJson
+
+/-- Also generated into `web/generated/routes.ts`. -/
+def GetRoute.path : GetRoute → String
+  | .index => "/"
+  | .script => "/app.js"
+  | .wasmLoader => "/wasm/forms.mjs"
+  | .wasmBinary => "/wasm/forms.wasm"
+  | .stylesheet => "/style.css"
+  | .compiledSpecification => "/api/compiled-form"
+
+def GetRoute.all : List GetRoute :=
+  [.index, .script, .wasmLoader, .wasmBinary, .stylesheet, .compiledSpecification]
+
+theorem GetRoute.mem_all (route : GetRoute) : route ∈ all := by
+  cases route <;> decide
 
 def GetRoute.ofPath (path : String) : Option GetRoute :=
-  if path == "/" then some .index
-  else if path == "/app.js" then some .script
-  else if path == "/wasm/forms.mjs" then some .wasmLoader
-  else if path == "/wasm/forms.wasm" then some .wasmBinary
-  else if path == "/style.css" then some .stylesheet
-  else if path == "/api/compiled-form" then some .compiledSpecification
-  else none
+  all.find? (·.path == path)
 
 inductive Route where
   | get (route : GetRoute)

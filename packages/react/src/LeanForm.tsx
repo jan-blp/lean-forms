@@ -52,8 +52,7 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
   function send(event: Wire.Event): Wire.Snapshot {
     const next = model.send({ event: { message: event } });
     setSnapshot(next);
-    const editable = editableFields(next.view);
-    setDrafts(drafts => new Map([...drafts].filter(([name]) => editable.has(name))));
+    setDrafts(drafts => new Map([...drafts].filter(([name]) => next.draftFields.includes(name))));
     for (const { url, ...request } of next.effects) void perform(url, request);
     return next;
   }
@@ -83,7 +82,7 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
       } else if (action === 'submit') {
         let current = snapshot;
         for (const [name, text] of drafts) {
-          if (!editableFields(current.view).has(name)) continue;
+          if (!current.draftFields.includes(name)) continue;
           const next = commit(name, text);
           if (!next) return;
           current = next;
@@ -106,13 +105,4 @@ function withDraft(drafts: ReadonlyMap<string, string>, name: string, text: stri
   const next = new Map(drafts);
   if (text === undefined) next.delete(name); else next.set(name, text);
   return next;
-}
-
-/** Names of the enabled fields that commit a draft (`onCommit`) anywhere in `value`. */
-function editableFields(value: unknown, names = new Set<string>()): Set<string> {
-  if (typeof value !== 'object' || value === null) return names;
-  if ('onCommit' in value && 'name' in value && 'disabled' in value && value.disabled === false)
-    names.add(String(value.name));
-  for (const child of Object.values(value)) editableFields(child, names);
-  return names;
 }
