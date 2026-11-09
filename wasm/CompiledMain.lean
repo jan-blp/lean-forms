@@ -1,6 +1,6 @@
 module
 
-public import Forms.Runtime.CompiledRevision
+public import Forms.ExampleForms.FormFingerprint
 
 public section
 
@@ -11,7 +11,7 @@ initialize formStore : IO.Ref BrowserProtocol.Store ← IO.mkRef {}
 
 @[export forms_handle_request]
 def request (text : String) : IO String := do
-  let (store, response) := BrowserProtocol.respond Forms.ExampleForms.registeredForms compiledRevision (← formStore.get) text
+  let (store, response) := BrowserProtocol.respond Forms.ExampleForms.registeredForms Forms.ExampleForms.formFingerprint (← formStore.get) text
   formStore.set store
   return response
 

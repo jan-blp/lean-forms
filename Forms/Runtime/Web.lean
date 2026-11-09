@@ -2,7 +2,7 @@ module
 
 public import Std.Http
 public import Forms.Runtime.TrafficLog
-public import Forms.Runtime.CompiledRevision
+public import Forms.ExampleForms.FormFingerprint
 
 @[expose] public section
 
@@ -167,7 +167,7 @@ def run
   (openBrowser : Bool := false)
   : IO Unit := do
   let app : Application := {
-    compiledForm := PersonProtocol.descriptor compiledRevision
+    compiledForm := PersonProtocol.descriptor ExampleForms.formFingerprint
     logger := ← TrafficLog.Logger.create
     form := { submit := PersonProtocol.verifySubmission }
     html := ← IO.FS.readFile "web/index.html"

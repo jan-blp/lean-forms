@@ -23,12 +23,12 @@ def modelHandle (text : String) : Except String FormHandle := do
   let some value := text.toNat? | throw "Invalid form handle"
   pure ⟨value⟩
 
-def execute (forms : Std.HashMap String RegisteredForm) (revision : String) (store : Store)
+def execute (forms : Std.HashMap String RegisteredForm) (fingerprint : String) (store : Store)
     (request : Wire.Request) : Except String (Store × Wire.Response) := do
   match request with
   | .open descriptor =>
     let some form := forms[descriptor.form]? | throw "Unknown compiled form"
-    unless descriptor.revision == revision do
+    unless descriptor.fingerprint == fingerprint do
       throw "Compiled form version differs from the server. Rebuild Wasm, restart forms-web, then reload."
     let (state, snapshot) ← form.open descriptor.form descriptor.value
     let handle := store.next
@@ -44,10 +44,10 @@ def execute (forms : Std.HashMap String RegisteredForm) (revision : String) (sto
     unless store.models.contains handle do throw "Unknown or disposed form handle"
     pure ({ store with models := store.models.erase handle }, .disposed)
 
-def respond (forms : Std.HashMap String RegisteredForm) (revision : String) (store : Store) (text : String) : Store × String :=
+def respond (forms : Std.HashMap String RegisteredForm) (fingerprint : String) (store : Store) (text : String) : Store × String :=
   let result : Except String (Store × Wire.Response) := match Json.parse text >>= fromJson? with
     | .error message => .error message
-    | .ok request => execute forms revision store request
+    | .ok request => execute forms fingerprint store request
   match result with
   | .error error => (store, (toJson ({ ok := false, error } : Wire.Failure)).compress)
   | .ok (store, value) => (store, (toJson ({ ok := true, value } : Wire.Success)).compress)

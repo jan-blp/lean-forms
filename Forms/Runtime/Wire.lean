@@ -52,7 +52,7 @@ inductive FormRequest where
 
 structure CompiledDescriptor where
   form : String
-  revision : String
+  fingerprint : String
   value : Json
   deriving ToJson, FromJson
 

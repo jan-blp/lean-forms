@@ -1,6 +1,6 @@
 // Generated from Lean. Run npm --prefix web run generate.
 export type Request = { "open": { "descriptor": CompiledDescriptor } } | { "send": { "handle": string; "request": FormRequest } } | { "dispose": { "handle": string } };
-export type CompiledDescriptor = { "form": string; "revision": string; "value": unknown };
+export type CompiledDescriptor = { "form": string; "fingerprint": string; "value": unknown };
 export type FormRequest = { "event": { "message": FormEvent } } | { "apply": { "key": string; "argument": unknown } } | "reset" | "validate" | "inspect" | { "serverError": { "status": number; "body": string } };
 export type FormEvent = { "apply": { "key": string; "argument": unknown } } | { "draft": { "key": string; "argument": string } } | "submit" | "reset" | { "complete": { "status": number; "body": string } } | { "failed": { "message": string } };
 export type Success = { "ok": boolean; "value": Response };

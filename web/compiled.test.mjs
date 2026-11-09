@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { openCompiledForm } from './dist/wasm.js';
 
 const cwd = fileURLToPath(new URL('..', import.meta.url));
-execFileSync('lake', ['build', 'Forms.Runtime.CompiledRevision'], { cwd, stdio: 'pipe' });
+execFileSync('lake', ['build', 'Forms.ExampleForms.FormFingerprint'], { cwd, stdio: 'pipe' });
 const fixtures = JSON.parse(execFileSync('lake', ['env', 'lean', '--run', 'tools/ExportCompiledForms.lean'], {
   cwd, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
 }));
@@ -56,7 +56,7 @@ test('models preserve independent values and reset', async () => {
 test('initialization rejects unknown forms, incompatible revisions, and malformed raw values', async () => {
   const descriptor = fixture('person').descriptor;
   await assert.rejects(openCompiledForm({ ...descriptor, form: 'missing' }), /Unknown compiled form/);
-  await assert.rejects(openCompiledForm({ ...descriptor, revision: 'old' }), /version differs/);
+  await assert.rejects(openCompiledForm({ ...descriptor, fingerprint: 'old' }), /version differs/);
   for (const value of [false, {}, { ...descriptor.value, age: '20' }])
     await assert.rejects(openCompiledForm({ ...descriptor, value }));
 });

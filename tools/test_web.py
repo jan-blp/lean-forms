@@ -49,9 +49,9 @@ def session(example):
             raise AssertionError('HTTP server did not start')
         assert status == 200
         descriptor = json.loads(body)
-        assert set(descriptor) == {'form', 'revision', 'value'}
+        assert set(descriptor) == {'form', 'fingerprint', 'value'}
         assert descriptor['form'] == example
-        assert descriptor['revision'].startswith('compiled-2-')
+        assert descriptor['fingerprint'].startswith('compiled-2-')
         for path, mime in [('/', 'text/html'), ('/app.js', 'text/javascript'),
                            ('/style.css', 'text/css')]:
             status, headers, body = request(path)

@@ -1,7 +1,7 @@
 module
 
-import Forms.Runtime.CompiledRevision
-meta import Forms.Runtime.CompiledRevision
+import Forms.ExampleForms.FormFingerprint
+meta import Forms.ExampleForms.FormFingerprint
 
 open Lean Forms Forms.Runtime Forms.ExampleForms
 
@@ -22,6 +22,6 @@ public def main : IO Unit := do
       (.apply control.key.value ((fields.lookup "argument").getD Json.null)))
     pure (Json.mkObj [("action", action), ("expected", toJson (PersonProtocol.snapshot updated))])
   let typed := Json.mkObj [
-    ("descriptor", PersonProtocol.descriptor compiledRevision),
+    ("descriptor", PersonProtocol.descriptor formFingerprint),
     ("initial", toJson (PersonProtocol.snapshot state)), ("cases", toJson cases)]
   IO.println (toJson [typed]).compress

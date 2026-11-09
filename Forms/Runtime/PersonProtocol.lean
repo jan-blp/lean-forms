@@ -10,8 +10,8 @@ open Lean Forms.ExampleForms
 def name := "person"
 abbrev State := ModelForm.State Person.Raw
 
-def descriptor (revision : String) : Json :=
-  toJson ({ form := name, revision, value := toJson Person.initial } : Wire.CompiledDescriptor)
+def descriptor (fingerprint : String) : Json :=
+  toJson ({ form := name, fingerprint, value := toJson Person.initial } : Wire.CompiledDescriptor)
 
 def snapshot (state : State) (render := true) : Wire.Snapshot :=
   let snapshot := ModelForm.snapshot (model := Person) Person.form state render
