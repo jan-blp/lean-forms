@@ -1,6 +1,7 @@
 module
 
 public import Forms.Runtime.BrowserProtocol
+public import Forms.ExampleForms.Registry
 meta import Lean.Elab.Term
 
 open Lean Elab Term in

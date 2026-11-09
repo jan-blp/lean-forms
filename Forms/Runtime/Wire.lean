@@ -77,7 +77,10 @@ structure HttpEffect where
   body : String
   deriving ToJson, FromJson
 
-structure FormSnapshot where
+/-- Browser-facing snapshot returned after opening or updating a form.
+Contains the display, feedback, submission payload, and HTTP effects for the
+browser to perform. -/
+structure Snapshot where
   title : String
   view : Option DisplayView
   render : Bool
@@ -91,8 +94,8 @@ structure FormSnapshot where
   deriving ToJson, FromJson
 
 inductive Response where
-  | opened (handle : String) (snapshot : FormSnapshot)
-  | updated (snapshot : FormSnapshot)
+  | opened (handle : String) (snapshot : Snapshot)
+  | updated (snapshot : Snapshot)
   | disposed
   deriving ToJson, FromJson
 

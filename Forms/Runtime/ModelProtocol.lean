@@ -4,7 +4,33 @@ public import Forms.Runtime.ModelForm
 public import Forms.Runtime.InputProtocol
 
 @[expose] public section
-namespace Forms.Runtime.ModelProtocol
+namespace Forms.Runtime
+open Lean
+
+/-- A form's registered name and submitted value. -/
+structure Submission (raw : Type) where
+  form : String
+  value : raw
+  deriving ToJson, FromJson
+
+def ModelForm.Snapshot.toWire {raw : Type} [ToJson raw] (snapshot : ModelForm.Snapshot raw)
+    (formName : String) (submitUrl : String) : Wire.Snapshot :=
+  let submission := toJson ({ form := formName, value := snapshot.value } : Submission raw)
+  { title := snapshot.view.title
+    view := DisplayProtocol.layoutToWire (DisplayLayout.page snapshot.view snapshot.ui snapshot.actions
+      (toJson snapshot.value).pretty)
+    render := snapshot.render
+    focus := snapshot.ui.focus.map (·.value)
+    summary := snapshot.summary
+    submissionBlocked := snapshot.submissionBlocked
+    controls := snapshot.controls.map DisplayProtocol.controlToJson
+    submission
+    errors := snapshot.errors.map FeedbackProtocol.errorToJson
+    effects := if snapshot.ui.send then [{
+      url := submitUrl, method := .POST
+      headers := { «Content-Type» := "application/json" }, body := submission.compress }] else [] }
+
+namespace ModelProtocol
 
 def eventFromWire : Wire.FormEvent → Except String ModelForm.Event
   | .draft key value => .ok (.draft ⟨key⟩ value)
@@ -27,4 +53,5 @@ def commandFromWire : Wire.FormRequest → Except String ModelForm.Command
   | .inspect => .ok .inspect
   | .serverError status body => .ok (.serverError (FeedbackProtocol.serverError status body))
 
-end Forms.Runtime.ModelProtocol
+end ModelProtocol
+end Forms.Runtime

@@ -1,5 +1,5 @@
 import { openCompiledForm } from './wasm.js';
-import type { CompiledDescriptor, DisplayView, FormSnapshot, FormEvent } from './protocol.js';
+import type { CompiledDescriptor, DisplayView, Snapshot, FormEvent } from './protocol.js';
 
 const root = document.querySelector('main')!;
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -20,7 +20,7 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
       }
     } catch (error) { fail(error); }
   }
-  function render(snapshot: FormSnapshot) {
+  function render(snapshot: Snapshot) {
     let focus: HTMLElement | undefined;
     function node(tree: DisplayView | null): HTMLElement | DocumentFragment {
       if (!tree) return document.createDocumentFragment();
