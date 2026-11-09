@@ -60,16 +60,16 @@ def run : IO Unit := do
   check "Lowering changed" (view.toReact false == some expected)
   check "Draft fields changed" (expected.draftFields == ["name", "age"])
   check "Hidden view must lower to nothing" (Display.View.hidden.toReact false == none)
-  let pendingPage := view.toReactPage { Interaction.State.initial with submission := .pending } 3 "{}"
+  let pendingPage := view.toReactPage { Interaction.State.initial with submission := .pending } "{}"
   check "Pending page must have no draft fields" pendingPage.draftFields.isEmpty
   let pending := match pendingPage with
-    | .page page => page.busy && page.result.isNone && page.actions == 3 &&
+    | .page page => page.busy && page.result.isNone &&
         page.toolbar.all (fun
           | .button button => button.disabled
           | _ => false)
     | _ => false
   check "Pending page must be busy with disabled toolbar" pending
-  let page := view.toReactPage { Interaction.State.initial with resultVisible := true } 0 "{}"
+  let page := view.toReactPage { Interaction.State.initial with resultVisible := true } "{}"
   let decoded : Except String FormsReact.Component := fromJson? (toJson page)
   check "Component JSON roundtrip changed" (decoded.toOption == some page)
   check "Props must encode directly under the constructor name"

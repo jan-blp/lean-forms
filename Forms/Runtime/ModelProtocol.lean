@@ -23,7 +23,7 @@ def ModelForm.Snapshot.toWire
   (formName fingerprint submitUrl : String)
   : Wire.Snapshot :=
   let submission := toJson ({ form := formName, fingerprint, value := snapshot.value } : Submission raw)
-  let view := snapshot.view.toReactPage snapshot.ui snapshot.actions (toJson snapshot.value).pretty
+  let view := snapshot.view.toReactPage snapshot.ui (toJson snapshot.value).pretty
   { title := snapshot.view.title
     view
     draftFields := view.draftFields

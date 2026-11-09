@@ -34,7 +34,6 @@ def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
 def Display.View.toReactPage
   (view : View)
   (state : Interaction.State)
-  (actions : Nat)
   (result : String)
   : FormsReact.Component :=
   .page {
@@ -44,7 +43,6 @@ def Display.View.toReactPage
     toolbar := [
       .button { label := "Submit", variant := .primary, disabled := state.pending, onClick := .submit },
       .button { label := "Start over", variant := .secondary, disabled := state.pending, onClick := .reset }]
-    actions
     notice := state.notice.toReact
     result := if state.resultVisible then some result else none }
 

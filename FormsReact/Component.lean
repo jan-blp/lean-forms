@@ -78,7 +78,6 @@ structure Page where
   busy : Bool
   body : List Component
   toolbar : List Component
-  actions : Nat
   notice : Notice
   /-- The submitted value, once there is one to show. -/
   result : Option String

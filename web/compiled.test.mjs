@@ -203,7 +203,6 @@ test('Lean owns submission effects, pending locks, and reset', async () => {
   try {
     const editor = model.snapshot().controls.find(c => c.label === 'Age');
     const send = (event, fields = {}) => model.send({ event: { message: event === 'submit' || event === 'reset' ? event : { [event]: fields } } });
-    assert.equal(page(model).actions, 0);
     send('apply', { key: editor.key, argument: '07' });
     assert.equal(model.snapshot().submission.value.age, 7);
     send('submit');
@@ -242,7 +241,6 @@ test('Lean owns submission effects, pending locks, and reset', async () => {
     assert.equal(model.snapshot().submission.value.age, 8);
     send('reset');
     assert.equal(model.snapshot().submission.value.age, 20);
-    assert.equal(page(model).actions, 0);
     send('submit');
     assert.equal((model.snapshot().effects.length > 0), true);
   } finally { model.dispose(); }
@@ -257,7 +255,7 @@ test('UI state stays local to each model', async () => {
     a.send({ event: { message: 'submit' } });
     assert.equal((a.snapshot().effects.length > 0), true);
     assert.equal(submitButton(b).disabled, false);
-    assert.equal(page(b).actions, 0);
+    assert.equal(b.snapshot().effects.length, 0);
     a.send({ event: { message: { failed: { message: 'Offline' } } } });
     assert.equal(status(a), 'Offline');
     assert.equal(status(b), '');

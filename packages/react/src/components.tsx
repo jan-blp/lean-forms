@@ -58,17 +58,14 @@ export function Group({ label, children }: FormsReact.Group) {
   return <fieldset className="component"><legend>{label}</legend><Children components={children} /></fieldset>;
 }
 
-export function Page({ title, busy, body, toolbar, actions, notice, result }: FormsReact.Page) {
+export function Page({ title, busy, body, toolbar, notice, result }: FormsReact.Page) {
   const error = 'error' in notice;
   return (
     <div>
       <header><span className="brand">LEAN FORMS</span></header>
       <h1 id="title">{title}</h1>
       <section id="controls" aria-label="Form controls" aria-busy={busy} data-runtime="compiled"><Children components={body} /></section>
-      <div className="toolbar">
-        <Children components={toolbar} />
-        <span id="count">{actions} {actions === 1 ? 'action' : 'actions'}</span>
-      </div>
+      <div className="toolbar"><Children components={toolbar} /></div>
       <p id="status" role="status" aria-live="polite" className={error ? 'error' : undefined}>
         {error ? notice.error.message : notice.info.message}
       </p>

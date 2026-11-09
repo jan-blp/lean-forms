@@ -76,7 +76,6 @@ input:hover:not(:disabled), select:hover:not(:disabled) { border-color: var(--pr
 label:has(> input[type="checkbox"]) { display: flex; flex-direction: row-reverse; justify-content: flex-end; align-items: center; gap: var(--space-xs); }
 input[type="checkbox"] { flex-shrink: 0; display: inline-block; width: 16px; height: 16px; min-height: 0; margin: 0; vertical-align: middle; accent-color: var(--primary); }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-s); margin-top: var(--space-xl); }
-#count { margin-left: auto; color: var(--text-secondary); }
 #status { min-height: 20px; overflow-wrap: anywhere; white-space: pre-line; }
 .error { color: var(--error); }
 summary { cursor: pointer; overflow-wrap: anywhere; }

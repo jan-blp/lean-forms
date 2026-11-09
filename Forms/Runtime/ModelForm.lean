@@ -12,7 +12,6 @@ structure State (raw : Type) where
   ui : Interaction.State
   validationStarted : Bool
   serverFeedback : Option Feedback.ServerError
-  actions : Nat
 
 def openState {raw : Type} (value : raw) : State raw where
   initial := value
@@ -20,7 +19,6 @@ def openState {raw : Type} (value : raw) : State raw where
   ui := .initial
   validationStarted := false
   serverFeedback := none
-  actions := 0
 
 inductive Event where
   | apply (key : ControlKey) (argument : Option Input)
@@ -50,7 +48,6 @@ structure Snapshot (raw : Type) where
   controls : List Display.Control
   value : raw
   ui : Interaction.State
-  actions : Nat
   errors : List Feedback.Error
   summary : String
   submissionBlocked : Bool
@@ -68,7 +65,7 @@ def snapshot
     | none => if state.validationStarted then errors else []
   let rendered := ModelView.render form state.value visible
   { view := rendered.view, controls := rendered.controls.map (·.view), value := state.value,
-    ui := state.ui, actions := state.actions, errors,
+    ui := state.ui, errors,
     summary := state.serverFeedback.map (·.message) |>.getD (Feedback.summary visible),
     submissionBlocked := !visible.isEmpty }
 
@@ -85,7 +82,7 @@ def apply
   if control.disabled then throw "This action is unavailable."
   let value ← control.invoke argument
   pure { state with
-    value, actions := state.actions + 1, serverFeedback := none
+    value, serverFeedback := none
     ui := { state.ui with notice := .info "", resultVisible := false } }
 
 def submit
