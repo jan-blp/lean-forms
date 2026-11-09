@@ -3,15 +3,24 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run generate && tsc -p tsconfig.json",
-    "build:prepared": "npm run generate:prepared && tsc -p tsconfig.json",
-    "check": "npm run generate && tsc -p tsconfig.json --noEmit",
+    "build": "npm run generate && npm run bundle",
+    "build:prepared": "npm run generate:prepared && npm run bundle",
+    "bundle": "npm --prefix ../packages/react run build && tsc -p tsconfig.json && esbuild app.tsx --bundle --format=esm --outfile=dist/app.js --log-level=warning",
+    "check": "npm run generate && npm --prefix ../packages/react run build && tsc -p tsconfig.json",
     "test": "npm run build && node --test compiled.test.mjs",
     "test:wasm": "cd .. && make -f wasm/makefile test",
-    "generate": "(cd .. && lake build Forms.Runtime.Wire Forms.Protocol.TypeScript) && npm run generate:prepared",
+    "generate": "(cd .. && lake build Forms.Runtime.Wire FormsReact.Component Forms.Protocol.TypeScript) && npm run generate:prepared",
     "generate:prepared": "cd .. && lake env lean --run tools/GenerateProtocol.lean"
   },
+  "dependencies": {
+    "@blp/lean-forms-react": "*",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
   "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "esbuild": "^0.28.2",
     "typescript": "7.0.2"
   }
 }

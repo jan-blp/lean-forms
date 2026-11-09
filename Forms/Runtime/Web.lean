@@ -15,7 +15,6 @@ structure ComponentEndpoint where
 inductive GetRoute where
   | index
   | script
-  | wasmAdapter
   | wasmLoader
   | wasmBinary
   | stylesheet
@@ -24,7 +23,6 @@ inductive GetRoute where
 def GetRoute.ofPath (path : String) : Option GetRoute :=
   if path == "/" then some .index
   else if path == "/app.js" then some .script
-  else if path == "/wasm.js" then some .wasmAdapter
   else if path == "/wasm/forms.mjs" then some .wasmLoader
   else if path == "/wasm/forms.wasm" then some .wasmBinary
   else if path == "/style.css" then some .stylesheet
@@ -94,7 +92,6 @@ structure Application where
   form : ComponentEndpoint
   html : String
   script : String
-  wasmAdapter : String
   wasmLoader : Option String
   wasmBinary : Option ByteArray
   style : String
@@ -107,7 +104,6 @@ def Application.get
   match route with
   | .index => some (.html app.html)
   | .script => some (.javascript app.script)
-  | .wasmAdapter => some (.javascript app.wasmAdapter)
   | .wasmLoader => app.wasmLoader.map .javascript
   | .wasmBinary => app.wasmBinary.map .wasm
   | .stylesheet => some (.css app.style)
@@ -190,7 +186,6 @@ def run
     form := { submit := PersonProtocol.verifySubmission ExampleForms.formFingerprint }
     html := ← IO.FS.readFile "web/index.html"
     script := ← IO.FS.readFile "web/dist/app.js"
-    wasmAdapter := ← IO.FS.readFile "web/dist/wasm.js"
     wasmLoader := ← if ← System.FilePath.pathExists "web/dist/wasm/forms.mjs"
       then some <$> IO.FS.readFile "web/dist/wasm/forms.mjs" else pure none
     wasmBinary

@@ -1,7 +1,6 @@
 module
 
 public import Forms.Runtime.Wire
-import Forms.Runtime.DisplayProtocol
 import Forms.Protocol.TypeScriptAst
 meta import Forms.Protocol.TypeScript
 
@@ -29,25 +28,14 @@ def run : IO Unit := do
   check "Nullable field must be present" (((toJson absent).getObjVal? "required").toOption == some Json.null)
   check "Optional field must be omitted" (!((toJson absent).getObjVal? "omitted").isOk)
   for event in [Event.apply "key" Json.null, .apply "key" (toJson "12"),
-      .draft "key" "12", .submit, .reset, .complete 200 "ok", .failed "offline"] do
+      .submit, .reset, .complete 200 "ok", .failed "offline"] do
     roundtrip event
     roundtrip (Command.event event)
   check "Payload-free constructors encode as strings" (toJson Event.submit == toJson "submit")
-  check "Payload constructors encode under their name" ((toJson (Event.draft "key" "12")).getObjValD "draft" ==
+  check "Payload constructors encode under their name" ((toJson (Event.apply "key" (toJson "12"))).getObjValD "apply" ==
     Json.mkObj [("key", toJson "key"), ("argument", toJson "12")])
-  check "Missing draft argument accepted" (!(fromJson? (Json.mkObj [
-    ("draft", Json.mkObj [("key", toJson "key")])]) : Except String Event).isOk)
-  -- Intentionally bypass browser validation: Lean accepts " 8" and owns input errors.
-  let editor := Forms.Runtime.DisplayLayout.control {} {
-    key := ⟨"age"⟩, target := {}, label := "Age", disabled := false,
-    location := [], input := .natural 8 }
-  let noValidate := match editor.toWire with
-    | some (.element .form attrs _ _ _ _ _ _) => attrs.contains ("novalidate", "")
-    | _ => false
-  check "Editor forms must leave validation to Lean" noValidate
-  let child := Node.element .input [] [] [] none (some "hello") none (some "key")
-  roundtrip (Node.element .div [("class", "form")] [none, some child]
-    [⟨.input, .draft, "key", "input", .value⟩] (some "title") none none none)
+  check "Missing apply argument accepted" (!(fromJson? (Json.mkObj [
+    ("apply", Json.mkObj [("key", toJson "key")])]) : Except String Event).isOk)
   check "Generated schema omitted dependencies" ((typescript% [Forms.Runtime.Wire.Command]).modules.any
     (·.declarations.any (·.name == "Event")))
   let schema := typescript% [OptionalSample]
@@ -55,12 +43,12 @@ def run : IO Unit := do
   check "Generated optional fields have wrong AST" (schema.modules == [⟨["Tests", "Wire"], [
     ⟨"OptionalSample", .object [
       .mk "required" (.union .string .null []), .mk "omitted" .string true]⟩]⟩])
-  let wire := (typescript% [Forms.Runtime.Wire.Node]).modules
+  let wire := (typescript% [Forms.Runtime.Wire.Snapshot]).modules
   check "Types were not grouped by namespace" (wire.map (·.file) ==
-    ["Forms/Runtime/Wire.ts", "Forms/Runtime/DisplayLayout.ts"])
+    ["Forms/Runtime/Wire.ts", "FormsReact.ts"])
   check "Cross-namespace reference was not imported" (wire.any fun m => m.file == "Forms/Runtime/Wire.ts" &&
-    m.pretty.contains "import type * as DisplayLayout from \"./DisplayLayout.js\";" &&
-    m.pretty.contains "\"tag\": DisplayLayout.Tag")
+    m.pretty.contains "import type * as FormsReact from \"../../FormsReact.js\";" &&
+    m.pretty.contains "\"view\": FormsReact.Component")
   check "Relative import paths changed" (TS.relativeImport ["A", "B", "C"] ["A", "D", "E"] == "../D/E.js" &&
     TS.relativeImport ["A", "B"] ["A", "B", "C"] == "./B/C.js" && TS.relativeImport ["A", "B", "C"] ["A", "B"] == "../B.js")
   let nested : TS.Type := .array (.union (.reference [] "Node") .null [])

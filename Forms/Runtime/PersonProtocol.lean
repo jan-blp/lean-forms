@@ -13,15 +13,15 @@ abbrev State := ModelForm.State Person.Raw
 def descriptor (fingerprint : String) : Json :=
   toJson ({ form := name, fingerprint, value := toJson Person.initial } : Wire.CompiledDescriptor)
 
-def snapshot (fingerprint : String) (state : State) (render := true) : Wire.Snapshot :=
-  let snapshot := ModelForm.snapshot (model := Person) Person.form state render
+def snapshot (fingerprint : String) (state : State) : Wire.Snapshot :=
+  let snapshot := ModelForm.snapshot (model := Person) Person.form state
   snapshot.toWire name fingerprint "/api/submit"
 
 def execute (fingerprint : String) (state : State) (request : Wire.Command) :
     Except String (State × Wire.Snapshot) := do
   let command ← ModelForm.Command.fromWire request
   let state ← ModelForm.execute (model := Person) Person.form state command
-  pure (state, snapshot fingerprint state command.render)
+  pure (state, snapshot fingerprint state)
 
 def formDefinition : FormDefinition where
   State := State
@@ -31,7 +31,7 @@ def formDefinition : FormDefinition where
     pure (state, ModelForm.snapshot (model := Person) Person.form state)
   execute state command := do
     let state ← ModelForm.execute (model := Person) Person.form state command
-    pure (state, ModelForm.snapshot (model := Person) Person.form state command.render)
+    pure (state, ModelForm.snapshot (model := Person) Person.form state)
 
 /-- Checked first, so a stale client gets a reload hint instead of a decode error. -/
 def verifySubmission (fingerprint : String) (json : Json) : Except Json Unit := do

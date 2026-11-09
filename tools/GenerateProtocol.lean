@@ -1,12 +1,13 @@
 import Forms.Runtime.Wire
+import FormsReact.Component
 import Forms.Protocol.TypeScript
 
 open Forms.Protocol Forms.Runtime.Wire
 
-def directory : System.FilePath := "web/protocol"
+def directory : System.FilePath := "packages/react/src/protocol"
 
 def files : List (System.FilePath × String) :=
-  (typescript% [Request, Success, Failure]).modules.map fun module =>
+  (typescript% [Request, Success, Failure, FormsReact.Component]).modules.map fun module =>
     (directory / module.file,
       "// Generated from Lean. Run npm --prefix web run generate.\n" ++ module.pretty)
 

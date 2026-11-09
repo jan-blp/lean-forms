@@ -1,0 +1,8 @@
+{
+  "name": "lean-forms",
+  "private": true,
+  "workspaces": [
+    "packages/react",
+    "web"
+  ]
+}

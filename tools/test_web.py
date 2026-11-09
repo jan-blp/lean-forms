@@ -57,7 +57,7 @@ def session(example):
             status, headers, body = request(path)
             assert status == 200 and headers['Content-Type'].startswith(mime), (path, status, headers)
             assert body and headers['Cache-Control'] == 'no-store'
-        for retired in ['/validation.js', '/display.js', '/api/form', '/interpreter.js', '/wasm/json.mjs', '/wasm/json.wasm']:
+        for retired in ['/wasm.js', '/validation.js', '/display.js', '/api/form', '/interpreter.js', '/wasm/json.mjs', '/wasm/json.wasm']:
             assert request(retired)[0] == 404
         for method in ['GET', 'POST', 'DELETE']:
             status, headers, _ = request('/missing', method=method)
@@ -76,9 +76,10 @@ def session(example):
         assert status == 204 and body == ''
         assert 'Content-Type' not in headers
         script = """
-import { openCompiledForm } from './web/dist/wasm.js';
+import { openCompiledForm } from '@blp/lean-forms-react/runtime';
 import { readFileSync } from 'node:fs';
-const model = await openCompiledForm(JSON.parse(readFileSync(0, 'utf8')));
+import { pathToFileURL } from 'node:url';
+const model = await openCompiledForm(JSON.parse(readFileSync(0, 'utf8')), pathToFileURL('web/dist/wasm/forms.mjs'));
 const apply = (label, argument) => model.send({ apply: {
   key: model.snapshot().controls.find(c => c.label === label).key, argument } });
 apply('Name', 'Grace');

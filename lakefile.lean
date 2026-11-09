@@ -17,6 +17,9 @@ require «lean-lens» from git "https://github.com/janmasrovira/lean-lens" @ "81
 @[default_target]
 lean_lib Forms
 
+@[default_target]
+lean_lib FormsReact
+
 lean_lib FormTests where
   globs := #[.submodules `Tests]
 
@@ -25,13 +28,13 @@ lean_exe tests where
   root := `Tests
 
 target webAssets pkg : Unit := do
-  let jobs ← #[`Forms.Runtime.Wire, `Forms.Protocol.TypeScript].mapM fun name => do
+  let jobs ← #[`Forms.Runtime.Wire, `FormsReact.Component, `Forms.Protocol.TypeScript].mapM fun name => do
     let some mod := pkg.findModule? name | error s!"Missing protocol module {name}"
     mod.leanArts.fetch
   Job.async do
     for job in jobs do discard job.await
-    unless ← (pkg.dir / "web" / "node_modules").isDir do
-      error "web dependencies missing; run `npm --prefix web ci`"
+    unless ← (pkg.dir / "node_modules").isDir do
+      error "npm dependencies missing; run `npm ci`"
     proc {
       cmd := "npm"
       args := #["--prefix", (pkg.dir / "web").toString, "run", "build:prepared", "--silent"]

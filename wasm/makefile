@@ -113,6 +113,6 @@ size-brotli:
 
 # Count physical source lines, including comments and blank lines.
 ts-lines:
-	@find web -type d \( -name node_modules -o -name dist -o -name tests -o -name __tests__ \) -prune -o \
+	@find web packages -type d \( -name node_modules -o -name dist -o -name tests -o -name __tests__ \) -prune -o \
 	-type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.test.*' ! -name '*.spec.*' \
 	-exec wc -l {} +

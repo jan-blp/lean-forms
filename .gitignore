@@ -1,3 +1,4 @@
 .lake/
-web/node_modules/
+node_modules/
+packages/react/dist/
 web/dist/

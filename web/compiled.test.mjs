@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { openCompiledForm } from './dist/wasm.js';
+import { openCompiledForm } from '@blp/lean-forms-react/runtime';
 
 const cwd = fileURLToPath(new URL('..', import.meta.url));
 execFileSync('lake', ['build', 'Forms.ExampleForms.FormFingerprint'], { cwd, stdio: 'pipe' });
@@ -11,19 +11,19 @@ const fixtures = JSON.parse(execFileSync('lake', ['env', 'lean', '--run', 'tools
 }));
 const fixture = name => fixtures.find(f => f.descriptor.form === name);
 
+const moduleUrl = new URL('./dist/wasm/forms.mjs', import.meta.url);
+const open = descriptor => openCompiledForm(descriptor, moduleUrl);
 function snapshot(model) { return model.snapshot(); }
-function page(model, id) {
-  const find = tree => { const node = tree?.element; return node && (node.attributes.some(([name, value]) => name === 'id' && value === id)
-    ? node : node.children.map(find).find(Boolean)); };
-  return find(model.snapshot().view);
-}
-function result(model) {
-  return page(model, 'result').attributes.some(([name]) => name === 'hidden')
-    ? null : page(model, 'result').children.find(node => node?.element.tag === 'pre').element.text;
-}
+const page = model => model.snapshot().view.page;
+const submitButton = model => page(model).toolbar.find(c => c.button.onClick === 'submit').button;
+const status = model => { const notice = page(model).notice; return (notice.error ?? notice.info).message; };
+const result = model => page(model).result;
+/** Field error messages in a component tree. */
+const messages = value => !value || typeof value !== 'object' ? [] :
+  [...(typeof value.error === 'string' ? [value.error] : []), ...Object.values(value).flatMap(messages)];
 for (const { descriptor, initial, cases } of fixtures) {
   test(`compiled ${descriptor.form} matches native Lean through actions, views, validation, and reset`, async () => {
-    const model = await openCompiledForm(descriptor);
+    const model = await open(descriptor);
     try {
       assert.deepEqual(snapshot(model), initial);
       for (const { action, expected } of cases) {
@@ -38,8 +38,8 @@ for (const { descriptor, initial, cases } of fixtures) {
 
 test('models preserve independent values and reset', async () => {
   const descriptor = fixture('person').descriptor;
-  const a = await openCompiledForm({ ...descriptor, value: { ...descriptor.value, age: 25 } });
-  const b = await openCompiledForm(descriptor);
+  const a = await open({ ...descriptor, value: { ...descriptor.value, age: 25 } });
+  const b = await open(descriptor);
   try {
     const key = a.snapshot().controls.find(c => c.label === 'Age').key;
     a.send({ apply: { key, argument: '30' } });
@@ -55,14 +55,14 @@ test('models preserve independent values and reset', async () => {
 
 test('initialization rejects unknown forms, incompatible revisions, and malformed raw values', async () => {
   const descriptor = fixture('person').descriptor;
-  await assert.rejects(openCompiledForm({ ...descriptor, form: 'missing' }), /Unknown compiled form/);
-  await assert.rejects(openCompiledForm({ ...descriptor, fingerprint: 'old' }), /version differs/);
+  await assert.rejects(open({ ...descriptor, form: 'missing' }), /Unknown compiled form/);
+  await assert.rejects(open({ ...descriptor, fingerprint: 'old' }), /version differs/);
   for (const value of [false, {}, { ...descriptor.value, age: '20' }])
-    await assert.rejects(openCompiledForm({ ...descriptor, value }));
+    await assert.rejects(open({ ...descriptor, value }));
 });
 
 test('hidden and disabled controls reject stale edits', async () => {
-  const model = await openCompiledForm(fixture('person').descriptor);
+  const model = await open(fixture('person').descriptor);
   const apply = (label, argument) => model.send({ apply: {
     key: model.snapshot().controls.find(c => c.label === label).key, argument } });
   try {
@@ -112,7 +112,7 @@ test('compiled model disposal releases memory and disposed handles stay invalid'
 });
 
 test('editor normalization preserves whitespace, types, and natural precision', async () => {
-  const model = await openCompiledForm(fixture('person').descriptor);
+  const model = await open(fixture('person').descriptor);
   const edit = (label, argument) => model.send({ apply: {
     key: model.snapshot().controls.find(c => c.label === label).key, argument } });
   try {
@@ -156,12 +156,7 @@ test('Wasm exposes only the compiled-form API and recovers using a fresh instanc
 
 
 test('Lean owns validation visibility, server feedback, and recovery', async () => {
-  const model = await openCompiledForm(fixture('person').descriptor);
-  const messages = value => {
-    if (!value || typeof value !== 'object') return [];
-    return [...(value.attributes?.some?.(([name, text]) => name === 'class' && text === 'validation-error') ? [value.text] : []),
-      ...Object.values(value).flatMap(messages)];
-  };
+  const model = await open(fixture('person').descriptor);
   try {
     const quantity = model.snapshot().controls.find(c => c.label === 'Age');
     model.send({ apply: { key: quantity.key, argument: '150' } });
@@ -203,17 +198,12 @@ test('Lean owns validation visibility, server feedback, and recovery', async () 
   } finally { model.dispose(); }
 });
 
-test('Lean owns draft guards, submission effects, pending locks, and reset', async () => {
-  const model = await openCompiledForm(fixture('person').descriptor);
+test('Lean owns submission effects, pending locks, and reset', async () => {
+  const model = await open(fixture('person').descriptor);
   try {
     const editor = model.snapshot().controls.find(c => c.label === 'Age');
     const send = (event, fields = {}) => model.send({ event: { message: event === 'submit' || event === 'reset' ? event : { [event]: fields } } });
-    assert.equal(send('draft', { key: editor.key, argument: '07' }).render, false);
-    assert.equal(page(model, 'count').text, '0 actions');
-    send('submit');
-    assert.equal(page(model, 'submit').attributes.some(([name]) => name === 'disabled'), false);
-    assert.equal((model.snapshot().effects.length > 0), false);
-    assert.equal(page(model, 'status').text, 'Apply your edits before submitting.');
+    assert.equal(page(model).actions, 0);
     send('apply', { key: editor.key, argument: '07' });
     assert.equal(model.snapshot().submission.value.age, 7);
     send('submit');
@@ -224,59 +214,63 @@ test('Lean owns draft guards, submission effects, pending locks, and reset', asy
     assert.equal(effect.method, 'POST');
     assert.equal(effect.headers['Content-Type'], 'application/json');
     assert.deepEqual(JSON.parse(effect.body), submission);
-    for (const [event, fields] of [['submit', {}], ['reset', {}], ['apply', { key: editor.key, argument: '8' }],
-      ['draft', { key: editor.key, argument: '99' }]]) {
+    for (const [event, fields] of [['submit', {}], ['reset', {}], ['apply', { key: editor.key, argument: '8' }]]) {
       send(event, fields);
-      assert.equal(page(model, 'submit').attributes.some(([name]) => name === 'disabled'), true);
+      assert.equal(submitButton(model).disabled, true);
+      assert.equal(page(model).busy, true);
       assert.equal((model.snapshot().effects.length > 0), false);
       assert.deepEqual(model.snapshot().submission, submission);
     }
     assert.throws(() => model.send({ apply: { key: editor.key, argument: '8' } }), /progress/);
     assert.throws(() => model.send('reset'), /progress/);
     send('failed', { message: 'Network offline' });
-    assert.equal(page(model, 'submit').attributes.some(([name]) => name === 'disabled'), false);
-    assert.equal(page(model, 'status').text, 'Network offline');
+    assert.equal(submitButton(model).disabled, false);
+    assert.equal(status(model), 'Network offline');
     send('submit');
     send('complete', { status: 503, body: 'malformed' });
-    assert.equal(page(model, 'status').text, 'Submission failed (HTTP 503).');
-    assert.equal(page(model, 'submit').attributes.some(([name]) => name === 'disabled'), false);
+    assert.equal(status(model), 'Submission failed (HTTP 503).');
+    assert.equal(submitButton(model).disabled, false);
     send('submit');
     send('complete', { status: 200, body: '' });
     assert.equal(JSON.parse(result(model)).age, 7);
-    assert.equal(page(model, 'status').attributes.some(([name, value]) => name === 'class' && value === 'error'), false);
+    assert.equal('error' in page(model).notice, false);
     send('complete', { status: 500, body: '' });
-    assert.equal(page(model, 'status').text, 'Submitted successfully.');
-    send('draft', { key: editor.key, argument: '8' });
-    send('draft', { key: editor.key, argument: '7' });
+    assert.equal(status(model), 'Submitted successfully.');
     send('apply', { key: editor.key, argument: '8' });
     assert.equal(result(model), null);
     assert.equal(model.snapshot().submission.value.age, 8);
     send('reset');
     assert.equal(model.snapshot().submission.value.age, 20);
-    assert.equal(page(model, 'count').text, '0 actions');
+    assert.equal(page(model).actions, 0);
     send('submit');
     assert.equal((model.snapshot().effects.length > 0), true);
   } finally { model.dispose(); }
 });
 
-test('hidden drafts are discarded and UI state stays local to each model', async () => {
-  const a = await openCompiledForm(fixture('person').descriptor);
-  const b = await openCompiledForm(fixture('person').descriptor);
+test('UI state stays local to each model', async () => {
+  const a = await open(fixture('person').descriptor);
+  const b = await open(fixture('person').descriptor);
   try {
     const checkbox = a.snapshot().controls.find(c => c.widget === 'checkbox');
     a.send({ event: { message: { apply: { key: checkbox.key, argument: true } } } });
-    const street = a.snapshot().controls.find(c => c.label === 'Street');
-    a.send({ event: { message: { draft: { key: street.key, argument: 'Hidden draft' } } } });
-    a.send({ event: { message: { apply: { key: checkbox.key, argument: false } } } });
     a.send({ event: { message: 'submit' } });
     assert.equal((a.snapshot().effects.length > 0), true);
-    assert.equal(page(b, 'submit').attributes.some(([name]) => name === 'disabled'), false);
-    assert.equal(page(b, 'count').text, '0 actions');
+    assert.equal(submitButton(b).disabled, false);
+    assert.equal(page(b).actions, 0);
     a.send({ event: { message: { failed: { message: 'Offline' } } } });
-    a.send({ event: { message: { apply: { key: checkbox.key, argument: true } } } });
-    const texts = value => !value || typeof value !== 'object' ? [] :
-      [value.value, ...Object.values(value).flatMap(texts)];
-    assert.ok(!texts(a.snapshot().view).includes('Hidden draft'));
-    assert.throws(() => a.send({ event: { message: { draft: { key: checkbox.key, argument: 'false' } } } }), /drafts/);
+    assert.equal(status(a), 'Offline');
+    assert.equal(status(b), '');
   } finally { a.dispose(); b.dispose(); }
+});
+
+test('rejected applies announce an error and leave the value unchanged', async () => {
+  const model = await open(fixture('person').descriptor);
+  try {
+    const age = model.snapshot().controls.find(c => c.label === 'Age');
+    model.send({ event: { message: { apply: { key: age.key, argument: 'abc' } } } });
+    assert.equal('error' in page(model).notice, true);
+    assert.equal(model.snapshot().submission.value.age, 20);
+    model.send({ event: { message: { apply: { key: age.key, argument: '21' } } } });
+    assert.equal('error' in page(model).notice, false);
+  } finally { model.dispose(); }
 });

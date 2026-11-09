@@ -1,51 +1,14 @@
 module
 
 public import Lean.Data.Json
-public import Forms.Runtime.DisplayLayout
+public import FormsReact.Component
 
 @[expose] public section
 namespace Forms.Runtime.Wire
 open Lean
 
-deriving instance ToJson, FromJson for DisplayLayout.Tag
-
-inductive DomArgument where
-  | none
-  | value
-  | checked
-  deriving ToJson, FromJson
-
-inductive BindingCommand where
-  | apply
-  | draft
-  | submit
-  | reset
-  deriving ToJson, FromJson
-
-inductive DomEvent where
-  | click
-  | input
-  | change
-  | submit
-  deriving ToJson, FromJson
-
-structure Binding where
-  event : DomEvent
-  command : BindingCommand
-  key : String
-  source : String
-  argument : DomArgument
-  deriving ToJson, FromJson
-
-inductive Node where
-  | element (tag : DisplayLayout.Tag) (attributes : List (String × String))
-      (children : List (Option Node)) (bindings : List Binding)
-      (text : Option String) (value : Option String) (checked : Option Bool) (focusKey : Option String)
-  deriving ToJson, FromJson
-
 inductive Event where
   | apply (key : String) (argument : Json)
-  | draft (key argument : String)
   | submit
   | reset
   | complete (status : Nat) (body : String)
@@ -93,9 +56,7 @@ Contains the display, feedback, submission payload, and HTTP effects for the
 browser to perform. -/
 structure Snapshot where
   title : String
-  view : Option Node
-  render : Bool
-  focus : Option String
+  view : FormsReact.Component
   effects : List HttpEffect
   summary : String
   submissionBlocked : Bool

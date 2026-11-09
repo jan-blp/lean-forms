@@ -1,9 +1,7 @@
 module
 
-public import Forms.Runtime.DisplayLayout
-public import Forms.Runtime.EditorPresentation
+public import Forms.Runtime.Display
 public import Forms.Runtime.FeedbackProtocol
-public import Forms.Runtime.Wire
 
 @[expose] public section
 
@@ -31,47 +29,6 @@ def controlToJson (control : Control) : Json :=
     ("kind", toJson "editor"), ("location", FeedbackProtocol.locationToJson control.location),
     ("widget", toJson (widgetName control.input))] ++ messageFields control.messages)
 
-def attributePair : DisplayLayout.Attribute → String × String
-  | .hidden => ("hidden", "")
-  | .ariaLive => ("aria-live", "polite")
-  | .ariaBusy value => ("aria-busy", toString value)
-  | .runtime => ("data-runtime", "compiled")
-  | .cssClass value => ("class", value)
-  | .role value => ("role", value)
-  | .ariaLabel value => ("aria-label", value)
-  | .id value => ("id", value.value)
-  | .inputType value => ("type", match value with
-      | .text => "text" | .checkbox => "checkbox")
-  | .numeric => ("inputmode", "numeric")
-  | .naturalPattern => ("pattern", "[0-9]+")
-  | .required => ("required", "")
-  | .noValidate => ("novalidate", "")
-  | .disabled => ("disabled", "")
-  | .invalid => ("aria-invalid", "true")
-  | .describedBy id => ("aria-describedby", id.value)
-
-def sourceFields : DisplayLayout.Source → String × Wire.DomArgument
-  | .value id => (id.value, .value)
-  | .checked id => (id.value, .checked)
-
 end DisplayProtocol
-
-open DisplayProtocol
-
-def DisplayLayout.Binding.toWire : DisplayLayout.Binding → Wire.Binding
-  | .page command => ⟨.click, (match command with | .submit => .submit | .reset => .reset), "", "", .none⟩
-  | .draft key id => ⟨.input, .draft, key.value, id.value, .value⟩
-  | .change key source => let (id, argument) := sourceFields source; ⟨.change, .apply, key.value, id, argument⟩
-  | .submit key source => let (id, argument) := sourceFields source; ⟨.submit, .apply, key.value, id, argument⟩
-
-def DisplayLayout.Node.toWire : DisplayLayout.Node → Option Wire.Node
-  | .hidden => none
-  | .element tag attributes text children behavior =>
-    let (value, checked) := match behavior.input with
-      | .none => (none, none)
-      | .value value => (some value, none)
-      | .checked checked => (none, some checked)
-    some (.element tag (attributes.map attributePair) (children.map toWire)
-      (behavior.bindings.map (·.toWire)) text value checked (behavior.focusKey.map (·.value)))
 
 end Forms.Runtime

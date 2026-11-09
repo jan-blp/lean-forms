@@ -17,11 +17,9 @@ inductive Notice where
   | error (message : String)
 
 structure State where
-  drafts : List (ControlKey × String) := []
   submission : Submission := .idle
   notice : Notice := .info ""
   resultVisible : Bool := false
-  focus : Option ControlKey := none
   deriving Inhabited
 
 def State.pending (state : State) : Bool :=
@@ -37,7 +35,7 @@ def State.error (state : State) : Bool :=
   match state.notice with | .error _ => true | .info _ => false
 
 def State.acknowledge (state : State) : State :=
-  { state with submission := match state.submission with | .requested => .pending | other => other, focus := none }
+  { state with submission := match state.submission with | .requested => .pending | other => other }
 
 def State.announce (state : State) (status : String) (error := false) : State :=
   { state with notice := if error then .error status else .info status }

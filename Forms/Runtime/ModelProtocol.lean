@@ -2,6 +2,8 @@ module
 
 public import Forms.Runtime.ModelForm
 public import Forms.Runtime.InputProtocol
+public import Forms.Runtime.ReactView
+public import Forms.Runtime.Wire
 
 @[expose] public section
 namespace Forms.Runtime
@@ -18,10 +20,7 @@ def ModelForm.Snapshot.toWire {raw : Type} [ToJson raw] (snapshot : ModelForm.Sn
     (formName fingerprint submitUrl : String) : Wire.Snapshot :=
   let submission := toJson ({ form := formName, fingerprint, value := snapshot.value } : Submission raw)
   { title := snapshot.view.title
-    view := (DisplayLayout.page snapshot.view snapshot.ui snapshot.actions
-      (toJson snapshot.value).pretty).toWire
-    render := snapshot.render
-    focus := snapshot.ui.focus.map (·.value)
+    view := snapshot.view.toReactPage snapshot.ui snapshot.actions (toJson snapshot.value).pretty
     summary := snapshot.summary
     submissionBlocked := snapshot.submissionBlocked
     controls := snapshot.controls.map DisplayProtocol.controlToJson
@@ -32,7 +31,6 @@ def ModelForm.Snapshot.toWire {raw : Type} [ToJson raw] (snapshot : ModelForm.Sn
       headers := { «Content-Type» := "application/json" }, body := submission.compress }] else [] }
 
 def ModelForm.Event.fromWire : Wire.Event → Except String ModelForm.Event
-  | .draft key value => .ok (.draft ⟨key⟩ value)
   | .apply key argument => do
     let argument ← InputProtocol.argumentFromJson (if argument == .null then none else some argument)
     pure (.apply ⟨key⟩ argument)

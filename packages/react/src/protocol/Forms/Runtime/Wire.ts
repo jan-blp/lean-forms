@@ -1,0 +1,14 @@
+// Generated from Lean. Run npm --prefix web run generate.
+import type * as FormsReact from "../../FormsReact.js";
+
+export type Request = { "open": { "descriptor": CompiledDescriptor } } | { "send": { "handle": string; "request": Command } } | { "dispose": { "handle": string } };
+export type CompiledDescriptor = { "form": string; "fingerprint": string; "value": unknown };
+export type Command = { "event": { "message": Event } } | { "apply": { "key": string; "argument": unknown } } | "reset" | "validate" | "inspect" | { "serverError": { "status": number; "body": string } };
+export type Event = { "apply": { "key": string; "argument": unknown } } | "submit" | "reset" | { "complete": { "status": number; "body": string } } | { "failed": { "message": string } };
+export type Success = { "ok": boolean; "value": Response };
+export type Response = { "opened": { "handle": string; "snapshot": Snapshot } } | { "updated": { "snapshot": Snapshot } } | "disposed";
+export type Snapshot = { "title": string; "view": FormsReact.Component; "effects": HttpEffect[]; "summary": string; "submissionBlocked": boolean; "controls": unknown[]; "submission": unknown; "errors": unknown[] };
+export type HttpEffect = { "url": string; "method": HttpMethod; "headers": HttpHeaders; "body": string };
+export type HttpMethod = "POST";
+export type HttpHeaders = { "Content-Type": string };
+export type Failure = { "ok": boolean; "error": string };
