@@ -1,14 +1,19 @@
 module
 
-public import Forms.Runtime.PersonProtocol
+public import Forms.ExampleForms.Person
+public import Forms.ExampleForms.Order
+public import Forms.Runtime.FormDefinition
 public import Std.Data.HashMap
 
 @[expose] public section
 namespace Forms.ExampleForms
+open Forms.Runtime
 
-/-- Forms available in the example application, shared by its native and Wasm builds. -/
-def registeredForms : Std.HashMap String Runtime.RegisteredForm :=
-  ({} : Std.HashMap String Runtime.RegisteredForm).insert Runtime.PersonProtocol.name
-    { definition := Runtime.PersonProtocol.formDefinition, submitUrl := "/api/submit" }
+/-- Forms of the example application, shared by its native and Wasm builds; the first is the default. -/
+def forms : List (String × RegisteredForm) := [
+  ("person", { definition := .ofModel Person Person.form Person.initial, submitUrl := "/api/submit" }),
+  ("order", { definition := .ofModel Order Order.form Order.initial, submitUrl := "/api/submit" })]
+
+def registeredForms : Std.HashMap String RegisteredForm := .ofList forms
 
 end Forms.ExampleForms

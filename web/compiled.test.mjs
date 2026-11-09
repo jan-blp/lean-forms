@@ -279,3 +279,37 @@ test('rejected applies announce an error and leave the value unchanged', async (
     assert.equal('error' in page(model).notice, false);
   } finally { model.dispose(); }
 });
+
+test('order nests visibility, disabling, and validation, alongside person in one runtime', async () => {
+  const order = await open(fixture('order').descriptor);
+  const person = await open(fixture('person').descriptor);
+  const apply = (label, argument) => order.send({ event: { message: { apply: {
+    key: order.snapshot().controls.find(c => c.label === label).key, argument } } } });
+  const outputs = () => JSON.stringify(page(order).body);
+  const draftLabels = () => order.snapshot().controls
+    .filter(c => order.snapshot().draftFields.includes(c.key)).map(c => c.label);
+  try {
+    assert.equal(person.snapshot().title, 'Person');
+    apply('Quantity', '100');
+    apply('Unit price (CHF)', '1234');
+    assert.match(outputs(), /CHF 123'400/);
+    assert.equal(order.snapshot().controls.find(c => c.label === 'Express shipping').disabled, true);
+    assert.equal(draftLabels().includes('Gift message'), false);
+    apply('Gift wrap', true);
+    assert.equal(draftLabels().includes('Gift message'), true);
+    assert.doesNotMatch(outputs(), /Card preview/);
+    order.send({ event: { message: 'submit' } });
+    assert.deepEqual(messages(order.snapshot().view), ['Enter a gift message.']);
+    apply('Gift message', 'Hi');
+    assert.match(outputs(), /\\"Hi\\" from Grace Hopper/);
+    apply('Email', 'grace');
+    order.send({ event: { message: 'submit' } });
+    assert.deepEqual(messages(order.snapshot().view), ['Enter a valid email address.']);
+    assert.equal(order.snapshot().effects.length, 0);
+    apply('Email', 'grace@example.com');
+    apply('Quantity', '3');
+    order.send({ event: { message: 'submit' } });
+    assert.equal(JSON.parse(order.snapshot().effects[0].body).value.quantity, 3);
+    assert.equal(person.snapshot().submission.value.name, 'Ada');
+  } finally { order.dispose(); person.dispose(); }
+});

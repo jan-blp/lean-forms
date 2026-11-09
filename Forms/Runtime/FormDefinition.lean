@@ -11,9 +11,57 @@ structure FormDefinition where
   State : Type
   Raw : Type
   [encode : ToJson Raw]
+  /-- The raw value new forms start from. -/
+  initial : Json
   /-- Decode the initial value and create the state and first snapshot. -/
   openState (value : Json) : Except String (State × ModelForm.Snapshot Raw)
   execute : State → ModelForm.Command → Except String (State × ModelForm.Snapshot Raw)
+  /-- Checks a submission to the form registered as `name`, fingerprint first. -/
+  verify (name fingerprint : String) (submission : Json) : Except Json Unit
+
+/-- Checked first, so a stale client gets a reload hint instead of a decode error. -/
+def decodeSubmission
+  (raw : Type)
+  [FromJson raw]
+  (name fingerprint : String)
+  (json : Json)
+  : Except String raw := do
+  unless (json.getObjValAs? String "fingerprint").toOption == some fingerprint do
+    throw "This form is out of date. Reload the page."
+  let submission ← fromJson? (α := Submission raw) json
+  unless submission.form == name do throw "Wrong form."
+  pure submission.value
+
+/-- `model` rendered by `form`, starting from `initial`. -/
+def FormDefinition.ofModel
+  (model : Type)
+  [FormModel model]
+  [Model.Validation model]
+  [ToJson (FormModel.Raw model)]
+  [FromJson (FormModel.Raw model)]
+  (form : Model.Component (FormModel.Raw model))
+  (initial : FormModel.Raw model)
+  : FormDefinition where
+  State := ModelForm.State (FormModel.Raw model)
+  Raw := FormModel.Raw model
+  initial := toJson initial
+  openState value := do
+    let state := ModelForm.openState (← fromJson? value)
+    pure (state, ModelForm.snapshot (model := model) form state)
+  execute state command := do
+    let state ← ModelForm.execute (model := model) form state command
+    pure (state, ModelForm.snapshot (model := model) form state)
+  verify name fingerprint json := do
+    let value ← (decodeSubmission (FormModel.Raw model) name fingerprint json).mapError fun message =>
+      Json.mkObj [("kind", toJson "request"), ("message", toJson message)]
+    match Model.Validation.validate (model := model) value with
+    | .ok _ => pure ()
+    | .error errors =>
+      let errors := errors.map ModelView.error
+      throw (.mkObj [
+        ("kind", toJson "validation"),
+        ("message", toJson (Feedback.summary errors)),
+        ("errors", toJson (errors.map FeedbackProtocol.errorToJson))])
 
 /-- A form definition and its application-specific submission endpoint. -/
 structure RegisteredForm where
@@ -25,6 +73,10 @@ structure FormInstance where
   execute : Wire.Command → Except String (FormInstance × Wire.Snapshot)
 
 instance : Inhabited FormInstance := ⟨.mk fun _ => .error "Uninitialized form"⟩
+
+/-- The descriptor that opens a new `name` form. -/
+def RegisteredForm.descriptor (form : RegisteredForm) (name fingerprint : String) : Wire.CompiledDescriptor :=
+  { form := name, fingerprint, value := form.definition.initial }
 
 def RegisteredForm.toWire
   (form : RegisteredForm)

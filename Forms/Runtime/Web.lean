@@ -184,6 +184,8 @@ def checkWasmFingerprint (binary : ByteArray) : IO Unit :=
       "web/dist/wasm/forms.wasm is stale (fingerprint mismatch). Run make -f wasm/makefile, then restart forms-web.")
 
 def run
+  (name : String)
+  (form : RegisteredForm)
   (port : UInt16 := 8080)
   (openBrowser : Bool := false)
   : IO Unit := do
@@ -191,9 +193,9 @@ def run
     then some <$> IO.FS.readBinFile "web/dist/wasm/forms.wasm" else pure none
   if let some binary := wasmBinary then checkWasmFingerprint binary
   let app : Application := {
-    compiledForm := PersonProtocol.descriptor ExampleForms.formFingerprint
+    compiledForm := Lean.toJson (form.descriptor name ExampleForms.formFingerprint)
     logger := ← TrafficLog.Logger.create
-    form := { submit := PersonProtocol.verifySubmission ExampleForms.formFingerprint }
+    form := { submit := form.definition.verify name ExampleForms.formFingerprint }
     html := ← IO.FS.readFile "web/index.html"
     script := ← IO.FS.readFile "web/dist/app.js"
     wasmLoader := ← if ← System.FilePath.pathExists "web/dist/wasm/forms.mjs"

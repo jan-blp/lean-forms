@@ -186,6 +186,41 @@ try {
     check((await forged.json()).error.message === 'Age must be at most 120.', 'Server validation did not run');
   `);
 
+  await example('order', `
+    const status = () => document.querySelector('#status').textContent;
+    const text = () => document.body.textContent;
+    const input = label => field(label).querySelector('input');
+    const toggle = async label => { input(label).click(); await tick(); };
+    check(text().includes('CHF 90'), 'Missing computed total');
+    await edit('Quantity', '100');
+    await edit('Unit price (CHF)', '1234');
+    check(text().includes("CHF 123'400"), 'Total not Swiss formatted');
+    check(input('Express shipping').disabled, 'Express not disabled above 10 items');
+    await edit('Quantity', '3');
+    check(!input('Express shipping').disabled, 'Express still disabled');
+    check(!field('Gift message'), 'Hidden gift message rendered');
+    await toggle('Gift wrap');
+    check(field('Gift message') && !text().includes('Card preview'), 'Wrong gift visibility');
+    await click('[data-action=submit]');
+    await wait(() => status() === 'Enter a gift message.');
+    check(input('Gift message').getAttribute('aria-invalid') === 'true', 'Missing gift feedback');
+    await edit('Gift message', 'Happy birthday');
+    check(text().includes('"Happy birthday" from Grace Hopper'), 'Nested visible output missing');
+    await edit('Email', 'grace');
+    await click('[data-action=submit]');
+    await wait(() => status() === 'Enter a valid email address.');
+    check(input('Email').getAttribute('aria-invalid') === 'true', 'Missing nested feedback');
+    await edit('Email', 'grace@example.com');
+    await toggle('Express shipping');
+    check(text().includes('Next business day'), 'Delivery output did not update');
+    await type(input('City'), 'Bern');
+    await click('[data-action=submit]');
+    await wait(() => status() === 'Submitted successfully.');
+    const submitted = JSON.parse(document.querySelector('#result pre').textContent);
+    check(submitted.shipping.city === 'Bern' && submitted.shipping.express && submitted.quantity === 3,
+      'Submitted value wrong');
+  `);
+
 } finally {
   socket?.close();
   await Promise.all([stop(firefox), stop(server)]);

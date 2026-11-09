@@ -4,10 +4,12 @@ import Forms.Runtime.Web
 
 open Forms Forms.Runtime Forms.ExampleForms
 
-private def usage := "Usage: forms-web [" ++ String.intercalate "|" [PersonProtocol.name] ++ "] [--port PORT] [--open]"
+private def names := forms.map (·.1)
+
+private def usage := "Usage: forms-web [" ++ String.intercalate "|" names ++ "] [--port PORT] [--open]"
 
 private structure Options where
-  selected : Bool := false
+  form : Option String := none
   port : UInt16 := 8080
   openBrowser : Bool := false
 
@@ -30,8 +32,8 @@ private def parseOptions
                 else .error "Port must be between 1 and 65535"
             | none => .error "Expected a port number"
       else
-        if arg == PersonProtocol.name && !options.selected then
-          parseOptions rest { options with selected := true }
+        if names.contains arg && options.form.isNone then
+          parseOptions rest { options with form := some arg }
         else .error usage
 
 private def complete (words : List String) : List String :=
@@ -41,7 +43,7 @@ private def complete (words : List String) : List String :=
     match parseOptions previous with
     | .error _ => []
     | .ok options =>
-        let candidates := (if !options.selected then [PersonProtocol.name] else []) ++
+        let candidates := (if options.form.isNone then names else []) ++
           (if options.openBrowser then [] else ["--open"]) ++ ["--port", "--help"]
         candidates.filter (fun candidate => candidate.startsWith (words.getLast?.getD ""))
 
@@ -53,4 +55,6 @@ public def main (args : List String) : IO Unit := do
     IO.println usage
     return
   let options ← IO.ofExcept (parseOptions args)
-  Web.run options.port options.openBrowser
+  let some (name, form) := forms.find? (·.1 == options.form.getD (names.headD ""))
+    | throw (IO.userError usage)
+  Web.run name form options.port options.openBrowser

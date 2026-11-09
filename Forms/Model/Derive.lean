@@ -34,6 +34,15 @@ private def fresh (name : Name) : CommandElabM Ident := return ident (← liftCo
 
 private def emit (command : TSyntax `command) : CommandElabM Unit := elabCommand command
 
+/-- Emits `command` in `name`'s namespace, so its auto-named instances stay unique across modules. -/
+private def emitIn (name : Name) (command : TSyntax `command) : CommandElabM Unit := do
+  let current ← getCurrNamespace
+  unless current.isPrefixOf name && name != current do return ← emit command
+  let relative := mkIdent (name.replacePrefix current .anonymous)
+  emit (← `(command| namespace $relative))
+  emit command
+  emit (← `(command| end $relative))
+
 private def inspect (name : Name) : MetaM (Bool × Array Constructor) := do
   if isPrivateName name then
     throwError "FormModel requires public model declarations"
@@ -111,7 +120,7 @@ private def emitRecord
   let fields ← fields.mapM fun (name, type) =>
     `(Parser.Command.structExplicitBinder| ($(ident name) : $type))
   if json then
-    emit (← `(command| structure $(global name):ident where
+    emitIn name (← `(command| structure $(global name):ident where
       $fields:structExplicitBinder*
       deriving Lean.ToJson, Lean.FromJson))
   else
@@ -228,7 +237,7 @@ private def emitConstructors (model : ModelInfo) : CommandElabM Unit := do
     let name := ident (Name.mkSimple ctor.name.getString!)
     if ctor.data.isEmpty then `(Parser.Command.ctor| | $name:ident)
     else `(Parser.Command.ctor| | $name:ident (payload : $(global (model.payload ctor))))
-  emit (← `(command| inductive $raw:ident where $ctors:ctor* deriving Lean.ToJson, Lean.FromJson))
+  emitIn model.raw (← `(command| inductive $raw:ident where $ctors:ctor* deriving Lean.ToJson, Lean.FromJson))
   let constructor := global (model.name ++ `Constructor)
   let ctors ← model.constructors.mapM fun ctor =>
     `(Parser.Command.ctor| | $(ident (Name.mkSimple ctor.name.getString!)):ident :

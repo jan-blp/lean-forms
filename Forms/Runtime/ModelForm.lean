@@ -9,12 +9,18 @@ namespace Forms.Runtime.ModelForm
 structure State (raw : Type) where
   initial : raw
   value : raw
-  ui : Interaction.State := .initial
-  validationStarted : Bool := false
-  serverFeedback : Option Feedback.ServerError := none
-  actions : Nat := 0
+  ui : Interaction.State
+  validationStarted : Bool
+  serverFeedback : Option Feedback.ServerError
+  actions : Nat
 
-def openState {raw : Type} (value : raw) : State raw := { initial := value, value }
+def openState {raw : Type} (value : raw) : State raw where
+  initial := value
+  value
+  ui := .initial
+  validationStarted := false
+  serverFeedback := none
+  actions := 0
 
 inductive Event where
   | apply (key : ControlKey) (argument : Option Input)

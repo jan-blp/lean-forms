@@ -9,6 +9,7 @@ import sys
 import subprocess
 import time
 import tempfile
+from contextlib import contextmanager
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -16,7 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / '.lake/build/bin/forms-web'
 
 
-def session(example):
+@contextmanager
+def serve(example):
+    """Runs forms-web for `example`; yields a request function, its descriptor, and the traffic log."""
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
         port = sock.getsockname()[1]
@@ -52,6 +55,45 @@ def session(example):
         assert set(descriptor) == {'form', 'fingerprint', 'value'}
         assert descriptor['form'] == example
         assert descriptor['fingerprint'].startswith('compiled-2-')
+        yield request, descriptor, traffic_log
+    finally:
+        process.terminate()
+        try:
+            process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+        traffic_log.close()
+
+
+def validation_error(request, submission, message, fields):
+    status, _, body = request('/api/submit', submission)
+    assert status == 422, (status, body)
+    error = json.loads(body)['error']
+    assert error['kind'] == 'validation' and error['message'] == message, error
+    assert error['errors'] == [{'message': message, 'targets': {
+        'kind': 'locations', 'locations': [[{'kind': 'field', 'name': f} for f in fields]]}}], error
+
+
+def order_session():
+    with serve('order') as (request, descriptor, _):
+        initial = {'form': 'order', 'fingerprint': descriptor['fingerprint'], 'value': descriptor['value']}
+        assert request('/api/submit', initial)[0] == 204
+        value = descriptor['value']
+        for changes, message, fields in [
+            ({'customer': {**value['customer'], 'email': 'grace'}}, 'Enter a valid email address.',
+             ['customer', 'email']),
+            ({'quantity': 11, 'shipping': {**value['shipping'], 'express': True}},
+             'Express shipping is limited to 10 items.', ['quantity']),
+            ({'gift': True}, 'Enter a gift message.', ['giftMessage']),
+        ]:
+            validation_error(request, {**initial, 'value': {**value, **changes}}, message, fields)
+        status, _, body = request('/api/submit', {**initial, 'form': 'person'})
+        assert status == 422 and json.loads(body)['error']['kind'] == 'request'
+
+
+def session(example):
+    with serve(example) as (request, descriptor, traffic_log):
         for path, mime in [('/', 'text/html'), ('/app.js', 'text/javascript'),
                            ('/style.css', 'text/css')]:
             status, headers, body = request(path)
@@ -110,13 +152,7 @@ model.dispose();
             ({'address': {'street': ''}}, 'Enter your delivery street.', ['address', 'street']),
             ({'age': 17, 'address': {'street': 'Campus'}}, 'Campus delivery requires an adult.', ['age']),
         ]:
-            invalid = {**initial, 'value': {**initial['value'], **changes}}
-            status, _, body = request('/api/submit', invalid)
-            assert status == 422
-            error = json.loads(body)['error']
-            assert error['kind'] == 'validation' and error['message'] == message
-            assert error['errors'] == [{'message': message, 'targets': {
-                'kind': 'locations', 'locations': [[{'kind': 'field', 'name': f} for f in fields]]}}]
+            validation_error(request, {**initial, 'value': {**initial['value'], **changes}}, message, fields)
         assert request('/api/submit', initial)[0] == 204
         traffic_log.seek(0)
         traffic = traffic_log.read().decode()
@@ -127,14 +163,6 @@ model.dispose();
         assert 'SERVER → CLIENT 204 POST /api/submit\n' in traffic
         assert 'SERVER → CLIENT 422 POST /api/submit' in traffic
         assert '"Grace"' in traffic
-    finally:
-        process.terminate()
-        try:
-            process.communicate(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.communicate()
-        traffic_log.close()
 
 
 def terminal_colors(no_color=False, term='xterm-256color'):
@@ -242,7 +270,8 @@ browser_flag(1)
 
 
 session('person')
+order_session()
 terminal_colors()
 terminal_colors(no_color=True)
 terminal_colors(term='dumb')
-print('PASS: HTTP traffic, model validation, request errors, terminal colors, NO_COLOR, and --open')
+print('PASS: HTTP traffic, person and order validation, request errors, terminal colors, NO_COLOR, and --open')
