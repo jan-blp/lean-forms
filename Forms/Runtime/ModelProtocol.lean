@@ -21,6 +21,7 @@ def ModelForm.Snapshot.toWire {raw : Type} [ToJson raw] (snapshot : ModelForm.Sn
   let submission := toJson ({ form := formName, fingerprint, value := snapshot.value } : Submission raw)
   { title := snapshot.view.title
     view := snapshot.view.toReactPage snapshot.ui snapshot.actions (toJson snapshot.value).pretty
+    rejection := snapshot.ui.rejection
     summary := snapshot.summary
     submissionBlocked := snapshot.submissionBlocked
     controls := snapshot.controls.map DisplayProtocol.controlToJson

@@ -56,12 +56,14 @@ def expected : FormsReact.Component :=
 def run : IO Unit := do
   check "Lowering changed" (view.toReact false == some expected)
   check "Hidden view must lower to nothing" (Display.View.hidden.toReact false == none)
-  let pending := match view.toReactPage { submission := .pending } 3 "{}" with
+  let pending := match view.toReactPage { Interaction.State.initial with submission := .pending } 3 "{}" with
     | .page page => page.busy && page.result.isNone && page.actions == 3 &&
-        page.toolbar.all fun | .button button => button.disabled | _ => false
+        page.toolbar.all (fun
+          | .button button => button.disabled
+          | _ => false)
     | _ => false
   check "Pending page must be busy with disabled toolbar" pending
-  let page := view.toReactPage { resultVisible := true } 0 "{}"
+  let page := view.toReactPage { Interaction.State.initial with resultVisible := true } 0 "{}"
   let decoded : Except String FormsReact.Component := fromJson? (toJson page)
   check "Component JSON roundtrip changed" (decoded.toOption == some page)
   check "Props must encode directly under the constructor name"

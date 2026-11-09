@@ -59,7 +59,10 @@ private def renderType (current : List String) : TS.Type → String
   | .reference path name => if path == current then name else alias path ++ "." ++ name
   | .array element =>
     let text := renderType current element
-    (match element with | .union .. => "(" ++ text ++ ")" | _ => text) ++ "[]"
+    let text := match element with
+      | .union .. => "(" ++ text ++ ")"
+      | _ => text
+    text ++ "[]"
   | .tuple elements => "[" ++ String.intercalate ", " (elements.map (renderType current)) ++ "]"
   | .union first second rest =>
     String.intercalate " | " (renderType current first :: renderType current second :: rest.map (renderType current))

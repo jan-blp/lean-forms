@@ -216,6 +216,7 @@ test('Lean owns submission effects, pending locks, and reset', async () => {
     assert.deepEqual(JSON.parse(effect.body), submission);
     for (const [event, fields] of [['submit', {}], ['reset', {}], ['apply', { key: editor.key, argument: '8' }]]) {
       send(event, fields);
+      assert.equal(model.snapshot().rejection, event === 'apply' ? 'Submission is in progress.' : null);
       assert.equal(submitButton(model).disabled, true);
       assert.equal(page(model).busy, true);
       assert.equal((model.snapshot().effects.length > 0), false);
@@ -269,8 +270,12 @@ test('rejected applies announce an error and leave the value unchanged', async (
     const age = model.snapshot().controls.find(c => c.label === 'Age');
     model.send({ event: { message: { apply: { key: age.key, argument: 'abc' } } } });
     assert.equal('error' in page(model).notice, true);
+    assert.equal(model.snapshot().rejection, 'Enter a non-negative whole number.');
     assert.equal(model.snapshot().submission.value.age, 20);
+    model.send({ event: { message: 'submit' } });
+    assert.equal(model.snapshot().rejection, null);
     model.send({ event: { message: { apply: { key: age.key, argument: '21' } } } });
+    assert.equal(model.snapshot().rejection, null);
     assert.equal('error' in page(model).notice, false);
   } finally { model.dispose(); }
 });

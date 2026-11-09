@@ -70,7 +70,7 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
   /** Applies `argument` to field `name`; keeps the draft when Lean rejects it. */
   function commit(name: string, argument: unknown): Wire.Snapshot | undefined {
     const next = send({ apply: { key: name, argument } });
-    if (rejected(next)) return undefined;
+    if (next.rejection !== null) return undefined;
     setDrafts(drafts => withDraft(drafts, name, undefined));
     return next;
   }
@@ -106,11 +106,6 @@ function withDraft(drafts: ReadonlyMap<string, string>, name: string, text: stri
   const next = new Map(drafts);
   if (text === undefined) next.delete(name); else next.set(name, text);
   return next;
-}
-
-/** Lean announces a rejected apply as an error notice. */
-function rejected(snapshot: Wire.Snapshot): boolean {
-  return 'page' in snapshot.view && 'error' in snapshot.view.page.notice;
 }
 
 /** Names of the enabled fields that commit a draft (`onCommit`) anywhere in `value`. */

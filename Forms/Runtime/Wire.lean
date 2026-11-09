@@ -51,12 +51,12 @@ structure HttpEffect where
   body : String
   deriving ToJson, FromJson
 
-/-- Browser-facing snapshot returned after opening or updating a form.
-Contains the display, feedback, submission payload, and HTTP effects for the
-browser to perform. -/
+/-- Browser-facing snapshot returned after opening or updating a form. -/
 structure Snapshot where
   title : String
   view : FormsReact.Component
+  /-- Why the last `apply` event was rejected. -/
+  rejection : Option String
   effects : List HttpEffect
   summary : String
   submissionBlocked : Bool

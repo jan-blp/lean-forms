@@ -9,7 +9,7 @@ namespace Forms.Runtime.ModelForm
 structure State (raw : Type) where
   initial : raw
   value : raw
-  ui : Interaction.State := {}
+  ui : Interaction.State := .initial
   validationStarted : Bool := false
   serverFeedback : Option Feedback.ServerError := none
   actions : Nat := 0
@@ -80,16 +80,17 @@ def submit {model : Type} [FormModel model] [Model.Validation model]
 def event {model : Type} [FormModel model] [Model.Validation model]
     (form : Model.Component (FormModel.Raw model)) (state : State (FormModel.Raw model)) :
     Event → Except String (State (FormModel.Raw model)) := fun event => do
-  let state := { state with ui := state.ui.acknowledge }
+  let state := { state with ui := { state.ui.acknowledge with rejection := none } }
   match event with
   | .apply key argument =>
-    if state.ui.pending then return state
     match apply form state key argument with
     | .ok state => pure state
-    | .error message => pure { state with ui := state.ui.announce message true }
+    | .error message =>
+      let ui := if state.ui.pending then state.ui else state.ui.announce message true
+      pure { state with ui := { ui with rejection := some message } }
   | .submit => pure (submit (model := model) state)
   | .reset => pure (if state.ui.pending then state else
-      { (openState state.initial) with ui := { notice := .info "Started over." } })
+      { (openState state.initial) with ui := { Interaction.State.initial with notice := .info "Started over." } })
   | .complete error =>
     if !state.ui.pending then return state
     match error with
