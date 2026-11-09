@@ -23,14 +23,18 @@ def modelHandle (text : String) : Except String FormHandle := do
   let some value := text.toNat? | throw "Invalid form handle"
   pure ⟨value⟩
 
-def execute (forms : Std.HashMap String RegisteredForm) (fingerprint : String) (store : Store)
-    (request : Wire.Request) : Except String (Store × Wire.Response) := do
+def execute
+  (forms : Std.HashMap String RegisteredForm)
+  (fingerprint : String)
+  (store : Store)
+  (request : Wire.Request)
+  : Except String (Store × Wire.Response) := do
   match request with
   | .open descriptor =>
     let some form := forms[descriptor.form]? | throw "Unknown compiled form"
     unless descriptor.fingerprint == fingerprint do
       throw "Compiled form version differs from the server. Rebuild Wasm, restart forms-web, then reload."
-    let (state, snapshot) ← form.open descriptor.form descriptor.value
+    let (state, snapshot) ← form.open descriptor.form fingerprint descriptor.value
     let handle := store.next
     let store := { store with next := ⟨handle.value + 1⟩, models := store.models.insert handle state }
     pure (store, .opened (toString handle.value) snapshot)

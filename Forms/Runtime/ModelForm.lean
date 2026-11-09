@@ -18,14 +18,17 @@ def openState {raw : Type} (value : raw) : State raw := { initial := value, valu
 inductive Event where
   | draft (key : ControlKey) (value : String)
   | apply (key : ControlKey) (argument : Option Input)
-  | submit | reset
+  | submit
+  | reset
   | complete (error : Option Feedback.ServerError)
   | failed (message : String)
 
 inductive Command where
   | event (event : Event)
   | apply (key : ControlKey) (argument : Option Input)
-  | validate | reset | inspect
+  | validate
+  | reset
+  | inspect
   | serverError (error : Feedback.ServerError)
 
 def Command.render : Command → Bool

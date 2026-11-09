@@ -1,13 +1,13 @@
-import type { CompiledDescriptor, FormRequest, Request, Response, Success, Failure } from './protocol.js';
+import type * as Wire from './protocol.js';
 
 interface WasmModule {
   _forms_init(): void;
   ccall(name: string, result: string, types: string[], args: (string | number)[]): string;
 }
-interface Runtime { form(request: Request): Response }
+interface Runtime { form(request: Wire.Request): Wire.Response }
 let loading: Promise<Runtime> | undefined;
 
-export async function openCompiledForm(descriptor: CompiledDescriptor) {
+export async function openCompiledForm(descriptor: Wire.CompiledDescriptor) {
   const runtime = await (loading ??= load());
   const opened = runtime.form({ open: { descriptor } });
   if (typeof opened !== 'object' || !('opened' in opened)) throw new Error('Expected an opened form.');
@@ -16,7 +16,7 @@ export async function openCompiledForm(descriptor: CompiledDescriptor) {
   function check() { if (disposed) throw new Error('Form model is disposed.'); }
   return {
     snapshot() { check(); return structuredClone(snapshot); },
-    send(request: FormRequest) {
+    send(request: Wire.Command) {
       check();
       const response = runtime.form({ send: { handle: opened.opened.handle, request } });
       if (typeof response !== 'object' || !('updated' in response)) throw new Error('Expected an updated form.');
@@ -37,7 +37,7 @@ async function load(): Promise<Runtime> {
   const module: WasmModule = await createModule();
   module._forms_init();
   const encoder = new TextEncoder();
-  function form(input: Request): Response {
+  function form(input: Wire.Request): Wire.Response {
     const request = JSON.stringify(input);
     if (request === undefined) throw new Error('Expected a JSON request.');
     let text: string;
@@ -49,7 +49,7 @@ async function load(): Promise<Runtime> {
       loading = undefined;
       throw error;
     }
-    const response = JSON.parse(text) as Success | Failure;
+    const response = JSON.parse(text) as Wire.Success | Wire.Failure;
     if ('error' in response) throw new Error(response.error);
     return response.value;
   }

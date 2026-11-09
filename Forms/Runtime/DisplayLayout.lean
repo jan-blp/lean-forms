@@ -9,12 +9,26 @@ namespace Forms.Runtime.DisplayLayout
 open Display
 
 inductive Tag where
-  | header | span | h1 | section | details | summary | pre
-  | div | fieldset | legend | output | p | label
-  | input | button | form
+  | header
+  | span
+  | h1
+  | section
+  | details
+  | summary
+  | pre
+  | div
+  | fieldset
+  | legend
+  | output
+  | p
+  | label
+  | input
+  | button
+  | form
 
 inductive InputType where
-  | text | checkbox
+  | text
+  | checkbox
 
 inductive Attribute where
   | hidden
@@ -39,7 +53,8 @@ inductive Source where
   | checked (id : DomId)
 
 inductive PageCommand where
-  | submit | reset
+  | submit
+  | reset
 
 inductive Binding where
   | page (command : PageCommand)
@@ -59,11 +74,21 @@ structure Behavior where
 
 inductive Node where
   | hidden
-  | element (tag : Tag) (attributes : List Attribute) (text : Option String)
-      (children : List Node) (behavior : Behavior)
+  | element
+     (tag : Tag)
+     (attributes : List Attribute)
+     (text : Option String)
+     (children : List Node)
+     (behavior : Behavior)
 
-def element (tag : Tag) (children : List Node := []) (attributes : List Attribute := [])
-    (text : Option String := none) (messages : Option String := none) (behavior : Behavior := {}) : Node :=
+def element
+  (tag : Tag)
+  (children : List Node := [])
+  (attributes : List Attribute := [])
+  (text : Option String := none)
+  (messages : Option String := none)
+  (behavior : Behavior := {})
+  : Node :=
   let feedback := messages.toList.map fun message =>
     Node.element .p [.cssClass "validation-error"] (some message) [] {}
   .element tag attributes text (children ++ feedback) behavior
@@ -106,7 +131,12 @@ def ofView (state : Interaction.State := {}) : View → Node
   | .computed label value => element .div
       [element .label [text .output value] (text := some label)] [.cssClass "computed"]
 
-def page (view : View) (state : Interaction.State) (count : Nat) (result : String) : Node :=
+def page
+ (view : View)
+ (state : Interaction.State)
+ (count : Nat)
+ (result : String)
+ : Node :=
   let disabled := if state.pending then [Attribute.disabled] else []
   element .div [
     element .header [text .span "LEAN FORMS" [.cssClass "brand"]],

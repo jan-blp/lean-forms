@@ -10,15 +10,23 @@ open Lean
 deriving instance ToJson, FromJson for DisplayLayout.Tag
 
 inductive DomArgument where
-  | none | value | checked
+  | none
+  | value
+  | checked
   deriving ToJson, FromJson
 
 inductive BindingCommand where
-  | apply | draft | submit | reset
+  | apply
+  | draft
+  | submit
+  | reset
   deriving ToJson, FromJson
 
 inductive DomEvent where
-  | click | input | change | submit
+  | click
+  | input
+  | change
+  | submit
   deriving ToJson, FromJson
 
 structure Binding where
@@ -29,24 +37,27 @@ structure Binding where
   argument : DomArgument
   deriving ToJson, FromJson
 
-inductive DisplayView where
+inductive Node where
   | element (tag : DisplayLayout.Tag) (attributes : List (String × String))
-      (children : List (Option DisplayView)) (bindings : List Binding)
+      (children : List (Option Node)) (bindings : List Binding)
       (text : Option String) (value : Option String) (checked : Option Bool) (focusKey : Option String)
   deriving ToJson, FromJson
 
-inductive FormEvent where
+inductive Event where
   | apply (key : String) (argument : Json)
   | draft (key argument : String)
-  | submit | reset
+  | submit
+  | reset
   | complete (status : Nat) (body : String)
   | failed (message : String)
   deriving ToJson, FromJson
 
-inductive FormRequest where
-  | event (message : FormEvent)
+inductive Command where
+  | event (message : Event)
   | apply (key : String) (argument : Json)
-  | reset | validate | inspect
+  | reset
+  | validate
+  | inspect
   | serverError (status : Nat) (body : String)
   deriving ToJson, FromJson
 
@@ -58,7 +69,7 @@ structure CompiledDescriptor where
 
 inductive Request where
   | open (descriptor : CompiledDescriptor)
-  | send (handle : String) (request : FormRequest)
+  | send (handle : String) (request : Command)
   | dispose (handle : String)
   deriving ToJson, FromJson
 
@@ -82,7 +93,7 @@ Contains the display, feedback, submission payload, and HTTP effects for the
 browser to perform. -/
 structure Snapshot where
   title : String
-  view : Option DisplayView
+  view : Option Node
   render : Bool
   focus : Option String
   effects : List HttpEffect

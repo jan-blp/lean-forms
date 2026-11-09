@@ -7,8 +7,11 @@ public import Forms.Runtime.Wire
 
 @[expose] public section
 
-namespace Forms.Runtime.DisplayProtocol
-open Lean Display
+namespace Forms.Runtime
+open Lean
+
+namespace DisplayProtocol
+open Display
 
 def controlKey (target : Target) : ControlKey :=
   ⟨(toJson target.indices).compress⟩
@@ -51,20 +54,24 @@ def sourceFields : DisplayLayout.Source → String × Wire.DomArgument
   | .value id => (id.value, .value)
   | .checked id => (id.value, .checked)
 
-def bindingToWire : DisplayLayout.Binding → Wire.Binding
+end DisplayProtocol
+
+open DisplayProtocol
+
+def DisplayLayout.Binding.toWire : DisplayLayout.Binding → Wire.Binding
   | .page command => ⟨.click, (match command with | .submit => .submit | .reset => .reset), "", "", .none⟩
   | .draft key id => ⟨.input, .draft, key.value, id.value, .value⟩
   | .change key source => let (id, argument) := sourceFields source; ⟨.change, .apply, key.value, id, argument⟩
   | .submit key source => let (id, argument) := sourceFields source; ⟨.submit, .apply, key.value, id, argument⟩
 
-def layoutToWire : DisplayLayout.Node → Option Wire.DisplayView
+def DisplayLayout.Node.toWire : DisplayLayout.Node → Option Wire.Node
   | .hidden => none
   | .element tag attributes text children behavior =>
     let (value, checked) := match behavior.input with
       | .none => (none, none)
       | .value value => (some value, none)
       | .checked checked => (none, some checked)
-    some (.element tag (attributes.map attributePair) (children.map layoutToWire)
-      (behavior.bindings.map bindingToWire) text value checked (behavior.focusKey.map (·.value)))
+    some (.element tag (attributes.map attributePair) (children.map toWire)
+      (behavior.bindings.map (·.toWire)) text value checked (behavior.focusKey.map (·.value)))
 
-end Forms.Runtime.DisplayProtocol
+end Forms.Runtime

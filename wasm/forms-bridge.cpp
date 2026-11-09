@@ -22,7 +22,6 @@ extern "C" void forms_init() {
 // Test instrumentation for model disposal.
 extern "C" unsigned forms_allocated_bytes() { return mallinfo().uordblks; }
 
-// Explicit lengths preserve embedded NULs, which the JSON parser must reject.
 extern "C" const char * forms_request(const char * request, size_t request_len) {
     lean_object * result = forms_handle_request(lean_mk_string_from_bytes(request, request_len));
     if (lean_io_result_is_error(result)) {

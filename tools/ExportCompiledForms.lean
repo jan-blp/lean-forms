@@ -18,10 +18,10 @@ public def main : IO Unit := do
   let cases ← controls.mapM fun control => do
     let fields ← IO.ofExcept (actionArgument control)
     let action := Json.mkObj (("key", toJson control.key.value) :: fields)
-    let (updated, _) ← IO.ofExcept (PersonProtocol.execute state
+    let (updated, _) ← IO.ofExcept (PersonProtocol.execute formFingerprint state
       (.apply control.key.value ((fields.lookup "argument").getD Json.null)))
-    pure (Json.mkObj [("action", action), ("expected", toJson (PersonProtocol.snapshot updated))])
+    pure (Json.mkObj [("action", action), ("expected", toJson (PersonProtocol.snapshot formFingerprint updated))])
   let typed := Json.mkObj [
     ("descriptor", PersonProtocol.descriptor formFingerprint),
-    ("initial", toJson (PersonProtocol.snapshot state)), ("cases", toJson cases)]
+    ("initial", toJson (PersonProtocol.snapshot formFingerprint state)), ("cases", toJson cases)]
   IO.println (toJson [typed]).compress

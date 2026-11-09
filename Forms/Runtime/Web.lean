@@ -169,7 +169,7 @@ def run
   let app : Application := {
     compiledForm := PersonProtocol.descriptor ExampleForms.formFingerprint
     logger := ← TrafficLog.Logger.create
-    form := { submit := PersonProtocol.verifySubmission }
+    form := { submit := PersonProtocol.verifySubmission ExampleForms.formFingerprint }
     html := ← IO.FS.readFile "web/index.html"
     script := ← IO.FS.readFile "web/dist/app.js"
     wasmAdapter := ← IO.FS.readFile "web/dist/wasm.js"

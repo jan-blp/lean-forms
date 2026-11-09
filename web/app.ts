@@ -1,5 +1,5 @@
 import { openCompiledForm } from './wasm.js';
-import type { CompiledDescriptor, DisplayView, Snapshot, FormEvent } from './protocol.js';
+import type * as Wire from './protocol.js';
 
 const root = document.querySelector('main')!;
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -8,7 +8,7 @@ function fail(error: unknown) {
 }
 
 function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
-  async function dispatch(event: FormEvent) {
+  async function dispatch(event: Wire.Event) {
     try {
       const snapshot = model.send({ event: { message: event } });
       if (snapshot.render) render(snapshot);
@@ -20,9 +20,9 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
       }
     } catch (error) { fail(error); }
   }
-  function render(snapshot: Snapshot) {
+  function render(snapshot: Wire.Snapshot) {
     let focus: HTMLElement | undefined;
-    function node(tree: DisplayView | null): HTMLElement | DocumentFragment {
+    function node(tree: Wire.Node | null): HTMLElement | DocumentFragment {
       if (!tree) return document.createDocumentFragment();
       const view = tree.element;
       const element = document.createElement(view.tag);
@@ -53,7 +53,7 @@ function mount(model: Awaited<ReturnType<typeof openCompiledForm>>) {
 try {
   const response = await fetch('/api/compiled-form');
   if (!response.ok) throw new Error('Could not load the form.');
-  const model = await openCompiledForm(await response.json() as CompiledDescriptor);
+  const model = await openCompiledForm(await response.json() as Wire.CompiledDescriptor);
   mount(model);
   window.addEventListener('pagehide', event => { if (!event.persisted) model.dispose(); });
 } catch (error) { fail(error); }

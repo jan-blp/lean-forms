@@ -22,24 +22,25 @@ structure RegisteredForm where
 
 /-- An open form. -/
 structure FormInstance where
-  execute : Wire.FormRequest → Except String (FormInstance × Wire.Snapshot)
+  execute : Wire.Command → Except String (FormInstance × Wire.Snapshot)
 
 instance : Inhabited FormInstance := ⟨.mk fun _ => .error "Uninitialized form"⟩
 
-def RegisteredForm.toWire (form : RegisteredForm) (name : String)
+def RegisteredForm.toWire (form : RegisteredForm) (name fingerprint : String)
     (snapshot : ModelForm.Snapshot form.definition.Raw) : Wire.Snapshot :=
   letI := form.definition.encode
-  snapshot.toWire name form.submitUrl
+  snapshot.toWire name fingerprint form.submitUrl
 
-partial def RegisteredForm.instance (form : RegisteredForm) (name : String)
+partial def RegisteredForm.instance (form : RegisteredForm) (name fingerprint : String)
     (state : form.definition.State) : FormInstance :=
   .mk fun request => do
-    let command ← ModelProtocol.commandFromWire request
+    let command ← ModelForm.Command.fromWire request
     let (state, snapshot) ← form.definition.execute state command
-    pure (form.instance name state, form.toWire name snapshot)
+    pure (form.instance name fingerprint state, form.toWire name fingerprint snapshot)
 
-def RegisteredForm.open (form : RegisteredForm) (name : String) (value : Json) : Except String (FormInstance × Wire.Snapshot) := do
+def RegisteredForm.open (form : RegisteredForm) (name fingerprint : String) (value : Json) :
+    Except String (FormInstance × Wire.Snapshot) := do
   let (state, snapshot) ← form.definition.openState value
-  pure (form.instance name state, form.toWire name snapshot)
+  pure (form.instance name fingerprint state, form.toWire name fingerprint snapshot)
 
 end Forms.Runtime

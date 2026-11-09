@@ -160,8 +160,9 @@ try {
     await wait(() => document.querySelector('#status').textContent === 'Submitted successfully.');
     check(field('Age').querySelector('input').value === '21', 'Reset ran while pending');
     window.fetch = originalFetch;
+    const { fingerprint } = await (await fetch('/api/compiled-form')).json();
     const forged = await fetch('/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ form: 'person', value: { name: 'Forged', age: 150,
+      body: JSON.stringify({ form: 'person', fingerprint, value: { name: 'Forged', age: 150,
         delivery: false, address: { street: 'Campus' } } }) });
     check(forged.status === 422, 'Server accepted an invalid model');
     check((await forged.json()).error.message === 'Age must be at most 120.', 'Server validation did not run');

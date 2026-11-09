@@ -7,7 +7,9 @@ public import Forms.Runtime.Identity
 namespace Forms.Runtime.Interaction
 
 inductive Submission where
-  | idle | requested | pending
+  | idle
+  | requested
+  | pending
   deriving Inhabited
 
 inductive Notice where

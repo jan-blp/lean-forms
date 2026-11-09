@@ -71,7 +71,7 @@ def session(example):
             assert status == 405 and headers['Allow'] == 'POST', (method, status, headers)
         assert request('/api/submit', raw=b'{')[0] == 400
         assert request('/api/submit', raw=b'x' * (1024 * 1024 + 1))[0] == 413
-        initial = {'form': example, 'value': descriptor['value']}
+        initial = {'form': example, 'fingerprint': descriptor['fingerprint'], 'value': descriptor['value']}
         status, headers, body = request('/api/submit', initial)
         assert status == 204 and body == ''
         assert 'Content-Type' not in headers
@@ -95,9 +95,13 @@ model.dispose();
         assert submission['value']['name'] == 'Grace'
         assert submission['value']['address'] == {'street': 'Campus'}
         assert request('/api/submit', submission)[0] == 204
-        for invalid in [{}, {'form': 'missing', 'value': descriptor['value']},
-                        {'form': example, 'value': False},
-                        {'form': example, 'value': {**descriptor['value'], 'age': '20'}}]:
+        assert submission['fingerprint'] == descriptor['fingerprint']
+        for stale in [{'form': example, 'value': descriptor['value']}, {**initial, 'fingerprint': 'compiled-2-0'}]:
+            status, _, body = request('/api/submit', stale)
+            assert status == 422 and json.loads(body)['error'] == {
+                'kind': 'request', 'message': 'This form is out of date. Reload the page.'}
+        for invalid in [{}, {**initial, 'form': 'missing'}, {**initial, 'value': False},
+                        {**initial, 'value': {**descriptor['value'], 'age': '20'}}]:
             status, _, body = request('/api/submit', invalid)
             assert status == 422 and json.loads(body)['error']['kind'] == 'request'
         for changes, message, fields in [

@@ -56,7 +56,8 @@ structure Empty where
   deriving FormModel
 
 inductive Choice where
-  | yes | no
+  | yes
+  | no
   deriving FormModel
 
 structure Pair where
