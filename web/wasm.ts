@@ -1,4 +1,4 @@
-import type * as Wire from './protocol.js';
+import type * as Wire from './protocol/Forms/Runtime/Wire.js';
 
 interface WasmModule {
   _forms_init(): void;

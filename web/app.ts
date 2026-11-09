@@ -1,5 +1,5 @@
 import { openCompiledForm } from './wasm.js';
-import type * as Wire from './protocol.js';
+import type * as Wire from './protocol/Forms/Runtime/Wire.js';
 
 const root = document.querySelector('main')!;
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);

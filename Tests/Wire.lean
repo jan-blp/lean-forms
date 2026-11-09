@@ -48,13 +48,22 @@ def run : IO Unit := do
   let child := Node.element .input [] [] [] none (some "hello") none (some "key")
   roundtrip (Node.element .div [("class", "form")] [none, some child]
     [⟨.input, .draft, "key", "input", .value⟩] (some "title") none none none)
-  check "Generated schema omitted dependencies" ((typescript% [Forms.Runtime.Wire.Command]).declarations.any (·.name == "Event"))
-  check "Optional structure field was not optional in TS" ((typescript% [OptionalSample]).pretty.contains "\"omitted\"?: string")
+  check "Generated schema omitted dependencies" ((typescript% [Forms.Runtime.Wire.Command]).modules.any
+    (·.declarations.any (·.name == "Event")))
   let schema := typescript% [OptionalSample]
-  check "Generated optional fields have wrong AST" (schema.declarations == [
+  check "Optional structure field was not optional in TS" (schema.modules.any (·.pretty.contains "\"omitted\"?: string"))
+  check "Generated optional fields have wrong AST" (schema.modules == [⟨["Tests", "Wire"], [
     ⟨"OptionalSample", .object [
-      .mk "required" (.union .string .null []), .mk "omitted" .string true]⟩])
-  let nested : TS.Type := .array (.union (.reference "Node") .null [])
+      .mk "required" (.union .string .null []), .mk "omitted" .string true]⟩]⟩])
+  let wire := (typescript% [Forms.Runtime.Wire.Node]).modules
+  check "Types were not grouped by namespace" (wire.map (·.file) ==
+    ["Forms/Runtime/Wire.ts", "Forms/Runtime/DisplayLayout.ts"])
+  check "Cross-namespace reference was not imported" (wire.any fun m => m.file == "Forms/Runtime/Wire.ts" &&
+    m.pretty.contains "import type * as DisplayLayout from \"./DisplayLayout.js\";" &&
+    m.pretty.contains "\"tag\": DisplayLayout.Tag")
+  check "Relative import paths changed" (TS.relativeImport ["A", "B", "C"] ["A", "D", "E"] == "../D/E.js" &&
+    TS.relativeImport ["A", "B"] ["A", "B", "C"] == "./B/C.js" && TS.relativeImport ["A", "B", "C"] ["A", "B"] == "../B.js")
+  let nested : TS.Type := .array (.union (.reference [] "Node") .null [])
   check "Array union precedence changed" (nested.pretty == "(Node | null)[]")
   check "Nested array printing changed" ((TS.Type.array nested).pretty == "(Node | null)[][]")
   check "Tuple printing changed" ((TS.Type.tuple [.string, nested]).pretty ==

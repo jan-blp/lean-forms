@@ -12,6 +12,11 @@ open Lean Meta Elab TS
 
 private def fieldName (name : Name) : String := name.eraseMacroScopes.getString!
 
+/-- The Lean namespace of `name`, which selects its TypeScript module. -/
+private def modulePath (name : Name) : MetaM (List String) := do
+  if name.getPrefix.isAnonymous then throwError "TypeScript types need a namespace: {name}"
+  return name.getPrefix.components.map Name.getString!
+
 private partial def tsType (type : Expr) : MetaM TS.Type := do
   let fn := type.getAppFn.constName!
   let args := type.getAppArgs
@@ -26,7 +31,7 @@ private partial def tsType (type : Expr) : MetaM TS.Type := do
   let info ← getConstInfoInduct fn
   unless info.numIndices == 0 && info.numParams == 0 do
     throwError "Indexed types belong behind the wire boundary: {type}"
-  return .reference fn.getString!
+  return .reference (← modulePath fn) fn.getString!
 
 private def tsField (name : String) (type : Expr) (isStruct : Bool) : MetaM Property := do
   if isStruct && name.endsWith "?" then
@@ -68,8 +73,6 @@ private partial def collectTypes (type : Expr) (seen : Array Name) : MetaM (Arra
     type.getAppArgs.foldlM (fun seen arg => collectTypes arg seen) seen
   else
     if seen.contains fn then return seen
-    if seen.any (fun name => name.getString! == fn.getString!) then
-      throwError "Duplicate TypeScript type name: {fn.getString!}"
     let info ← getConstInfoInduct fn
     unless info.numParams == 0 && info.numIndices == 0 do throwError "Unsupported wire type: {type}"
     let mut seen := seen.push fn
@@ -83,7 +86,19 @@ elab "typescript%" "[" names:ident,* "]" : term => do
   let mut types := #[]
   for name in names.getElems do
     types ← collectTypes (← Term.elabType name) types
-  let declarations ← types.toList.mapM fun name => declaration name
-  return toExpr (Module.mk declarations)
+  let mut modules : Array TS.Module := #[]
+  for name in types do
+    let path ← modulePath name
+    let decl ← declaration name
+    modules := match modules.findIdx? (·.path == path) with
+      | some i => modules.modify i fun m => { m with declarations := m.declarations ++ [decl] }
+      | none => modules.push ⟨path, [decl]⟩
+  for module in modules do
+    let mut taken := module.declarations.map (·.name)
+    for path in module.imports do
+      if taken.contains (alias path) then
+        throwError "TypeScript import alias {alias path} clashes in {module.file}"
+      taken := alias path :: taken
+  return toExpr (Program.mk modules.toList)
 
 end Forms.Protocol
