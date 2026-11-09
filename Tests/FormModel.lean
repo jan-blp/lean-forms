@@ -65,6 +65,28 @@ inductive Choice where
   | no
   deriving FormModel
 
+structure Line where
+  amount : Nat
+  amount_valid : 1 ≤ amount
+  deriving FormModel
+
+instance : ConstraintRule Line.Constraint.amount_valid where
+  check parts :=
+    if h : 1 ≤ parts.amount then .valid h
+    else .invalid (proof := h) (message := "Enter an amount.")
+      (targets := locations[Line.Field.amount])
+
+structure Basket where
+  lines : List Line
+  lines_valid : 0 < lines.length
+  deriving FormModel
+
+instance : ConstraintRule Basket.Constraint.lines_valid where
+  check parts :=
+    if h : 0 < parts.lines.length then .valid h
+    else .invalid (proof := h) (message := "Add a line.")
+      (targets := locations[Basket.Field.lines])
+
 inductive Single where
   | only (count : Nat)
   deriving FormModel
@@ -156,6 +178,10 @@ public def run : IO Unit := do
   check "ModelNestedPathUpdate" (street.get updated == "Road" && updated.age == 20)
   check "ModelPathLensUpdate"
     (LeanLens.view street.toLens (LeanLens.set street.toLens "Road" good) == "Road")
+  check "ModelListValid" ((Basket.validate ⟨[⟨1⟩, ⟨2⟩]⟩).toOption.any (·.val.lines.length == 2))
+  check "ModelListItemErrors" ((errors (Basket.validate ⟨[⟨1⟩, ⟨0⟩, ⟨0⟩]⟩)).map targetKeys ==
+    [[["lines", "1", "amount"]], [["lines", "2", "amount"]]])
+  check "ModelListConstraint" ((errors (Basket.validate ⟨[]⟩)).map targetKeys == [[["lines"]]])
   check "DeriveProjectActiveConstructor"
     ((Constructors.project Delivery.Constructor.campus (Delivery.Raw.campus ⟨20⟩)).map (·.age) == some 20)
   check "DeriveProjectOtherConstructor"
@@ -217,10 +243,14 @@ deriving instance FormModel for Recursive
 
 structure Container where
   values : List String
+  deriving FormModel
 
-/-- error: Unsupported FormModel field type: List String -/
+structure OptionalField where
+  value : Option String
+
+/-- error: Unsupported FormModel field type: Option String -/
 #guard_msgs in
-deriving instance FormModel for Container
+deriving instance FormModel for OptionalField
 
 structure FunctionField where
   value : Nat → Nat

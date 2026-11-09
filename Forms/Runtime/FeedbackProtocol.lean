@@ -11,13 +11,15 @@ open Lean Feedback
 def locationToJson (location : Location) : Json :=
   toJson (location.map fun step => match step with
     | .field name => Json.mkObj [("kind", toJson "field"), ("name", toJson name)]
-    | .constructor tag => Json.mkObj [("kind", toJson "constructor"), ("tag", toJson tag)])
+    | .constructor tag => Json.mkObj [("kind", toJson "constructor"), ("tag", toJson tag)]
+    | .index position => Json.mkObj [("kind", toJson "index"), ("position", toJson position)])
 
 def locationFromJson (json : Json) : Except String Location := do
   (← json.getArr?).toList.mapM fun step => do
     match ← step.getObjValAs? String "kind" with
     | "field" => pure (.field (← step.getObjValAs? String "name"))
     | "constructor" => pure (.constructor (← step.getObjValAs? String "tag"))
+    | "index" => pure (.index (← step.getObjValAs? Nat "position"))
     | _ => throw "Invalid location step"
 
 def errorToJson (error : Error) : Json :=

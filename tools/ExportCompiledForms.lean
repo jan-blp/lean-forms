@@ -10,6 +10,7 @@ private def actionArgument (input : Display.Editor) : Json :=
   | .natural n => toJson ("00" ++ toString (n + 123456789012345678901234567890))
   | .text text => toJson (text ++ " 🌍\x00")
   | .checkbox value => toJson (!value)
+  | .action => Json.null
   | .choice selected options => toJson ((options.find? (·.value != selected)).map (·.value) |>.getD selected)
 
 /-- The initial snapshot, and the snapshot after applying an argument to each control. -/

@@ -67,12 +67,13 @@ def serve(example):
 
 
 def validation_error(request, submission, message, steps):
-    """`steps` are field names, or `('constructor', tag)` for a sum's branch."""
+    """`steps` are field names, `('constructor', tag)` for a sum's branch, or `('index', n)` for a list item."""
     status, _, body = request('/api/submit', submission)
     assert status == 422, (status, body)
     error = json.loads(body)['error']
     assert error['kind'] == 'validation' and error['message'] == message, error
-    location = [{'kind': 'constructor', 'tag': s[1]} if isinstance(s, tuple) else {'kind': 'field', 'name': s}
+    names = {'constructor': 'tag', 'index': 'position'}
+    location = [{'kind': s[0], names[s[0]]: s[1]} if isinstance(s, tuple) else {'kind': 'field', 'name': s}
                 for s in steps]
     assert error['errors'] == [{'message': message, 'targets': {
         'kind': 'locations', 'locations': [location]}}], error
@@ -98,6 +99,22 @@ def order_session():
             validation_error(request, {**initial, 'value': {**value, **changes}}, message, fields)
         status, _, body = request('/api/submit', {**initial, 'form': 'person'})
         assert status == 422 and json.loads(body)['error']['kind'] == 'request'
+
+
+def expenses_session():
+    with serve('expenses') as (request, descriptor, _):
+        initial = {'form': 'expenses', 'fingerprint': descriptor['fingerprint'], 'value': descriptor['value']}
+        assert request('/api/submit', initial)[0] == 204
+        value = descriptor['value']
+        taxi = {'description': 'Taxi', 'amount': 150, 'receipt': False}
+        for changes, message, steps in [
+            ({'expenses': []}, 'Add at least one expense.', ['expenses']),
+            ({'expenses': [*value['expenses'], taxi]}, 'Attach a receipt for CHF 100 or more.',
+             ['expenses', ('index', 2), 'receipt']),
+            ({'expenses': [{**taxi, 'amount': 6000, 'receipt': True}]}, "A report is limited to CHF 5'000.",
+             ['expenses']),
+        ]:
+            validation_error(request, {**initial, 'value': {**value, **changes}}, message, steps)
 
 
 def session(example):
@@ -279,7 +296,8 @@ browser_flag(1)
 
 session('person')
 order_session()
+expenses_session()
 terminal_colors()
 terminal_colors(no_color=True)
 terminal_colors(term='dumb')
-print('PASS: HTTP traffic, person and order validation, request errors, terminal colors, NO_COLOR, and --open')
+print('PASS: HTTP traffic, person, order and expenses validation, request errors, terminal colors, NO_COLOR, and --open')

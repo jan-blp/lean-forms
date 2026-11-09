@@ -44,6 +44,14 @@ inductive Component : Type → Type 1 where
       (label : String)
       (branches : Branches sum)
       : Component raw
+  /-- Edits each item of the list at `path` with `body`; added items start from `initial`. -/
+  | list
+      {raw item : Type}
+      (path : Path raw (List item))
+      (label itemLabel : String)
+      (initial : item)
+      (body : Component item)
+      : Component raw
 
 inductive Components : Type → Type 1 where
   | nil {raw : Type} : Components raw

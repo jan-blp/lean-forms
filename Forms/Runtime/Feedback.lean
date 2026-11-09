@@ -10,6 +10,7 @@ namespace Forms.Runtime.Feedback
 inductive Step where
   | field (name : String)
   | constructor (tag : String)
+  | index (position : Nat)
   deriving BEq, DecidableEq
 
 abbrev Location := List Step

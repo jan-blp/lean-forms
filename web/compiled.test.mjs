@@ -330,3 +330,40 @@ test('order chooses shipping branches, nests visibility, and validates, alongsid
     assert.equal(person.snapshot().submission.value.name, 'Ada');
   } finally { order.dispose(); person.dispose(); }
 });
+
+test('expenses add, remove, and validate list items', async () => {
+  const model = await open(fixture('expenses').descriptor);
+  const key = (label, nth = 0) => model.snapshot().controls.filter(c => c.label === label)[nth].key;
+  const apply = (label, argument, nth = 0) =>
+    model.send({ event: { message: { apply: { key: key(label, nth), argument } } } });
+  const submit = () => model.send({ event: { message: 'submit' } });
+  const expenses = () => model.snapshot().submission.value.expenses;
+  const outputs = () => JSON.stringify(page(model).body);
+  try {
+    assert.match(outputs(), /CHF 238/);
+    apply('Add expense', null);
+    assert.deepEqual(expenses().at(-1), { description: '', amount: 0, receipt: false });
+    assert.deepEqual(page(model).body[0].group.children[1].group.children.map(c => c.group?.label ?? c.button.label),
+      ['Expense 1', 'Expense 2', 'Expense 3', 'Add expense']);
+    submit();
+    assert.deepEqual(messages(model.snapshot().view), ['Describe the expense.', 'Enter an amount of at least CHF 1.']);
+    assert.deepEqual(model.snapshot().errors[0].targets.locations[0],
+      [{ kind: 'field', name: 'expenses' }, { kind: 'index', position: 2 }, { kind: 'field', name: 'description' }]);
+    apply('Description', 'Taxi', 2);
+    apply('Amount (CHF)', '5000', 2);
+    assert.deepEqual(messages(model.snapshot().view),
+      ['Attach a receipt for CHF 100 or more.', "A report is limited to CHF 5'000."]);
+    apply('Receipt attached', true, 2);
+    apply('Remove', null, 0);
+    assert.deepEqual(expenses().map(e => e.description), ['Hotel', 'Taxi']);
+    assert.match(outputs(), /CHF 5'180/);
+    apply('Remove', null, 1);
+    apply('Remove', null, 0);
+    assert.deepEqual(expenses(), []);
+    submit();
+    assert.deepEqual(messages(model.snapshot().view), ['Add at least one expense.']);
+    assert.equal(model.snapshot().effects.length, 0);
+    model.send('reset');
+    assert.equal(expenses().length, 2);
+  } finally { model.dispose(); }
+});

@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.Component
+public import Forms.ExampleForms.Format
 public meta import Forms.Model.Derive
 
 @[expose] public section
@@ -102,16 +103,6 @@ instance Order.express_valid_rule : ConstraintRule Order.Constraint.express_vali
     if h : parts.shipping.isExpress = true → parts.quantity ≤ 10 then .valid h
     else .invalid (proof := h) (message := "Express shipping is limited to 10 items.")
       (targets := locations[Order.Field.quantity])
-
-/-- Swiss thousands separators, e.g. `12'345`. -/
-def swiss (n : Nat) : String :=
-  if n < 1000 then toString n
-  else
-    let rest := n % 1000
-    let pad := if rest < 10 then "00" else if rest < 100 then "0" else ""
-    swiss (n / 1000) ++ "'" ++ pad ++ toString rest
-termination_by n
-decreasing_by omega
 
 def Order.initial : Order.Raw :=
   ⟨⟨"Grace Hopper", "grace@example.com"⟩, 2, 45, false, "", .standard ⟨⟨"Bahnhofstrasse 1", "Zürich"⟩⟩⟩

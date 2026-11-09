@@ -133,11 +133,18 @@ inductive Location : (raw : Type) → raw → Type 1 where
       (constructor : Constructors.Constructor raw payload)
       (rest : Location payload value)
       : Location raw (Constructors.inject constructor value)
+  | index
+      {item : Type}
+      {value : List item}
+      (position : Fin value.length)
+      (rest : Location item (value.get position))
+      : Location (List item) value
 
 def Location.keys {raw : Type} {value : raw} : Location raw value → List String
   | .self => []
   | @field _ _ inst _ f rest => @Fields.key _ inst _ f :: rest.keys
   | @constructor _ _ inst _ c rest => @Constructors.key _ inst _ c :: rest.keys
+  | index position rest => toString position.val :: rest.keys
 
 inductive Targets (raw : Type) (value : raw) where
   | global
@@ -239,5 +246,23 @@ def errors {error value : Type _} : Except (List error) value → List error
 instance : Validation String := ⟨fun value => .ok ⟨value, rfl⟩⟩
 instance : Validation Bool := ⟨fun value => .ok ⟨value, rfl⟩⟩
 instance : Validation Nat := ⟨fun value => .ok ⟨value, rfl⟩⟩
+
+@[reducible] instance {α : Type} [FormModel α] : FormModel (List α) :=
+  ⟨List (FormModel.Raw α), List.map FormModel.erase⟩
+
+/-- Validates every item; errors point at their item's position. -/
+instance {α : Type} [FormModel α] [Validation α] : Validation (List α) where
+  validate raw :=
+    let results (position : Fin raw.length) := Validation.validate (model := α) (raw.get position)
+    if valid : ∀ position, (results position).isOk then
+      let values (position : Fin raw.length) : Validated α (raw.get position) :=
+        match results position, valid position with
+        | .ok value, _ => value
+        | .error _, h => nomatch h
+      .ok ⟨List.ofFn fun position => (values position).val, by
+        simp [FormModel.erase, Function.comp_def, (values _).property]⟩
+    else
+      .error ((List.finRange raw.length).flatMap fun position =>
+        (errors (results position)).map (Error.mapLocations (.index position)))
 
 end Forms.Model

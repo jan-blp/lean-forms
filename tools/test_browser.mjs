@@ -233,6 +233,45 @@ try {
     check(!field('Street') && text().includes('Store, Bahnhofstrasse 1'), 'Pickup branch not shown');
   `);
 
+  await example('expenses', `
+    const status = () => document.querySelector('#status').textContent;
+    const text = () => document.body.textContent;
+    const item = n => [...document.querySelectorAll('fieldset')].find(f => f.querySelector('legend').textContent === 'Expense ' + n);
+    const input = (n, label) => [...item(n).querySelectorAll('.editor')]
+      .find(e => e.querySelector('label').firstChild.textContent === label)?.querySelector('input');
+    const button = (root, label) => [...root.querySelectorAll('button')].find(b => b.textContent === label);
+    check(item(1) && item(2) && !item(3), 'Wrong initial items');
+    check(text().includes('CHF 238'), 'Missing total');
+    // An unapplied edit survives removing an earlier item: buttons apply drafts first.
+    await type(input(2, 'Description'), 'Hotel Zürich');
+    button(item(1), 'Remove').click(); await tick();
+    check(!item(2) && input(1, 'Description').value === 'Hotel Zürich', 'Draft lost or moved on remove');
+    button(document, 'Add expense').click(); await tick();
+    check(item(2) && input(2, 'Description').value === '', 'Added item missing');
+    await click('[data-action=submit]');
+    await wait(() => status().includes('Describe the expense.'));
+    check(input(2, 'Description').getAttribute('aria-invalid') === 'true', 'Missing item feedback');
+    check(input(1, 'Description').getAttribute('aria-invalid') === null, 'Feedback on the wrong item');
+    await type(input(2, 'Description'), 'Dinner');
+    await type(input(2, 'Amount (CHF)'), '120');
+    await click('[data-action=submit]');
+    await wait(() => status() === 'Attach a receipt for CHF 100 or more.');
+    input(2, 'Receipt attached').click(); await tick();
+    button(item(1), 'Remove').click(); await tick();
+    button(item(1), 'Remove').click(); await tick();
+    await click('[data-action=submit]');
+    await wait(() => status() === 'Add at least one expense.');
+    check(document.querySelector('fieldset[aria-invalid=true] legend').textContent === 'Expenses',
+      'Missing list feedback');
+    button(document, 'Add expense').click(); await tick();
+    await type(input(1, 'Description'), 'Lunch');
+    await type(input(1, 'Amount (CHF)'), '25');
+    await click('[data-action=submit]');
+    await wait(() => status() === 'Submitted successfully.');
+    const submitted = JSON.parse(document.querySelector('#result pre').textContent);
+    check(submitted.expenses.length === 1 && submitted.expenses[0].amount === 25, 'Submitted value wrong');
+  `);
+
 } finally {
   socket?.close();
   await Promise.all([stop(firefox), stop(server)]);

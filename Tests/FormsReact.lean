@@ -53,8 +53,10 @@ def expected : FormsReact.Component :=
             checked := true
             disabled := false
             error := none
-            onChange := .apply "delivery" }] },
-      .output { label := "Summary", value := "Ada, 36" }] }
+            onChange := .apply "delivery" }]
+        error := none },
+      .output { label := "Summary", value := "Ada, 36" }]
+    error := none }
 
 def run : IO Unit := do
   check "Lowering changed" (view.toReact false == some expected)

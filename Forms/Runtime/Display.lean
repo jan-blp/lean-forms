@@ -27,6 +27,8 @@ inductive Editor where
   | checkbox (value : Bool)
   /-- `selected` is the active option's `value`, or empty when no option matches. -/
   | choice (selected : String) (options : List ChoiceOption)
+  /-- A button; its argument is ignored. -/
+  | action
   deriving BEq
 
 structure Control where
@@ -44,12 +46,15 @@ inductive View where
   | control (control : Control)
   | stack (label : Option String) (children : List View)
   | computed (label text : String)
+  /-- Items, then the add button; `messages` are about the list as a whole. -/
+  | list (label : String) (children : List View) (messages : Option String)
   deriving BEq
 
 def View.title (view : View) : String :=
   let label := match view with
     | .control c => c.label
     | .stack label _ => label.getD ""
+    | .list label .. => label
     | .computed label .. => label
     | _ => ""
   if label.isEmpty then "Form" else label

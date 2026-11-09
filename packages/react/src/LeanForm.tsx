@@ -74,20 +74,28 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
     return next;
   }
 
+  /** Applies every editable draft; false when Lean rejects one. */
+  function commitDrafts(): boolean {
+    let current = snapshot;
+    for (const [name, text] of drafts) {
+      if (!current.draftFields.includes(name)) continue;
+      const next = commit(name, text);
+      if (!next) return false;
+      current = next;
+    }
+    return true;
+  }
+
+  /** Buttons (no `argument`) apply drafts first: they may reshape the form, e.g. remove a list item. */
   function run(action: FormsReact.Action, argument?: unknown) {
     try {
       if (action === 'reset') {
         setDrafts(new Map());
         send('reset');
       } else if (action === 'submit') {
-        let current = snapshot;
-        for (const [name, text] of drafts) {
-          if (!current.draftFields.includes(name)) continue;
-          const next = commit(name, text);
-          if (!next) return;
-          current = next;
-        }
-        send('submit');
+        if (commitDrafts()) send('submit');
+      } else if (argument === undefined) {
+        if (commitDrafts()) commit(action.apply.name, null);
       } else commit(action.apply.name, argument);
     } catch (error) { onFailure(error); }
   }

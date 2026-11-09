@@ -69,9 +69,16 @@ export function Button({ label, variant, disabled, onClick }: FormsReact.Button)
   );
 }
 
-export function Group({ label, children }: FormsReact.Group) {
-  if (label === null) return <div className="stack"><Children components={children} /></div>;
-  return <fieldset className="component"><legend>{label}</legend><Children components={children} /></fieldset>;
+export function Group({ label, children, error }: FormsReact.Group) {
+  const feedback = useId();
+  const message = error !== null && <p className="validation-error" id={feedback}>{error}</p>;
+  if (label === null) return <div className="stack"><Children components={children} />{message}</div>;
+  return (
+    <fieldset className="component" aria-invalid={error === null ? undefined : true}
+      aria-describedby={error === null ? undefined : feedback}>
+      <legend>{label}</legend><Children components={children} />{message}
+    </fieldset>
+  );
 }
 
 export function Page({ title, busy, body, toolbar, notice, result }: FormsReact.Page) {

@@ -84,10 +84,11 @@ structure Button where
   deriving ToJson, FromJson, BEq, Repr
 
 mutual
-/-- Children grouped under an optional legend. -/
+/-- Children grouped under an optional legend; `error` is about the group as a whole. -/
 structure Group where
   label : Option String
   children : List Component
+  error : Option String
 
 structure Page where
   title : String

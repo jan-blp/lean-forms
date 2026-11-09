@@ -30,12 +30,15 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       disabled
       error := c.messages
       onChange := .apply name }
+  | .action => .button { label := c.label, variant := .secondary, disabled, onClick := .apply name }
 
 def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
   | .hidden => none
   | .control c => some (c.toReact pending)
   | .stack label children => some (.group
-      { label := label.filter (!·.isEmpty), children := children.filterMap (·.toReact pending) })
+      { label := label.filter (!·.isEmpty), children := children.filterMap (·.toReact pending), error := none })
+  | .list label children messages => some (.group
+      { label := some label, children := children.filterMap (·.toReact pending), error := messages })
   | .computed label value => some (.output { label, value })
 
 /-- The whole page: `view` plus toolbar, notice and submitted `result`. -/

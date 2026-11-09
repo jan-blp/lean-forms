@@ -51,6 +51,7 @@ def location {raw : Type} {value : raw} : Model.Location raw value → Feedback.
   | .self => []
   | @Model.Location.field _ _ inst _ f rest => .field (@Fields.key _ inst _ f) :: location rest
   | @Model.Location.constructor _ _ inst _ c rest => .constructor (@Constructors.key _ inst _ c) :: location rest
+  | .index position rest => .index position.val :: location rest
 
 def error {raw : Type} {value : raw} (error : Model.Error value) : Feedback.Error where
   message := error.message
@@ -93,6 +94,18 @@ def choiceControl
       input := .choice (selected.getD "") (branches.map fun branch => { value := branch.key, label := branch.label })
       messages := Feedback.messages errors location } }
 
+/-- A button that replaces the value with `next`. -/
+def action
+  {raw : Type}
+  (next : raw)
+  (target : Display.Target)
+  (location : Feedback.Location)
+  (label : String)
+  (disabled : Bool)
+  : Control raw where
+  invoke _ := .ok next
+  view := { key := DisplayProtocol.controlKey target, target, label, disabled, location, input := .action }
+
 mutual
 /-- `location` is where `raw` sits in the form's value. -/
 def render
@@ -125,6 +138,21 @@ def render
       let body := body.map (path.set · value)
       ⟨.stack none [.control selector.view, body.view], selector :: body.controls⟩
     | none => ⟨.control selector.view, [selector]⟩
+  | .list path label itemLabel initial body =>
+    let items := path.get value
+    let location := location ++ pathLocation path
+    let rows := items.mapIdx fun index item =>
+      let row := target.child index
+      let itemLocation := location ++ [.index index]
+      let fields := render body item errors disabled (row.child 0) itemLocation
+      let fields := fields.map (fun item => path.set (items.set index item) value)
+      let remove := action (path.set (items.eraseIdx index) value) (row.child 1) itemLocation "Remove" disabled
+      (Rendered.mk (.stack (some s!"{itemLabel} {index + 1}") [fields.view, .control remove.view])
+        (fields.controls ++ [remove]))
+    let add := action (path.set (items ++ [initial]) value) (target.child items.length) location
+      s!"Add {itemLabel.toLower}" disabled
+    { view := .list label (rows.map (·.view) ++ [.control add.view]) (Feedback.messages errors location)
+      controls := rows.flatMap (·.controls) ++ [add] }
 
 def renderAll
   {raw : Type}
