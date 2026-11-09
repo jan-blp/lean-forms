@@ -27,9 +27,16 @@ def requiredArgument {α : Type} (decode : Input → Except String α) : Option 
   | some raw => decode raw
   | none => .error "Missing action argument."
 
-def editor {α : Type} (widget : Model.Editor α) (value : α)
-    (target : Display.Target) (location : Feedback.Location) (label : String) (disabled : Bool)
-    (errors : List Feedback.Error := []) : Control α :=
+def editor
+  {α : Type}
+  (widget : Model.Editor α)
+  (value : α)
+  (target : Display.Target)
+  (location : Feedback.Location)
+  (label : String)
+  (disabled : Bool)
+  (errors : List Feedback.Error := [])
+  : Control α :=
   let input : Display.Editor := match widget with
     | .text => .text value
     | .natural => .natural value
@@ -55,9 +62,14 @@ def pathLocation {source target : Type} : Model.Path source target → Feedback.
   | .self => []
   | @Model.Path.stepField _ _ _ inst f rest => .field (@Fields.key _ inst _ f) :: pathLocation rest
 
-def render {raw : Type} (component : Model.Component raw) (value : raw)
-    (errors : List Feedback.Error := []) (disabled := false) (target : Display.Target := {}) :
-    Rendered raw :=
+def render
+  {raw : Type}
+  (component : Model.Component raw)
+  (value : raw)
+  (errors : List Feedback.Error := [])
+  (disabled := false)
+  (target : Display.Target := {})
+  : Rendered raw :=
   match component with
   | .field path label widget =>
     let control := (editor widget (path.get value) target (pathLocation path) label disabled errors).map

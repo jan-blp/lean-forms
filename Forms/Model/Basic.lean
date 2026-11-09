@@ -19,7 +19,11 @@ attribute [reducible] Fields.Field
 def Fields.get {raw value : Type} [Fields raw] (field : Fields.Field raw value) : raw → value :=
   LeanLens.view (Fields.lens field)
 
-def Fields.set {raw value : Type} [Fields raw] (field : Fields.Field raw value) : value → raw → raw :=
+def Fields.set
+  {raw value : Type}
+  [Fields raw]
+  (field : Fields.Field raw value)
+  : value → raw → raw :=
   LeanLens.set (Fields.lens field)
 
 class Constructors (raw : Type) where
@@ -31,7 +35,9 @@ attribute [reducible] Constructors.Constructor
 
 inductive Path : Type → Type → Type 1 where
   | self {value : Type} : Path value value
-  | stepField {source child target : Type} [Fields source]
+  | stepField
+      {source child target : Type}
+      [Fields source]
       (field : Fields.Field source child)
       (rest : Path child target)
       : Path source target
@@ -47,36 +53,54 @@ def Path.get {source target : Type} (path : Path source target) (value : source)
   | .self => value
   | @stepField _ _ _ inst f rest => rest.get (@Fields.get _ _ inst f value)
 
-def Path.set {source target : Type} (path : Path source target) (new : target) (value : source) : source :=
+def Path.set
+  {source target : Type}
+  (path : Path source target)
+  (new : target)
+  (value : source)
+  : source :=
   match path with
   | .self => new
   | @stepField _ _ _ inst f rest =>
     @Fields.set _ _ inst f (rest.set new (@Fields.get _ _ inst f value)) value
 
-def Path.trans {source middle target : Type} (first : Path source middle)
-    (second : Path middle target) : Path source target :=
+def Path.trans
+  {source middle target : Type}
+  (first : Path source middle)
+  (second : Path middle target)
+  : Path source target :=
   match first with
   | .self => second
   | @stepField _ _ _ inst f rest => @Path.stepField _ _ _ inst f (rest.trans second)
 
-theorem Path.get_set {source target : Type} (path : Path source target) (new : target) (value : source) :
-    path.get (path.set new value) = new := by
+theorem Path.get_set
+  {source target : Type}
+  (path : Path source target)
+  (new : target)
+  (value : source)
+  : path.get (path.set new value) = new := by
   induction path with
   | self => rfl
   | @stepField source child target inst f rest ih =>
     simp only [get, set, Fields.get, Fields.set, (Fields.lawful f).view_set]
     exact ih _ _
 
-theorem Path.set_get {source target : Type} (path : Path source target) (value : source) :
-    path.set (path.get value) value = value := by
+theorem Path.set_get
+  {source target : Type}
+  (path : Path source target)
+  (value : source)
+  : path.set (path.get value) value = value := by
   induction path with
   | self => rfl
   | @stepField source child target inst f rest ih =>
     simp only [get, set, ih, Fields.get, Fields.set, (Fields.lawful f).set_view]
 
-theorem Path.set_set {source target : Type} (path : Path source target)
-    (first second : target) (value : source) :
-    path.set second (path.set first value) = path.set second value := by
+theorem Path.set_set
+  {source target : Type}
+  (path : Path source target)
+  (first second : target)
+  (value : source)
+  : path.set second (path.set first value) = path.set second value := by
   induction path with
   | self => rfl
   | @stepField source child target inst f rest ih =>
@@ -93,12 +117,20 @@ instance {source target : Type} (path : Path source target) : LeanLens.LawfulLen
 
 inductive Location : (raw : Type) → raw → Type 1 where
   | self {raw : Type} {value : raw} : Location raw value
-  | field {raw child : Type} [Fields raw] {value : raw}
+  | field
+      {raw child : Type}
+      [Fields raw]
+      {value : raw}
       (field : Fields.Field raw child)
-      (rest : Location child (Fields.get field value)) : Location raw value
-  | constructor {raw payload : Type} [Constructors raw] {value : payload}
-      (constructor : Constructors.Constructor raw payload) (rest : Location payload value) :
-      Location raw (Constructors.inject constructor value)
+      (rest : Location child (Fields.get field value))
+      : Location raw value
+  | constructor
+      {raw payload : Type}
+      [Constructors raw]
+      {value : payload}
+      (constructor : Constructors.Constructor raw payload)
+      (rest : Location payload value)
+      : Location raw (Constructors.inject constructor value)
 
 def Location.keys {raw : Type} {value : raw} : Location raw value → List String
   | .self => []
@@ -125,28 +157,45 @@ structure Error {raw : Type} (value : raw) where
   message : String
   targets : Targets raw value
 
-def Error.mapLocations {source target : Type} {value : source} {outer : target}
-    (step : Location source value → Location target outer) (error : Error value) : Error outer where
+def Error.mapLocations
+  {source target : Type}
+  {value : source}
+  {outer : target}
+  (step : Location source value → Location target outer)
+  (error : Error value)
+  : Error outer where
   message := error.message
   targets := match error.targets with
     | .global => .locations (step .self)
     | .locations first rest => .locations (step first) (rest.map step)
 
-def Error.lift {raw child : Type} [Fields raw] {value : raw}
-    (field : Fields.Field raw child) (error : Error (Fields.get field value)) : Error value :=
+def Error.lift
+  {raw child : Type}
+  [Fields raw]
+  {value : raw}
+  (field : Fields.Field raw child)
+  (error : Error (Fields.get field value))
+  : Error value :=
   error.mapLocations (.field field)
 
-def Error.inConstructor {raw payload : Type} [Constructors raw] {value : payload}
-    (constructor : Constructors.Constructor raw payload) (error : Error value) :
-    Error (Constructors.inject constructor value) :=
+def Error.inConstructor
+  {raw payload : Type}
+  [Constructors raw]
+  {value : payload}
+  (constructor : Constructors.Constructor raw payload)
+  (error : Error value)
+  : Error (Constructors.inject constructor value) :=
   error.mapLocations (.constructor constructor)
 
 inductive Decision (property : Prop) {raw : Type} (value : raw) where
   | valid (proof : property)
   | invalid (proof : ¬ property) (message : String) (targets : Targets raw value)
 
-def Decision.errors {property : Prop} {raw : Type} {value : raw} :
-    Decision property value → List (Error value)
+def Decision.errors
+  {property : Prop}
+  {raw : Type}
+  {value : raw}
+  : Decision property value → List (Error value)
   | .valid _ => []
   | .invalid _ message targets => [{ message, targets }]
 

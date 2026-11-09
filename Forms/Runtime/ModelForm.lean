@@ -31,8 +31,12 @@ inductive Command where
   | inspect
   | serverError (error : Feedback.ServerError)
 
-def validationErrors {model : Type} [FormModel model] [Model.Validation model]
-    (value : FormModel.Raw model) : List Feedback.Error :=
+def validationErrors
+  {model : Type}
+  [FormModel model]
+  [Model.Validation model]
+  (value : FormModel.Raw model)
+  : List Feedback.Error :=
   (Model.errors (Model.Validation.validate (model := model) value)).map ModelView.error
 
 structure Snapshot (raw : Type) where
@@ -45,9 +49,13 @@ structure Snapshot (raw : Type) where
   summary : String
   submissionBlocked : Bool
 
-def snapshot {model : Type} [FormModel model] [Model.Validation model]
-    (form : Model.Component (FormModel.Raw model)) (state : State (FormModel.Raw model))
- : Snapshot (FormModel.Raw model) :=
+def snapshot
+  {model : Type}
+  [FormModel model]
+  [Model.Validation model]
+  (form : Model.Component (FormModel.Raw model))
+  (state : State (FormModel.Raw model))
+  : Snapshot (FormModel.Raw model) :=
   let errors := validationErrors (model := model) state.value
   let visible := match state.serverFeedback with
     | some feedback => feedback.errors
@@ -58,8 +66,13 @@ def snapshot {model : Type} [FormModel model] [Model.Validation model]
     summary := state.serverFeedback.map (·.message) |>.getD (Feedback.summary visible),
     submissionBlocked := !visible.isEmpty }
 
-def apply {raw : Type} (form : Model.Component raw) (state : State raw)
-    (key : ControlKey) (argument : Option Input) : Except String (State raw) := do
+def apply
+  {raw : Type}
+  (form : Model.Component raw)
+  (state : State raw)
+  (key : ControlKey)
+  (argument : Option Input)
+  : Except String (State raw) := do
   if state.ui.pending then throw "Submission is in progress."
   let some control := (ModelView.render form state.value).controls.find? (·.key == key)
     | throw "This action is unavailable."
@@ -69,17 +82,25 @@ def apply {raw : Type} (form : Model.Component raw) (state : State raw)
     value, actions := state.actions + 1, serverFeedback := none
     ui := { state.ui with notice := .info "", resultVisible := false } }
 
-def submit {model : Type} [FormModel model] [Model.Validation model]
-    (state : State (FormModel.Raw model)) : State (FormModel.Raw model) :=
+def submit
+  {model : Type}
+  [FormModel model]
+  [Model.Validation model]
+  (state : State (FormModel.Raw model))
+  : State (FormModel.Raw model) :=
   if state.ui.pending then state else
   let errors := validationErrors (model := model) state.value
   let ui := if errors.isEmpty then { state.ui with submission := .requested, notice := .info "Submitting…" }
     else state.ui.announce (Feedback.summary errors) true
   { state with ui, validationStarted := true, serverFeedback := none }
 
-def event {model : Type} [FormModel model] [Model.Validation model]
-    (form : Model.Component (FormModel.Raw model)) (state : State (FormModel.Raw model)) :
-    Event → Except String (State (FormModel.Raw model)) := fun event => do
+def event
+  {model : Type}
+  [FormModel model]
+  [Model.Validation model]
+  (form : Model.Component (FormModel.Raw model))
+  (state : State (FormModel.Raw model))
+  : Event → Except String (State (FormModel.Raw model)) := fun event => do
   let state := { state with ui := { state.ui.acknowledge with rejection := none } }
   match event with
   | .apply key argument =>
@@ -102,9 +123,13 @@ def event {model : Type} [FormModel model] [Model.Validation model]
   | .failed message => pure (if state.ui.pending then
       { state with ui := { (state.ui.announce message true) with submission := .idle } } else state)
 
-def execute {model : Type} [FormModel model] [Model.Validation model]
-    (form : Model.Component (FormModel.Raw model)) (state : State (FormModel.Raw model)) :
-    Command → Except String (State (FormModel.Raw model))
+def execute
+  {model : Type}
+  [FormModel model]
+  [Model.Validation model]
+  (form : Model.Component (FormModel.Raw model))
+  (state : State (FormModel.Raw model))
+  : Command → Except String (State (FormModel.Raw model))
   | .event input => event (model := model) form state input
   | .apply key argument => apply form state key argument
   | .validate => .ok { state with validationStarted := true, serverFeedback := none }

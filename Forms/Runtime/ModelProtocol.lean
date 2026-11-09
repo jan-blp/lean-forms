@@ -16,8 +16,12 @@ structure Submission (raw : Type) where
   value : raw
   deriving ToJson, FromJson
 
-def ModelForm.Snapshot.toWire {raw : Type} [ToJson raw] (snapshot : ModelForm.Snapshot raw)
-    (formName fingerprint submitUrl : String) : Wire.Snapshot :=
+def ModelForm.Snapshot.toWire
+  {raw : Type}
+  [ToJson raw]
+  (snapshot : ModelForm.Snapshot raw)
+  (formName fingerprint submitUrl : String)
+  : Wire.Snapshot :=
   let submission := toJson ({ form := formName, fingerprint, value := snapshot.value } : Submission raw)
   let view := snapshot.view.toReactPage snapshot.ui snapshot.actions (toJson snapshot.value).pretty
   { title := snapshot.view.title

@@ -26,20 +26,29 @@ structure FormInstance where
 
 instance : Inhabited FormInstance := ⟨.mk fun _ => .error "Uninitialized form"⟩
 
-def RegisteredForm.toWire (form : RegisteredForm) (name fingerprint : String)
-    (snapshot : ModelForm.Snapshot form.definition.Raw) : Wire.Snapshot :=
+def RegisteredForm.toWire
+  (form : RegisteredForm)
+  (name fingerprint : String)
+  (snapshot : ModelForm.Snapshot form.definition.Raw)
+  : Wire.Snapshot :=
   letI := form.definition.encode
   snapshot.toWire name fingerprint form.submitUrl
 
-partial def RegisteredForm.instance (form : RegisteredForm) (name fingerprint : String)
-    (state : form.definition.State) : FormInstance :=
+partial def RegisteredForm.instance
+  (form : RegisteredForm)
+  (name fingerprint : String)
+  (state : form.definition.State)
+  : FormInstance :=
   .mk fun request => do
     let command ← ModelForm.Command.fromWire request
     let (state, snapshot) ← form.definition.execute state command
     pure (form.instance name fingerprint state, form.toWire name fingerprint snapshot)
 
-def RegisteredForm.open (form : RegisteredForm) (name fingerprint : String) (value : Json) :
-    Except String (FormInstance × Wire.Snapshot) := do
+def RegisteredForm.open
+  (form : RegisteredForm)
+  (name fingerprint : String)
+  (value : Json)
+  : Except String (FormInstance × Wire.Snapshot) := do
   let (state, snapshot) ← form.definition.openState value
   pure (form.instance name fingerprint state, form.toWire name fingerprint snapshot)
 

@@ -48,7 +48,12 @@ def execute
     unless store.models.contains handle do throw "Unknown or disposed form handle"
     pure ({ store with models := store.models.erase handle }, .disposed)
 
-def respond (forms : Std.HashMap String RegisteredForm) (fingerprint : String) (store : Store) (text : String) : Store × String :=
+def respond
+  (forms : Std.HashMap String RegisteredForm)
+  (fingerprint : String)
+  (store : Store)
+  (text : String)
+  : Store × String :=
   let result : Except String (Store × Wire.Response) := match Json.parse text >>= fromJson? with
     | .error message => .error message
     | .ok request => execute forms fingerprint store request

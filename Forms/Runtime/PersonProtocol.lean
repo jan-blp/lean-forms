@@ -17,8 +17,11 @@ def snapshot (fingerprint : String) (state : State) : Wire.Snapshot :=
   let snapshot := ModelForm.snapshot (model := Person) Person.form state
   snapshot.toWire name fingerprint "/api/submit"
 
-def execute (fingerprint : String) (state : State) (request : Wire.Command) :
-    Except String (State × Wire.Snapshot) := do
+def execute
+  (fingerprint : String)
+  (state : State)
+  (request : Wire.Command)
+  : Except String (State × Wire.Snapshot) := do
   let command ← ModelForm.Command.fromWire request
   let state ← ModelForm.execute (model := Person) Person.form state command
   pure (state, snapshot fingerprint state)

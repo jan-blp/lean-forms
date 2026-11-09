@@ -11,8 +11,11 @@ open Lean Forms.Runtime Forms.Protocol
 private def check (message : String) (ok : Bool) : IO Unit := do
   unless ok do throw (IO.userError message)
 
-private def control (key label : String) (input : Display.Editor) (messages : Option String := none) :
-    Display.Control :=
+private def control
+  (key label : String)
+  (input : Display.Editor)
+  (messages : Option String := none)
+  : Display.Control :=
   { key := ⟨key⟩, target := {}, label, disabled := false, location := [], input, messages }
 
 def view : Display.View :=

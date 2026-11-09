@@ -85,11 +85,17 @@ private def fieldType (ctor : Constructor) (field : FieldInfo) : CommandElabM Te
 private def app (fn : TermSyntax) (args : Array TermSyntax) : CommandElabM TermSyntax :=
   `($fn $args*)
 
-private def matchOn (values : Array TermSyntax) (alts : Array Alternative) : CommandElabM TermSyntax := do
+private def matchOn
+  (values : Array TermSyntax)
+  (alts : Array Alternative)
+  : CommandElabM TermSyntax := do
   let discrs ← values.mapM fun value => `(Parser.Term.matchDiscr| $value:term)
   `(match $[$discrs],* with $alts:matchAlt*)
 
-private def alternative (patterns : Array TermSyntax) (body : TermSyntax) : CommandElabM Alternative :=
+private def alternative
+  (patterns : Array TermSyntax)
+  (body : TermSyntax)
+  : CommandElabM Alternative :=
   `(Parser.Term.matchAltExpr| | $[$patterns],* => $body)
 
 private def appendLists (values : Array TermSyntax) : CommandElabM TermSyntax := do
@@ -97,7 +103,11 @@ private def appendLists (values : Array TermSyntax) : CommandElabM TermSyntax :=
   for value in values.reverse do result ← `($value ++ $result)
   return result
 
-private def emitRecord (name : Name) (fields : Array (Name × TermSyntax)) (json : Bool) : CommandElabM Unit := do
+private def emitRecord
+  (name : Name)
+  (fields : Array (Name × TermSyntax))
+  (json : Bool)
+  : CommandElabM Unit := do
   let fields ← fields.mapM fun (name, type) =>
     `(Parser.Command.structExplicitBinder| ($(ident name) : $type))
   if json then
@@ -108,7 +118,10 @@ private def emitRecord (name : Name) (fields : Array (Name × TermSyntax)) (json
     emit (← `(command| structure $(global name):ident where
       $fields:structExplicitBinder*))
 
-private def emitFields (ns raw : Name) (fields : Array (FieldInfo × TermSyntax)) : CommandElabM Unit := do
+private def emitFields
+  (ns raw : Name)
+  (fields : Array (FieldInfo × TermSyntax))
+  : CommandElabM Unit := do
   let field := global (ns ++ `Field)
   let raw := global raw
   let ctors ← fields.mapM fun (f, type) =>
@@ -169,16 +182,27 @@ private def ModelInfo.constraint (model : ModelInfo) (ctor : Constructor) (field
 private def ModelInfo.rules (model : ModelInfo) :=
   model.constructors.flatMap fun ctor => ctor.proofs.map (ctor, ·)
 
-private def ModelInfo.payloadValue (model : ModelInfo) (ctor : Constructor) : CommandElabM TermSyntax :=
+private def ModelInfo.payloadValue
+  (model : ModelInfo)
+  (ctor : Constructor)
+  : CommandElabM TermSyntax :=
   app (global (model.payload ctor ++ `mk)) (ctor.data.map fun f => ident f.binder)
 
-private def ModelInfo.wrap (model : ModelInfo) (ctor : Constructor) (value : TermSyntax) : CommandElabM TermSyntax := do
+private def ModelInfo.wrap
+  (model : ModelInfo)
+  (ctor : Constructor)
+  (value : TermSyntax)
+  : CommandElabM TermSyntax := do
   if model.record then return value
   let name := global (model.raw ++ Name.mkSimple ctor.name.getString!)
   if ctor.data.isEmpty then return name
   app name #[value]
 
-private def ModelInfo.liftError (model : ModelInfo) (ctor : Constructor) (error : TermSyntax) : CommandElabM TermSyntax := do
+private def ModelInfo.liftError
+  (model : ModelInfo)
+  (ctor : Constructor)
+  (error : TermSyntax)
+  : CommandElabM TermSyntax := do
   if model.record then return error
   let constructor := global (model.name ++ `Constructor ++ Name.mkSimple ctor.name.getString!)
   `(Forms.Model.Error.inConstructor (raw := $(global model.raw)) $constructor $error)
@@ -297,7 +321,10 @@ private structure CheckedField where
   value : Ident
   equality : Ident
 
-private def validationBranch (model : ModelInfo) (ctor : Constructor) : CommandElabM Alternative := do
+private def validationBranch
+  (model : ModelInfo)
+  (ctor : Constructor)
+  : CommandElabM Alternative := do
   let fields ← ctor.fields.mapM fun field => do
     let result ← fresh `result
     let value ← fresh `value

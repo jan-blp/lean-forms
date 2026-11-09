@@ -31,8 +31,12 @@ def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
   | .computed label value => some (.output { label, value })
 
 /-- The whole page: `view` plus toolbar, notice and submitted `result`. -/
-def Display.View.toReactPage (view : View) (state : Interaction.State) (actions : Nat)
-    (result : String) : FormsReact.Component :=
+def Display.View.toReactPage
+  (view : View)
+  (state : Interaction.State)
+  (actions : Nat)
+  (result : String)
+  : FormsReact.Component :=
   .page {
     title := view.title
     busy := state.pending

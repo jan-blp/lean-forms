@@ -5,7 +5,10 @@ meta import Forms.ExampleForms.FormFingerprint
 
 open Lean Forms Forms.Runtime Forms.ExampleForms
 
-private def actionArgument {α : Type} (control : ModelView.Control α) : Except String (List (String × Json)) := do
+private def actionArgument
+  {α : Type}
+  (control : ModelView.Control α)
+  : Except String (List (String × Json)) := do
   let value := match control.view.input with
     | .natural n => toJson ("00" ++ toString (n + 123456789012345678901234567890))
     | .text text => toJson (text ++ " 🌍\x00")
