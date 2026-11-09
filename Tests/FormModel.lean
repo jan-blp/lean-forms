@@ -15,8 +15,8 @@ structure Address where
 instance : ConstraintRule Address.Constraint.street_valid where
   check parts :=
     if h : parts.street ≠ "" then .valid h
-    else .invalid h "Enter your delivery street."
-      (.locations (.field Address.Field.street .self))
+    else .invalid (proof := h) (message := "Enter your delivery street.")
+      (targets := locations[Address.Field.street])
 
 structure Person where
   address : Address
@@ -28,17 +28,22 @@ structure Person where
 
 #fields Person.Parts
 
+example (value : Person.Raw) :
+    (locations[Person.Field.address / Address.Field.street, Person.Field.age] : Targets Person.Raw value) =
+      .locations (.field Person.Field.address (.field Address.Field.street .self)) [.field Person.Field.age .self] :=
+  rfl
+
 instance : ConstraintRule Person.Constraint.age_valid where
   check parts :=
     if h : parts.age ≤ 120 then .valid h
-    else .invalid h "Age must be at most 120."
-      (.locations (.field Person.Field.age .self))
+    else .invalid (proof := h) (message := "Age must be at most 120.")
+      (targets := locations[Person.Field.age])
 
 instance : ConstraintRule Person.Constraint.delivery_valid where
   check parts :=
     if h : parts.address.street = "Campus" → 18 ≤ parts.age then .valid h
-    else .invalid h "Campus delivery requires an adult."
-      (.locations (.field Person.Field.age .self))
+    else .invalid (proof := h) (message := "Campus delivery requires an adult.")
+      (targets := locations[Person.Field.age])
 
 inductive Delivery where
   | pickup
@@ -49,8 +54,8 @@ inductive Delivery where
 instance : ConstraintRule Delivery.Constraint.campus_adult where
   check parts :=
     if h : 18 ≤ parts.age then .valid h
-    else .invalid h "You must be an adult to receive this delivery."
-      (.locations (.field Delivery.campus.Field.age .self))
+    else .invalid (proof := h) (message := "You must be an adult to receive this delivery.")
+      (targets := locations[Delivery.campus.Field.age])
 
 structure Empty where
   deriving FormModel
@@ -74,13 +79,14 @@ structure TwoRules where
 instance : ConstraintRule TwoRules.Constraint.registration where
   check parts :=
     if h : 18 ≤ parts.age then .valid h
-    else .invalid h "Registration requires an adult." .global
+    else .invalid (proof := h) (message := "Registration requires an adult.")
+      (targets := .global)
 
 instance : ConstraintRule TwoRules.Constraint.delivery where
   check parts :=
     if h : 18 ≤ parts.age then .valid h
-    else .invalid h "Delivery requires an adult."
-      (.locations (.field TwoRules.Field.age .self))
+    else .invalid (proof := h) (message := "Delivery requires an adult.")
+      (targets := locations[TwoRules.Field.age])
 
 structure EscapedFields where
   «first name» : String
@@ -91,8 +97,8 @@ structure EscapedFields where
 instance : ConstraintRule EscapedFields.Constraint.«valid age» where
   check parts :=
     if h : parts.«match» ≤ 120 then .valid h
-    else .invalid h "Age must be at most 120."
-      (.locations (.field EscapedFields.Field.«match» .self))
+    else .invalid (proof := h) (message := "Age must be at most 120.")
+      (targets := locations[EscapedFields.Field.«match»])
 
 inductive EscapedConstructor where
   | «home delivery» (parts : EscapedFields) («door code» : String)

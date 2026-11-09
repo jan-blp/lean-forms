@@ -109,6 +109,18 @@ inductive Targets (raw : Type) (value : raw) where
   | global
   | locations (first : Location raw value) (rest : List (Location raw value) := [])
 
+syntax locationPath := sepBy1(term:max, " / ")
+
+/-- `locations[a / b, c]` targets the field paths `a / b` and `c`. -/
+macro "locations[" paths:sepBy1(locationPath, ", ") "]" : term => do
+  let locations ← paths.getElems.mapM fun path => do
+    let mut result ← `(Location.self)
+    for field in path.raw[0].getSepArgs.reverse do
+      result ← `(Location.field (field := $(⟨field⟩)) (rest := $result))
+    return result
+  let rest := locations.extract 1 locations.size
+  `(Targets.locations (first := $(locations[0]!)) (rest := [$rest,*]))
+
 structure Error {raw : Type} (value : raw) where
   message : String
   targets : Targets raw value

@@ -162,10 +162,28 @@ def openDefaultBrowser (url : String) : IO Unit := do
   catch error =>
     IO.eprintln s!"Could not open browser: {error}. Open {url} manually."
 
+/-- Whether `needle` occurs in `haystack`. -/
+def containsBytes (haystack needle : ByteArray) : Bool := Id.run do
+  if needle.size > haystack.size then return false
+  for i in [0:haystack.size - needle.size + 1] do
+    let mut j := 0
+    while j < needle.size && haystack[i + j]! == needle[j]! do j := j + 1
+    if j == needle.size then return true
+  return false
+
+/-- The fingerprint is a string literal in the Wasm data segment. -/
+def checkWasmFingerprint (binary : ByteArray) : IO Unit :=
+  unless containsBytes binary ExampleForms.formFingerprint.toUTF8 do
+    throw (IO.userError
+      "web/dist/wasm/forms.wasm is stale (fingerprint mismatch). Run make -f wasm/makefile, then restart forms-web.")
+
 def run
   (port : UInt16 := 8080)
   (openBrowser : Bool := false)
   : IO Unit := do
+  let wasmBinary ← if ← System.FilePath.pathExists "web/dist/wasm/forms.wasm"
+    then some <$> IO.FS.readBinFile "web/dist/wasm/forms.wasm" else pure none
+  if let some binary := wasmBinary then checkWasmFingerprint binary
   let app : Application := {
     compiledForm := PersonProtocol.descriptor ExampleForms.formFingerprint
     logger := ← TrafficLog.Logger.create
@@ -175,8 +193,7 @@ def run
     wasmAdapter := ← IO.FS.readFile "web/dist/wasm.js"
     wasmLoader := ← if ← System.FilePath.pathExists "web/dist/wasm/forms.mjs"
       then some <$> IO.FS.readFile "web/dist/wasm/forms.mjs" else pure none
-    wasmBinary := ← if ← System.FilePath.pathExists "web/dist/wasm/forms.wasm"
-      then some <$> IO.FS.readBinFile "web/dist/wasm/forms.wasm" else pure none
+    wasmBinary
     style := ← IO.FS.readFile "web/style.css"
   }
   Async.block do
