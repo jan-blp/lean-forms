@@ -30,7 +30,7 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       disabled
       error := c.messages
       onChange := .apply name }
-  | .action => .button { label := c.label, variant := .secondary, disabled, onClick := .apply name }
+  | .action => .button { label := c.label, variant := .secondary, disabled, onClick := .press name }
 
 def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
   | .hidden => none

@@ -86,7 +86,7 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
     return true;
   }
 
-  /** Buttons (no `argument`) apply drafts first: they may reshape the form, e.g. remove a list item. */
+  /** Buttons apply drafts first: they may reshape the form, e.g. remove a list item. */
   function run(action: FormsReact.Action, argument?: unknown) {
     try {
       if (action === 'reset') {
@@ -94,8 +94,8 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
         send('reset');
       } else if (action === 'submit') {
         if (commitDrafts()) send('submit');
-      } else if (argument === undefined) {
-        if (commitDrafts()) commit(action.apply.name, null);
+      } else if ('press' in action) {
+        if (commitDrafts()) send({ apply: { key: action.press.name, argument: null } });
       } else commit(action.apply.name, argument);
     } catch (error) { onFailure(error); }
   }

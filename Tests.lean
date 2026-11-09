@@ -5,6 +5,7 @@ import Tests.Dependencies
 import Tests.InputProtocol
 import Tests.Wire
 import Tests.FormsReact
+import Tests.Invocation
 
 public def main : IO Unit := do
   Tests.FormModel.run
@@ -12,3 +13,4 @@ public def main : IO Unit := do
   Tests.InputProtocol.run
   Tests.Wire.run
   Tests.FormsReact.run
+  Tests.Invocation.run

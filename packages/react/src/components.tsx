@@ -65,7 +65,7 @@ export function Button({ label, variant, disabled, onClick }: FormsReact.Button)
   const form = useLeanForm();
   return (
     <button type="button" className={variant === 'primary' ? 'primary' : undefined} disabled={disabled}
-      data-action={typeof onClick === 'string' ? onClick : 'apply'} onClick={() => form.run(onClick)}>{label}</button>
+      data-action={typeof onClick === 'string' ? onClick : 'press'} onClick={() => form.run(onClick)}>{label}</button>
   );
 }
 

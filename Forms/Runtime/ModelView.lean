@@ -1,6 +1,6 @@
 module
 
-public import Forms.Model.Component
+public import Forms.Model.Invocation
 public import Forms.Runtime.Input
 public import Forms.Runtime.DisplayProtocol
 
@@ -8,24 +8,9 @@ public import Forms.Runtime.DisplayProtocol
 namespace Forms.Runtime.ModelView
 open Forms.Model
 
-/-- Each control decodes its boundary argument directly into a typed invocation. -/
-structure Control (invocation : Type) where
-  invoke : Option Input → Except String invocation
-  view : Display.Control
-
-def Control.key {α : Type} (control : Control α) : ControlKey := control.view.key
-def Control.disabled {α : Type} (control : Control α) : Bool := control.view.disabled
-
-def Control.map {α β : Type} (f : α → β) (control : Control α) : Control β :=
-  { control with invoke := fun argument => (control.invoke argument).map f }
-
-structure Rendered (invocation : Type) where
+structure Rendered where
   view : Display.View
-  controls : List (Control invocation) := []
-
-def requiredArgument {α : Type} (decode : Input → Except String α) : Option Input → Except String α
-  | some raw => decode raw
-  | none => .error "Missing action argument."
+  controls : List Display.Control
 
 def editor
   {α : Type}
@@ -35,17 +20,14 @@ def editor
   (location : Feedback.Location)
   (label : String)
   (disabled : Bool)
-  (errors : List Feedback.Error := [])
-  : Control α :=
+  (errors : List Feedback.Error)
+  : Display.Control :=
   let input : Display.Editor := match widget with
     | .text => .text value
     | .natural => .natural value
     | .checkbox => .checkbox value
-  { invoke := requiredArgument (Input.decode widget)
-    view := {
-      key := DisplayProtocol.controlKey target, target, label, disabled, location, input
-      messages := Feedback.messages errors location } }
-
+  { key := DisplayProtocol.controlKey target, target, label, disabled, location, input
+    messages := Feedback.messages errors location }
 
 def location {raw : Type} {value : raw} : Model.Location raw value → Feedback.Location
   | .self => []
@@ -63,10 +45,6 @@ def pathLocation {source target : Type} : Model.Path source target → Feedback.
   | .self => []
   | @Model.Path.stepField _ _ _ inst f rest => .field (@Fields.key _ inst _ f) :: pathLocation rest
 
-def Rendered.map {α β : Type} (f : α → β) (rendered : Rendered α) : Rendered β :=
-  { rendered with controls := rendered.controls.map (·.map f) }
-
-/-- Picks the branch whose key is the argument; re-choosing the active branch keeps its payload. -/
 def choiceControl
   {raw sum : Type}
   (path : Model.Path raw sum)
@@ -77,34 +55,24 @@ def choiceControl
   (label : String)
   (disabled : Bool)
   (errors : List Feedback.Error)
-  : Control raw :=
-  let current := path.get value
-  let selected := (branches.find? (·.matches current)).map (·.key)
-  { invoke := fun
-      | some (.text key) => match branches.find? (·.key == key) with
-        | some branch => .ok (if selected == some key then value else path.set branch.start value)
-        | none => .error "Unknown option."
-      | _ => .error "Expected an option."
-    view := {
-      key := DisplayProtocol.controlKey target
-      target
-      label
-      disabled
-      location
-      input := .choice (selected.getD "") (branches.map fun branch => { value := branch.key, label := branch.label })
-      messages := Feedback.messages errors location } }
+  : Display.Control :=
+  let selected := (branches.find? (·.matches (path.get value))).map (·.key)
+  { key := DisplayProtocol.controlKey target
+    target
+    label
+    disabled
+    location
+    input := .choice (selected.getD "") (branches.map fun branch =>
+      { value := branch.key, label := branch.label })
+    messages := Feedback.messages errors location }
 
-/-- A button that replaces the value with `next`. -/
-def action
-  {raw : Type}
-  (next : raw)
+def button
   (target : Display.Target)
   (location : Feedback.Location)
   (label : String)
   (disabled : Bool)
-  : Control raw where
-  invoke _ := .ok next
-  view := { key := DisplayProtocol.controlKey target, target, label, disabled, location, input := .action }
+  : Display.Control :=
+  { key := DisplayProtocol.controlKey target, target, label, disabled, location, input := .action }
 
 mutual
 /-- `location` is where `raw` sits in the form's value. -/
@@ -116,12 +84,11 @@ def render
   (disabled := false)
   (target : Display.Target := {})
   (location : Feedback.Location := [])
-  : Rendered raw :=
+  : Rendered :=
   match component with
   | .field path label widget =>
     let control := editor widget (path.get value) target (location ++ pathLocation path) label disabled errors
-    let control := control.map (fun replacement => path.set replacement value)
-    ⟨.control control.view, [control]⟩
+    ⟨.control control, [control]⟩
   | .groupOf label children =>
     let children := renderAll children value errors disabled target location 0
     { view := .stack (some label) (children.map (·.view))
@@ -134,24 +101,20 @@ def render
     let location := location ++ pathLocation path
     let selector := choiceControl path branches.toList value target location label disabled errors
     match renderActive branches (path.get value) errors disabled target location 0 with
-    | some body =>
-      let body := body.map (path.set · value)
-      ⟨.stack none [.control selector.view, body.view], selector :: body.controls⟩
-    | none => ⟨.control selector.view, [selector]⟩
-  | .list path label itemLabel initial body =>
+    | some body => ⟨.stack none [.control selector, body.view], selector :: body.controls⟩
+    | none => ⟨.control selector, [selector]⟩
+  | .list path label itemLabel _ body =>
     let items := path.get value
     let location := location ++ pathLocation path
     let rows := items.mapIdx fun index item =>
       let row := target.child index
       let itemLocation := location ++ [.index index]
       let fields := render body item errors disabled (row.child 0) itemLocation
-      let fields := fields.map (fun item => path.set (items.set index item) value)
-      let remove := action (path.set (items.eraseIdx index) value) (row.child 1) itemLocation "Remove" disabled
-      (Rendered.mk (.stack (some s!"{itemLabel} {index + 1}") [fields.view, .control remove.view])
+      let remove := button (row.child 1) itemLocation "Remove" disabled
+      (Rendered.mk (.stack (some s!"{itemLabel} {index + 1}") [fields.view, .control remove])
         (fields.controls ++ [remove]))
-    let add := action (path.set (items ++ [initial]) value) (target.child items.length) location
-      s!"Add {itemLabel.toLower}" disabled
-    { view := .list label (rows.map (·.view) ++ [.control add.view]) (Feedback.messages errors location)
+    let add := button target location s!"Add {itemLabel.toLower}" disabled
+    { view := .list label (rows.map (·.view) ++ [.control add]) (Feedback.messages errors location)
       controls := rows.flatMap (·.controls) ++ [add] }
 
 def renderAll
@@ -163,7 +126,7 @@ def renderAll
   (target : Display.Target)
   (location : Feedback.Location)
   (index : Nat)
-  : List (Rendered raw) :=
+  : List Rendered :=
   match children with
   | .nil => []
   | .cons head tail =>
@@ -180,7 +143,7 @@ def renderActive
   (target : Display.Target)
   (location : Feedback.Location)
   (index : Nat)
-  : Option (Rendered sum) :=
+  : Option Rendered :=
   match branches with
   | .nil => none
   | .cons head tail =>
@@ -197,11 +160,115 @@ def renderBranch
   (disabled : Bool)
   (target : Display.Target)
   (location : Feedback.Location)
-  : Option (Rendered sum) :=
+  : Option Rendered :=
   match branch with
-  | .mk key _ inject project _ body =>
+  | .mk key _ _ project _ body =>
     (project current).map fun payload =>
-      (render body payload errors disabled target (location ++ [.constructor key])).map inject
+      render body payload errors disabled target (location ++ [.constructor key])
 end
+
+inductive DecodeError where
+  | unknownControl
+  | missingArgument
+  | unexpectedArgument
+  | invalidArgument (message : String)
+  | unknownOption
+  deriving DecidableEq, Repr
+
+instance : ToString DecodeError where
+  toString
+    | .unknownControl => "This action is unavailable."
+    | .missingArgument => "Missing action argument."
+    | .unexpectedArgument => "This action takes no argument."
+    | .invalidArgument message => message
+    | .unknownOption => "Unknown option."
+
+def noArgument {α : Type} (argument : Option Input) (invocation : α) : Except DecodeError α :=
+  match argument with
+  | none => .ok invocation
+  | some _ => .error .unexpectedArgument
+
+def selectBranch
+  {sum : Type}
+  (key : String)
+  : (branches : Model.Branches sum) → Except DecodeError branches.Invocation
+  | .nil => .error .unknownOption
+  | .cons (.mk branchKey ..) tail =>
+    if branchKey == key then
+      .ok (Sum.inl Model.BranchInvocation.select)
+    else
+      Sum.inr <$> selectBranch key tail
+
+mutual
+/-- The invocation of the control `render` puts at `target`. -/
+def decode
+  {raw : Type}
+  (component : Model.Component raw)
+  (target : List Nat)
+  (argument : Option Input)
+  : Except DecodeError component.Invocation :=
+  match component, target with
+  | .field _ _ widget, [] =>
+    match argument with
+    | some input => (Input.decode widget input).mapError .invalidArgument
+    | none => .error .missingArgument
+  | .groupOf _ children, index :: rest => decodeAll children index rest argument
+  | .visibleWhen _ body, target => decode body target argument
+  | .disabledWhen _ body, target => decode body target argument
+  | .choiceOf _ _ branches, [] =>
+    match argument with
+    | some (.text key) => selectBranch key branches
+    | some _ => .error (.invalidArgument "Expected an option.")
+    | none => .error .missingArgument
+  | .choiceOf _ _ branches, index :: rest => decodeBranches branches index rest argument
+  | .list .., [] => noArgument argument Model.ListInvocation.add
+  | .list .., [index, 1] => noArgument argument (Model.ListInvocation.remove index)
+  | .list _ _ _ _ body, index :: 0 :: rest =>
+    Model.ListInvocation.edit index <$> decode body rest argument
+  | _, _ => .error .unknownControl
+
+def decodeAll
+  {raw : Type}
+  (children : Model.Components raw)
+  (index : Nat)
+  (target : List Nat)
+  (argument : Option Input)
+  : Except DecodeError children.Invocation :=
+  match children, index with
+  | .nil, _ => .error .unknownControl
+  | .cons head _, 0 => Sum.inl <$> decode head target argument
+  | .cons _ tail, index + 1 => Sum.inr <$> decodeAll tail index target argument
+
+def decodeBranch
+  {sum : Type}
+  (branch : Model.Branch sum)
+  (target : List Nat)
+  (argument : Option Input)
+  : Except DecodeError branch.Invocation :=
+  match branch with
+  | .mk _ _ _ _ _ body => Model.BranchInvocation.edit <$> decode body target argument
+
+def decodeBranches
+  {sum : Type}
+  (branches : Model.Branches sum)
+  (index : Nat)
+  (target : List Nat)
+  (argument : Option Input)
+  : Except DecodeError branches.Invocation :=
+  match branches, index with
+  | .nil, _ => .error .unknownControl
+  | .cons head _, 0 => Sum.inl <$> decodeBranch head target argument
+  | .cons _ tail, index + 1 => Sum.inr <$> decodeBranches tail index target argument
+end
+
+def decodeKey
+  {raw : Type}
+  (component : Model.Component raw)
+  (key : ControlKey)
+  (argument : Option Input)
+  : Except DecodeError component.Invocation :=
+  match DisplayProtocol.keyTarget key with
+  | some target => decode component target.indices argument
+  | none => .error .unknownControl
 
 end Forms.Runtime.ModelView

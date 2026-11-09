@@ -9,6 +9,8 @@ open Lean
 /-- What a component asks the form to do. -/
 inductive Action where
   | apply (name : String)
+  /-- Presses button `name`; pending drafts are applied first. -/
+  | press (name : String)
   | submit
   | reset
   deriving ToJson, FromJson, BEq, Repr

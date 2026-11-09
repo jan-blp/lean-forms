@@ -64,10 +64,21 @@ def snapshot
     | some feedback => feedback.errors
     | none => if state.validationStarted then errors else []
   let rendered := ModelView.render form state.value visible
-  { view := rendered.view, controls := rendered.controls.map (·.view), value := state.value,
+  { view := rendered.view, controls := rendered.controls, value := state.value,
     ui := state.ui, errors,
     summary := state.serverFeedback.map (·.message) |>.getD (Feedback.summary visible),
     submissionBlocked := !visible.isEmpty }
+
+inductive Rejection where
+  | pending
+  | decode (error : ModelView.DecodeError)
+  | invocation (error : Model.InvocationError)
+
+instance : ToString Rejection where
+  toString
+    | .pending => "Submission is in progress."
+    | .decode error => toString error
+    | .invocation error => toString error
 
 def apply
   {raw : Type}
@@ -75,12 +86,10 @@ def apply
   (state : State raw)
   (key : ControlKey)
   (argument : Option Input)
-  : Except String (State raw) := do
-  if state.ui.pending then throw "Submission is in progress."
-  let some control := (ModelView.render form state.value).controls.find? (·.key == key)
-    | throw "This action is unavailable."
-  if control.disabled then throw "This action is unavailable."
-  let value ← control.invoke argument
+  : Except Rejection (State raw) := do
+  if state.ui.pending then throw .pending
+  let invocation ← (ModelView.decodeKey form key argument).mapError .decode
+  let value ← (form.apply state.value invocation).mapError .invocation
   pure { state with
     value, serverFeedback := none
     ui := { state.ui with notice := .info "", resultVisible := false } }
@@ -109,7 +118,8 @@ def event
   | .apply key argument =>
     match apply form state key argument with
     | .ok state => pure state
-    | .error message =>
+    | .error rejection =>
+      let message := toString rejection
       let ui := if state.ui.pending then state.ui else state.ui.announce message true
       pure { state with ui := { ui with rejection := some message } }
   | .submit => pure (submit (model := model) state)
@@ -134,7 +144,7 @@ def execute
   (state : State (FormModel.Raw model))
   : Command → Except String (State (FormModel.Raw model))
   | .event input => event (model := model) form state input
-  | .apply key argument => apply form state key argument
+  | .apply key argument => (apply form state key argument).mapError toString
   | .validate => .ok { state with validationStarted := true, serverFeedback := none }
   | .reset => if state.ui.pending then .error "Submission is in progress." else .ok (openState state.initial)
   | .serverError error => .ok { state with serverFeedback := some error }

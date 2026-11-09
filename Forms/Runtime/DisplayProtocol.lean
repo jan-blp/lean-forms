@@ -14,6 +14,9 @@ open Display
 def controlKey (target : Target) : ControlKey :=
   ⟨(toJson target.indices).compress⟩
 
+def keyTarget (key : ControlKey) : Option Target :=
+  (Json.parse key.value >>= fromJson?).toOption.map Target.mk
+
 def messageFields (messages : Option String) : List (String × Json) :=
   messages.toList.map fun message => ("messages", toJson message)
 

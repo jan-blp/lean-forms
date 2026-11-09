@@ -62,6 +62,9 @@ def run : IO Unit := do
   check "Lowering changed" (view.toReact false == some expected)
   check "Draft fields changed" (expected.draftFields == ["name", "age"])
   check "Hidden view must lower to nothing" (Display.View.hidden.toReact false == none)
+  check "Buttons must lower to press"
+    ((control "add" "Add" .action).toReact false ==
+      .button { label := "Add", variant := .secondary, disabled := false, onClick := .press "add" })
   let pendingPage := view.toReactPage { Interaction.State.initial with submission := .pending } "{}"
   check "Pending page must have no draft fields" pendingPage.draftFields.isEmpty
   let pending := match pendingPage with
