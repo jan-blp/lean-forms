@@ -250,9 +250,11 @@ deriving instance FormModel for PrivateModel
 -- Field types must retain their meaning inside generated namespaces.
 namespace TypeRoundTrip
 
-structure Parts where
+structure Item where
   count : Nat
   deriving FormModel
+
+abbrev Parts := Item
 
 structure Order where
   parts : Parts
