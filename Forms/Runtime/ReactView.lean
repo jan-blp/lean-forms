@@ -22,6 +22,14 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       { name, label := c.label, value := toString value, disabled, error := c.messages, onCommit := .apply name }
   | .checkbox checked => .checkbox
       { name, label := c.label, checked, disabled, error := c.messages, onChange := .apply name }
+  | .choice value options => .choice {
+      name
+      label := c.label
+      value
+      options := options.map fun option => { value := option.value, label := option.label }
+      disabled
+      error := c.messages
+      onChange := .apply name }
 
 def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
   | .hidden => none

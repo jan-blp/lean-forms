@@ -41,6 +41,22 @@ export function Checkbox({ label, checked, disabled, error, onChange }: FormsRea
   );
 }
 
+export function Choice({ name, label, value, options, disabled, error, onChange }: FormsReact.Choice) {
+  const form = useLeanForm();
+  const feedback = useId();
+  return (
+    <fieldset className="choice" aria-invalid={error === null ? undefined : true}
+      aria-describedby={error === null ? undefined : feedback}>
+      <legend>{label}</legend>
+      {options.map(option =>
+        <label key={option.value}><input type="radio" name={name} value={option.value}
+          checked={option.value === value} disabled={disabled}
+          onChange={() => form.run(onChange, option.value)} />{option.label}</label>)}
+      {error !== null && <p className="validation-error" id={feedback}>{error}</p>}
+    </fieldset>
+  );
+}
+
 export function Output({ label, value }: FormsReact.Output) {
   return <div className="computed"><label>{label}<output>{value}</output></label></div>;
 }
@@ -78,6 +94,7 @@ export const defaultComponents: Components = {
   textField: TextField,
   naturalField: NaturalField,
   checkbox: Checkbox,
+  choice: Choice,
   output: Output,
   button: Button,
   group: Group,

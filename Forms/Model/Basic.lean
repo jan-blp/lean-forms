@@ -29,6 +29,8 @@ def Fields.set
 class Constructors (raw : Type) where
   Constructor : Type → Type
   inject : {payload : Type} → Constructor payload → payload → raw
+  /-- The payload of a value built by `constructor`. -/
+  project : {payload : Type} → Constructor payload → raw → Option payload
   key : {payload : Type} → Constructor payload → String
 
 attribute [reducible] Constructors.Constructor

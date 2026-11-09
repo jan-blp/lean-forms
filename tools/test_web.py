@@ -66,25 +66,33 @@ def serve(example):
         traffic_log.close()
 
 
-def validation_error(request, submission, message, fields):
+def validation_error(request, submission, message, steps):
+    """`steps` are field names, or `('constructor', tag)` for a sum's branch."""
     status, _, body = request('/api/submit', submission)
     assert status == 422, (status, body)
     error = json.loads(body)['error']
     assert error['kind'] == 'validation' and error['message'] == message, error
+    location = [{'kind': 'constructor', 'tag': s[1]} if isinstance(s, tuple) else {'kind': 'field', 'name': s}
+                for s in steps]
     assert error['errors'] == [{'message': message, 'targets': {
-        'kind': 'locations', 'locations': [[{'kind': 'field', 'name': f} for f in fields]]}}], error
+        'kind': 'locations', 'locations': [location]}}], error
 
 
 def order_session():
     with serve('order') as (request, descriptor, _):
         initial = {'form': 'order', 'fingerprint': descriptor['fingerprint'], 'value': descriptor['value']}
         assert request('/api/submit', initial)[0] == 204
+        assert request('/api/submit', {**initial, 'value': {**descriptor['value'], 'shipping': 'pickup'}})[0] == 204
         value = descriptor['value']
         for changes, message, fields in [
             ({'customer': {**value['customer'], 'email': 'grace'}}, 'Enter a valid email address.',
              ['customer', 'email']),
-            ({'quantity': 11, 'shipping': {**value['shipping'], 'express': True}},
+            ({'quantity': 11, 'shipping': {'express': {'address': {'street': 'Main', 'city': 'Bern'}, 'phone': '079'}}},
              'Express shipping is limited to 10 items.', ['quantity']),
+            ({'shipping': {'express': {'address': {'street': 'Main', 'city': 'Bern'}, 'phone': ''}}},
+             'Enter a phone number for the courier.', ['shipping', ('constructor', 'express'), 'phone']),
+            ({'shipping': {'standard': {'address': {'street': '', 'city': 'Bern'}}}},
+             'Enter the shipping street.', ['shipping', ('constructor', 'standard'), 'address', 'street']),
             ({'gift': True}, 'Enter a gift message.', ['giftMessage']),
         ]:
             validation_error(request, {**initial, 'value': {**value, **changes}}, message, fields)

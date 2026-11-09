@@ -278,36 +278,55 @@ test('rejected applies announce an error and leave the value unchanged', async (
   } finally { model.dispose(); }
 });
 
-test('order nests visibility, disabling, and validation, alongside person in one runtime', async () => {
+test('order chooses shipping branches, nests visibility, and validates, alongside person in one runtime', async () => {
   const order = await open(fixture('order').descriptor);
   const person = await open(fixture('person').descriptor);
-  const apply = (label, argument) => order.send({ event: { message: { apply: {
-    key: order.snapshot().controls.find(c => c.label === label).key, argument } } } });
+  const control = label => order.snapshot().controls.find(c => c.label === label);
+  const apply = (label, argument) => order.send({ event: { message: { apply: { key: control(label).key, argument } } } });
+  const submit = () => order.send({ event: { message: 'submit' } });
   const outputs = () => JSON.stringify(page(order).body);
   const draftLabels = () => order.snapshot().controls
     .filter(c => order.snapshot().draftFields.includes(c.key)).map(c => c.label);
+  const shipping = () => order.snapshot().submission.value.shipping;
   try {
     assert.equal(person.snapshot().title, 'Person');
     apply('Quantity', '100');
     apply('Unit price (CHF)', '1234');
     assert.match(outputs(), /CHF 123'400/);
-    assert.equal(order.snapshot().controls.find(c => c.label === 'Express shipping').disabled, true);
-    assert.equal(draftLabels().includes('Gift message'), false);
+    assert.equal(control('Gift wrap').disabled, true);
+    apply('Quantity', '3');
     apply('Gift wrap', true);
     assert.equal(draftLabels().includes('Gift message'), true);
     assert.doesNotMatch(outputs(), /Card preview/);
-    order.send({ event: { message: 'submit' } });
+    submit();
     assert.deepEqual(messages(order.snapshot().view), ['Enter a gift message.']);
     apply('Gift message', 'Hi');
     assert.match(outputs(), /\\"Hi\\" from Grace Hopper/);
-    apply('Email', 'grace');
-    order.send({ event: { message: 'submit' } });
-    assert.deepEqual(messages(order.snapshot().view), ['Enter a valid email address.']);
-    assert.equal(order.snapshot().effects.length, 0);
-    apply('Email', 'grace@example.com');
+
+    assert.equal(control('Shipping').widget, 'choice');
+    assert.deepEqual(draftLabels(), ['Customer name', 'Email', 'Quantity', 'Unit price (CHF)', 'Gift message',
+      'Street', 'City']);
+    apply('Shipping', 'express');
+    assert.deepEqual(shipping(), { express: { address: { street: '', city: '' }, phone: '' } });
+    assert.match(outputs(), /Next business day/);
+    submit();
+    assert.deepEqual(messages(order.snapshot().view),
+      ['Enter the shipping street.', 'Enter the shipping city.', 'Enter a phone number for the courier.']);
+    apply('Street', 'Main');
+    apply('City', 'Bern');
+    apply('Phone', '079');
+    apply('Quantity', '11');
+    submit();
+    assert.deepEqual(messages(order.snapshot().view), ['Express shipping is limited to 10 items.']);
     apply('Quantity', '3');
-    order.send({ event: { message: 'submit' } });
-    assert.equal(JSON.parse(order.snapshot().effects[0].body).value.quantity, 3);
+    apply('Shipping', 'express');
+    assert.equal(shipping().express.phone, '079');
+    assert.throws(() => order.send({ apply: { key: control('Shipping').key, argument: 'drone' } }), /Unknown option/);
+    apply('Shipping', 'pickup');
+    assert.equal(control('Street'), undefined);
+    assert.match(outputs(), /Store, Bahnhofstrasse 1/);
+    submit();
+    assert.equal(JSON.parse(order.snapshot().effects[0].body).value.shipping, 'pickup');
     assert.equal(person.snapshot().submission.value.name, 'Ada');
   } finally { order.dispose(); person.dispose(); }
 });

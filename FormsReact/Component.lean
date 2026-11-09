@@ -54,6 +54,22 @@ structure Checkbox where
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
+structure ChoiceOption where
+  value : String
+  label : String
+  deriving ToJson, FromJson, BEq, Repr
+
+/-- Picks one of `options`; `onChange` receives the chosen option's `value`. -/
+structure Choice where
+  name : String
+  label : String
+  value : String
+  options : List ChoiceOption
+  disabled : Bool
+  error : Option String
+  onChange : Action
+  deriving ToJson, FromJson, BEq, Repr
+
 /-- A read-only computed value. -/
 structure Output where
   label : String
@@ -86,6 +102,7 @@ inductive Component where
   | textField : TextField → Component
   | naturalField : NaturalField → Component
   | checkbox : Checkbox → Component
+  | choice : Choice → Component
   | output : Output → Component
   | button : Button → Component
   | group : Group → Component
@@ -100,6 +117,7 @@ def Component.draftFields : Component → List String
   | .textField field => if field.disabled then [] else [field.name]
   | .naturalField field => if field.disabled then [] else [field.name]
   | .checkbox _ => []
+  | .choice _ => []
   | .output _ => []
   | .button _ => []
   | .group { children, .. } => draftFieldsOf children

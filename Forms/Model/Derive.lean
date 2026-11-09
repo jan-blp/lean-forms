@@ -245,24 +245,35 @@ private def emitConstructors (model : ModelInfo) : CommandElabM Unit := do
   emit (← `(command| inductive $constructor:ident : Type → Type where $ctors:ctor*))
   let selected ← fresh `selected
   let value ← fresh `value
+  let payload ← fresh `payload
   let mut injections := #[]
+  let mut projections := #[]
   let mut keys := #[]
   for ctor in model.constructors do
     let pattern : TermSyntax := global (model.name ++ `Constructor ++ Name.mkSimple ctor.name.getString!)
     injections := injections.push (← alternative #[pattern] (← model.wrap ctor value))
+    let found ← if ctor.data.isEmpty then `(some $(global (model.payload ctor ++ `mk))) else `(some $payload)
+    let mut cases := #[← alternative #[← model.wrap ctor payload] found]
+    if model.constructors.size > 1 then cases := cases.push (← alternative #[← `(_)] (← `(none)))
+    projections := projections.push (← alternative #[pattern] (← matchOn #[value] cases))
     keys := keys.push (← alternative #[pattern] (Syntax.mkStrLit ctor.name.getString!))
   let injection ← matchOn #[selected] injections
+  let projection ← matchOn #[selected] projections
   let key ← matchOn #[selected] keys
   let inject := global (model.name ++ `Constructor.inject)
+  let project := global (model.name ++ `Constructor.project)
   let keyName := global (model.name ++ `Constructor.key)
   emit (← `(command| @[expose] def $inject:ident {payload : Type}
     ($selected:ident : $constructor payload) ($value:ident : payload) : $raw := $injection))
+  emit (← `(command| @[expose] def $project:ident {payload : Type}
+    ($selected:ident : $constructor payload) ($value:ident : $raw) : Option payload := $projection))
   emit (← `(command| @[expose] def $keyName:ident {payload : Type}
     ($selected:ident : $constructor payload) : String := $key))
   emit (← `(command| @[expose, reducible] instance $(global (model.name ++ `constructors)):ident :
       Forms.Model.Constructors $raw where
     Constructor := $constructor
     inject := $inject
+    project := $project
     key := $keyName))
 
 private def emitErasure (model : ModelInfo) : CommandElabM Unit := do

@@ -24,6 +24,7 @@ const named = {
   textField: true,
   naturalField: true,
   checkbox: true,
+  choice: true,
   output: false,
   button: false,
   group: false,

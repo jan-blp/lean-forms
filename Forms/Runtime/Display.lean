@@ -16,10 +16,17 @@ structure Target where
 def Target.child (target : Target) (index : Nat) : Target :=
   ⟨target.indices ++ [index]⟩
 
+structure ChoiceOption where
+  value : String
+  label : String
+  deriving BEq
+
 inductive Editor where
   | text (value : String)
   | natural (value : Nat)
   | checkbox (value : Bool)
+  /-- `selected` is the active option's `value`, or empty when no option matches. -/
+  | choice (selected : String) (options : List ChoiceOption)
   deriving BEq
 
 structure Control where

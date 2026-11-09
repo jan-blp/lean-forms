@@ -28,25 +28,43 @@ instance Customer.email_valid_rule : ConstraintRule Customer.Constraint.email_va
     else .invalid (proof := h) (message := "Enter a valid email address.")
       (targets := locations[Customer.Field.email])
 
-structure Shipping where
+structure ShippingAddress where
   street : String
   city : String
-  express : Bool
   street_valid : street ≠ ""
   city_valid : city ≠ ""
   deriving FormModel
 
-instance Shipping.street_valid_rule : ConstraintRule Shipping.Constraint.street_valid where
+instance ShippingAddress.street_valid_rule
+  : ConstraintRule ShippingAddress.Constraint.street_valid where
   check parts :=
     if h : parts.street ≠ "" then .valid h
     else .invalid (proof := h) (message := "Enter the shipping street.")
-      (targets := locations[Shipping.Field.street])
+      (targets := locations[ShippingAddress.Field.street])
 
-instance Shipping.city_valid_rule : ConstraintRule Shipping.Constraint.city_valid where
+instance ShippingAddress.city_valid_rule
+  : ConstraintRule ShippingAddress.Constraint.city_valid where
   check parts :=
     if h : parts.city ≠ "" then .valid h
     else .invalid (proof := h) (message := "Enter the shipping city.")
-      (targets := locations[Shipping.Field.city])
+      (targets := locations[ShippingAddress.Field.city])
+
+inductive Shipping where
+  | pickup
+  | standard (address : ShippingAddress)
+  | express (address : ShippingAddress) (phone : String) (phone_valid : phone ≠ "")
+  deriving FormModel
+
+instance Shipping.express_phone_valid_rule
+  : ConstraintRule Shipping.Constraint.express_phone_valid where
+  check parts :=
+    if h : parts.phone ≠ "" then .valid h
+    else .invalid (proof := h) (message := "Enter a phone number for the courier.")
+      (targets := locations[Shipping.express.Field.phone])
+
+def Shipping.isExpress : Shipping → Bool
+  | .express .. => true
+  | _ => false
 
 structure Order where
   customer : Customer
@@ -58,7 +76,7 @@ structure Order where
   quantity_min : 1 ≤ quantity
   quantity_max : quantity ≤ 100
   gift_valid : gift = true → giftMessage ≠ ""
-  express_valid : shipping.express = true → quantity ≤ 10
+  express_valid : shipping.isExpress = true → quantity ≤ 10
   deriving FormModel
 
 instance Order.quantity_min_rule : ConstraintRule Order.Constraint.quantity_min where
@@ -81,7 +99,7 @@ instance Order.gift_valid_rule : ConstraintRule Order.Constraint.gift_valid wher
 
 instance Order.express_valid_rule : ConstraintRule Order.Constraint.express_valid where
   check parts :=
-    if h : parts.shipping.express = true → parts.quantity ≤ 10 then .valid h
+    if h : parts.shipping.isExpress = true → parts.quantity ≤ 10 then .valid h
     else .invalid (proof := h) (message := "Express shipping is limited to 10 items.")
       (targets := locations[Order.Field.quantity])
 
@@ -96,7 +114,18 @@ termination_by n
 decreasing_by omega
 
 def Order.initial : Order.Raw :=
-  ⟨⟨"Grace Hopper", "grace@example.com"⟩, 2, 45, false, "", ⟨"Bahnhofstrasse 1", "Zürich", false⟩⟩
+  ⟨⟨"Grace Hopper", "grace@example.com"⟩, 2, 45, false, "", .standard ⟨⟨"Bahnhofstrasse 1", "Zürich"⟩⟩⟩
+
+/-- Street and city of the address at `path`. -/
+def addressFields {raw : Type} (path : Path raw ShippingAddress.Raw) : List (Component raw) := [
+  .field
+    (path := path.trans path[ShippingAddress.Field.street])
+    (label := "Street")
+    (editor := .text),
+  .field
+    (path := path.trans path[ShippingAddress.Field.city])
+    (label := "City")
+    (editor := .text)]
 
 def Order.form : Component Order.Raw :=
   .group (label := "Order") (children := [
@@ -124,10 +153,15 @@ def Order.form : Component Order.Raw :=
           inputs := inputs[path[Order.Field.quantity], path[Order.Field.unitPrice]]
           run := fun quantity price => s!"CHF {swiss (quantity * price)}"
         })]),
-    .field
-      (path := path[Order.Field.gift])
-      (label := "Gift wrap")
-      (editor := .checkbox),
+    .disabledWhen
+      (condition := {
+        inputs := inputs[path[Order.Field.quantity]]
+        run := fun quantity => decide (quantity > 10)
+      })
+      (body := .field
+        (path := path[Order.Field.gift])
+        (label := "Gift wrap")
+        (editor := .checkbox)),
     .visibleWhen
       (condition := {
         inputs := inputs[path[Order.Field.gift]]
@@ -149,30 +183,44 @@ def Order.form : Component Order.Raw :=
               inputs := inputs[path[Order.Field.giftMessage], path[Order.Field.customer, Customer.Field.name]]
               run := fun message name => s!"\"{message}\" from {name}"
             }))])),
-    .group (label := "Shipping") (children := [
-      .field
-        (path := path[Order.Field.shipping, Shipping.Field.street])
-        (label := "Street")
-        (editor := .text),
-      .field
-        (path := path[Order.Field.shipping, Shipping.Field.city])
-        (label := "City")
-        (editor := .text),
-      .disabledWhen
-        (condition := {
-          inputs := inputs[path[Order.Field.quantity]]
-          run := fun quantity => decide (quantity > 10)
-        })
-        (body := .field
-          (path := path[Order.Field.shipping, Shipping.Field.express])
-          (label := "Express shipping")
-          (editor := .checkbox)),
-      .computed
-        (label := "Delivery")
-        (value := {
-          inputs := inputs[path[Order.Field.shipping, Shipping.Field.express]]
-          run := fun express => if express then "Next business day" else "3 to 5 business days"
-        })])
+    .choice
+      (path := path[Order.Field.shipping])
+      (label := "Shipping")
+      (branches := [
+        .of
+          (constructor := Shipping.Constructor.pickup)
+          (label := "Pickup")
+          (initial := ⟨⟩)
+          (body := .computed
+            (label := "Pickup at")
+            (value := { inputs := inputs[], run := "Store, Bahnhofstrasse 1, Zürich" })),
+        .of
+          (constructor := Shipping.Constructor.standard)
+          (label := "Standard")
+          (initial := ⟨⟨"", ""⟩⟩)
+          (body := .group
+            (label := "Address")
+            (children := addressFields path[Shipping.standard.Field.address])),
+        .of
+          (constructor := Shipping.Constructor.express)
+          (label := "Express")
+          (initial := ⟨⟨"", ""⟩, ""⟩)
+          (body := .group
+            (label := "Courier")
+            (children := addressFields path[Shipping.express.Field.address] ++ [
+              .field
+                (path := path[Shipping.express.Field.phone])
+                (label := "Phone")
+                (editor := .text)]))]),
+    .computed
+      (label := "Delivery")
+      (value := {
+        inputs := inputs[path[Order.Field.shipping]]
+        run := fun
+          | .pickup => "Ready tomorrow"
+          | .standard _ => "3 to 5 business days"
+          | .express _ => "Next business day"
+      })
   ])
 
 end Forms.ExampleForms

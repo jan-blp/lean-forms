@@ -191,13 +191,15 @@ try {
     const text = () => document.body.textContent;
     const input = label => field(label).querySelector('input');
     const toggle = async label => { input(label).click(); await tick(); };
+    const radios = () => [...document.querySelectorAll('.choice input[type=radio]')];
+    const choose = async option => { radios().find(r => r.parentElement.textContent === option).click(); await tick(); };
     check(text().includes('CHF 90'), 'Missing computed total');
     await edit('Quantity', '100');
     await edit('Unit price (CHF)', '1234');
     check(text().includes("CHF 123'400"), 'Total not Swiss formatted');
-    check(input('Express shipping').disabled, 'Express not disabled above 10 items');
+    check(input('Gift wrap').disabled, 'Gift wrap not disabled above 10 items');
     await edit('Quantity', '3');
-    check(!input('Express shipping').disabled, 'Express still disabled');
+    check(!input('Gift wrap').disabled, 'Gift wrap still disabled');
     check(!field('Gift message'), 'Hidden gift message rendered');
     await toggle('Gift wrap');
     check(field('Gift message') && !text().includes('Card preview'), 'Wrong gift visibility');
@@ -211,14 +213,24 @@ try {
     await wait(() => status() === 'Enter a valid email address.');
     check(input('Email').getAttribute('aria-invalid') === 'true', 'Missing nested feedback');
     await edit('Email', 'grace@example.com');
-    await toggle('Express shipping');
-    check(text().includes('Next business day'), 'Delivery output did not update');
-    await type(input('City'), 'Bern');
+    check(radios().find(r => r.checked).parentElement.textContent === 'Standard', 'Wrong initial branch');
+    await type(input('Street'), 'Draft street');
+    await choose('Express');
+    check(input('Street').value === '' && field('Phone'), 'Express branch did not start fresh');
+    check(text().includes('Next business day'), 'Delivery output did not follow the branch');
+    await click('[data-action=submit]');
+    await wait(() => status().includes('Enter a phone number for the courier.'));
+    check(input('Phone').getAttribute('aria-invalid') === 'true', 'Missing branch feedback');
+    await edit('Street', 'Main');
+    await edit('City', 'Bern');
+    await type(input('Phone'), '079');
     await click('[data-action=submit]');
     await wait(() => status() === 'Submitted successfully.');
     const submitted = JSON.parse(document.querySelector('#result pre').textContent);
-    check(submitted.shipping.city === 'Bern' && submitted.shipping.express && submitted.quantity === 3,
-      'Submitted value wrong');
+    check(submitted.shipping.express.phone === '079' && submitted.shipping.express.address.city === 'Bern' &&
+      submitted.quantity === 3, 'Submitted value wrong');
+    await choose('Pickup');
+    check(!field('Street') && text().includes('Store, Bahnhofstrasse 1'), 'Pickup branch not shown');
   `);
 
 } finally {

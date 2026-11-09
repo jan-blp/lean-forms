@@ -65,6 +65,10 @@ inductive Choice where
   | no
   deriving FormModel
 
+inductive Single where
+  | only (count : Nat)
+  deriving FormModel
+
 structure Pair where
   first : Address
   second : Address
@@ -152,6 +156,14 @@ public def run : IO Unit := do
   check "ModelNestedPathUpdate" (street.get updated == "Road" && updated.age == 20)
   check "ModelPathLensUpdate"
     (LeanLens.view street.toLens (LeanLens.set street.toLens "Road" good) == "Road")
+  check "DeriveProjectActiveConstructor"
+    ((Constructors.project Delivery.Constructor.campus (Delivery.Raw.campus ⟨20⟩)).map (·.age) == some 20)
+  check "DeriveProjectOtherConstructor"
+    (Constructors.project Delivery.Constructor.campus Delivery.Raw.pickup |>.isNone)
+  check "DeriveProjectNullaryConstructor"
+    (Constructors.project Delivery.Constructor.pickup Delivery.Raw.pickup |>.isSome)
+  check "DeriveProjectSingleConstructor"
+    ((Constructors.project Single.Constructor.only (Single.Raw.only ⟨3⟩)).map (·.count) == some 3)
   check "ModelConstructorPayloadLens"
     (Delivery.campus.Field.age.get (Delivery.campus.Field.age.set 30 ⟨20⟩) == 30)
   check "ModelTotalFieldUpdate" (Person.Field.age.get (Person.Field.age.set 40 good) == 40)

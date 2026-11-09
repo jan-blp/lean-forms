@@ -21,6 +21,7 @@ def widgetName : Editor → String
   | .text _ => "textInput"
   | .natural _ => "naturalInput"
   | .checkbox _ => "checkbox"
+  | .choice .. => "choice"
 
 def controlToJson (control : Control) : Json :=
   Json.mkObj ([
