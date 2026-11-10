@@ -15,9 +15,13 @@ structure FormHandle where
 /-- Holds the independent state of each open form in one Wasm instance.
 Requests use handles to select a form; disposal removes its state. -/
 structure Store where
-  next : FormHandle := ⟨0⟩
-  models : Std.HashMap FormHandle FormInstance := {}
+  next : FormHandle
+  models : Std.HashMap FormHandle FormInstance
   deriving Inhabited
+
+def Store.empty : Store where
+  next := ⟨0⟩
+  models := {}
 
 def modelHandle (text : String) : Except String FormHandle := do
   let some value := text.toNat? | throw "Invalid form handle"

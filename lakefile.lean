@@ -46,7 +46,7 @@ lean_exe «forms-web» where
   extraDepTargets := #[`webAssets]
 
 lean_lib Browser where
-  roots := #[`CompiledMain]
+  roots := #[`WasmEntry]
   srcDir := "wasm"
 
 /-- Collect the modules needed to run the form in the browser.
@@ -74,7 +74,7 @@ private def runtimeModules (root : Module) : FetchM (Array Module) := do
 
 -- Use Lake's dependency graph, without inspecting or rewriting generated C.
 target browserSources pkg : FilePath := do
-  let some root := pkg.findModule? `CompiledMain
+  let some root := pkg.findModule? `WasmEntry
     | error "Missing browser entry module"
   let modules ← runtimeModules root
   let jobs ← modules.mapM fun mod => mod.c.fetch

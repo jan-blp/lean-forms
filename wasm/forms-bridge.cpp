@@ -4,12 +4,12 @@
 #include <malloc.h>
 
 extern "C" lean_object * forms_handle_request(lean_object *);
-extern "C" lean_object * runtime_initialize_lean_x2dforms_CompiledMain(uint8_t);
+extern "C" lean_object * runtime_initialize_lean_x2dforms_WasmEntry(uint8_t);
 
 extern "C" void forms_init() {
     static bool initialized = false;
     if (initialized) return;
-    lean_object * result = runtime_initialize_lean_x2dforms_CompiledMain(1);
+    lean_object * result = runtime_initialize_lean_x2dforms_WasmEntry(1);
     if (lean_io_result_is_error(result)) {
         lean_io_result_show_error(result);
         abort();
