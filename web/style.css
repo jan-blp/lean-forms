@@ -70,7 +70,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .editor { display: flex; flex-wrap: wrap; gap: var(--space-xs); align-items: end; margin: var(--space-m) 0; }
 label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .editor > label { flex-basis: 12rem; }
-.editor > button { flex-shrink: 0; }
 input, select { display: block; width: 100%; min-height: 32px; margin-top: var(--space-xs); border: 1px solid var(--border); border-radius: var(--radius-s); padding: 4px var(--space-xs); background: var(--surface); color: var(--text); font: inherit; }
 input:hover:not(:disabled), select:hover:not(:disabled) { border-color: var(--primary); }
 label:has(> input[type="checkbox"]) { display: flex; flex-direction: row-reverse; justify-content: flex-end; align-items: center; gap: var(--space-xs); }

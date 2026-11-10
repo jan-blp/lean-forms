@@ -16,6 +16,18 @@ structure Submission (raw : Type) where
   value : raw
   deriving ToJson, FromJson
 
+def fetchEffect (request : Model.HttpRequest) : Wire.Effect :=
+  .fetch (toJson request).compress {
+    url := request.url
+    method := match request.method with
+      | .get => .GET
+      | .post => .POST
+    headers := { «Content-Type» := "application/json" }
+    body := request.body }
+
+def fetchedRequest (id : String) : Except String Model.HttpRequest :=
+  Json.parse id >>= fromJson?
+
 def ModelForm.Snapshot.toWire
   {raw : Type}
   [ToJson raw]
@@ -33,9 +45,13 @@ def ModelForm.Snapshot.toWire
     controls := snapshot.controls.map DisplayProtocol.controlToJson
     submission
     errors := snapshot.errors.map FeedbackProtocol.errorToJson
-    effects := if snapshot.ui.send then [{
-      url := submitUrl, method := .POST
-      headers := { «Content-Type» := "application/json" }, body := submission.compress }] else [] }
+    effects := snapshot.effects.map fun
+      | .submit => .submit {
+          url := submitUrl
+          method := .POST
+          headers := { «Content-Type» := "application/json" }
+          body := some submission.compress }
+      | .fetch request => fetchEffect request }
 
 def ModelForm.Event.fromWire : Wire.Event → Except String ModelForm.Event
   | .apply key argument => do
@@ -43,9 +59,17 @@ def ModelForm.Event.fromWire : Wire.Event → Except String ModelForm.Event
     pure (.apply ⟨key⟩ argument)
   | .submit => .ok .submit
   | .reset => .ok .reset
-  | .complete status body => .ok (.complete (if 200 ≤ status && status < 300 then none
-      else some (FeedbackProtocol.serverError status body)))
-  | .failed message => .ok (.failed message)
+  | .submitted (.response status body) =>
+    let rejection := if 200 ≤ status && status < 300 then none
+      else some (FeedbackProtocol.serverError status body)
+    .ok (.submitted (.ok rejection))
+  | .submitted (.unreachable message) => .ok (.submitted (.error message))
+  | .fetched id outcome => do
+    let response := match outcome with
+      | .response status body => if 200 ≤ status && status < 300 then Json.parse body
+        else .error s!"The server responded with status {status}."
+      | .unreachable message => .error message
+    pure (.loaded (← fetchedRequest id) response)
 
 def ModelForm.Command.fromWire : Wire.Command → Except String ModelForm.Command
   | .event message => ModelForm.Command.event <$> ModelForm.Event.fromWire message

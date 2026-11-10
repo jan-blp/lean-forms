@@ -8,12 +8,12 @@ const message = (error: unknown) => error instanceof Error ? error.message : Str
 const setTitle = (snapshot: Wire.Snapshot) => { document.title = `Lean Forms · ${snapshot.title}`; };
 
 try {
-  const response = await fetch(routes.compiledSpecification);
+  const response = await fetch(routes.formStart);
   if (!response.ok) throw new Error('Could not load the form.');
-  const descriptor = await response.json() as Wire.CompiledDescriptor;
+  const start = await response.json() as Wire.FormStart;
   root.render(
     <StrictMode>
-      <LeanForm descriptor={descriptor} moduleUrl={new URL(routes.wasmLoader, location.href)} onSnapshot={setTitle} />
+      <LeanForm start={start} moduleUrl={new URL(routes.wasmLoader, location.href)} onSnapshot={setTitle} />
     </StrictMode>);
 } catch (error) {
   root.render(<p className="error" role="alert">{message(error)}</p>);

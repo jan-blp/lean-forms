@@ -66,6 +66,11 @@ structure Computation (source result : Type) where
   inputs : Inputs source types
   run : Inputs.Function types result
 
+/-- A computation without inputs. -/
+def Computation.const {source result : Type} (value : result) : Computation source result where
+  inputs := .nil
+  run := value
+
 def Computation.eval
   {source result : Type}
   (computation : Computation source result)

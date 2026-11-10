@@ -34,6 +34,7 @@ def location {raw : Type} {value : raw} : Model.Location raw value → Feedback.
   | @Model.Location.field _ _ inst _ f rest => .field (@Fields.key _ inst _ f) :: location rest
   | @Model.Location.constructor _ _ inst _ c rest => .constructor (@Constructors.key _ inst _ c) :: location rest
   | .index position rest => .index position.val :: location rest
+  | .selected (keyEq := _) (keyHash := _) (rest := rest) .. => location rest
 
 def error {raw : Type} {value : raw} (error : Model.Error value) : Feedback.Error where
   message := error.message
@@ -41,9 +42,12 @@ def error {raw : Type} {value : raw} (error : Model.Error value) : Feedback.Erro
     | .global => .global
     | .locations first rest => .locations (location first) (rest.map location)
 
+/-- Fields with an empty key, like `Scope.Field.value`, add no step. -/
 def pathLocation {source target : Type} : Model.Path source target → Feedback.Location
   | .self => []
-  | @Model.Path.stepField _ _ _ inst f rest => .field (@Fields.key _ inst _ f) :: pathLocation rest
+  | @Model.Path.stepField _ _ _ inst f rest =>
+    let key := @Fields.key _ inst _ f
+    (if key.isEmpty then [] else [.field key]) ++ pathLocation rest
 
 def choiceControl
   {raw sum : Type}
@@ -66,6 +70,26 @@ def choiceControl
       { value := branch.key, label := branch.label })
     messages := Feedback.messages errors location }
 
+def keyedControl
+  {key : Type}
+  (keyText : key → String)
+  (options : List (Model.KeyedOption key))
+  (selected : Option key)
+  (target : Display.Target)
+  (location : Feedback.Location)
+  (label : String)
+  (disabled : Bool)
+  (errors : List Feedback.Error)
+  : Display.Control :=
+  { key := DisplayProtocol.controlKey target
+    target
+    label
+    disabled
+    location
+    input := .choice ((selected.map keyText).getD "") (options.map fun option =>
+      { value := keyText option.key, label := option.label })
+    messages := Feedback.messages errors location }
+
 def button
   (target : Display.Target)
   (location : Feedback.Location)
@@ -80,6 +104,7 @@ def render
   {raw : Type}
   (component : Model.Component raw)
   (value : raw)
+  (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error := [])
   (disabled := false)
   (target : Display.Target := {})
@@ -90,17 +115,19 @@ def render
     let control := editor widget (path.get value) target (location ++ pathLocation path) label disabled errors
     ⟨.control control, [control]⟩
   | .groupOf label children =>
-    let children := renderAll children value errors disabled target location 0
+    let children := renderAll children value cache errors disabled target location 0
     { view := .stack (some label) (children.map (·.view))
       controls := children.flatMap (·.controls) }
   | .computed label computation => ⟨.computed label (computation.eval value), []⟩
   | .visibleWhen condition body =>
-    if condition.eval value then render body value errors disabled target location else ⟨.hidden, []⟩
-  | .disabledWhen condition body => render body value errors (disabled || condition.eval value) target location
+    if condition.eval value then render body value cache errors disabled target location
+    else ⟨.hidden, []⟩
+  | .disabledWhen condition body =>
+    render body value cache errors (disabled || condition.eval value) target location
   | .choiceOf path label branches =>
     let location := location ++ pathLocation path
     let selector := choiceControl path branches.toList value target location label disabled errors
-    match renderActive branches (path.get value) errors disabled target location 0 with
+    match renderActive branches (path.get value) cache errors disabled target location 0 with
     | some body => ⟨.stack none [.control selector, body.view], selector :: body.controls⟩
     | none => ⟨.control selector, [selector]⟩
   | .list path label itemLabel _ body =>
@@ -109,18 +136,36 @@ def render
     let rows := items.mapIdx fun index item =>
       let row := target.child index
       let itemLocation := location ++ [.index index]
-      let fields := render body item errors disabled (row.child 0) itemLocation
+      let fields := render body item cache errors disabled (row.child 0) itemLocation
       let remove := button (row.child 1) itemLocation "Remove" disabled
       (Rendered.mk (.stack (some s!"{itemLabel} {index + 1}") [fields.view, .control remove])
         (fields.controls ++ [remove]))
     let add := button target location s!"Add {itemLabel.toLower}" disabled
     { view := .list label (rows.map (·.view) ++ [.control add]) (Feedback.messages errors location)
       controls := rows.flatMap (·.controls) ++ [add] }
+  | .load source body =>
+    match (source.eval value).resolve cache with
+    | .loading => ⟨.computed "" "Loading…", []⟩
+    | .failed message => ⟨.computed "" s!"Could not load: {message}", []⟩
+    | .ready data => render body ⟨data, value⟩ cache errors disabled target location
+  | .keyedChoice (keyEq := _) (keyHash := _) (path := path) (label := label) (keyText := keyText)
+      (options := options) (body := body) .. =>
+    let location := location ++ pathLocation path
+    let selection := path.get value
+    let picked := selection.selected.map (·.1)
+    let options := options.eval value
+    let selector := keyedControl keyText options picked target location label disabled errors
+    match selection.selected with
+    | none => ⟨.control selector, [selector]⟩
+    | some (picked, payload) =>
+      let body := render body ⟨picked, payload⟩ cache errors disabled (target.child 0) location
+      ⟨.stack none [.control selector, body.view], selector :: body.controls⟩
 
 def renderAll
   {raw : Type}
   (children : Model.Components raw)
   (value : raw)
+  (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error)
   (disabled : Bool)
   (target : Display.Target)
@@ -130,14 +175,15 @@ def renderAll
   match children with
   | .nil => []
   | .cons head tail =>
-    render head value errors disabled (target.child index) location ::
-      renderAll tail value errors disabled target location (index + 1)
+    render head value cache errors disabled (target.child index) location ::
+      renderAll tail value cache errors disabled target location (index + 1)
 
 /-- Renders the body of the branch that `current` was built by, at `target.child index`. -/
 def renderActive
   {sum : Type}
   (branches : Model.Branches sum)
   (current : sum)
+  (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error)
   (disabled : Bool)
   (target : Display.Target)
@@ -147,15 +193,16 @@ def renderActive
   match branches with
   | .nil => none
   | .cons head tail =>
-    match renderBranch head current errors disabled (target.child index) location with
+    match renderBranch head current cache errors disabled (target.child index) location with
     | some rendered => some rendered
-    | none => renderActive tail current errors disabled target location (index + 1)
+    | none => renderActive tail current cache errors disabled target location (index + 1)
 
 /-- The branch's body, when `current` was built by its constructor. -/
 def renderBranch
   {sum : Type}
   (branch : Model.Branch sum)
   (current : sum)
+  (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error)
   (disabled : Bool)
   (target : Display.Target)
@@ -164,7 +211,7 @@ def renderBranch
   match branch with
   | .mk key _ _ project _ body =>
     (project current).map fun payload =>
-      render body payload errors disabled target (location ++ [.constructor key])
+      render body payload cache errors disabled target (location ++ [.constructor key])
 end
 
 def noArgument {α : Type} (argument : Option Input) (invocation : α) : Except DecodeError α :=
@@ -209,6 +256,14 @@ def decode
   | .list .., [index, 1] => noArgument argument (Model.ListInvocation.remove index)
   | .list _ _ _ _ body, index :: 0 :: rest =>
     Model.ListInvocation.edit index <$> decode body rest argument
+  | .load _ body, target => decode body target argument
+  | .keyedChoice (keyEq := _) (keyHash := _) .., [] =>
+    match argument with
+    | some (.text key) => .ok (Model.KeyedInvocation.select key)
+    | some _ => .error (.clientBug (.wrongArgument "an option"))
+    | none => .error (.clientBug .missingArgument)
+  | .keyedChoice (keyEq := _) (keyHash := _) (body := body) .., 0 :: rest =>
+    Model.KeyedInvocation.edit <$> decode body rest argument
   | _, _ => .error (.clientBug .unknownControl)
 
 def decodeAll

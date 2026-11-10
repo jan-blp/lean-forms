@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.Computation
+public import Forms.Model.Remote
 
 @[expose] public section
 namespace Forms.Model
@@ -51,6 +52,25 @@ inductive Component : Type → Type 1 where
       (label itemLabel : String)
       (initial : item)
       (body : Component item)
+      : Component raw
+  /-- Loads `source`; `body` edits the value next to the loaded data. -/
+  | load
+      {raw data : Type}
+      (source : Computation raw (Source data))
+      (body : Component (Scope data raw))
+      : Component raw
+  /-- Picks a key from `options`, shown and sent as `keyText`; `body` edits the picked key's
+  payload, starting from `initial`, next to the key. -/
+  | keyedChoice
+      {raw key payload : Type}
+      [keyEq : BEq key]
+      [keyHash : Hashable key]
+      (path : Path raw (Selection key payload))
+      (label : String)
+      (keyText : key → String)
+      (options : Computation raw (List (KeyedOption key)))
+      (initial : payload)
+      (body : Component (Scope key payload))
       : Component raw
 
 inductive Components : Type → Type 1 where
@@ -133,5 +153,18 @@ def Component.choice
   (branches : List (Branch sum))
   : Component raw :=
   .choiceOf path label (.ofList branches)
+
+def Component.keyed
+  {raw key payload : Type}
+  [BEq key]
+  [Hashable key]
+  [ToString key]
+  (path : Path raw (Selection key payload))
+  (label : String)
+  (options : Computation raw (List (KeyedOption key)))
+  (initial : payload)
+  (body : Component (Scope key payload))
+  : Component raw :=
+  .keyedChoice path label toString options initial body
 
 end Forms.Model

@@ -5,5 +5,5 @@ export const routes = {
   "wasmLoader": "/wasm/forms.mjs",
   "wasmBinary": "/wasm/forms.wasm",
   "stylesheet": "/style.css",
-  "compiledSpecification": "/api/compiled-form",
+  "formStart": "/api/form-start",
 } as const;

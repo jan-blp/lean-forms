@@ -7,12 +7,19 @@ public import FormsReact.Component
 namespace Forms.Runtime.Wire
 open Lean
 
+inductive HttpOutcome where
+  | response (status : Nat) (body : String)
+  | unreachable (message : String)
+  deriving ToJson, FromJson
+
 inductive Event where
   | apply (key : String) (argument : Json)
   | submit
   | reset
-  | complete (status : Nat) (body : String)
-  | failed (message : String)
+  /-- The outcome of the `submit` effect. -/
+  | submitted (outcome : HttpOutcome)
+  /-- The outcome of the `fetch` effect with `id`. -/
+  | fetched (id : String) (outcome : HttpOutcome)
   deriving ToJson, FromJson
 
 inductive Command where
@@ -24,19 +31,21 @@ inductive Command where
   | serverError (status : Nat) (body : String)
   deriving ToJson, FromJson
 
-structure CompiledDescriptor where
+/-- What opening a form needs: its registered name, its code version, and its starting value. -/
+structure FormStart where
   form : String
   fingerprint : String
   value : Json
   deriving ToJson, FromJson
 
 inductive Request where
-  | open (descriptor : CompiledDescriptor)
+  | open (start : FormStart)
   | send (handle : String) (request : Command)
   | dispose (handle : String)
   deriving ToJson, FromJson
 
 inductive HttpMethod where
+  | GET
   | POST
   deriving ToJson, FromJson
 
@@ -48,7 +57,15 @@ structure HttpEffect where
   url : String
   method : HttpMethod
   headers : HttpHeaders
-  body : String
+  body : Option String
+  deriving ToJson, FromJson
+
+/-- A request for the browser to send. -/
+inductive Effect where
+  /-- Answered by `submitted`. -/
+  | submit (request : HttpEffect)
+  /-- Answered by `fetched` with `id`. -/
+  | fetch (id : String) (request : HttpEffect)
   deriving ToJson, FromJson
 
 /-- Browser-facing snapshot returned after opening or updating a form. -/
@@ -59,7 +76,7 @@ structure Snapshot where
   rejection : Option String
   /-- Names of the fields whose drafts React keeps. -/
   draftFields : List String
-  effects : List HttpEffect
+  effects : List Effect
   summary : String
   submissionBlocked : Bool
   controls : List Json

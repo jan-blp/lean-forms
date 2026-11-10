@@ -19,7 +19,7 @@ BINARY = ROOT / '.lake/build/bin/forms-web'
 
 @contextmanager
 def serve(example):
-    """Runs forms-web for `example`; yields a request function, its descriptor, and the traffic log."""
+    """Runs forms-web for `example`; yields a request function, its start, and the traffic log."""
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
         port = sock.getsockname()[1]
@@ -44,18 +44,18 @@ def serve(example):
             if process.poll() is not None:
                 raise AssertionError(process.stderr.read().decode())
             try:
-                status, _, body = request('/api/compiled-form')
+                status, _, body = request('/api/form-start')
                 break
             except URLError:
                 time.sleep(.05)
         else:
             raise AssertionError('HTTP server did not start')
         assert status == 200
-        descriptor = json.loads(body)
-        assert set(descriptor) == {'form', 'fingerprint', 'value'}
-        assert descriptor['form'] == example
-        assert descriptor['fingerprint'].startswith('compiled-2-')
-        yield request, descriptor, traffic_log
+        start = json.loads(body)
+        assert set(start) == {'form', 'fingerprint', 'value'}
+        assert start['form'] == example
+        assert start['fingerprint'].startswith('compiled-2-')
+        yield request, start, traffic_log
     finally:
         process.terminate()
         try:
@@ -80,11 +80,11 @@ def validation_error(request, submission, message, steps):
 
 
 def order_session():
-    with serve('order') as (request, descriptor, _):
-        initial = {'form': 'order', 'fingerprint': descriptor['fingerprint'], 'value': descriptor['value']}
+    with serve('order') as (request, start, _):
+        initial = {'form': 'order', 'fingerprint': start['fingerprint'], 'value': start['value']}
         assert request('/api/submit', initial)[0] == 204
-        assert request('/api/submit', {**initial, 'value': {**descriptor['value'], 'shipping': 'pickup'}})[0] == 204
-        value = descriptor['value']
+        assert request('/api/submit', {**initial, 'value': {**start['value'], 'shipping': 'pickup'}})[0] == 204
+        value = start['value']
         for changes, message, fields in [
             ({'customer': {**value['customer'], 'email': 'grace'}}, 'Enter a valid email address.',
              ['customer', 'email']),
@@ -102,10 +102,10 @@ def order_session():
 
 
 def expenses_session():
-    with serve('expenses') as (request, descriptor, _):
-        initial = {'form': 'expenses', 'fingerprint': descriptor['fingerprint'], 'value': descriptor['value']}
+    with serve('expenses') as (request, start, _):
+        initial = {'form': 'expenses', 'fingerprint': start['fingerprint'], 'value': start['value']}
         assert request('/api/submit', initial)[0] == 204
-        value = descriptor['value']
+        value = start['value']
         taxi = {'description': 'Taxi', 'amount': 150, 'receipt': False}
         for changes, message, steps in [
             ({'expenses': []}, 'Add at least one expense.', ['expenses']),
@@ -117,8 +117,24 @@ def expenses_session():
             validation_error(request, {**initial, 'value': {**value, **changes}}, message, steps)
 
 
+def invoice_session():
+    with serve('invoice') as (request, start, _):
+        status, headers, body = request('/api/suppliers', {})
+        assert status == 200 and headers['Content-Type'] == 'application/json'
+        assert [option['key'] for option in json.loads(body)] == ['acme', 'globex', 'initech']
+        status, _, body = request('/api/supplier', 'acme')
+        assert status == 200 and json.loads(body)['requiresPurchaseOrder'] is True
+        assert request('/api/supplier', 'missing')[0] == 404
+        assert request('/api/suppliers')[0] == 404
+        initial = {'form': 'invoice', 'fingerprint': start['fingerprint'], 'value': start['value']}
+        assert start['value']['supplier'] is None
+        validation_error(request, initial, 'Choose a supplier.', ['supplier'])
+        acme = {'key': 'acme', 'payload': {'contact': {'key': 'ben', 'payload': {}}, 'purchaseOrder': 'PO-1'}}
+        assert request('/api/submit', {**initial, 'value': {**start['value'], 'supplier': acme}})[0] == 204
+
+
 def session(example):
-    with serve(example) as (request, descriptor, traffic_log):
+    with serve(example) as (request, start, traffic_log):
         for path, mime in [('/', 'text/html'), ('/app.js', 'text/javascript'),
                            ('/style.css', 'text/css')]:
             status, headers, body = request(path)
@@ -129,7 +145,7 @@ def session(example):
         for method in ['GET', 'POST', 'DELETE']:
             status, headers, _ = request('/missing', method=method)
             assert status == 404 and 'Allow' not in headers
-        for path in ['/', '/app.js', '/style.css', '/api/compiled-form']:
+        for path in ['/', '/app.js', '/style.css', '/api/form-start']:
             for method in ['POST', 'DELETE']:
                 status, headers, _ = request(path, method=method)
                 assert status == 405 and headers['Allow'] == 'GET', (path, method, status, headers)
@@ -138,15 +154,15 @@ def session(example):
             assert status == 405 and headers['Allow'] == 'POST', (method, status, headers)
         assert request('/api/submit', raw=b'{')[0] == 400
         assert request('/api/submit', raw=b'x' * (1024 * 1024 + 1))[0] == 413
-        initial = {'form': example, 'fingerprint': descriptor['fingerprint'], 'value': descriptor['value']}
+        initial = {'form': example, 'fingerprint': start['fingerprint'], 'value': start['value']}
         status, headers, body = request('/api/submit', initial)
         assert status == 204 and body == ''
         assert 'Content-Type' not in headers
         script = """
-import { openCompiledForm } from '@blp/lean-forms-react/runtime';
+import { openForm } from '@blp/lean-forms-react/runtime';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-const model = await openCompiledForm(JSON.parse(readFileSync(0, 'utf8')), pathToFileURL('web/dist/wasm/forms.mjs'));
+const model = await openForm(JSON.parse(readFileSync(0, 'utf8')), pathToFileURL('web/dist/wasm/forms.mjs'));
 const apply = (label, argument) => model.send({ apply: {
   key: model.snapshot().controls.find(c => c.label === label).key, argument } });
 apply('Name', 'Grace');
@@ -154,22 +170,22 @@ apply('Request delivery', true);
 apply('Street', 'Campus');
 apply('Age', '25');
 model.send({ event: { message: 'submit' } });
-process.stdout.write(model.snapshot().effects[0].body);
+process.stdout.write(model.snapshot().effects[0].submit.request.body);
 model.dispose();
 """
         submission = json.loads(subprocess.check_output(
             ['node', '--input-type=module', '-e', script],
-            input=json.dumps(descriptor).encode(), cwd=ROOT))
+            input=json.dumps(start).encode(), cwd=ROOT))
         assert submission['value']['name'] == 'Grace'
         assert submission['value']['address'] == {'street': 'Campus'}
         assert request('/api/submit', submission)[0] == 204
-        assert submission['fingerprint'] == descriptor['fingerprint']
-        for stale in [{'form': example, 'value': descriptor['value']}, {**initial, 'fingerprint': 'compiled-2-0'}]:
+        assert submission['fingerprint'] == start['fingerprint']
+        for stale in [{'form': example, 'value': start['value']}, {**initial, 'fingerprint': 'compiled-2-0'}]:
             status, _, body = request('/api/submit', stale)
             assert status == 422 and json.loads(body)['error'] == {
                 'kind': 'request', 'message': 'This form is out of date. Reload the page.'}
         for invalid in [{}, {**initial, 'form': 'missing'}, {**initial, 'value': False},
-                        {**initial, 'value': {**descriptor['value'], 'age': '20'}}]:
+                        {**initial, 'value': {**start['value'], 'age': '20'}}]:
             status, _, body = request('/api/submit', invalid)
             assert status == 422 and json.loads(body)['error']['kind'] == 'request'
         for changes, message, fields in [
@@ -182,8 +198,8 @@ model.dispose();
         traffic_log.seek(0)
         traffic = traffic_log.read().decode()
         assert '\x1b[' not in traffic
-        assert 'CLIENT → SERVER GET /api/compiled-form' in traffic
-        assert 'SERVER → CLIENT 200 GET /api/compiled-form' in traffic
+        assert 'CLIENT → SERVER GET /api/form-start' in traffic
+        assert 'SERVER → CLIENT 200 GET /api/form-start' in traffic
         assert 'CLIENT → SERVER POST /api/submit' in traffic
         assert 'SERVER → CLIENT 204 POST /api/submit\n' in traffic
         assert 'SERVER → CLIENT 422 POST /api/submit' in traffic
@@ -218,7 +234,7 @@ def terminal_colors(no_color=False, term='xterm-256color'):
             if process.poll() is not None:
                 raise AssertionError(process.stderr.read().decode())
             try:
-                with urlopen(f'http://127.0.0.1:{port}/api/compiled-form', timeout=5) as response:
+                with urlopen(f'http://127.0.0.1:{port}/api/form-start', timeout=5) as response:
                     assert response.status == 200
                     response.read()
                 break
@@ -257,7 +273,7 @@ def browser_flag(exit_code):
             'import sys\n'
             'from pathlib import Path\n'
             'from urllib.request import urlopen\n'
-            'with urlopen(sys.argv[1] + "/api/compiled-form", timeout=5) as response:\n'
+            'with urlopen(sys.argv[1] + "/api/form-start", timeout=5) as response:\n'
             '    assert response.status == 200\n'
             f'Path({str(marker)!r}).write_text(sys.argv[1])\n'
             f'sys.exit({exit_code})\n')
@@ -276,7 +292,7 @@ def browser_flag(exit_code):
                 else:
                     raise AssertionError('Browser opener was not called')
                 assert marker.read_text() == base
-                with urlopen(base + '/api/compiled-form', timeout=5) as response:
+                with urlopen(base + '/api/form-start', timeout=5) as response:
                     assert response.status == 200
                 if exit_code:
                     assert b'Could not open browser' in process.stderr.readline()
@@ -297,7 +313,8 @@ browser_flag(1)
 session('person')
 order_session()
 expenses_session()
+invoice_session()
 terminal_colors()
 terminal_colors(no_color=True)
 terminal_colors(term='dumb')
-print('PASS: HTTP traffic, person, order and expenses validation, request errors, terminal colors, NO_COLOR, and --open')
+print('PASS: HTTP traffic, person, order, expenses and invoice validation, invoice data endpoints, request errors, terminal colors, NO_COLOR, and --open')

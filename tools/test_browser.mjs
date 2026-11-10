@@ -40,7 +40,7 @@ try {
   for (let attempt = 0; attempt < 100; attempt++) {
     if (startupError) throw startupError;
     try {
-      await fetch(`http://127.0.0.1:${port}/api/compiled-form`);
+      await fetch(`http://127.0.0.1:${port}/api/form-start`);
       socket = new WebSocket(`ws://127.0.0.1:${debugPort}/session`);
       await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
       break;
@@ -79,7 +79,7 @@ try {
     try {
       let ready = false;
       for (let attempt = 0; attempt < 100; attempt++) {
-        try { await fetch(`http://127.0.0.1:${examplePort}/api/compiled-form`); ready = true; break; }
+        try { await fetch(`http://127.0.0.1:${examplePort}/api/form-start`); ready = true; break; }
         catch { await delay(50); }
       }
       assert.ok(ready, `Server did not start: ${name}`);
@@ -133,11 +133,14 @@ try {
     check(!document.querySelector('#controls img'), 'Name interpreted as HTML');
     await click('[data-action=reset]');
     check(field('Name').querySelector('input').value === 'Ada', 'Reset kept edit');
-    const text = () => document.body.textContent;
-    check(text().includes('Ada, age 20'), 'Missing computed summary');
+    const blurred = field('Age').querySelector('input');
+    blurred.focus();
+    await type(blurred, 'abc');
+    blurred.blur();
+    await tick();
+    check(status() === 'Enter a non-negative whole number.', 'Leaving the field did not apply the edit');
+    await edit('Age', '20');
     check(!field('Street'), 'Hidden nested field rendered');
-    await edit('Name', 'Grace');
-    check(text().includes('Grace, age 20'), 'Computed summary did not update');
     await edit('Age', 'abc');
     check(field('Age').querySelector('input').value === 'abc' && status() === 'Enter a non-negative whole number.',
       'Rejected edit lost its draft');
@@ -148,9 +151,6 @@ try {
     await click('input[type=checkbox]');
     await click('input[type=checkbox]');
     check(field('Street').querySelector('input').value === 'Lambda Lane', 'Hidden field kept its draft');
-    await edit('Age', '17');
-    check(field('Street').querySelector('input').disabled, 'Dependent field not disabled');
-    check(text().includes('Delivery details require an adult.'), 'Dependent text did not update');
     await edit('Age', '150');
     await click('[data-action=submit]');
     await wait(() => status() === 'Age must be at most 120.');
@@ -178,7 +178,7 @@ try {
     await wait(() => status() === 'Submitted successfully.');
     check(field('Age').querySelector('input').value === '21', 'Reset ran while pending');
     window.fetch = originalFetch;
-    const { fingerprint } = await (await fetch('/api/compiled-form')).json();
+    const { fingerprint } = await (await fetch('/api/form-start')).json();
     const forged = await fetch('/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ form: 'person', fingerprint, value: { name: 'Forged', age: 150,
         delivery: false, address: { street: 'Campus' } } }) });
@@ -270,6 +270,21 @@ try {
     await wait(() => status() === 'Submitted successfully.');
     const submitted = JSON.parse(document.querySelector('#result pre').textContent);
     check(submitted.expenses.length === 1 && submitted.expenses[0].amount === 25, 'Submitted value wrong');
+  `);
+
+  await example('invoice', `
+    const choice = label => [...document.querySelectorAll('fieldset.choice')]
+      .find(f => f.querySelector('legend').textContent === label);
+    const choose = async (label, option) => {
+      [...choice(label).querySelectorAll('input[type=radio]')]
+        .find(r => r.parentElement.textContent === option).click();
+      await tick();
+    };
+    await wait(() => choice('Supplier'));
+    await choose('Supplier', 'ACME AG');
+    await wait(() => choice('Contact') && field('Purchase order'));
+    await choose('Contact', 'Ben Keller');
+    await edit('Purchase order', 'PO-1');
   `);
 
 } finally {

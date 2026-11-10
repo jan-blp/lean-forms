@@ -24,7 +24,7 @@ private def keyOf
   (label : String)
   (nth : Nat := 0)
   : ControlKey :=
-  let controls := (ModelView.render form value).controls.filter (·.label == label)
+  let controls := (ModelView.render form value {}).controls.filter (·.label == label)
   (controls[nth]?.map (·.key)).getD ⟨"missing"⟩
 
 private def perform
@@ -35,7 +35,7 @@ private def perform
   (argument : Option Input)
   : Except ModelForm.Rejection raw := do
   let invocation ← (ModelView.decodeKey form key argument).mapError .ofDecode
-  (form.apply value invocation).mapError fun error => .stale (.invocation error)
+  (form.apply {} value invocation).mapError fun error => .stale (.invocation error)
 
 private def rejected
   {raw : Type}
@@ -56,7 +56,7 @@ private def clientBug (error : ClientBug) : Option ModelForm.Rejection :=
 
 /-- Every control `render` emits decodes and applies to the value it was rendered from. -/
 private def everyControlApplies {raw : Type} (form : Component raw) (value : raw) : Bool :=
-  (ModelView.render form value).controls.all fun control =>
+  (ModelView.render form value {}).controls.all fun control =>
     (perform form value control.key (argument control.input)).toBool
 
 def run : IO Unit := do
@@ -69,8 +69,9 @@ def run : IO Unit := do
       == some "Road")
   check "InvocationHidden"
     (rejected Person.form Person.initial street (some (.text "Road")) == stale .hidden)
+  let manyItems := { Order.initial with quantity := 11 }
   check "InvocationDisabled"
-    (rejected Person.form ⟨"Ada", 17, true, ⟨"Lambda Lane"⟩⟩ street (some (.text "Road"))
+    (rejected Order.form manyItems (keyOf Order.form manyItems "Gift wrap") (some (.boolean true))
       == stale .disabled)
   check "InvocationMissingArgument"
     (rejected Person.form Person.initial (keyOf Person.form Person.initial "Age") none

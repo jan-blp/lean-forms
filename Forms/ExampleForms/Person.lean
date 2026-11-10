@@ -55,10 +55,6 @@ def Person.form : Component Person.Raw :=
       (label := "Name")
       (editor := .text),
     .field
-      (path := path[Person.Field.name])
-      (label := "Name Dup")
-      (editor := .text),
-    .field
       (path := path[Person.Field.age])
       (label := "Age")
       (editor := .natural),
@@ -66,37 +62,15 @@ def Person.form : Component Person.Raw :=
       (path := path[Person.Field.delivery])
       (label := "Request delivery")
       (editor := .checkbox),
-    .computed
-      (label := "Summary")
-      (value := {
-        inputs := inputs[
-          path[Person.Field.name],
-          path[Person.Field.age]]
-        run := fun name age => s!"{name}, age {age}"
-      }),
     .visibleWhen
       (condition := {
         inputs := inputs[path[Person.Field.delivery]]
         run := id
       })
-      (body := .group (label := "Delivery") (children := [
-        .computed
-          (label := "Eligibility")
-          (value := {
-            inputs := inputs[path[Person.Field.age]]
-            run := fun age =>
-              if age < 18 then "Delivery details require an adult." else "Ready for delivery."
-          }),
-        .disabledWhen
-          (condition := {
-            inputs := inputs[path[Person.Field.age]]
-            run := fun age => decide (age < 18)
-          })
-          (body := .field
-            (path := path[Person.Field.address, Address.Field.street])
-            (label := "Street")
-            (editor := .text))
-      ]))
+      (body := .field
+        (path := path[Person.Field.address, Address.Field.street])
+        (label := "Street")
+        (editor := .text))
   ])
 
 end Forms.ExampleForms

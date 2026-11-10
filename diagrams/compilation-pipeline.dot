@@ -1,4 +1,4 @@
-// Render PDF and SVG: make -C diagrams
+// Render PDF: make -C diagrams
 // Solid arrows show build flow; the dashed arrow connects the browser outputs at runtime.
 digraph CompilationPipeline {
   graph [
