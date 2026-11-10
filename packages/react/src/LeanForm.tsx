@@ -60,19 +60,18 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
   }
 
   function performAll(snapshot: Wire.Snapshot) {
-    for (const { url, id, ...request } of snapshot.effects) void perform(url, request, id);
+    for (const effect of snapshot.effects) void perform(effect);
   }
 
-  /** Sends the response back as `fetched` when the effect has an `id`, else as the submission's. */
-  async function perform(url: string, request: RequestInit, id: string | null) {
-    let event: Wire.Event;
+  /** Sends the request and reports its outcome: `submitted` for the submission, else `fetched`. */
+  async function perform(effect: Wire.Effect) {
+    const { url, ...request } = 'submit' in effect ? effect.submit.request : effect.fetch.request;
+    let outcome: Wire.HttpOutcome;
     try {
       const response = await fetch(url, request);
-      const status = response.status, body = await response.text();
-      event = id === null ? { complete: { status, body } } : { fetched: { id, status, body } };
-    } catch (error) {
-      event = id === null ? { failed: { message: message(error) } } : { unreachable: { id, message: message(error) } };
-    }
+      outcome = { response: { status: response.status, body: await response.text() } };
+    } catch (error) { outcome = { unreachable: { message: message(error) } }; }
+    const event: Wire.Event = 'submit' in effect ? { submitted: { outcome } } : { fetched: { id: effect.fetch.id, outcome } };
     try { send(event); } catch (error) { onFailure(error); }
   }
 

@@ -170,7 +170,7 @@ apply('Request delivery', true);
 apply('Street', 'Campus');
 apply('Age', '25');
 model.send({ event: { message: 'submit' } });
-process.stdout.write(model.snapshot().effects[0].body);
+process.stdout.write(model.snapshot().effects[0].submit.request.body);
 model.dispose();
 """
         submission = json.loads(subprocess.check_output(

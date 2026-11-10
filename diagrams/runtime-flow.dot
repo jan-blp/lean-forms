@@ -1,4 +1,4 @@
-// Render PDF and SVG: make -C diagrams
+// Render PDF: make -C diagrams
 // Logical runtime flow; responses return through the C++ bridge and JS adapter.
 digraph RuntimeFlow {
   graph [label="Lean Forms: runtime flow" labelloc=t fontsize=24 fontname="sans-serif"

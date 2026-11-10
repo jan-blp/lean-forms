@@ -65,7 +65,7 @@ def run : IO Unit := do
   check "Buttons must lower to press"
     ((control "add" "Add" .action).toReact false ==
       .button { label := "Add", variant := .secondary, disabled := false, onClick := .press "add" })
-  let pendingPage := view.toReactPage { Interaction.State.initial with submission := .pending } "{}"
+  let pendingPage := view.toReactPage { Interaction.State.initial with pending := true } "{}"
   check "Pending page must have no draft fields" pendingPage.draftFields.isEmpty
   let pending := match pendingPage with
     | .page page => page.busy && page.result.isNone &&

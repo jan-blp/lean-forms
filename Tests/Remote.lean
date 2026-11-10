@@ -30,18 +30,23 @@ private def apply (state : State) (label : String) (argument : Input) : IO State
   let some control := control? state label | throw (IO.userError s!"FAIL no control {label}")
   execute state (.event (.apply control.key (some argument)))
 
+private def fetches (state : State) : List HttpRequest :=
+  state.outbox.filterMap fun
+    | .fetch request => some request
+    | .submit => none
+
 private def answer (request : HttpRequest) : Except String Json :=
   (api request).elim (.error "Not found.") .ok
 
 /-- Answers every queued request, and the requests their responses queue. -/
 private def settle (state : State) : IO State := do
   let mut state := state
-  let mut pending := state.fetches
+  let mut pending := fetches state
   for _ in [0:10] do
     let mut queued := []
     for request in pending do
       state ← execute state (.event (.loaded request (answer request)))
-      queued := queued ++ state.fetches
+      queued := queued ++ fetches state
     pending := queued
   return state
 
@@ -73,12 +78,13 @@ def run : IO Unit := do
   check "RemoteApiRejects" ([{ suppliers with method := .get }, { suppliers with url := "/api/missing" },
     { supplier "acme" with body := some "1" }].all (Api.parse (endpoint := SupplierEndpoint) · |>.isNone))
   check "RemoteUnitUsesCoreCodec" (suppliers.body == some "{}")
-  check "RemoteFetchEffectRoundtrip"
-    ((fetchedRequest ((fetchEffect (supplier "acme")).id.getD "")).toOption == some (supplier "acme"))
+  check "RemoteFetchEffectRoundtrip" (match fetchEffect (supplier "acme") with
+    | .fetch id _ => (fetchedRequest id).toOption == some (supplier "acme")
+    | .submit _ => false)
   let (opened, _) ← IO.ofExcept
     ((FormDefinition.ofModel Invoice Invoice.form Invoice.initial).openState (toJson Invoice.initial))
   let opened : State := opened
-  check "RemoteOpenFetchesOptions" (opened.fetches == [suppliers])
+  check "RemoteOpenFetchesOptions" (fetches opened == [suppliers])
   check "RemoteOptionsLoading" (control? opened "Supplier").isNone
   let early ← execute opened (.event (.apply (DisplayProtocol.controlKey ⟨[0]⟩) (some (.text "acme"))))
   check "RemoteSelectBeforeLoadRejects"
@@ -89,7 +95,7 @@ def run : IO Unit := do
   check "RemoteUnknownOptionRejects"
     ((snapshot unknown).ui.rejection == some (toString InvocationError.unknownOption))
   let acme ← apply loaded "Supplier" (.text "acme")
-  check "RemoteSelectFetchesDetails" (acme.fetches == [supplier "acme"])
+  check "RemoteSelectFetchesDetails" (fetches acme == [supplier "acme"])
   check "RemoteDetailsLoading" (control? acme "Contact").isNone
   let acme ← settle acme
   check "RemoteDependentOptions" (options acme "Contact" == ["anna", "ben"])
@@ -99,7 +105,7 @@ def run : IO Unit := do
   check "RemoteDetailDrivesVisibility"
     ((control? acme "Purchase order").isSome && (control? globex "Purchase order").isNone)
   let back ← apply globex "Supplier" (.text "acme")
-  check "RemoteReselectIsCached" back.fetches.isEmpty
+  check "RemoteReselectIsCached" (fetches back).isEmpty
   check "RemoteReselectKeepsPayload"
     ((toJson back.value.supplier) == toJson ({ selected := some ("acme",
       ⟨{ selected := some ("ben", ()), stash := {} }, "PO-1"⟩), stash := {} } :
@@ -109,7 +115,7 @@ def run : IO Unit := do
     | .stack _ (first :: _) => first == .computed "" "Could not load: offline"
     | _ => false)
   let retried ← execute failed (.event .reset)
-  check "RemoteResetRetries" (retried.fetches == [suppliers])
+  check "RemoteResetRetries" (fetches retried == [suppliers])
   let late ← execute loaded (.event (.loaded (supplier "initech") (.ok Json.null)))
   check "RemoteUnrequestedResponseIgnored" !(late.cache.contains (supplier "initech"))
 

@@ -31,7 +31,7 @@ for (const { start, initial, cases } of fixtures) {
         assert.deepEqual(snapshot(model), expected);
         model.send('reset');
         // Reset does not resend requests still in flight.
-        assert.deepEqual(snapshot(model), { ...initial, effects: initial.effects.filter(e => e.id === null) });
+        assert.deepEqual(snapshot(model), { ...initial, effects: initial.effects.filter(e => 'submit' in e) });
       }
     } finally { model.dispose(); }
   });
@@ -204,12 +204,13 @@ test('Lean owns submission effects, pending locks, and reset', async () => {
   try {
     const editor = model.snapshot().controls.find(c => c.label === 'Age');
     const send = (event, fields = {}) => model.send({ event: { message: event === 'submit' || event === 'reset' ? event : { [event]: fields } } });
+    const respond = (status, body) => send('submitted', { outcome: { response: { status, body } } });
     send('apply', { key: editor.key, argument: '07' });
     assert.equal(model.snapshot().submission.value.age, 7);
     send('submit');
     assert.equal((model.snapshot().effects.length > 0), true);
     const submission = model.snapshot().submission;
-    const [effect] = model.snapshot().effects;
+    const [{ submit: { request: effect } }] = model.snapshot().effects;
     assert.equal(effect.url, '/api/submit');
     assert.equal(effect.method, 'POST');
     assert.equal(effect.headers['Content-Type'], 'application/json');
@@ -224,18 +225,18 @@ test('Lean owns submission effects, pending locks, and reset', async () => {
     }
     assert.throws(() => model.send({ apply: { key: editor.key, argument: '8' } }), /progress/);
     assert.throws(() => model.send('reset'), /progress/);
-    send('failed', { message: 'Network offline' });
+    send('submitted', { outcome: { unreachable: { message: 'Network offline' } } });
     assert.equal(submitButton(model).disabled, false);
     assert.equal(status(model), 'Network offline');
     send('submit');
-    send('complete', { status: 503, body: 'malformed' });
+    respond(503, 'malformed');
     assert.equal(status(model), 'Submission failed (HTTP 503).');
     assert.equal(submitButton(model).disabled, false);
     send('submit');
-    send('complete', { status: 200, body: '' });
+    respond(200, '');
     assert.equal(JSON.parse(result(model)).age, 7);
     assert.equal('error' in page(model).notice, false);
-    send('complete', { status: 500, body: '' });
+    respond(500, '');
     assert.equal(status(model), 'Submitted successfully.');
     send('apply', { key: editor.key, argument: '8' });
     assert.equal(result(model), null);
@@ -257,7 +258,7 @@ test('UI state stays local to each model', async () => {
     assert.equal((a.snapshot().effects.length > 0), true);
     assert.equal(submitButton(b).disabled, false);
     assert.equal(b.snapshot().effects.length, 0);
-    a.send({ event: { message: { failed: { message: 'Offline' } } } });
+    a.send({ event: { message: { submitted: { outcome: { unreachable: { message: 'Offline' } } } } } });
     assert.equal(status(a), 'Offline');
     assert.equal(status(b), '');
   } finally { a.dispose(); b.dispose(); }
@@ -327,7 +328,7 @@ test('order chooses shipping branches, nests visibility, and validates, alongsid
     assert.equal(control('Street'), undefined);
     assert.match(outputs(), /Store, Bahnhofstrasse 1/);
     submit();
-    assert.equal(JSON.parse(order.snapshot().effects[0].body).value.shipping, 'pickup');
+    assert.equal(JSON.parse(order.snapshot().effects[0].submit.request.body).value.shipping, 'pickup');
     assert.equal(person.snapshot().submission.value.name, 'Ada');
   } finally { order.dispose(); person.dispose(); }
 });

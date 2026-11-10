@@ -1,4 +1,4 @@
-// Render PDF and SVG: make -C diagrams
+// Render PDF: make -C diagrams
 // JS ↔ Wasm boundary: one synchronous JSON call per request. Blue: request · pink: response.
 // Numbers: order of one `send` round trip; `open` inserts a new form, `dispose` erases one without form logic.
 // Omits loading and init: on first use of a module URL, runtime.ts `load` imports forms.mjs

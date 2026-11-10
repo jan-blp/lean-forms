@@ -7,16 +7,19 @@ public import FormsReact.Component
 namespace Forms.Runtime.Wire
 open Lean
 
+inductive HttpOutcome where
+  | response (status : Nat) (body : String)
+  | unreachable (message : String)
+  deriving ToJson, FromJson
+
 inductive Event where
   | apply (key : String) (argument : Json)
   | submit
   | reset
-  | complete (status : Nat) (body : String)
-  | failed (message : String)
-  /-- The response to the effect with `id`. -/
-  | fetched (id : String) (status : Nat) (body : String)
-  /-- The effect with `id` got no response. -/
-  | unreachable (id : String) (message : String)
+  /-- The outcome of the `submit` effect. -/
+  | submitted (outcome : HttpOutcome)
+  /-- The outcome of the `fetch` effect with `id`. -/
+  | fetched (id : String) (outcome : HttpOutcome)
   deriving ToJson, FromJson
 
 inductive Command where
@@ -55,8 +58,14 @@ structure HttpEffect where
   method : HttpMethod
   headers : HttpHeaders
   body : Option String
-  /-- Echoed in `fetched` and `unreachable` events; none for the submission. -/
-  id : Option String
+  deriving ToJson, FromJson
+
+/-- A request for the browser to send. -/
+inductive Effect where
+  /-- Answered by `submitted`. -/
+  | submit (request : HttpEffect)
+  /-- Answered by `fetched` with `id`. -/
+  | fetch (id : String) (request : HttpEffect)
   deriving ToJson, FromJson
 
 /-- Browser-facing snapshot returned after opening or updating a form. -/
@@ -67,7 +76,7 @@ structure Snapshot where
   rejection : Option String
   /-- Names of the fields whose drafts React keeps. -/
   draftFields : List String
-  effects : List HttpEffect
+  effects : List Effect
   summary : String
   submissionBlocked : Bool
   controls : List Json
