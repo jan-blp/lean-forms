@@ -2,8 +2,7 @@ module
 
 public import Std.Http
 public import Forms.Runtime.TrafficLog
-public import Forms.Runtime.CompositionProtocol
-public import Forms.Runtime.SubmissionProtocol
+public import Forms.ExampleForms.FormFingerprint
 
 @[expose] public section
 
@@ -11,34 +10,34 @@ namespace Forms.Runtime.Web
 open Std Http Async
 
 structure ComponentEndpoint where
-  specification : Lean.Json
   submit : Lean.Json → Except Lean.Json Unit
-
-def ComponentEndpoint.ofComponent {ty : DataType}
-  (refined : RefinedDataType ty)
-  (component : Composition.Component ty)
-  (initial : ⟦ty⟧)
-  : ComponentEndpoint where
-  specification := CompositionProtocol.specificationToJson refined component initial
-  submit submission := do
-    discard <| (SubmissionProtocol.verify refined component initial submission).mapError (·.toJson)
 
 inductive GetRoute where
   | index
   | script
-  | interpreter
-  | validation
+  | wasmLoader
+  | wasmBinary
   | stylesheet
-  | specification
+  | compiledSpecification
+  deriving DecidableEq, Lean.ToJson
+
+/-- Also generated into `web/generated/routes.ts`. -/
+def GetRoute.path : GetRoute → String
+  | .index => "/"
+  | .script => "/app.js"
+  | .wasmLoader => "/wasm/forms.mjs"
+  | .wasmBinary => "/wasm/forms.wasm"
+  | .stylesheet => "/style.css"
+  | .compiledSpecification => "/api/compiled-form"
+
+def GetRoute.all : List GetRoute :=
+  [.index, .script, .wasmLoader, .wasmBinary, .stylesheet, .compiledSpecification]
+
+theorem GetRoute.mem_all (route : GetRoute) : route ∈ all := by
+  cases route <;> decide
 
 def GetRoute.ofPath (path : String) : Option GetRoute :=
-  if path == "/" then some .index
-  else if path == "/app.js" then some .script
-  else if path == "/interpreter.js" then some .interpreter
-  else if path == "/validation.js" then some .validation
-  else if path == "/style.css" then some .stylesheet
-  else if path == "/api/form" then some .specification
-  else none
+  all.find? (·.path == path)
 
 inductive Route where
   | get (route : GetRoute)
@@ -59,6 +58,7 @@ inductive ResponseBody where
   | css (content : String)
   | json (content : Lean.Json)
   | text (content : String)
+  | wasm (content : ByteArray)
 
 def ResponseBody.contentType : ResponseBody → Option String
   | .empty => none
@@ -67,14 +67,13 @@ def ResponseBody.contentType : ResponseBody → Option String
   | .css _ => some "text/css; charset=utf-8"
   | .json _ => some "application/json"
   | .text _ => some "text/plain; charset=utf-8"
+  | .wasm _ => some "application/wasm"
 
-def ResponseBody.serialize : ResponseBody → String
-  | .empty => ""
-  | .html content => content
-  | .javascript content => content
-  | .css content => content
-  | .json content => content.compress
-  | .text content => content
+def ResponseBody.bytes : ResponseBody → ByteArray
+  | .empty => .empty
+  | .html content | .javascript content | .css content | .text content => content.toUTF8
+  | .json content => content.compress.toUTF8
+  | .wasm content => content
 
 def requestErrorJson (message : String) : Lean.Json :=
   Lean.Json.mkObj [("error", Lean.Json.mkObj [
@@ -87,34 +86,38 @@ def respond
   (body : ResponseBody)
   : Async (Response Body.Full) := do
   let contentType := body.contentType
-  let body := body.serialize
-  logger.write (TrafficLog.response request status.toCode.toNat (contentType.getD "") body)
+  let bytes := body.bytes
+  logger.write (TrafficLog.response request status.toCode.toNat (contentType.getD "") bytes)
   let response := Response.new.status status |>.header! "Cache-Control" "no-store"
+  -- Lean's upstream Emscripten runtime uses shared WebAssembly memory.
+  let response := response.header! "Cross-Origin-Opener-Policy" "same-origin"
+    |>.header! "Cross-Origin-Embedder-Policy" "require-corp"
   let response := match contentType with
     | none => response
     | some contentType => response.header! "Content-Type" contentType
-  response.fromBytes body.toUTF8
+  response.fromBytes bytes
 
 structure Application where
   logger : TrafficLog.Logger
   form : ComponentEndpoint
   html : String
   script : String
-  interpreter : String
-  validation : String
+  wasmLoader : Option String
+  wasmBinary : Option ByteArray
   style : String
+  compiledForm : Lean.Json
 
 def Application.get
   (app : Application)
   (route : GetRoute)
-  : ResponseBody :=
+  : Option ResponseBody :=
   match route with
-  | .index => .html app.html
-  | .script => .javascript app.script
-  | .interpreter => .javascript app.interpreter
-  | .validation => .javascript app.validation
-  | .stylesheet => .css app.style
-  | .specification => .json app.form.specification
+  | .index => some (.html app.html)
+  | .script => some (.javascript app.script)
+  | .wasmLoader => app.wasmLoader.map .javascript
+  | .wasmBinary => app.wasmBinary.map .wasm
+  | .stylesheet => some (.css app.style)
+  | .compiledSpecification => some (.json app.compiledForm)
 
 def Application.submit
   (app : Application)
@@ -151,7 +154,9 @@ instance : Server.Handler Application where
     match route with
     | .get route =>
         app.logger.write (TrafficLog.request label)
-        respond .ok (app.get route)
+        match app.get route with
+        | some body => respond .ok body
+        | none => respond .notFound (.text "WebAssembly assets are not built. Run make -f wasm/makefile, restart forms-web, then reload.")
     | .submit => app.submit label request
 
 def openDefaultBrowser (url : String) : IO Unit := do
@@ -163,20 +168,39 @@ def openDefaultBrowser (url : String) : IO Unit := do
   catch error =>
     IO.eprintln s!"Could not open browser: {error}. Open {url} manually."
 
-def run {ty : DataType}
-  (refined : RefinedDataType ty)
-  (component : Composition.Component ty)
-  (initial : ⟦ty⟧)
+/-- Whether `needle` occurs in `haystack`. -/
+def containsBytes (haystack needle : ByteArray) : Bool := Id.run do
+  if needle.size > haystack.size then return false
+  for i in [0:haystack.size - needle.size + 1] do
+    let mut j := 0
+    while j < needle.size && haystack[i + j]! == needle[j]! do j := j + 1
+    if j == needle.size then return true
+  return false
+
+/-- The fingerprint is a string literal in the Wasm data segment. -/
+def checkWasmFingerprint (binary : ByteArray) : IO Unit :=
+  unless containsBytes binary ExampleForms.formFingerprint.toUTF8 do
+    throw (IO.userError
+      "web/dist/wasm/forms.wasm is stale (fingerprint mismatch). Run make -f wasm/makefile, then restart forms-web.")
+
+def run
+  (name : String)
+  (form : RegisteredForm)
   (port : UInt16 := 8080)
   (openBrowser : Bool := false)
   : IO Unit := do
+  let wasmBinary ← if ← System.FilePath.pathExists "web/dist/wasm/forms.wasm"
+    then some <$> IO.FS.readBinFile "web/dist/wasm/forms.wasm" else pure none
+  if let some binary := wasmBinary then checkWasmFingerprint binary
   let app : Application := {
+    compiledForm := Lean.toJson (form.descriptor name ExampleForms.formFingerprint)
     logger := ← TrafficLog.Logger.create
-    form := .ofComponent refined component initial
+    form := { submit := form.definition.verify name ExampleForms.formFingerprint }
     html := ← IO.FS.readFile "web/index.html"
     script := ← IO.FS.readFile "web/dist/app.js"
-    interpreter := ← IO.FS.readFile "web/dist/interpreter.js"
-    validation := ← IO.FS.readFile "web/dist/validation.js"
+    wasmLoader := ← if ← System.FilePath.pathExists "web/dist/wasm/forms.mjs"
+      then some <$> IO.FS.readFile "web/dist/wasm/forms.mjs" else pure none
+    wasmBinary
     style := ← IO.FS.readFile "web/style.css"
   }
   Async.block do

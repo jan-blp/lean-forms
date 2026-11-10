@@ -1,0 +1,50 @@
+// Render PDF and SVG: make -C diagrams
+// JS ↔ Wasm boundary: one synchronous JSON call per request. Blue: request · pink: response.
+// Numbers: order of one `send` round trip; `open` inserts a new form, `dispose` erases one without form logic.
+// Omits loading and init: on first use of a module URL, runtime.ts `load` imports forms.mjs
+// (which fetches forms.wasm) and calls `_forms_init`, which initializes the Lean runtime and
+// modules and creates formStore.
+digraph WasmInteraction {
+  graph [label="Lean Forms: JS ↔ Wasm interaction" labelloc=t fontsize=22
+    fontname="sans-serif" rankdir=TB newrank=true nodesep=0.5 ranksep=0.45 bgcolor="white"];
+  node [shape=box style="rounded,filled" fillcolor="#bfdbfe" color="#475569"
+    fontname="sans-serif" fontsize=11 margin="0.15,0.10"];
+  edge [color="#475569" fontname="sans-serif" fontsize=10];
+
+  subgraph cluster_js {
+    label="JavaScript";
+    fontsize=14; labeljust=l; labelloc=t; color="#059669"; penwidth=2; style=rounded;
+
+    app [label=<<B>Entry point</B><BR/>web/app.tsx → LeanForm.tsx> fillcolor="#bbebcd" color="#059669" penwidth=2.5];
+    runtime [label="runtime.ts"];
+    glue [label="forms.mjs (Emscripten glue)\nJS string ↔ UTF-8 in Wasm memory"];
+
+    app -> runtime [color="#2563eb" fontcolor="#2563eb" label="1. openCompiledForm(descriptor, url)\nmodel.send(command) · model.dispose()"];
+    app -> runtime [dir=back color="#db2777" fontcolor="#db2777" label="14. FormModel (open)\nWire.Snapshot (send)"];
+    runtime -> glue [color="#2563eb" fontcolor="#2563eb" label="2. { open: descriptor }\n{ send: handle, request }\n{ dispose: handle }"];
+    runtime -> glue [dir=back color="#db2777" fontcolor="#db2777" label="13. { opened: handle, snapshot }\n{ updated: snapshot } · disposed"];
+  }
+
+  subgraph cluster_wasm {
+    label="Wasm (forms.wasm)";
+    fontsize=14; labeljust=l; labelloc=t; color="#d97706"; penwidth=2; style=rounded;
+
+    bridge [label="forms-bridge.cpp\nC string ↔ Lean String"];
+    export [label="WasmEntry.lean"];
+    protocol [label="BrowserProtocol.respond (pure)\nlooks up the handle\nreturns the new store"];
+    store [label="Open forms (formStore : IO.Ref)\nhandle → form state\nJS holds only the handle" fillcolor="#fff1cc"];
+    form [label="Lean form logic" color="#8b5cf6" penwidth=2.5];
+
+    bridge -> export [color="#2563eb" fontcolor="#2563eb" label="4. String"];
+    bridge -> export [dir=back color="#db2777" fontcolor="#db2777" label="11. String"];
+    export -> store [label="5. get\n10. set" dir=both];
+    export -> protocol [color="#2563eb" fontcolor="#2563eb" label="6. Wire.Request + store"];
+    export -> protocol [dir=back color="#db2777" fontcolor="#db2777" label="9. Wire.Response\n+ new store"];
+    protocol -> form [color="#2563eb" fontcolor="#2563eb" label="7. command"];
+    protocol -> form [dir=back color="#db2777" fontcolor="#db2777" label="8. next instance\n+ snapshot"];
+    { rank=same; protocol; store; }
+  }
+
+  glue -> bridge [color="#2563eb" fontcolor="#2563eb" label="3. forms_request: JSON text"];
+  glue -> bridge [dir=back color="#db2777" fontcolor="#db2777" label="12. { ok, value }\n| { ok: false, error }"];
+}

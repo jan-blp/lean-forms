@@ -1,0 +1,121 @@
+// Render PDF and SVG: make -C diagrams
+// Solid arrows show build flow; the dashed arrow connects the browser outputs at runtime.
+digraph CompilationPipeline {
+  graph [
+    label="Lean Forms: compilation pipeline"
+    labelloc=t
+    fontsize=24
+    fontname="sans-serif"
+    rankdir=TB
+    newrank=true
+    compound=true
+    nodesep=0.35
+    ranksep=0.55
+    bgcolor="white"
+  ];
+  // Fills: cream = source or intermediate, blue = build tool, green = packaged output.
+  // Rose borders mark manually maintained project code.
+  node [shape=box style="rounded,filled" fillcolor="#fff1cc" color="#475569" fontname="sans-serif" fontsize=11 margin="0.15,0.10"];
+  edge [color="#475569" fontname="sans-serif" fontsize=10];
+
+  subgraph cluster_author {
+    label="What the application author writes";
+    fontsize=16;
+    color="#8b5cf6";
+    style="rounded";
+    sources [label="Lean application code (.lean)\nModels + validation + form behavior\nLayout + registration" penwidth=2.5 color="#be4563"];
+  }
+  framework [label="Lean Forms library\nRuntime + protocol + deriving" penwidth=2.5 color="#be4563"];
+  dependencies [label="Pinned Lake dependencies\nMathlib + Batteries forks, lean-lens"];
+  lean [label="Host Lean compiler\nPrebuilt via elan · run by Lake" fillcolor="#bfdbfe"];
+  artifacts [label=".olean + generated C"];
+
+  sources -> lean;
+  framework -> lean;
+  dependencies -> lean;
+  lean -> artifacts [weight=10];
+
+  subgraph cluster_native {
+    label="Native server · lake build";
+    fontsize=14;
+    labeljust=l;
+    labelloc=b;
+    color="#2563eb";
+    penwidth=2;
+    native_c [label="WebMain + native dependency closure\nGenerated C"];
+    native_link [label="Host C compiler + linker\nHost Lean libraries" fillcolor="#bfdbfe"];
+    server [label=".lake/build/bin/forms-web\nNative server executable" fillcolor="#bbebcd"];
+    native_c -> native_link -> server;
+  }
+
+  subgraph cluster_wasm {
+    label="Browser form engine · make -f wasm/makefile";
+    fontsize=14;
+    labeljust=l;
+    labelloc=b;
+    color="#d97706";
+    penwidth=2;
+    selected_c [label="Selected C files\nfor the Wasm form runtime"];
+    emcc [label="Emscripten emcc\nC → wasm32 objects" fillcolor="#bfdbfe"];
+    bridge [label="wasm/forms-bridge.cpp\nJS ↔ Lean ABI adapter" penwidth=2.5 color="#be4563"];
+    bridge_obj [label="Emscripten em++\nC++ → wasm32 object" fillcolor="#bfdbfe"];
+    runtime_src [label="Lean runtime + standard-library sources"];
+    runtime_build [label="Emscripten + upstream Lean build\nCross-compile runtime + libraries to wasm32\nUses host Lean for stdlib .lean → C" fillcolor="#bfdbfe"];
+    runtime_libs [label="Lean runtime + standard libraries\nCompiled to Wasm"];
+    wasm_link [label="Emscripten linker (em++)" fillcolor="#bfdbfe"];
+    wasm_output [label=".lake/wasm/forms.wasm\n+ forms.mjs"];
+    installed [label="web/dist/wasm/\nWasm + JS loader" fillcolor="#bbebcd"];
+
+    selected_c -> emcc;
+    bridge -> bridge_obj;
+    runtime_src -> runtime_build -> runtime_libs;
+    emcc -> wasm_link;
+    bridge_obj -> wasm_link;
+    runtime_libs -> wasm_link;
+    wasm_link -> wasm_output -> installed [weight=20];
+  }
+
+  subgraph cluster_web {
+    label="Browser UI · Lake webAssets / npm build";
+    fontsize=14;
+    labeljust=l;
+    labelloc=b;
+    color="#059669";
+    penwidth=2;
+    generator [label="tools/GenerateProtocol.lean\nWire types → TypeScript" fillcolor="#bfdbfe" penwidth=2.5 color="#be4563"];
+    protocol [label="web/protocol.ts\nGenerated protocol types"];
+    frontend [label="Shared frontend: web/app.ts + web/wasm.ts\nDOM rendering + HTTP effects + Wasm calls\nNo form-specific logic" penwidth=2.5 color="#be4563"];
+    tsc [label="TypeScript compiler (tsc)" fillcolor="#bfdbfe"];
+    js [label="web/dist/*.js\nBrowser UI + adapter" fillcolor="#bbebcd"];
+    generator -> protocol -> tsc;
+    frontend -> tsc -> js;
+  }
+
+  js -> installed [label="loads and calls at runtime" style=dashed constraint=false];
+  { rank=same; installed; js; }
+
+  artifacts -> native_c [label="native\nentry point"];
+  artifacts -> selected_c [label="browser\nentry point"];
+  artifacts -> generator [label=".olean for Wire,\nProtocol.TypeScript"];
+  // Align the starts of the three build branches for comparison.
+  { rank=same; native_c; selected_c; bridge; runtime_src; generator; }
+  native_c -> selected_c -> bridge -> runtime_src -> generator [style=invis weight=20];
+  { rank=same; emcc; bridge_obj; runtime_build; }
+
+  guide [shape=plain style="" label=<
+    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="8" COLOR="#cbd5e1" BGCOLOR="white">
+      <TR>
+        <TD BGCOLOR="#fff1cc">Source / intermediate</TD>
+        <TD BGCOLOR="#bfdbfe">Build tool</TD>
+        <TD BGCOLOR="#bbebcd">Packaged output</TD>
+      </TR>
+      <TR><TD COLSPAN="3">Solid arrows: build flow · Dashed arrow: runtime connection</TD></TR>
+      <TR><TD COLSPAN="3"><B><FONT COLOR="#be4563">Rose border: manually maintained project code</FONT></B></TD></TR>
+    </TABLE>
+  >];
+
+  // Keep explanatory material below the pipeline rather than widening its top rank.
+  installed -> guide [style=invis];
+  js -> guide [style=invis];
+  server -> guide [style=invis];
+}

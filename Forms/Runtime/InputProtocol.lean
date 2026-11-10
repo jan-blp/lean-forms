@@ -1,0 +1,20 @@
+module
+
+public import Forms.Runtime.Input
+public import Lean.Data.Json
+
+@[expose] public section
+
+namespace Forms.Runtime.InputProtocol
+open Lean
+
+def fromJson : Json → Except String Input
+  | .str value => .ok (.text value)
+  | .bool value => .ok (.boolean value)
+  | _ => .error "Expected a text or boolean argument."
+
+def argumentFromJson : Option Json → Except String (Option Input)
+  | none => .ok none
+  | some value => some <$> fromJson value
+
+end Forms.Runtime.InputProtocol

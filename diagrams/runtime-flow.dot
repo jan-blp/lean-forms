@@ -1,0 +1,65 @@
+// Render PDF and SVG: make -C diagrams
+// Logical runtime flow; responses return through the C++ bridge and JS adapter.
+digraph RuntimeFlow {
+  graph [label="Lean Forms: runtime flow" labelloc=t fontsize=24 fontname="sans-serif"
+    rankdir=TB newrank=true nodesep=0.5 ranksep=0.6 bgcolor="white"];
+  node [shape=box style="rounded,filled" fillcolor="#bfdbfe" color="#475569"
+    fontname="sans-serif" fontsize=11 margin="0.15,0.10"];
+  edge [color="#475569" fontname="sans-serif" fontsize=10];
+
+  user [shape=ellipse style=filled fillcolor=white label="User"];
+
+  subgraph cluster_tab {
+    label="Browser tab";
+    fontsize=16; labeljust=l; labelloc=t; color="#94a3b8"; style=rounded;
+
+    subgraph cluster_js {
+      label="Shared JavaScript / DOM · no form-specific logic";
+      fontsize=14; labeljust=l; labelloc=t; color="#059669"; penwidth=2; style="";
+      ui [label="web/app.ts\nDOM events + rendering"];
+      adapter [label="web/wasm.ts\nLoad Wasm · retain form handle\nJSON requests / responses"];
+      effects [label="HTTP effect runner\nfetch → completion / failure event"];
+      ui -> adapter [label="requests / snapshots" dir=both];
+      ui -> effects [label="HTTP effects / result events" dir=both];
+    }
+
+    subgraph cluster_wasm {
+      label="Lean form logic + state (Wasm)";
+      fontsize=14; labeljust=l; labelloc=t; color="#d97706"; penwidth=2; style="";
+      bridge [label="wasm/forms-bridge.cpp\nJS ↔ Lean ABI adapter"];
+      protocol [label="Lean BrowserProtocol\nOpen: check form + fingerprint\nSend / dispose: look up handle"];
+      store [label="Form instances\nIndependent state per handle" fillcolor="#fff1cc"];
+      form [label="Lean form behavior\nUpdate state · validate · feedback\nChoose view + effects" color="#8b5cf6" penwidth=2.5];
+      bridge -> protocol [dir=both];
+      protocol -> form [label="commands / snapshots" dir=both];
+      form -> store [label="read / update" dir=both];
+      { rank=same; form; store; }
+    }
+    adapter -> bridge [label="synchronous JSON call / response" dir=both];
+  }
+
+  subgraph cluster_server {
+    label="Native server · HTTP";
+    fontsize=14; labeljust=l; labelloc=t; color="#2563eb"; penwidth=2;
+    files [label="Static assets + form descriptor"];
+    submit [label="Submission endpoint\nIndependently validate submission\nReturn success / errors"];
+    files -> submit [style=invis];
+  }
+
+  user -> ui [label="edit / submit / reset"];
+  ui -> files [label="startup" color="#2563eb" dir=both constraint=false];
+  effects:e -> submit:w [xlabel="POST { form, fingerprint, value }\n← status + body" color="#2563eb" dir=both];
+  { rank=same; ui; files; }
+  { rank=same; adapter; effects; submit; }
+  adapter -> effects [style=invis weight=100];
+
+  guide [shape=plain style="" label=<
+    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6" COLOR="#cbd5e1" BGCOLOR="white">
+      <TR><TD BGCOLOR="#bfdbfe">Runtime component</TD><TD BGCOLOR="#fff1cc">State</TD></TR>
+      <TR><TD COLSPAN="2">Grey arrows: local calls / responses · <FONT COLOR="#2563eb">Blue: HTTP</FONT></TD></TR>
+      <TR><TD COLSPAN="2"><FONT COLOR="#8b5cf6">Purple border: Lean form behavior</FONT></TD></TR>
+    </TABLE>
+  >];
+  form -> guide [style=invis];
+  store -> guide [style=invis];
+}
