@@ -42,8 +42,8 @@ export async function openCompiledForm(descriptor: Wire.CompiledDescriptor, modu
   };
 }
 
+/** Loads the app's compiled Emscripten module; `url` points to its `forms.mjs`. */
 async function load(url: string): Promise<Runtime> {
-  // A variable URL keeps the generated Emscripten module out of the bundle.
   const { default: createModule } = await import(url);
   const module: WasmModule = await createModule();
   module._forms_init();
@@ -55,7 +55,6 @@ async function load(url: string): Promise<Runtime> {
       text = module.ccall('forms_request', 'string',
         ['string', 'number'], [request, encoder.encode(request).length]);
     } catch (error) {
-      // An aborted instance (e.g. stack overflow) is unusable; reload on next use.
       loading.delete(url);
       throw error;
     }
