@@ -219,10 +219,15 @@ try {
     check(input('Street').value === '' && field('Phone'), 'Express branch did not start fresh');
     check(text().includes('Next business day'), 'Delivery output did not follow the branch');
     await click('[data-action=submit]');
-    await wait(() => status().includes('Enter a phone number for the courier.'));
-    check(input('Phone').getAttribute('aria-invalid') === 'true', 'Missing branch feedback');
+    await wait(() => status() === 'Enter the shipping street.\\nEnter the shipping city.');
+    check(input('Street').getAttribute('aria-invalid') === 'true' &&
+      input('City').getAttribute('aria-invalid') === 'true', 'Missing address feedback');
+    // Express checks the phone once its address is valid.
     await edit('Street', 'Main');
     await edit('City', 'Bern');
+    await click('[data-action=submit]');
+    await wait(() => status() === 'Enter a phone number for the courier.');
+    check(input('Phone').getAttribute('aria-invalid') === 'true', 'Missing branch feedback');
     await type(input('Phone'), '079');
     await click('[data-action=submit]');
     await wait(() => status() === 'Submitted successfully.');
