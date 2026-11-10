@@ -8,13 +8,15 @@ function DraftField({ name, label, value, disabled, error, onCommit, numeric = f
   const form = useLeanForm();
   const input = useRef<HTMLInputElement>(null);
   const feedback = useId();
+  const commit = () => form.run(onCommit, input.current!.value);
+  // Enter submits the form; leaving the field applies a pending edit.
   return (
-    <form className="editor" noValidate onSubmit={event => { event.preventDefault(); form.run(onCommit, input.current!.value); }}>
+    <form className="editor" noValidate onSubmit={event => { event.preventDefault(); commit(); }}>
       <label>{label}<input ref={input} type="text" value={form.draft(name) ?? value} disabled={disabled}
         inputMode={numeric ? 'numeric' : undefined}
         aria-invalid={error === null ? undefined : true} aria-describedby={error === null ? undefined : feedback}
-        onChange={event => form.setDraft(name, event.target.value === value ? undefined : event.target.value)} /></label>
-      <button disabled={disabled}>Apply</button>
+        onChange={event => form.setDraft(name, event.target.value === value ? undefined : event.target.value)}
+        onBlur={() => { if (form.draft(name) !== undefined) commit(); }} /></label>
       {error !== null && <p className="validation-error" id={feedback}>{error}</p>}
     </form>
   );

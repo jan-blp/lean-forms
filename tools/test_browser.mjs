@@ -135,6 +135,12 @@ try {
     check(field('Name').querySelector('input').value === 'Ada', 'Reset kept edit');
     const text = () => document.body.textContent;
     check(text().includes('Ada, age 20'), 'Missing computed summary');
+    const blurred = field('Name').querySelector('input');
+    blurred.focus();
+    await type(blurred, 'Blur');
+    blurred.blur();
+    await tick();
+    check(text().includes('Blur, age 20'), 'Leaving the field did not apply the edit');
     check(!field('Street'), 'Hidden nested field rendered');
     await edit('Name', 'Grace');
     check(text().includes('Grace, age 20'), 'Computed summary did not update');
