@@ -24,7 +24,7 @@ private def fixture (name : String) (form : RegisteredForm) : Except String Json
       ("action", Json.mkObj [("key", toJson control.key.value), ("argument", argument)]),
       ("expected", toJson expected)])
   pure (Json.mkObj [
-    ("descriptor", toJson (form.descriptor name formFingerprint)),
+    ("start", toJson (form.start name formFingerprint)),
     ("initial", toJson initial),
     ("cases", toJson cases)])
 

@@ -2,6 +2,7 @@ module
 
 public import Lean.Data.Json
 public import LeanLens.Lawful
+public import Std.Data.HashMap
 
 @[expose] public section
 namespace Forms.Model
@@ -117,6 +118,15 @@ instance {source target : Type} (path : Path source target) : LeanLens.LawfulLen
   set_view := path.set_get
   set_set := path.set_set
 
+/-- A picked key with its payload; `stash` keeps payloads of keys picked before. -/
+structure Selection (key payload : Type) [BEq key] [Hashable key] where
+  selected : Option (key × payload)
+  stash : Std.HashMap key payload
+
+def Selection.empty {key payload : Type} [BEq key] [Hashable key] : Selection key payload where
+  selected := none
+  stash := {}
+
 inductive Location : (raw : Type) → raw → Type 1 where
   | self {raw : Type} {value : raw} : Location raw value
   | field
@@ -139,12 +149,23 @@ inductive Location : (raw : Type) → raw → Type 1 where
       (position : Fin value.length)
       (rest : Location item (value.get position))
       : Location (List item) value
+  /-- The payload of the selected `picked`. -/
+  | selected
+      {key payload : Type}
+      [keyEq : BEq key]
+      [keyHash : Hashable key]
+      {value : payload}
+      (picked : key)
+      (stash : Std.HashMap key payload)
+      (rest : Location payload value)
+      : Location (Selection key payload) ⟨some (picked, value), stash⟩
 
 def Location.keys {raw : Type} {value : raw} : Location raw value → List String
   | .self => []
   | @field _ _ inst _ f rest => @Fields.key _ inst _ f :: rest.keys
   | @constructor _ _ inst _ c rest => @Constructors.key _ inst _ c :: rest.keys
   | index position rest => toString position.val :: rest.keys
+  | selected _ _ rest => rest.keys
 
 inductive Targets (raw : Type) (value : raw) where
   | global

@@ -1,4 +1,4 @@
-// Render PDF and SVG: make -C diagrams
+// Render PDF: make -C diagrams
 // Logical runtime flow; responses return through the C++ bridge and JS adapter.
 digraph RuntimeFlow {
   graph [label="Lean Forms: runtime flow" labelloc=t fontsize=24 fontname="sans-serif"
@@ -41,7 +41,7 @@ digraph RuntimeFlow {
   subgraph cluster_server {
     label="Native server · HTTP";
     fontsize=14; labeljust=l; labelloc=t; color="#2563eb"; penwidth=2;
-    files [label="Static assets + form descriptor"];
+    files [label="Static assets + form start"];
     submit [label="Submission endpoint\nIndependently validate submission\nReturn success / errors"];
     files -> submit [style=invis];
   }

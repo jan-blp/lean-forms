@@ -4,10 +4,10 @@ import { Context, type Components, type LeanFormContext } from './context.js';
 import type * as Wire from './protocol/Forms/Runtime/Wire.js';
 import type * as FormsReact from './protocol/FormsReact.js';
 import { Render } from './render.js';
-import { openCompiledForm, type FormModel } from './runtime.js';
+import { openForm, type FormModel } from './runtime.js';
 
 export interface LeanFormProps {
-  descriptor: Wire.CompiledDescriptor;
+  start: Wire.FormStart;
   /** URL of the app's compiled `forms.mjs`. */
   moduleUrl: string | URL;
   /** Replaces default components. */
@@ -17,20 +17,20 @@ export interface LeanFormProps {
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 
-/** Runs `descriptor` in the compiled Lean form and renders its component tree. */
-export function LeanForm({ descriptor, moduleUrl, components, onSnapshot }: LeanFormProps) {
+/** Runs `start` in the compiled Lean form and renders its component tree. */
+export function LeanForm({ start, moduleUrl, components, onSnapshot }: LeanFormProps) {
   const [model, setModel] = useState<FormModel>();
   const [failure, setFailure] = useState<string>();
   const url = String(moduleUrl);
   useEffect(() => {
     let opened: FormModel | undefined;
     let cancelled = false;
-    openCompiledForm(descriptor, url).then(model => {
+    openForm(start, url).then(model => {
       if (cancelled) model.dispose();
       else setModel(opened = model);
     }, error => { if (!cancelled) setFailure(message(error)); });
     return () => { cancelled = true; opened?.dispose(); };
-  }, [descriptor, url]);
+  }, [start, url]);
   if (failure !== undefined) return <p className="error" role="alert">{failure}</p>;
   if (!model) return <p role="status">Loading…</p>;
   return <OpenForm model={model} components={{ ...defaultComponents, ...components }}
@@ -48,21 +48,30 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
   const [snapshot, setSnapshot] = useState(() => model.snapshot());
   const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(new Map());
   useEffect(() => onSnapshot?.(snapshot), [snapshot, onSnapshot]);
+  // The opened snapshot may already request data; Lean ignores repeated responses.
+  useEffect(() => performAll(model.snapshot()), [model]);
 
   function send(event: Wire.Event): Wire.Snapshot {
     const next = model.send({ event: { message: event } });
     setSnapshot(next);
     setDrafts(drafts => new Map([...drafts].filter(([name]) => next.draftFields.includes(name))));
-    for (const { url, ...request } of next.effects) void perform(url, request);
+    performAll(next);
     return next;
   }
 
-  async function perform(url: string, request: RequestInit) {
-    let event: Wire.Event;
+  function performAll(snapshot: Wire.Snapshot) {
+    for (const effect of snapshot.effects) void perform(effect);
+  }
+
+  /** Sends the request and reports its outcome: `submitted` for the submission, else `fetched`. */
+  async function perform(effect: Wire.Effect) {
+    const { url, ...request } = 'submit' in effect ? effect.submit.request : effect.fetch.request;
+    let outcome: Wire.HttpOutcome;
     try {
       const response = await fetch(url, request);
-      event = { complete: { status: response.status, body: await response.text() } };
-    } catch (error) { event = { failed: { message: message(error) } }; }
+      outcome = { response: { status: response.status, body: await response.text() } };
+    } catch (error) { outcome = { unreachable: { message: message(error) } }; }
+    const event: Wire.Event = 'submit' in effect ? { submitted: { outcome } } : { fetched: { id: effect.fetch.id, outcome } };
     try { send(event); } catch (error) { onFailure(error); }
   }
 

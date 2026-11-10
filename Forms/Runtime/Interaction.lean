@@ -6,38 +6,23 @@ public import Forms.Runtime.Identity
 
 namespace Forms.Runtime.Interaction
 
-inductive Submission where
-  | idle
-  | requested
-  | pending
-  deriving Inhabited
-
 inductive Notice where
   | info (message : String)
   | error (message : String)
 
 structure State where
-  submission : Submission
+  /-- A submission was sent and its outcome has not arrived. -/
+  pending : Bool
   notice : Notice
   resultVisible : Bool
   /-- Why the last event's `apply` was rejected. -/
   rejection : Option String
 
 def State.initial : State where
-  submission := .idle
+  pending := false
   notice := .info ""
   resultVisible := false
   rejection := none
-
-def State.pending (state : State) : Bool :=
-  match state.submission with
-  | .idle => false
-  | _ => true
-
-def State.send (state : State) : Bool :=
-  match state.submission with
-  | .requested => true
-  | _ => false
 
 def State.status (state : State) : String :=
   match state.notice with
@@ -48,12 +33,6 @@ def State.error (state : State) : Bool :=
   match state.notice with
   | .error _ => true
   | .info _ => false
-
-def State.acknowledge (state : State) : State :=
-  let submission := match state.submission with
-    | .requested => .pending
-    | other => other
-  { state with submission }
 
 def State.announce (state : State) (status : String) (error := false) : State :=
   { state with notice := if error then .error status else .info status }

@@ -46,7 +46,7 @@ def FormDefinition.ofModel
   Raw := FormModel.Raw model
   initial := toJson initial
   openState value := do
-    let state := ModelForm.openState (← fromJson? value)
+    let state := ModelForm.load form (ModelForm.openState (← fromJson? value))
     pure (state, ModelForm.snapshot (model := model) form state)
   execute state command := do
     let state ← ModelForm.execute (model := model) form state command
@@ -74,8 +74,8 @@ structure FormInstance where
 
 instance : Inhabited FormInstance := ⟨.mk fun _ => .error "Uninitialized form"⟩
 
-/-- The descriptor that opens a new `name` form. -/
-def RegisteredForm.descriptor (form : RegisteredForm) (name fingerprint : String) : Wire.CompiledDescriptor :=
+/-- The `FormStart` that opens a new `name` form. -/
+def RegisteredForm.start (form : RegisteredForm) (name fingerprint : String) : Wire.FormStart :=
   { form := name, fingerprint, value := form.definition.initial }
 
 def RegisteredForm.toWire

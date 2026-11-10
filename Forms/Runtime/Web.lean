@@ -18,7 +18,7 @@ inductive GetRoute where
   | wasmLoader
   | wasmBinary
   | stylesheet
-  | compiledSpecification
+  | formStart
   deriving DecidableEq, Lean.ToJson
 
 /-- Also generated into `web/generated/routes.ts`. -/
@@ -28,10 +28,10 @@ def GetRoute.path : GetRoute → String
   | .wasmLoader => "/wasm/forms.mjs"
   | .wasmBinary => "/wasm/forms.wasm"
   | .stylesheet => "/style.css"
-  | .compiledSpecification => "/api/compiled-form"
+  | .formStart => "/api/form-start"
 
 def GetRoute.all : List GetRoute :=
-  [.index, .script, .wasmLoader, .wasmBinary, .stylesheet, .compiledSpecification]
+  [.index, .script, .wasmLoader, .wasmBinary, .stylesheet, .formStart]
 
 theorem GetRoute.mem_all (route : GetRoute) : route ∈ all := by
   cases route <;> decide
@@ -105,7 +105,9 @@ structure Application where
   wasmLoader : Option String
   wasmBinary : Option ByteArray
   style : String
-  compiledForm : Lean.Json
+  formStart : Lean.Json
+  /-- Responses of the data endpoints forms load from. -/
+  api : Model.HttpRequest → Option Lean.Json
 
 def Application.get
   (app : Application)
@@ -117,7 +119,38 @@ def Application.get
   | .wasmLoader => app.wasmLoader.map .javascript
   | .wasmBinary => app.wasmBinary.map .wasm
   | .stylesheet => some (.css app.style)
-  | .compiledSpecification => some (.json app.compiledForm)
+  | .formStart => some (.json app.formStart)
+
+/-- The logged request body, or the response rejecting a body over 1 MiB. -/
+def Application.readBody
+  (app : Application)
+  (label : String)
+  (request : Request Body.Stream)
+  : Async (Except (Response Body.Full) String) := do
+  let body ← try request.body.readAll (maximumSize := some (1024 * 1024))
+    catch _ =>
+      app.logger.write (TrafficLog.request label (some (.text "Body could not be read within the 1 MiB limit")))
+      return .error (← respond app.logger label .payloadTooLarge
+        (.json (requestErrorJson "Request body could not be read within the 1 MiB limit")))
+  app.logger.write (TrafficLog.request label (some (TrafficLog.json body)))
+  return .ok body
+
+/-- Answers a POST to a data endpoint at `path`. -/
+def Application.call
+  (app : Application)
+  (label path : String)
+  (request : Request Body.Stream)
+  : Async (Response Body.Full) := do
+  let respond := respond app.logger label
+  if request.line.method != .post then
+    app.logger.write (TrafficLog.request label)
+    return ← respond .notFound (.text "Not found")
+  match ← app.readBody label request with
+  | .error response => return response
+  | .ok body =>
+    match app.api { method := .post, url := path, body := some body } with
+    | some json => respond .ok (.json json)
+    | none => respond .notFound (.text "Not found")
 
 def Application.submit
   (app : Application)
@@ -125,12 +158,9 @@ def Application.submit
   (request : Request Body.Stream)
   : Async (Response Body.Full) := do
   let respond := respond app.logger label
-  let body ← try request.body.readAll (maximumSize := some (1024 * 1024))
-    catch _ =>
-      app.logger.write (TrafficLog.request label (some (.text "Body could not be read within the 1 MiB limit")))
-      return ← respond .payloadTooLarge
-        (.json (requestErrorJson "Request body could not be read within the 1 MiB limit"))
-  app.logger.write (TrafficLog.request label (some (TrafficLog.json body)))
+  let body ← match ← app.readBody label request with
+    | .error response => return response
+    | .ok body => pure body
   match Lean.Json.parse body with
   | .error error => respond .badRequest (.json (requestErrorJson error))
   | .ok submission =>
@@ -143,9 +173,9 @@ instance : Server.Handler Application where
   onRequest app request := do
     let label := s!"{request.line.method} {request.line.uri}"
     let respond := respond app.logger label
-    let some route := Route.ofPath (toString request.line.uri.path)
-      | app.logger.write (TrafficLog.request label)
-        respond .notFound (.text "Not found")
+    let path := toString request.line.uri.path
+    let some route := Route.ofPath path
+      | app.call label path request
     if request.line.method != route.method then
       app.logger.write (TrafficLog.request label)
       let response ← respond .methodNotAllowed (.text "Method not allowed")
@@ -186,6 +216,7 @@ def checkWasmFingerprint (binary : ByteArray) : IO Unit :=
 def run
   (name : String)
   (form : RegisteredForm)
+  (api : Model.HttpRequest → Option Lean.Json)
   (port : UInt16 := 8080)
   (openBrowser : Bool := false)
   : IO Unit := do
@@ -193,7 +224,7 @@ def run
     then some <$> IO.FS.readBinFile "web/dist/wasm/forms.wasm" else pure none
   if let some binary := wasmBinary then checkWasmFingerprint binary
   let app : Application := {
-    compiledForm := Lean.toJson (form.descriptor name ExampleForms.formFingerprint)
+    formStart := Lean.toJson (form.start name ExampleForms.formFingerprint)
     logger := ← TrafficLog.Logger.create
     form := { submit := form.definition.verify name ExampleForms.formFingerprint }
     html := ← IO.FS.readFile "web/index.html"
@@ -202,6 +233,7 @@ def run
       then some <$> IO.FS.readFile "web/dist/wasm/forms.mjs" else pure none
     wasmBinary
     style := ← IO.FS.readFile "web/style.css"
+    api
   }
   Async.block do
     let address : Net.SocketAddress := .v4 ⟨.ofParts 127 0 0 1, port⟩
