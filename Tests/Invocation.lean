@@ -69,8 +69,9 @@ def run : IO Unit := do
       == some "Road")
   check "InvocationHidden"
     (rejected Person.form Person.initial street (some (.text "Road")) == stale .hidden)
+  let manyItems := { Order.initial with quantity := 11 }
   check "InvocationDisabled"
-    (rejected Person.form ⟨"Ada", 17, true, ⟨"Lambda Lane"⟩⟩ street (some (.text "Road"))
+    (rejected Order.form manyItems (keyOf Order.form manyItems "Gift wrap") (some (.boolean true))
       == stale .disabled)
   check "InvocationMissingArgument"
     (rejected Person.form Person.initial (keyOf Person.form Person.initial "Age") none

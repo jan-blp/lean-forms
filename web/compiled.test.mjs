@@ -63,19 +63,21 @@ test('initialization rejects unknown forms, incompatible revisions, and malforme
 });
 
 test('hidden and disabled controls reject stale edits', async () => {
-  const model = await open(fixture('person').start);
-  const apply = (label, argument) => model.send({ apply: {
-    key: model.snapshot().controls.find(c => c.label === label).key, argument } });
+  const person = await open(fixture('person').start);
+  const order = await open(fixture('order').start);
+  const key = (model, label) => model.snapshot().controls.find(c => c.label === label).key;
+  const apply = (model, label, argument) => model.send({ apply: { key: key(model, label), argument } });
   try {
-    apply('Request delivery', true);
-    const key = model.snapshot().controls.find(c => c.label === 'Street').key;
-    apply('Age', '17');
-    assert.throws(() => model.send({ apply: { key, argument: 'Changed' } }), /unavailable/);
-    apply('Age', '20');
-    apply('Request delivery', false);
-    assert.throws(() => model.send({ apply: { key, argument: 'Changed' } }), /unavailable/);
-    assert.equal(model.snapshot().submission.value.address.street, 'Lambda Lane');
-  } finally { model.dispose(); }
+    apply(person, 'Request delivery', true);
+    const street = key(person, 'Street');
+    apply(person, 'Request delivery', false);
+    assert.throws(() => person.send({ apply: { key: street, argument: 'Changed' } }), /unavailable/);
+    assert.equal(person.snapshot().submission.value.address.street, 'Lambda Lane');
+    const gift = key(order, 'Gift wrap');
+    apply(order, 'Quantity', '11');
+    assert.throws(() => order.send({ apply: { key: gift, argument: true } }), /unavailable/);
+    assert.equal(order.snapshot().submission.value.gift, false);
+  } finally { person.dispose(); order.dispose(); }
 });
 
 test('compiled model disposal releases memory and disposed handles stay invalid', async () => {
