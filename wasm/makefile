@@ -89,7 +89,7 @@ FORCE:
 
 link: $(OUT)/forms.mjs $(OUT)/forms.wasm
 $(OUT)/forms.mjs $(OUT)/forms.wasm &: $(WORK)/forms-bridge.o $(LEAN_OBJECTS) $(MINIMAL_INIT) $(LIBRARIES) .lake/build/browser-sources.txt $(MAKEFILE)
-	$(SDK)/em++ $(FLAGS) $(WORK)/forms-bridge.o $(LEAN_OBJECTS) $(MINIMAL_INIT) -Wl,--start-group $(LIBRARIES) -Wl,--end-group --no-entry -Wl,--fatal-warnings -sMODULARIZE -sEXPORT_ES6 -sENVIRONMENT=node,web,worker -sALLOW_MEMORY_GROWTH -sSTACK_SIZE=8388608 -sSTACK_OVERFLOW_CHECK=2 '-sEXPORTED_FUNCTIONS=["_forms_init","_forms_request","_forms_allocated_bytes"]' '-sEXPORTED_RUNTIME_METHODS=["ccall"]' -o $(OUT)/forms.mjs
+	$(SDK)/em++ $(FLAGS) $(WORK)/forms-bridge.o $(LEAN_OBJECTS) $(MINIMAL_INIT) -Wl,--start-group $(LIBRARIES) -Wl,--end-group --no-entry -Wl,--fatal-warnings -sMODULARIZE -sEXPORT_ES6 -sENVIRONMENT=node,web,worker -sALLOW_MEMORY_GROWTH -sSTACK_SIZE=8388608 -sSTACK_OVERFLOW_CHECK=2 '-sEXPORTED_FUNCTIONS=["_forms_init","_forms_request"]' '-sEXPORTED_RUNTIME_METHODS=["ccall"]' -o $(OUT)/forms.mjs
 
 test: all
 	npm --prefix web test

@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: leanprover/lean-action@v1
+
+      - name: Check generated files
+        run: git diff --exit-code -- packages/react/src/protocol web/generated
+
+      - name: Restore Wasm toolchains and runtime
+        id: wasm-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            .lake/wasm/toolchains
+            .lake/wasm/full-runtime-*
+          key: wasm-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'wasm/makefile', 'wasm/*.patch') }}
+
+      - name: Build Wasm
+        run: |
+          make -f wasm/makefile setup
+          make -f wasm/makefile JOBS=4
+
+      # Saved before the tests so a failing test does not discard the runtime build.
+      - name: Save Wasm toolchains and runtime
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            .lake/wasm/toolchains
+            .lake/wasm/full-runtime-*
+          key: ${{ steps.wasm-cache.outputs.cache-primary-key }}
+
+      - name: Install Fish
+        run: sudo apt-get update && sudo apt-get install -y fish
+
+      - name: Compiled forms
+        run: node --test web/compiled.test.mjs
+
+      - name: HTTP server
+        run: python3 tools/test_web.py
+
+      - name: CLI completion
+        run: python3 tools/test_cli.py
+
+      - name: Browser
+        run: node tools/test_browser.mjs

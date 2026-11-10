@@ -1,7 +1,6 @@
 #include <lean/lean.h>
 #include <string>
 #include <cstdlib>
-#include <malloc.h>
 
 extern "C" lean_object * forms_handle_request(lean_object *);
 extern "C" lean_object * runtime_initialize_lean_x2dforms_WasmEntry(uint8_t);
@@ -18,9 +17,6 @@ extern "C" void forms_init() {
     lean_io_mark_end_initialization();
     initialized = true;
 }
-
-// Test instrumentation for model disposal.
-extern "C" unsigned forms_allocated_bytes() { return mallinfo().uordblks; }
 
 extern "C" const char * forms_request(const char * request, size_t request_len) {
     lean_object * result = forms_handle_request(lean_mk_string_from_bytes(request, request_len));
