@@ -28,6 +28,7 @@ inductive ValidBranchInvocation
   | select
   | edit (payload : payload) (active : current = some payload) (invocation : valid payload)
 
+/-- Why an invocation does not apply to the current value. -/
 inductive InvocationError where
   | hidden
   | disabled

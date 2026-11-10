@@ -69,16 +69,55 @@ def snapshot
     summary := state.serverFeedback.map (·.message) |>.getD (Feedback.summary visible),
     submissionBlocked := !visible.isEmpty }
 
-inductive Rejection where
+inductive StaleError where
   | pending
-  | decode (error : ModelView.DecodeError)
   | invocation (error : Model.InvocationError)
+  deriving DecidableEq, Repr
+
+instance : ToString StaleError where
+  toString
+    | .pending => "Submission is in progress."
+    | .invocation error => toString error
+
+/-- Why an action was not applied. -/
+inductive Rejection where
+  | input (message : String)
+  | stale (error : StaleError)
+  | clientBug (error : ClientBug)
+  deriving DecidableEq, Repr
 
 instance : ToString Rejection where
   toString
-    | .pending => "Submission is in progress."
-    | .decode error => toString error
-    | .invocation error => toString error
+    | .input message => message
+    | .stale error => toString error
+    | .clientBug error => toString error
+
+def Rejection.ofDecode : DecodeError → Rejection
+  | .input message => .input message
+  | .clientBug error => .clientBug error
+
+/-- The checked invocation that `key` and `argument` name. -/
+def validateAction
+  {raw : Type}
+  (form : Model.Component raw)
+  (state : State raw)
+  (key : ControlKey)
+  (argument : Option Input)
+  : Except Rejection (form.ValidInvocation state.value) := do
+  if state.ui.pending then throw (.stale .pending)
+  let invocation ← (ModelView.decodeKey form key argument).mapError .ofDecode
+  (form.validate state.value invocation).mapError fun error => .stale (.invocation error)
+
+def applyValid
+  {raw : Type}
+  (form : Model.Component raw)
+  (state : State raw)
+  (invocation : form.ValidInvocation state.value)
+  : State raw :=
+  { state with
+    value := form.applyValid state.value invocation
+    serverFeedback := none
+    ui := { state.ui with notice := .info "", resultVisible := false } }
 
 def apply
   {raw : Type}
@@ -87,12 +126,7 @@ def apply
   (key : ControlKey)
   (argument : Option Input)
   : Except Rejection (State raw) := do
-  if state.ui.pending then throw .pending
-  let invocation ← (ModelView.decodeKey form key argument).mapError .decode
-  let value ← (form.apply state.value invocation).mapError .invocation
-  pure { state with
-    value, serverFeedback := none
-    ui := { state.ui with notice := .info "", resultVisible := false } }
+  return applyValid form state (← validateAction form state key argument)
 
 def submit
   {model : Type}
@@ -118,6 +152,7 @@ def event
   | .apply key argument =>
     match apply form state key argument with
     | .ok state => pure state
+    | .error (.clientBug error) => throw (toString error)
     | .error rejection =>
       let message := toString rejection
       let ui := if state.ui.pending then state.ui else state.ui.announce message true

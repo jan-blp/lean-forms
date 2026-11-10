@@ -167,32 +167,16 @@ def renderBranch
       render body payload errors disabled target (location ++ [.constructor key])
 end
 
-inductive DecodeError where
-  | unknownControl
-  | missingArgument
-  | unexpectedArgument
-  | invalidArgument (message : String)
-  | unknownOption
-  deriving DecidableEq, Repr
-
-instance : ToString DecodeError where
-  toString
-    | .unknownControl => "This action is unavailable."
-    | .missingArgument => "Missing action argument."
-    | .unexpectedArgument => "This action takes no argument."
-    | .invalidArgument message => message
-    | .unknownOption => "Unknown option."
-
 def noArgument {α : Type} (argument : Option Input) (invocation : α) : Except DecodeError α :=
   match argument with
   | none => .ok invocation
-  | some _ => .error .unexpectedArgument
+  | some _ => .error (.clientBug .unexpectedArgument)
 
 def selectBranch
   {sum : Type}
   (key : String)
   : (branches : Model.Branches sum) → Except DecodeError branches.Invocation
-  | .nil => .error .unknownOption
+  | .nil => .error (.clientBug .unknownOption)
   | .cons (.mk branchKey ..) tail =>
     if branchKey == key then
       .ok (Sum.inl Model.BranchInvocation.select)
@@ -210,22 +194,22 @@ def decode
   match component, target with
   | .field _ _ widget, [] =>
     match argument with
-    | some input => (Input.decode widget input).mapError .invalidArgument
-    | none => .error .missingArgument
+    | some input => Input.decode widget input
+    | none => .error (.clientBug .missingArgument)
   | .groupOf _ children, index :: rest => decodeAll children index rest argument
   | .visibleWhen _ body, target => decode body target argument
   | .disabledWhen _ body, target => decode body target argument
   | .choiceOf _ _ branches, [] =>
     match argument with
     | some (.text key) => selectBranch key branches
-    | some _ => .error (.invalidArgument "Expected an option.")
-    | none => .error .missingArgument
+    | some _ => .error (.clientBug (.wrongArgument "an option"))
+    | none => .error (.clientBug .missingArgument)
   | .choiceOf _ _ branches, index :: rest => decodeBranches branches index rest argument
   | .list .., [] => noArgument argument Model.ListInvocation.add
   | .list .., [index, 1] => noArgument argument (Model.ListInvocation.remove index)
   | .list _ _ _ _ body, index :: 0 :: rest =>
     Model.ListInvocation.edit index <$> decode body rest argument
-  | _, _ => .error .unknownControl
+  | _, _ => .error (.clientBug .unknownControl)
 
 def decodeAll
   {raw : Type}
@@ -235,7 +219,7 @@ def decodeAll
   (argument : Option Input)
   : Except DecodeError children.Invocation :=
   match children, index with
-  | .nil, _ => .error .unknownControl
+  | .nil, _ => .error (.clientBug .unknownControl)
   | .cons head _, 0 => Sum.inl <$> decode head target argument
   | .cons _ tail, index + 1 => Sum.inr <$> decodeAll tail index target argument
 
@@ -256,7 +240,7 @@ def decodeBranches
   (argument : Option Input)
   : Except DecodeError branches.Invocation :=
   match branches, index with
-  | .nil, _ => .error .unknownControl
+  | .nil, _ => .error (.clientBug .unknownControl)
   | .cons head _, 0 => Sum.inl <$> decodeBranch head target argument
   | .cons _ tail, index + 1 => Sum.inr <$> decodeBranches tail index target argument
 end
@@ -269,6 +253,6 @@ def decodeKey
   : Except DecodeError component.Invocation :=
   match DisplayProtocol.keyTarget key with
   | some target => decode component target.indices argument
-  | none => .error .unknownControl
+  | none => .error (.clientBug .unknownControl)
 
 end Forms.Runtime.ModelView
