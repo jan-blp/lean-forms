@@ -29,8 +29,9 @@ jobs:
       - name: Check generated files
         run: git diff --exit-code -- packages/react/src/protocol web/generated
 
-      - name: Cache Wasm toolchains and runtime
-        uses: actions/cache@v6
+      - name: Restore Wasm toolchains and runtime
+        id: wasm-cache
+        uses: actions/cache/restore@v6
         with:
           path: |
             .lake/wasm/toolchains
@@ -41,6 +42,16 @@ jobs:
         run: |
           make -f wasm/makefile setup
           make -f wasm/makefile JOBS=4
+
+      # Saved before the tests so a failing test does not discard the runtime build.
+      - name: Save Wasm toolchains and runtime
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            .lake/wasm/toolchains
+            .lake/wasm/full-runtime-*
+          key: ${{ steps.wasm-cache.outputs.cache-primary-key }}
 
       - name: Install Fish
         run: sudo apt-get update && sudo apt-get install -y fish
