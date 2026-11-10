@@ -278,6 +278,21 @@ try {
     check(submitted.expenses.length === 1 && submitted.expenses[0].amount === 25, 'Submitted value wrong');
   `);
 
+  await example('invoice', `
+    const choice = label => [...document.querySelectorAll('fieldset.choice')]
+      .find(f => f.querySelector('legend').textContent === label);
+    const choose = async (label, option) => {
+      [...choice(label).querySelectorAll('input[type=radio]')]
+        .find(r => r.parentElement.textContent === option).click();
+      await tick();
+    };
+    await wait(() => choice('Supplier'));
+    await choose('Supplier', 'ACME AG');
+    await wait(() => choice('Contact') && field('Purchase order'));
+    await choose('Contact', 'Ben Keller');
+    await edit('Purchase order', 'PO-1');
+  `);
+
 } finally {
   socket?.close();
   await Promise.all([stop(firefox), stop(server)]);

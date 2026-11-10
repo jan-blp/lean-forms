@@ -30,7 +30,8 @@ for (const { descriptor, initial, cases } of fixtures) {
         model.send({ apply: { key: action.key, argument: action.argument ?? null } });
         assert.deepEqual(snapshot(model), expected);
         model.send('reset');
-        assert.deepEqual(snapshot(model), initial);
+        // Reset does not resend requests still in flight.
+        assert.deepEqual(snapshot(model), { ...initial, effects: initial.effects.filter(e => e.id === null) });
       }
     } finally { model.dispose(); }
   });

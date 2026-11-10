@@ -16,6 +16,18 @@ structure Submission (raw : Type) where
   value : raw
   deriving ToJson, FromJson
 
+def fetchEffect (request : Model.HttpRequest) : Wire.HttpEffect where
+  url := request.url
+  method := match request.method with
+    | .get => .GET
+    | .post => .POST
+  headers := { «Content-Type» := "application/json" }
+  body := request.body
+  id := some (toJson request).compress
+
+def fetchedRequest (id : String) : Except String Model.HttpRequest :=
+  Json.parse id >>= fromJson?
+
 def ModelForm.Snapshot.toWire
   {raw : Type}
   [ToJson raw]
@@ -33,9 +45,12 @@ def ModelForm.Snapshot.toWire
     controls := snapshot.controls.map DisplayProtocol.controlToJson
     submission
     errors := snapshot.errors.map FeedbackProtocol.errorToJson
-    effects := if snapshot.ui.send then [{
-      url := submitUrl, method := .POST
-      headers := { «Content-Type» := "application/json" }, body := submission.compress }] else [] }
+    effects :=
+      let submit : List Wire.HttpEffect := if snapshot.ui.send then [{
+        url := submitUrl, method := .POST
+        headers := { «Content-Type» := "application/json" }, body := some submission.compress, id := none }]
+        else []
+      submit ++ snapshot.fetches.map fetchEffect }
 
 def ModelForm.Event.fromWire : Wire.Event → Except String ModelForm.Event
   | .apply key argument => do
@@ -46,6 +61,11 @@ def ModelForm.Event.fromWire : Wire.Event → Except String ModelForm.Event
   | .complete status body => .ok (.complete (if 200 ≤ status && status < 300 then none
       else some (FeedbackProtocol.serverError status body)))
   | .failed message => .ok (.failed message)
+  | .fetched id status body => do
+    let response := if 200 ≤ status && status < 300 then Json.parse body
+      else .error s!"The server responded with status {status}."
+    pure (.loaded (← fetchedRequest id) response)
+  | .unreachable id message => do pure (.loaded (← fetchedRequest id) (.error message))
 
 def ModelForm.Command.fromWire : Wire.Command → Except String ModelForm.Command
   | .event message => ModelForm.Command.event <$> ModelForm.Event.fromWire message

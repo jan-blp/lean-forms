@@ -13,6 +13,10 @@ inductive Event where
   | reset
   | complete (status : Nat) (body : String)
   | failed (message : String)
+  /-- The response to the effect with `id`. -/
+  | fetched (id : String) (status : Nat) (body : String)
+  /-- The effect with `id` got no response. -/
+  | unreachable (id : String) (message : String)
   deriving ToJson, FromJson
 
 inductive Command where
@@ -37,6 +41,7 @@ inductive Request where
   deriving ToJson, FromJson
 
 inductive HttpMethod where
+  | GET
   | POST
   deriving ToJson, FromJson
 
@@ -48,7 +53,9 @@ structure HttpEffect where
   url : String
   method : HttpMethod
   headers : HttpHeaders
-  body : String
+  body : Option String
+  /-- Echoed in `fetched` and `unreachable` events; none for the submission. -/
+  id : Option String
   deriving ToJson, FromJson
 
 /-- Browser-facing snapshot returned after opening or updating a form. -/

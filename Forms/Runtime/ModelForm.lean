@@ -2,6 +2,7 @@ module
 
 public import Forms.Runtime.ModelView
 public import Forms.Runtime.Interaction
+public import Forms.Model.Requests
 
 @[expose] public section
 namespace Forms.Runtime.ModelForm
@@ -12,6 +13,9 @@ structure State (raw : Type) where
   ui : Interaction.State
   validationStarted : Bool
   serverFeedback : Option Feedback.ServerError
+  cache : Model.HttpRequest.Cache
+  /-- Requests to send with this snapshot. -/
+  fetches : List Model.HttpRequest
 
 def openState {raw : Type} (value : raw) : State raw where
   initial := value
@@ -19,6 +23,23 @@ def openState {raw : Type} (value : raw) : State raw where
   ui := .initial
   validationStarted := false
   serverFeedback := none
+  cache := {}
+  fetches := []
+
+/-- Marks the requests `form` reads but has not loaded as loading, and queues them. -/
+def load {raw : Type} (form : Model.Component raw) (state : State raw) : State raw :=
+  let missing := ((form.requests state.cache state.value).filter (!state.cache.contains ·)).eraseDups
+  { state with
+    cache := missing.foldl (fun cache request => cache.insert request .loading) state.cache
+    fetches := state.fetches ++ missing }
+
+/-- Starts over from `initial`, keeping loaded responses; failed requests are retried. -/
+def restart {raw : Type} (state : State raw) : State raw :=
+  { openState state.initial with
+    cache := state.cache.filter fun _ response => match response with
+      | .failed _ => false
+      | .loading => true
+      | .loaded _ => true }
 
 inductive Event where
   | apply (key : ControlKey) (argument : Option Input)
@@ -26,6 +47,7 @@ inductive Event where
   | reset
   | complete (error : Option Feedback.ServerError)
   | failed (message : String)
+  | loaded (request : Model.HttpRequest) (response : Except String Lean.Json)
 
 inductive Command where
   | event (event : Event)
@@ -51,6 +73,7 @@ structure Snapshot (raw : Type) where
   errors : List Feedback.Error
   summary : String
   submissionBlocked : Bool
+  fetches : List Model.HttpRequest
 
 def snapshot
   {model : Type}
@@ -63,11 +86,12 @@ def snapshot
   let visible := match state.serverFeedback with
     | some feedback => feedback.errors
     | none => if state.validationStarted then errors else []
-  let rendered := ModelView.render form state.value visible
+  let rendered := ModelView.render form state.value state.cache visible
   { view := rendered.view, controls := rendered.controls, value := state.value,
     ui := state.ui, errors,
     summary := state.serverFeedback.map (·.message) |>.getD (Feedback.summary visible),
-    submissionBlocked := !visible.isEmpty }
+    submissionBlocked := !visible.isEmpty
+    fetches := state.fetches }
 
 inductive StaleError where
   | pending
@@ -103,19 +127,19 @@ def validateAction
   (state : State raw)
   (key : ControlKey)
   (argument : Option Input)
-  : Except Rejection (form.ValidInvocation state.value) := do
+  : Except Rejection (form.ValidInvocation state.cache state.value) := do
   if state.ui.pending then throw (.stale .pending)
   let invocation ← (ModelView.decodeKey form key argument).mapError .ofDecode
-  (form.validate state.value invocation).mapError fun error => .stale (.invocation error)
+  (form.validate state.cache state.value invocation).mapError fun error => .stale (.invocation error)
 
 def applyValid
   {raw : Type}
   (form : Model.Component raw)
   (state : State raw)
-  (invocation : form.ValidInvocation state.value)
+  (invocation : form.ValidInvocation state.cache state.value)
   : State raw :=
   { state with
-    value := form.applyValid state.value invocation
+    value := form.applyValid state.cache state.value invocation
     serverFeedback := none
     ui := { state.ui with notice := .info "", resultVisible := false } }
 
@@ -159,7 +183,7 @@ def event
       pure { state with ui := { ui with rejection := some message } }
   | .submit => pure (submit (model := model) state)
   | .reset => pure (if state.ui.pending then state else
-      { (openState state.initial) with ui := { Interaction.State.initial with notice := .info "Started over." } })
+      { restart state with ui := { Interaction.State.initial with notice := .info "Started over." } })
   | .complete error =>
     if !state.ui.pending then return state
     match error with
@@ -170,8 +194,16 @@ def event
         ui := { (state.ui.announce feedback.message true) with submission := .idle } }
   | .failed message => pure (if state.ui.pending then
       { state with ui := { (state.ui.announce message true) with submission := .idle } } else state)
+  | .loaded request response =>
+    match state.cache[request]? with
+    | some .loading =>
+      let cached := match response with
+        | .ok json => .loaded json
+        | .error message => .failed message
+      pure { state with cache := state.cache.insert request cached }
+    | _ => pure state
 
-def execute
+def step
   {model : Type}
   [FormModel model]
   [Model.Validation model]
@@ -181,8 +213,19 @@ def execute
   | .event input => event (model := model) form state input
   | .apply key argument => (apply form state key argument).mapError toString
   | .validate => .ok { state with validationStarted := true, serverFeedback := none }
-  | .reset => if state.ui.pending then .error "Submission is in progress." else .ok (openState state.initial)
+  | .reset => if state.ui.pending then .error "Submission is in progress." else .ok (restart state)
   | .serverError error => .ok { state with serverFeedback := some error }
   | .inspect => .ok state
+
+/-- Runs `command`, then queues the requests the new state reads. -/
+def execute
+  {model : Type}
+  [FormModel model]
+  [Model.Validation model]
+  (form : Model.Component (FormModel.Raw model))
+  (state : State (FormModel.Raw model))
+  (command : Command)
+  : Except String (State (FormModel.Raw model)) :=
+  load form <$> step (model := model) form { state with fetches := [] } command
 
 end Forms.Runtime.ModelForm

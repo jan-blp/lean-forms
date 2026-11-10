@@ -28,7 +28,8 @@ def run : IO Unit := do
   check "Nullable field must be present" (((toJson absent).getObjVal? "required").toOption == some Json.null)
   check "Optional field must be omitted" (!((toJson absent).getObjVal? "omitted").isOk)
   for event in [Event.apply "key" Json.null, .apply "key" (toJson "12"),
-      .submit, .reset, .complete 200 "ok", .failed "offline"] do
+      .submit, .reset, .complete 200 "ok", .failed "offline", .fetched "id" 200 "[]",
+      .unreachable "id" "offline"] do
     roundtrip event
     roundtrip (Command.event event)
   check "Payload-free constructors encode as strings" (toJson Event.submit == toJson "submit")

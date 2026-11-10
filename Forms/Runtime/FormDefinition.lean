@@ -46,7 +46,7 @@ def FormDefinition.ofModel
   Raw := FormModel.Raw model
   initial := toJson initial
   openState value := do
-    let state := ModelForm.openState (← fromJson? value)
+    let state := ModelForm.load form (ModelForm.openState (← fromJson? value))
     pure (state, ModelForm.snapshot (model := model) form state)
   execute state command := do
     let state ← ModelForm.execute (model := model) form state command

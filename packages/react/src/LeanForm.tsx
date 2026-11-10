@@ -48,21 +48,31 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
   const [snapshot, setSnapshot] = useState(() => model.snapshot());
   const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(new Map());
   useEffect(() => onSnapshot?.(snapshot), [snapshot, onSnapshot]);
+  // The opened snapshot may already request data; Lean ignores repeated responses.
+  useEffect(() => performAll(model.snapshot()), [model]);
 
   function send(event: Wire.Event): Wire.Snapshot {
     const next = model.send({ event: { message: event } });
     setSnapshot(next);
     setDrafts(drafts => new Map([...drafts].filter(([name]) => next.draftFields.includes(name))));
-    for (const { url, ...request } of next.effects) void perform(url, request);
+    performAll(next);
     return next;
   }
 
-  async function perform(url: string, request: RequestInit) {
+  function performAll(snapshot: Wire.Snapshot) {
+    for (const { url, id, ...request } of snapshot.effects) void perform(url, request, id);
+  }
+
+  /** Sends the response back as `fetched` when the effect has an `id`, else as the submission's. */
+  async function perform(url: string, request: RequestInit, id: string | null) {
     let event: Wire.Event;
     try {
       const response = await fetch(url, request);
-      event = { complete: { status: response.status, body: await response.text() } };
-    } catch (error) { event = { failed: { message: message(error) } }; }
+      const status = response.status, body = await response.text();
+      event = id === null ? { complete: { status, body } } : { fetched: { id, status, body } };
+    } catch (error) {
+      event = id === null ? { failed: { message: message(error) } } : { unreachable: { id, message: message(error) } };
+    }
     try { send(event); } catch (error) { onFailure(error); }
   }
 
