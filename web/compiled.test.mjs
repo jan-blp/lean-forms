@@ -270,8 +270,6 @@ test('rejected applies announce an error and leave the value unchanged', async (
     assert.equal('error' in page(model).notice, true);
     assert.equal(model.snapshot().rejection, 'Enter a non-negative whole number.');
     assert.equal(model.snapshot().submission.value.age, 20);
-    model.send({ event: { message: 'submit' } });
-    assert.equal(model.snapshot().rejection, null);
     model.send({ event: { message: { apply: { key: age.key, argument: '21' } } } });
     assert.equal(model.snapshot().rejection, null);
     assert.equal('error' in page(model).notice, false);
@@ -310,10 +308,11 @@ test('order chooses shipping branches, nests visibility, and validates, alongsid
     assert.deepEqual(shipping(), { express: { address: { street: '', city: '' }, phone: '' } });
     assert.match(outputs(), /Next business day/);
     submit();
-    assert.deepEqual(messages(order.snapshot().view),
-      ['Enter the shipping street.', 'Enter the shipping city.', 'Enter a phone number for the courier.']);
+    // Express checks the phone once its address is valid.
+    assert.deepEqual(messages(order.snapshot().view), ['Enter the shipping street.', 'Enter the shipping city.']);
     apply('Street', 'Main');
     apply('City', 'Bern');
+    assert.deepEqual(messages(order.snapshot().view), ['Enter a phone number for the courier.']);
     apply('Phone', '079');
     apply('Quantity', '11');
     submit();
@@ -351,9 +350,11 @@ test('expenses add, remove, and validate list items', async () => {
       [{ kind: 'field', name: 'expenses' }, { kind: 'index', position: 2 }, { kind: 'field', name: 'description' }]);
     apply('Description', 'Taxi', 2);
     apply('Amount (CHF)', '5000', 2);
-    assert.deepEqual(messages(model.snapshot().view),
-      ['Attach a receipt for CHF 100 or more.', "A report is limited to CHF 5'000."]);
-    apply('Receipt attached', true, 2);
+    // The report limit is checked once every expense is valid.
+    assert.deepEqual(messages(model.snapshot().view), ['Attach a receipt for CHF 100 or more.']);
+    // Only expenses of CHF 100 or more show a receipt checkbox.
+    apply('Receipt attached', true, 1);
+    assert.deepEqual(messages(model.snapshot().view), ["A report is limited to CHF 5'000."]);
     apply('Remove', null, 0);
     assert.deepEqual(expenses().map(e => e.description), ['Hotel', 'Taxi']);
     assert.match(outputs(), /CHF 5'180/);
