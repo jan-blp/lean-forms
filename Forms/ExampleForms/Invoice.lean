@@ -12,22 +12,20 @@ structure SupplierDetails where
   requiresPurchaseOrder : Bool
   deriving ToJson, FromJson
 
+/-- The example's data endpoints. -/
 inductive SupplierEndpoint where
+  /-- All suppliers, as options. -/
   | suppliers
+  /-- One supplier's details, by key. -/
   | supplier
   deriving DecidableEq, Repr
 
-def SupplierEndpoint.Input : SupplierEndpoint → Type
-  | .suppliers => Unit
-  | .supplier => String
-
-def SupplierEndpoint.Output : SupplierEndpoint → Type
-  | .suppliers => List (KeyedOption String)
-  | .supplier => SupplierDetails
+def SupplierEndpoint.signature : SupplierEndpoint → Api.Signature
+  | .suppliers => { Input := Unit, Output := List (KeyedOption String) }
+  | .supplier => { Input := String, Output := SupplierDetails }
 
 instance : Api SupplierEndpoint where
-  Input := SupplierEndpoint.Input
-  Output := SupplierEndpoint.Output
+  signature := SupplierEndpoint.signature
   path
     | .suppliers => "/api/suppliers"
     | .supplier => "/api/supplier"
@@ -36,18 +34,6 @@ instance : Api SupplierEndpoint where
     intro named
     cases named <;> decide
   distinct := by decide
-  inputToJson
-    | .suppliers => inferInstanceAs (ToJson Unit)
-    | .supplier => inferInstanceAs (ToJson String)
-  inputFromJson
-    | .suppliers => inferInstanceAs (FromJson Unit)
-    | .supplier => inferInstanceAs (FromJson String)
-  outputToJson
-    | .suppliers => inferInstanceAs (ToJson (List (KeyedOption String)))
-    | .supplier => inferInstanceAs (ToJson SupplierDetails)
-  outputFromJson
-    | .suppliers => inferInstanceAs (FromJson (List (KeyedOption String)))
-    | .supplier => inferInstanceAs (FromJson SupplierDetails)
 
 def supplierDetails : String → Option SupplierDetails
   | "acme" => some ⟨[⟨"anna", "Anna Muster"⟩, ⟨"ben", "Ben Keller"⟩], true⟩
@@ -55,7 +41,8 @@ def supplierDetails : String → Option SupplierDetails
   | "initech" => some ⟨[], true⟩
   | _ => none
 
-def SupplierEndpoint.fixture : (named : SupplierEndpoint) → named.Input → Option named.Output
+def SupplierEndpoint.fixture
+  : (named : SupplierEndpoint) → named.signature.Input → Option named.signature.Output
   | .suppliers, _ => some [⟨"acme", "ACME AG"⟩, ⟨"globex", "Globex GmbH"⟩, ⟨"initech", "Initech Ltd"⟩]
   | .supplier, id => supplierDetails id
 

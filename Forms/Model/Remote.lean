@@ -54,41 +54,48 @@ def Source.resolve {α : Type} (cache : HttpRequest.Cache) : Source α → Statu
 -- This is needed so that the desired ToJson instance for Unit takes precedence.
 attribute [instance high] instToJsonUnit instFromJsonUnit
 
-/-- Typed HTTP endpoints: a call to `named` sends an `Input named` and returns an `Output named`.
+structure Api.Signature where
+  Input : Type
+  Output : Type
+  [inputToJson : ToJson Input]
+  [inputFromJson : FromJson Input]
+  [outputToJson : ToJson Output]
+  [outputFromJson : FromJson Output]
+
+attribute [instance]
+  Api.Signature.inputToJson
+  Api.Signature.inputFromJson
+  Api.Signature.outputToJson
+  Api.Signature.outputFromJson
+
+/-- Typed HTTP endpoints: a call to `named` sends its signature's `Input` and returns its `Output`.
 Calls are POSTs of the JSON input to the endpoint's `path`. -/
 class Api (endpoint : Type) where
-  Input : endpoint → Type
-  Output : endpoint → Type
+  signature : endpoint → Api.Signature
   path : endpoint → String
   all : List endpoint
   complete : ∀ named, named ∈ all
   distinct : (all.map path).Nodup
-  inputToJson : (named : endpoint) → ToJson (Input named)
-  inputFromJson : (named : endpoint) → FromJson (Input named)
-  outputToJson : (named : endpoint) → ToJson (Output named)
-  outputFromJson : (named : endpoint) → FromJson (Output named)
 
 /-- An endpoint and its input. -/
 structure Api.Call (endpoint : Type) [Api endpoint] where
   named : endpoint
-  input : Api.Input named
+  input : (Api.signature named).Input
 
 def Api.request
   {endpoint : Type}
   [Api endpoint]
   (named : endpoint)
-  (input : Api.Input named)
+  (input : (Api.signature named).Input)
   : HttpRequest :=
-  letI := Api.inputToJson named
   { method := .post, url := Api.path named, body := some (toJson input).compress }
 
 def Api.source
   {endpoint : Type}
   [Api endpoint]
   (named : endpoint)
-  (input : Api.Input named)
-  : Source (Api.Output named) :=
-  letI := Api.outputFromJson named
+  (input : (Api.signature named).Input)
+  : Source (Api.signature named).Output :=
   .fetch (Api.request named input) fromJson?
 
 /-- The call `request` names. -/
@@ -99,20 +106,19 @@ def Api.parse
   : Option (Api.Call endpoint) := do
   guard (request.method == .post)
   let named ← (Api.all : List endpoint).find? (Api.path · == request.url)
-  let decode := (Api.inputFromJson named).fromJson?
-  let input ← (Json.parse (request.body.getD "") >>= decode).toOption
+  let input ← (Json.parse (request.body.getD "") >>= fromJson?).toOption
   return ⟨named, input⟩
 
 /-- The encoded response `handle` gives to `request`. -/
 def Api.serve
   {endpoint : Type}
   [Api endpoint]
-  (handle : (named : endpoint) → Api.Input named → Option (Api.Output named))
+  (handle : (named : endpoint) → (Api.signature named).Input → Option (Api.signature named).Output)
   (request : HttpRequest)
   : Option Json := do
   let call ← Api.parse (endpoint := endpoint) request
   let output ← handle call.named call.input
-  return (Api.outputToJson call.named).toJson output
+  return toJson output
 
 structure KeyedOption (key : Type) where
   key : key
