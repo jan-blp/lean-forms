@@ -2,17 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { openCompiledForm } from '@blp/lean-forms-react/runtime';
+import { openForm } from '@blp/lean-forms-react/runtime';
 
 const cwd = fileURLToPath(new URL('..', import.meta.url));
 execFileSync('lake', ['build', 'Forms.ExampleForms.FormFingerprint'], { cwd, stdio: 'pipe' });
 const fixtures = JSON.parse(execFileSync('lake', ['env', 'lean', '--run', 'tools/ExportCompiledForms.lean'], {
   cwd, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
 }));
-const fixture = name => fixtures.find(f => f.descriptor.form === name);
+const fixture = name => fixtures.find(f => f.start.form === name);
 
 const moduleUrl = new URL('./dist/wasm/forms.mjs', import.meta.url);
-const open = descriptor => openCompiledForm(descriptor, moduleUrl);
+const open = start => openForm(start, moduleUrl);
 function snapshot(model) { return model.snapshot(); }
 const page = model => model.snapshot().view.page;
 const submitButton = model => page(model).toolbar.find(c => c.button.onClick === 'submit').button;
@@ -21,9 +21,9 @@ const result = model => page(model).result;
 /** Field error messages in a component tree. */
 const messages = value => !value || typeof value !== 'object' ? [] :
   [...(typeof value.error === 'string' ? [value.error] : []), ...Object.values(value).flatMap(messages)];
-for (const { descriptor, initial, cases } of fixtures) {
-  test(`compiled ${descriptor.form} matches native Lean through actions, views, validation, and reset`, async () => {
-    const model = await open(descriptor);
+for (const { start, initial, cases } of fixtures) {
+  test(`compiled ${start.form} matches native Lean through actions, views, validation, and reset`, async () => {
+    const model = await open(start);
     try {
       assert.deepEqual(snapshot(model), initial);
       for (const { action, expected } of cases) {
@@ -38,9 +38,9 @@ for (const { descriptor, initial, cases } of fixtures) {
 }
 
 test('models preserve independent values and reset', async () => {
-  const descriptor = fixture('person').descriptor;
-  const a = await open({ ...descriptor, value: { ...descriptor.value, age: 25 } });
-  const b = await open(descriptor);
+  const start = fixture('person').start;
+  const a = await open({ ...start, value: { ...start.value, age: 25 } });
+  const b = await open(start);
   try {
     const key = a.snapshot().controls.find(c => c.label === 'Age').key;
     a.send({ apply: { key, argument: '30' } });
@@ -55,15 +55,15 @@ test('models preserve independent values and reset', async () => {
 });
 
 test('initialization rejects unknown forms, incompatible revisions, and malformed raw values', async () => {
-  const descriptor = fixture('person').descriptor;
-  await assert.rejects(open({ ...descriptor, form: 'missing' }), /Unknown compiled form/);
-  await assert.rejects(open({ ...descriptor, fingerprint: 'old' }), /version differs/);
-  for (const value of [false, {}, { ...descriptor.value, age: '20' }])
-    await assert.rejects(open({ ...descriptor, value }));
+  const start = fixture('person').start;
+  await assert.rejects(open({ ...start, form: 'missing' }), /Unknown compiled form/);
+  await assert.rejects(open({ ...start, fingerprint: 'old' }), /version differs/);
+  for (const value of [false, {}, { ...start.value, age: '20' }])
+    await assert.rejects(open({ ...start, value }));
 });
 
 test('hidden and disabled controls reject stale edits', async () => {
-  const model = await open(fixture('person').descriptor);
+  const model = await open(fixture('person').start);
   const apply = (label, argument) => model.send({ apply: {
     key: model.snapshot().controls.find(c => c.label === label).key, argument } });
   try {
@@ -82,10 +82,10 @@ test('compiled model disposal releases memory and disposed handles stay invalid'
   const { createFormRuntime } = await import('../wasm/form-api.mjs');
   const runtime = await createFormRuntime();
   const call = ({ operation, handle, ...fields }) => runtime.form(JSON.stringify(
-    operation === 'open' ? { open: { descriptor: fields } } : operation === 'dispose' ? { dispose: { handle } }
+    operation === 'open' ? { open: { start: fields } } : operation === 'dispose' ? { dispose: { handle } }
       : { send: { handle, request: Object.keys(fields).length ? { [operation]: fields } : operation } }));
   const cycle = () => {
-    const opened = call({ operation: 'open', ...fixture('person').descriptor });
+    const opened = call({ operation: 'open', ...fixture('person').start });
     assert.equal(opened.ok, true);
     const { handle, snapshot } = opened.value.opened;
     const key = snapshot.controls.find(c => c.label === 'Age').key;
@@ -101,7 +101,7 @@ test('compiled model disposal releases memory and disposed handles stay invalid'
   for (let i = 0; i < 1000; i++) cycle();
   // Disposal must not grow allocations; allocator bookkeeping may shrink them.
   assert.ok(runtime.allocatedBytes() <= before, 'Repeated disposal grew allocated memory');
-  const next = call({ operation: 'open', ...fixture('person').descriptor });
+  const next = call({ operation: 'open', ...fixture('person').start });
   const handle = next.value.opened.handle;
   const initial = call({ operation: 'inspect', handle });
   // The prefix must be valid so truncating at NUL would incorrectly succeed.
@@ -113,7 +113,7 @@ test('compiled model disposal releases memory and disposed handles stay invalid'
 });
 
 test('editor normalization preserves whitespace, types, and natural precision', async () => {
-  const model = await open(fixture('person').descriptor);
+  const model = await open(fixture('person').start);
   const edit = (label, argument) => model.send({ apply: {
     key: model.snapshot().controls.find(c => c.label === label).key, argument } });
   try {
@@ -149,7 +149,7 @@ test('Wasm exposes only the compiled-form API and recovers using a fresh instanc
   const trapped = await createFormRuntime();
   assert.throws(() => trapped.form('['.repeat(200000) + ']'.repeat(200000)), /stack overflow|maximum call stack size exceeded/i);
   const fresh = await createFormRuntime();
-  const result = fresh.form(JSON.stringify({ open: { descriptor: fixture('person').descriptor } }));
+  const result = fresh.form(JSON.stringify({ open: { start: fixture('person').start } }));
   assert.equal(result.ok, true);
   assert.equal(result.value.opened.snapshot.submission.value.age, 20);
   assert.equal(fresh.form(JSON.stringify({ dispose: { handle: result.value.opened.handle } })).ok, true);
@@ -157,7 +157,7 @@ test('Wasm exposes only the compiled-form API and recovers using a fresh instanc
 
 
 test('Lean owns validation visibility, server feedback, and recovery', async () => {
-  const model = await open(fixture('person').descriptor);
+  const model = await open(fixture('person').start);
   try {
     const quantity = model.snapshot().controls.find(c => c.label === 'Age');
     model.send({ apply: { key: quantity.key, argument: '150' } });
@@ -200,7 +200,7 @@ test('Lean owns validation visibility, server feedback, and recovery', async () 
 });
 
 test('Lean owns submission effects, pending locks, and reset', async () => {
-  const model = await open(fixture('person').descriptor);
+  const model = await open(fixture('person').start);
   try {
     const editor = model.snapshot().controls.find(c => c.label === 'Age');
     const send = (event, fields = {}) => model.send({ event: { message: event === 'submit' || event === 'reset' ? event : { [event]: fields } } });
@@ -248,8 +248,8 @@ test('Lean owns submission effects, pending locks, and reset', async () => {
 });
 
 test('UI state stays local to each model', async () => {
-  const a = await open(fixture('person').descriptor);
-  const b = await open(fixture('person').descriptor);
+  const a = await open(fixture('person').start);
+  const b = await open(fixture('person').start);
   try {
     const checkbox = a.snapshot().controls.find(c => c.widget === 'checkbox');
     a.send({ event: { message: { apply: { key: checkbox.key, argument: true } } } });
@@ -264,7 +264,7 @@ test('UI state stays local to each model', async () => {
 });
 
 test('rejected applies announce an error and leave the value unchanged', async () => {
-  const model = await open(fixture('person').descriptor);
+  const model = await open(fixture('person').start);
   try {
     const age = model.snapshot().controls.find(c => c.label === 'Age');
     model.send({ event: { message: { apply: { key: age.key, argument: 'abc' } } } });
@@ -280,8 +280,8 @@ test('rejected applies announce an error and leave the value unchanged', async (
 });
 
 test('order chooses shipping branches, nests visibility, and validates, alongside person in one runtime', async () => {
-  const order = await open(fixture('order').descriptor);
-  const person = await open(fixture('person').descriptor);
+  const order = await open(fixture('order').start);
+  const person = await open(fixture('person').start);
   const control = label => order.snapshot().controls.find(c => c.label === label);
   const apply = (label, argument) => order.send({ event: { message: { apply: { key: control(label).key, argument } } } });
   const submit = () => order.send({ event: { message: 'submit' } });
@@ -333,7 +333,7 @@ test('order chooses shipping branches, nests visibility, and validates, alongsid
 });
 
 test('expenses add, remove, and validate list items', async () => {
-  const model = await open(fixture('expenses').descriptor);
+  const model = await open(fixture('expenses').start);
   const key = (label, nth = 0) => model.snapshot().controls.filter(c => c.label === label)[nth].key;
   const apply = (label, argument, nth = 0) =>
     model.send({ event: { message: { apply: { key: key(label, nth), argument } } } });

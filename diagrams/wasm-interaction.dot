@@ -19,9 +19,9 @@ digraph WasmInteraction {
     runtime [label="runtime.ts"];
     glue [label="forms.mjs (Emscripten glue)\nJS string ↔ UTF-8 in Wasm memory"];
 
-    app -> runtime [color="#2563eb" fontcolor="#2563eb" label="1. openCompiledForm(descriptor, url)\nmodel.send(command) · model.dispose()"];
+    app -> runtime [color="#2563eb" fontcolor="#2563eb" label="1. openForm(start, url)\nmodel.send(command) · model.dispose()"];
     app -> runtime [dir=back color="#db2777" fontcolor="#db2777" label="14. FormModel (open)\nWire.Snapshot (send)"];
-    runtime -> glue [color="#2563eb" fontcolor="#2563eb" label="2. { open: descriptor }\n{ send: handle, request }\n{ dispose: handle }"];
+    runtime -> glue [color="#2563eb" fontcolor="#2563eb" label="2. { open: start }\n{ send: handle, request }\n{ dispose: handle }"];
     runtime -> glue [dir=back color="#db2777" fontcolor="#db2777" label="13. { opened: handle, snapshot }\n{ updated: snapshot } · disposed"];
   }
 

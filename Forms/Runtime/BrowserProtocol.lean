@@ -34,11 +34,11 @@ def execute
   (request : Wire.Request)
   : Except String (Store × Wire.Response) := do
   match request with
-  | .open descriptor =>
-    let some form := forms[descriptor.form]? | throw "Unknown compiled form"
-    unless descriptor.fingerprint == fingerprint do
+  | .open start =>
+    let some form := forms[start.form]? | throw "Unknown compiled form"
+    unless start.fingerprint == fingerprint do
       throw "Compiled form version differs from the server. Rebuild Wasm, restart forms-web, then reload."
-    let (state, snapshot) ← form.open descriptor.form fingerprint descriptor.value
+    let (state, snapshot) ← form.open start.form fingerprint start.value
     let handle := store.next
     let store := { store with next := ⟨handle.value + 1⟩, models := store.models.insert handle state }
     pure (store, .opened (toString handle.value) snapshot)

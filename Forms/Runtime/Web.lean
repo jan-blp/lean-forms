@@ -18,7 +18,7 @@ inductive GetRoute where
   | wasmLoader
   | wasmBinary
   | stylesheet
-  | compiledSpecification
+  | formStart
   deriving DecidableEq, Lean.ToJson
 
 /-- Also generated into `web/generated/routes.ts`. -/
@@ -28,10 +28,10 @@ def GetRoute.path : GetRoute → String
   | .wasmLoader => "/wasm/forms.mjs"
   | .wasmBinary => "/wasm/forms.wasm"
   | .stylesheet => "/style.css"
-  | .compiledSpecification => "/api/compiled-form"
+  | .formStart => "/api/form-start"
 
 def GetRoute.all : List GetRoute :=
-  [.index, .script, .wasmLoader, .wasmBinary, .stylesheet, .compiledSpecification]
+  [.index, .script, .wasmLoader, .wasmBinary, .stylesheet, .formStart]
 
 theorem GetRoute.mem_all (route : GetRoute) : route ∈ all := by
   cases route <;> decide
@@ -105,7 +105,7 @@ structure Application where
   wasmLoader : Option String
   wasmBinary : Option ByteArray
   style : String
-  compiledForm : Lean.Json
+  formStart : Lean.Json
   /-- Responses of the data endpoints forms load from. -/
   api : Model.HttpRequest → Option Lean.Json
 
@@ -119,7 +119,7 @@ def Application.get
   | .wasmLoader => app.wasmLoader.map .javascript
   | .wasmBinary => app.wasmBinary.map .wasm
   | .stylesheet => some (.css app.style)
-  | .compiledSpecification => some (.json app.compiledForm)
+  | .formStart => some (.json app.formStart)
 
 /-- The logged request body, or the response rejecting a body over 1 MiB. -/
 def Application.readBody
@@ -224,7 +224,7 @@ def run
     then some <$> IO.FS.readBinFile "web/dist/wasm/forms.wasm" else pure none
   if let some binary := wasmBinary then checkWasmFingerprint binary
   let app : Application := {
-    compiledForm := Lean.toJson (form.descriptor name ExampleForms.formFingerprint)
+    formStart := Lean.toJson (form.start name ExampleForms.formFingerprint)
     logger := ← TrafficLog.Logger.create
     form := { submit := form.definition.verify name ExampleForms.formFingerprint }
     html := ← IO.FS.readFile "web/index.html"

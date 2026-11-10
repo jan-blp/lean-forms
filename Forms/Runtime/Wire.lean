@@ -28,14 +28,15 @@ inductive Command where
   | serverError (status : Nat) (body : String)
   deriving ToJson, FromJson
 
-structure CompiledDescriptor where
+/-- What opening a form needs: its registered name, its code version, and its starting value. -/
+structure FormStart where
   form : String
   fingerprint : String
   value : Json
   deriving ToJson, FromJson
 
 inductive Request where
-  | open (descriptor : CompiledDescriptor)
+  | open (start : FormStart)
   | send (handle : String) (request : Command)
   | dispose (handle : String)
   deriving ToJson, FromJson

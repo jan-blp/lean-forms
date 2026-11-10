@@ -15,13 +15,13 @@ export interface FormModel {
 
 const loading = new Map<string, Promise<Runtime>>();
 
-/** Opens `descriptor` in the Emscripten module at `moduleUrl` (the app's `forms.mjs`). */
-export async function openCompiledForm(descriptor: Wire.CompiledDescriptor, moduleUrl: string | URL): Promise<FormModel> {
+/** Opens `start` in the Emscripten module at `moduleUrl` (the app's `forms.mjs`). */
+export async function openForm(start: Wire.FormStart, moduleUrl: string | URL): Promise<FormModel> {
   const url = String(moduleUrl);
   let runtime = loading.get(url);
   if (!runtime) loading.set(url, runtime = load(url));
   const { form } = await runtime;
-  const opened = form({ open: { descriptor } });
+  const opened = form({ open: { start } });
   if (typeof opened !== 'object' || !('opened' in opened)) throw new Error('Expected an opened form.');
   const { handle } = opened.opened;
   let snapshot = opened.opened.snapshot;

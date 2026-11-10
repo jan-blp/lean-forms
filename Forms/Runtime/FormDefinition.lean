@@ -74,8 +74,8 @@ structure FormInstance where
 
 instance : Inhabited FormInstance := ⟨.mk fun _ => .error "Uninitialized form"⟩
 
-/-- The descriptor that opens a new `name` form. -/
-def RegisteredForm.descriptor (form : RegisteredForm) (name fingerprint : String) : Wire.CompiledDescriptor :=
+/-- The `FormStart` that opens a new `name` form. -/
+def RegisteredForm.start (form : RegisteredForm) (name fingerprint : String) : Wire.FormStart :=
   { form := name, fingerprint, value := form.definition.initial }
 
 def RegisteredForm.toWire

@@ -1,8 +1,8 @@
 // Generated from Lean. Run npm --prefix web run generate.
 import type * as FormsReact from "../../FormsReact.js";
 
-export type Request = { "open": { "descriptor": CompiledDescriptor } } | { "send": { "handle": string; "request": Command } } | { "dispose": { "handle": string } };
-export type CompiledDescriptor = { "form": string; "fingerprint": string; "value": unknown };
+export type Request = { "open": { "start": FormStart } } | { "send": { "handle": string; "request": Command } } | { "dispose": { "handle": string } };
+export type FormStart = { "form": string; "fingerprint": string; "value": unknown };
 export type Command = { "event": { "message": Event } } | { "apply": { "key": string; "argument": unknown } } | "reset" | "validate" | "inspect" | { "serverError": { "status": number; "body": string } };
 export type Event = { "apply": { "key": string; "argument": unknown } } | "submit" | "reset" | { "complete": { "status": number; "body": string } } | { "failed": { "message": string } } | { "fetched": { "id": string; "status": number; "body": string } } | { "unreachable": { "id": string; "message": string } };
 export type Success = { "ok": boolean; "value": Response };

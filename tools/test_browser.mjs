@@ -40,7 +40,7 @@ try {
   for (let attempt = 0; attempt < 100; attempt++) {
     if (startupError) throw startupError;
     try {
-      await fetch(`http://127.0.0.1:${port}/api/compiled-form`);
+      await fetch(`http://127.0.0.1:${port}/api/form-start`);
       socket = new WebSocket(`ws://127.0.0.1:${debugPort}/session`);
       await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
       break;
@@ -79,7 +79,7 @@ try {
     try {
       let ready = false;
       for (let attempt = 0; attempt < 100; attempt++) {
-        try { await fetch(`http://127.0.0.1:${examplePort}/api/compiled-form`); ready = true; break; }
+        try { await fetch(`http://127.0.0.1:${examplePort}/api/form-start`); ready = true; break; }
         catch { await delay(50); }
       }
       assert.ok(ready, `Server did not start: ${name}`);
@@ -184,7 +184,7 @@ try {
     await wait(() => status() === 'Submitted successfully.');
     check(field('Age').querySelector('input').value === '21', 'Reset ran while pending');
     window.fetch = originalFetch;
-    const { fingerprint } = await (await fetch('/api/compiled-form')).json();
+    const { fingerprint } = await (await fetch('/api/form-start')).json();
     const forged = await fetch('/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ form: 'person', fingerprint, value: { name: 'Forged', age: 150,
         delivery: false, address: { street: 'Campus' } } }) });
