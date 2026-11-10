@@ -53,6 +53,9 @@ jobs:
             .lake/wasm/full-runtime-*
           key: ${{ steps.wasm-cache.outputs.cache-primary-key }}
 
+      - name: libuv stub check
+        run: make -f wasm/makefile test-libuv-check
+
       - name: Compiled forms
         run: node --test web/compiled.test.mjs
 
