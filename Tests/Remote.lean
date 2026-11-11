@@ -1,8 +1,8 @@
 module
 
 public import Forms.ExampleForms.Registry
+public import Forms.Model.Endpoints
 meta import Forms.Model.Derive
-meta import Forms.Deriving.FinEnum
 
 public section
 namespace Tests.Remote
@@ -13,23 +13,11 @@ structure SupplierDetails where
   deriving ToJson, FromJson
 
 /-- The tests' data endpoints. -/
-inductive SupplierEndpoint where
+endpoints SupplierEndpoint where
   /-- All supplier ids. -/
-  | suppliers
+  | suppliers : List String at "/api/suppliers"
   /-- One supplier's details, by id. -/
-  | supplier
-  deriving DecidableEq, FinEnum, Repr
-
-@[expose] def SupplierEndpoint.signature : SupplierEndpoint → Api.Signature
-  | .suppliers => { Input := Unit, Output := List String }
-  | .supplier => { Input := String, Output := SupplierDetails }
-
-instance : Api SupplierEndpoint where
-  signature := SupplierEndpoint.signature
-  path
-    | .suppliers => "/api/suppliers"
-    | .supplier => "/api/supplier"
-  distinct := by decide
+  | supplier : String → SupplierDetails at "/api/supplier"
 
 def supplierDetails : String → Option SupplierDetails
   | "acme" => some ⟨true⟩
