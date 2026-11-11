@@ -33,9 +33,6 @@ def GetRoute.path : GetRoute → String
 def GetRoute.all : List GetRoute :=
   [.index, .script, .wasmLoader, .wasmBinary, .stylesheet, .formStart]
 
-theorem GetRoute.mem_all (route : GetRoute) : route ∈ all := by
-  cases route <;> decide
-
 def GetRoute.ofPath (path : String) : Option GetRoute :=
   all.find? (·.path == path)
 

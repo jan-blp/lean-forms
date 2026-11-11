@@ -78,14 +78,6 @@ def Computation.eval
   : result :=
   Inputs.apply computation.run (computation.inputs.read value)
 
-theorem Computation.eval_eq_of_inputs_eq
-  {source result : Type}
-  (computation : Computation source result)
-  (first second : source)
-  (h : computation.inputs.read first = computation.inputs.read second)
-  : computation.eval first = computation.eval second :=
-  congrArg (Inputs.apply computation.run) h
-
 def Computation.weaken
   {outer source result : Type}
   (path : Path outer source)
