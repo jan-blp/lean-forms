@@ -1,8 +1,8 @@
 module
 
 public import Forms.ExampleForms.Registry
+public import Forms.Model.Endpoints
 meta import Forms.Model.Derive
-meta import Forms.Deriving.FinEnum
 public import Tests.FreshId
 
 public section
@@ -13,21 +13,9 @@ structure SupplierDetails where
   requiresPurchaseOrder : Bool
   deriving ToJson, FromJson, DecidableEq
 
-inductive SupplierEndpoint where
-  | suppliers
-  | supplier
-  deriving DecidableEq, FinEnum, Repr
-
-@[expose] def SupplierEndpoint.signature : SupplierEndpoint → Api.Signature
-  | .suppliers => { Input := Unit, Output := List String }
-  | .supplier => { Input := String, Output := SupplierDetails }
-
-instance : Api SupplierEndpoint where
-  signature := SupplierEndpoint.signature
-  path
-    | .suppliers => "/api/suppliers"
-    | .supplier => "/api/supplier"
-  distinct := by decide
+endpoints SupplierEndpoint where
+  | suppliers : List String at "/api/suppliers"
+  | supplier : String → SupplierDetails at "/api/supplier"
 
 def supplierDetails : String → Option SupplierDetails
   | "acme" => some ⟨true⟩
