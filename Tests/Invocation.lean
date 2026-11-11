@@ -62,7 +62,8 @@ private def everyControlApplies {raw : Type} (form : Component raw) (value : raw
 def run : IO Unit := do
   check "InvocationPersonControls" (everyControlApplies Person.form ⟨"Ada", 20, true, ⟨"Lambda Lane"⟩⟩)
   check "InvocationOrderControls" (everyControlApplies Order.form Order.initial)
-  check "InvocationExpensesControls" (everyControlApplies ExpenseReport.form ExpenseReport.initial)
+  check "InvocationExpensesControls" (everyControlApplies ExpenseReport.listForm ExpenseReport.initial)
+  check "InvocationTableControls" (everyControlApplies ExpenseReport.form ExpenseReport.initial)
   let street := keyOf Person.form ⟨"Ada", 20, true, ⟨"Lambda Lane"⟩⟩ "Street"
   check "InvocationEdit"
     ((perform Person.form ⟨"Ada", 20, true, ⟨"Lambda Lane"⟩⟩ street (some (.text "Road"))).toOption.map (·.address.street)
@@ -108,16 +109,16 @@ def run : IO Unit := do
     check "InvocationReselectKeeps"
       ((perform Order.form express shipping (some (.text "express"))).toOption.map Lean.toJson
         == some (Lean.toJson express))
-  let add := keyOf ExpenseReport.form ExpenseReport.initial "Add expense"
+  let add := keyOf ExpenseReport.listForm ExpenseReport.initial "Add expense"
   check "InvocationUnexpectedArgument"
-    (rejected ExpenseReport.form ExpenseReport.initial add (some (.text "x"))
+    (rejected ExpenseReport.listForm ExpenseReport.initial add (some (.text "x"))
       == clientBug .unexpectedArgument)
-  match perform ExpenseReport.form ExpenseReport.initial add none with
+  match perform ExpenseReport.listForm ExpenseReport.initial add none with
   | .error rejection => throw (IO.userError s!"FAIL InvocationAdd: {rejection}")
   | .ok longer =>
     check "InvocationAdd" (longer.expenses.length == ExpenseReport.initial.expenses.length + 1)
-    let removeLast := keyOf ExpenseReport.form longer "Remove" ExpenseReport.initial.expenses.length
+    let removeLast := keyOf ExpenseReport.listForm longer "Remove" ExpenseReport.initial.expenses.length
     check "InvocationMissingItem"
-      (rejected ExpenseReport.form ExpenseReport.initial removeLast none == stale .absent)
+      (rejected ExpenseReport.listForm ExpenseReport.initial removeLast none == stale .absent)
 
 end Tests.Invocation

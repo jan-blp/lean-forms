@@ -17,6 +17,8 @@ def Component.requests {raw : Type} : Component raw → HttpRequest.Cache → ra
   | .choiceOf path _ branches, cache, current => branches.requests cache (path.get current)
   | .list path _ _ _ body, cache, current =>
     (path.get current).flatMap fun item => body.requests cache item
+  | .table path _ _ _ columns, cache, current =>
+    (path.get current).flatMap fun item => columns.requests cache item
   | .load source body, cache, current =>
     let source := source.eval current
     source.request?.toList ++ (body (source.resolve cache)).requests cache current
@@ -24,6 +26,11 @@ def Component.requests {raw : Type} : Component raw → HttpRequest.Cache → ra
 def Components.requests {raw : Type} : Components raw → HttpRequest.Cache → raw → List HttpRequest
   | .nil, _, _ => []
   | .cons head tail, cache, current =>
+    head.requests cache current ++ tail.requests cache current
+
+def Columns.requests {raw : Type} : Columns raw → HttpRequest.Cache → raw → List HttpRequest
+  | .nil, _, _ => []
+  | .cons _ head tail, cache, current =>
     head.requests cache current ++ tail.requests cache current
 
 def Branch.requests {sum : Type} : Branch sum → HttpRequest.Cache → sum → List HttpRequest

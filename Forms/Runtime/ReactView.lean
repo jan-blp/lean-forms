@@ -32,6 +32,7 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       onChange := .apply name }
   | .action => .button { label := c.label, variant := .secondary, disabled, onClick := .press name }
 
+mutual
 def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
   | .hidden => none
   | .control c => some (c.toReact pending)
@@ -40,6 +41,24 @@ def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
   | .list label children messages => some (.group
       { label := some label, children := children.filterMap (·.toReact pending), error := messages })
   | .computed label value => some (.output { label, value })
+  | .table label headers rows footer messages => some (.table {
+      label, headers
+      rows := tableRowsToReact pending rows
+      footer := (footer.toReact pending).getD (.group { label := none, children := [], error := none })
+      error := messages })
+
+def tableRowsToReact (pending : Bool) : List Display.TableRow → List FormsReact.TableRow
+  | [] => []
+  | ⟨label, cells⟩ :: rest =>
+    { label, cells := tableCellsToReact pending cells } :: tableRowsToReact pending rest
+
+/-- Hidden cells stay empty so later cells keep their column. -/
+def tableCellsToReact (pending : Bool) : List View → List FormsReact.Component
+  | [] => []
+  | cell :: rest =>
+    ((cell.toReact pending).getD (.group { label := none, children := [], error := none })) ::
+      tableCellsToReact pending rest
+end
 
 /-- The whole page: `view` plus toolbar, notice and submitted `result`. -/
 def Display.View.toReactPage

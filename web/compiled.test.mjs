@@ -337,7 +337,7 @@ test('order chooses shipping branches, nests visibility, and validates, alongsid
   } finally { order.dispose(); person.dispose(); }
 });
 
-test('expenses add, remove, and validate list items', async () => {
+test('expenses table adds, removes, and validates items', async () => {
   const model = await open(fixture('expenses').start);
   const key = (label, nth = 0) => model.snapshot().controls.filter(c => c.label === label)[nth].key;
   const apply = (label, argument, nth = 0) =>
@@ -349,8 +349,14 @@ test('expenses add, remove, and validate list items', async () => {
     assert.match(outputs(), /CHF 238/);
     apply('Add expense', null);
     assert.deepEqual(expenses().at(-1), { description: '', amount: 0, receipt: false });
-    assert.deepEqual(page(model).body[0].group.children[1].group.children.map(c => c.group?.label ?? c.button.label),
-      ['Expense 1', 'Expense 2', 'Expense 3', 'Add expense']);
+    const items = page(model).body[0].group.children[1];
+    assert.deepEqual(items.table.headers, ['Description', 'Amount (CHF)', 'Receipt', 'Actions']);
+    assert.deepEqual(items.table.rows.map(row => row.label), ['Expense 1', 'Expense 2', 'Expense 3']);
+    assert.equal(items.table.rows.every(row => row.cells.length === 4), true);
+    assert.deepEqual(items.table.rows[0].cells[2], { group: { label: null, children: [], error: null } });
+    assert.equal(items.table.footer.button.label, 'Add expense');
+    const description = key('Description', 2);
+    assert.ok(model.snapshot().draftFields.includes(description));
     submit();
     assert.deepEqual(messages(model.snapshot().view), ['Describe the expense.', 'Enter an amount of at least CHF 1.']);
     assert.deepEqual(model.snapshot().errors[0].targets.locations[0],

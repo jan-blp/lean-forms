@@ -53,12 +53,29 @@ inductive Component : Type → Type 1 where
       (initial : item)
       (body : Component item)
       : Component raw
+  /-- A list editor with one row per item and one component per column. -/
+  | table
+      {raw item : Type}
+      (path : Path raw (List item))
+      (label itemLabel : String)
+      (initial : item)
+      (columns : Columns item)
+      : Component raw
   /-- Loads `source`; `body` builds the subtree from its status. -/
   | load
       {raw data : Type}
       (source : Computation raw (Source data))
       (body : Status data → Component raw)
       : Component raw
+
+inductive Columns : Type → Type 1 where
+  | nil {item : Type} : Columns item
+  | cons
+      {item : Type}
+      (header : String)
+      (cell : Component item)
+      (rest : Columns item)
+      : Columns item
 
 inductive Components : Type → Type 1 where
   | nil {raw : Type} : Components raw
@@ -91,6 +108,31 @@ end
 def Components.ofList {raw : Type} : List (Component raw) → Components raw
   | [] => .nil
   | head :: tail => .cons head (ofList tail)
+
+def Columns.ofList {item : Type} : List (String × Component item) → Columns item
+  | [] => .nil
+  | (header, cell) :: rest => .cons header cell (ofList rest)
+
+declare_syntax_cat tableColumn
+syntax term " => " term : tableColumn
+
+/-- `columns["Name" => cell, "Amount" => otherCell]` pairs headers with cell components. -/
+macro "columns[" columns:tableColumn,* "]" : term => do
+  let mut result ← `(Columns.nil)
+  for column in columns.getElems.reverse do
+    match column with
+    | `(tableColumn| $header:term => $cell:term) =>
+      result ← `(Columns.cons $header $cell $result)
+    | _ => Lean.Macro.throwUnsupported
+  return result
+
+def Columns.headers {item : Type} : Columns item → List String
+  | .nil => []
+  | .cons header _ rest => header :: rest.headers
+
+def Columns.components {item : Type} : Columns item → Components item
+  | .nil => .nil
+  | .cons _ cell rest => .cons cell rest.components
 
 def Component.group
   {raw : Type}

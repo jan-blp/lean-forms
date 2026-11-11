@@ -184,21 +184,46 @@ try {
   `);
 
   await example('expenses', `
-    const item = n => [...document.querySelectorAll('fieldset')]
-      .find(f => f.querySelector('legend').textContent === 'Expense ' + n);
-    const itemInput = (n, label) => [...item(n).querySelectorAll('.editor')]
-      .find(e => e.querySelector('label').firstChild.textContent === label)?.querySelector('input');
+    const table = () => document.querySelector('table');
+    const rows = () => [...table().querySelectorAll('tbody tr')];
+    const rowInput = (row, column) => rows()[row].cells[column].querySelector('input');
     const button = (root, label) => [...root.querySelectorAll('button')].find(b => b.textContent === label);
-    // Drafts follow their item when an earlier one is removed.
-    await type(itemInput(2, 'Description'), 'Hotel Zürich');
-    button(item(1), 'Remove').click();
+    check(table().caption.textContent === 'Expenses', 'Table caption missing');
+    check([...table().querySelectorAll('th')].map(th => th.textContent).join('|') ===
+      'Description|Amount (CHF)|Receipt|Actions', 'Table headers changed');
+    check(rows().every(row => row.cells.length === 4), 'Table cells lost their columns');
+    check(!rowInput(0, 2) && rowInput(1, 2)?.type === 'checkbox', 'Hidden cell shifted the action column');
+    const description = rowInput(1, 0);
+    description.focus();
+    await type(description, 'Hotel Zürich');
+    check(rowInput(1, 0) === description && document.activeElement === description, 'Table edit lost focus');
+    button(rows()[0], 'Remove').click();
     await tick();
-    check(!item(2) && itemInput(1, 'Description').value === 'Hotel Zürich', 'Draft lost or moved on remove');
+    check(rows().length === 1 && rowInput(0, 0).value === 'Hotel Zürich', 'Table draft lost on remove');
+    button(rows()[0], 'Remove').click();
+    await tick();
+    check(rows().length === 0 && table().querySelectorAll('th').length === 4, 'Empty table lost headers');
+    check(document.querySelector('.empty').textContent === 'No items.', 'Empty table message missing');
     button(document, 'Add expense').click();
     await tick();
-    check(item(2) && itemInput(2, 'Description').value === '', 'Added item missing');
-    await type(itemInput(2, 'Description'), 'Lunch');
-    await type(itemInput(2, 'Amount (CHF)'), '25');
+    check(rows().length === 1 && rowInput(0, 0).value === '', 'Table add missing');
+    await type(rowInput(0, 0), 'Lunch');
+    rowInput(0, 0).focus();
+    rowInput(0, 0).blur();
+    await tick();
+    await type(rowInput(0, 1), 'abc');
+    rowInput(0, 1).focus();
+    rowInput(0, 1).blur();
+    await tick();
+    check(status() === 'Enter a non-negative whole number.', 'Table accepted invalid number');
+    check(rowInput(0, 1).value === 'abc', 'Table rejected draft was lost');
+    await type(rowInput(0, 1), '100');
+    rowInput(0, 1).closest('form').requestSubmit();
+    await tick();
+    check(rowInput(0, 2)?.type === 'checkbox' && rows()[0].cells[3].querySelector('button'),
+      'Showing a cell shifted the action column');
+    rowInput(0, 2).click();
+    await tick();
   `);
 } finally {
   socket?.close();

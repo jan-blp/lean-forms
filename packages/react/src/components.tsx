@@ -1,7 +1,7 @@
 import { useId, useRef } from 'react';
 import { useLeanForm, type Components } from './context.js';
 import type * as FormsReact from './protocol/FormsReact.js';
-import { Children } from './render.js';
+import { Children, Render } from './render.js';
 
 function DraftField({ name, label, value, disabled, error, onCommit, numeric = false }:
     FormsReact.TextField & { numeric?: boolean }) {
@@ -83,6 +83,27 @@ export function Group({ label, children, error }: FormsReact.Group) {
   );
 }
 
+export function Table({ label, headers, rows, footer, error }: FormsReact.Table) {
+  const feedback = useId();
+  return (
+    <div className="table-component" aria-invalid={error === null ? undefined : true}
+      aria-describedby={error === null ? undefined : feedback}>
+      <div className="table-scroll" tabIndex={0} role="region" aria-label={label}>
+        <table>
+          <caption>{label}</caption>
+          <thead><tr>{headers.map((header, index) => <th key={index} scope="col">{header}</th>)}</tr></thead>
+          <tbody>{rows.map((row, index) =>
+            <tr key={index} aria-label={row.label}>{row.cells.map((cell, column) =>
+              <td key={column}><Children components={[cell]} /></td>)}</tr>)}</tbody>
+        </table>
+      </div>
+      {rows.length === 0 && <p className="empty">No items.</p>}
+      {error !== null && <p className="validation-error" id={feedback}>{error}</p>}
+      <Render component={footer} />
+    </div>
+  );
+}
+
 export function Page({ title, busy, body, toolbar, notice, result }: FormsReact.Page) {
   const error = 'error' in notice;
   return (
@@ -107,5 +128,6 @@ export const defaultComponents: Components = {
   output: Output,
   button: Button,
   group: Group,
+  table: Table,
   page: Page,
 };
