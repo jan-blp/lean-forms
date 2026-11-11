@@ -42,12 +42,17 @@ export async function openForm(start: Wire.FormStart, moduleUrl: string | URL): 
   };
 }
 
+function traceRequested(): boolean {
+  return typeof location !== 'undefined' && new URLSearchParams(location.search).has('trace');
+}
+
 /** Loads the app's compiled Emscripten module; `url` points to its `forms.mjs`. */
 async function load(url: string): Promise<Runtime> {
   const { default: createModule } = await import(url);
   const module: WasmModule = await createModule();
   module._forms_init();
   const encoder = new TextEncoder();
+  const trace = traceRequested();
   function form(input: Wire.Request): Wire.Response {
     const request = JSON.stringify(input);
     let text: string;
@@ -59,6 +64,7 @@ async function load(url: string): Promise<Runtime> {
       throw error;
     }
     const response = JSON.parse(text) as Wire.Success | Wire.Failure;
+    if (trace) console.debug('forms', input, response);
     if ('error' in response) throw new Error(response.error);
     return response.value;
   }
