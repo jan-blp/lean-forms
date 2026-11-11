@@ -7,6 +7,8 @@ public import Forms.Model.Basic
 @[expose] public section
 namespace Forms.Model
 
+universe u
+
 inductive Inputs (source : Type) : List Type → Type 1 where
   | nil : Inputs source []
   | cons
@@ -36,7 +38,7 @@ def Inputs.Values : List Type → Type
   | [] => Unit
   | value :: rest => value × Values rest
 
-def Inputs.Function (types : List Type) (result : Type) : Type :=
+def Inputs.Function (types : List Type) (result : Type u) : Type u :=
   match types with
   | [] => result
   | value :: rest => value → Function rest result
@@ -52,7 +54,7 @@ def Inputs.read
   | .cons path rest => (path.get sourceValue, rest.read sourceValue)
 
 def Inputs.apply
-  {result : Type}
+  {result : Type u}
   {types : List Type}
   (fn : Function types result)
   (values : Values types)
@@ -71,18 +73,18 @@ def Inputs.Function.map
   | [] => f fn
   | _ :: _ => fun value => map f (fn value)
 
-structure Computation (source result : Type) where
+structure Computation (source : Type) (result : Type u) where
   {types : List Type}
   inputs : Inputs source types
   run : Inputs.Function types result
 
 /-- A computation without inputs. -/
-def Computation.const {source result : Type} (value : result) : Computation source result where
+def Computation.const {source : Type} {result : Type u} (value : result) : Computation source result where
   inputs := .nil
   run := value
 
 def Computation.eval
-  {source result : Type}
+  {source : Type} {result : Type u}
   (computation : Computation source result)
   (value : source)
   : result :=
@@ -92,7 +94,7 @@ instance {source : Type} : Functor (Computation source) where
   map f computation := ⟨computation.inputs, Inputs.Function.map f computation.run⟩
 
 def Computation.weaken
-  {outer source result : Type}
+  {outer source : Type} {result : Type u}
   (path : Path outer source)
   (computation : Computation source result)
   : Computation outer result :=

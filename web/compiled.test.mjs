@@ -337,13 +337,13 @@ test('order chooses shipping branches, nests visibility, and validates, alongsid
   } finally { order.dispose(); person.dispose(); }
 });
 
-test('expenses table adds, removes, and validates items', async () => {
+test('expenses adds, removes, and validates items', async () => {
   const model = await open(fixture('expenses').start);
   const key = (label, nth = 0) => model.snapshot().controls.filter(c => c.label === label)[nth].key;
   const apply = (label, argument, nth = 0) =>
     model.send({ event: { message: { apply: { key: key(label, nth), argument } } } });
   const submit = () => model.send({ event: { message: 'submit' } });
-  const expenses = () => model.snapshot().submission.value.expenses;
+  const expenses = () => model.snapshot().submission.value.report.expenses;
   const outputs = () => JSON.stringify(page(model).body);
   try {
     assert.match(outputs(), /CHF 238/);
@@ -353,20 +353,19 @@ test('expenses table adds, removes, and validates items', async () => {
     assert.deepEqual(items.table.headers, ['Description', 'Amount (CHF)', 'Receipt', 'Actions']);
     assert.deepEqual(items.table.rows.map(row => row.label), ['Expense 1', 'Expense 2', 'Expense 3']);
     assert.equal(items.table.rows.every(row => row.cells.length === 4), true);
-    assert.deepEqual(items.table.rows[0].cells[2], { group: { label: null, children: [], error: null } });
     assert.equal(items.table.footer.button.label, 'Add expense');
-    const description = key('Description', 2);
-    assert.ok(model.snapshot().draftFields.includes(description));
+    apply('Select', null, 2);
+    assert.ok(model.snapshot().draftFields.includes(key('Description')));
     submit();
     assert.deepEqual(messages(model.snapshot().view), ['Describe the expense.', 'Enter an amount of at least CHF 1.']);
     assert.deepEqual(model.snapshot().errors[0].targets.locations[0],
-      [{ kind: 'field', name: 'expenses' }, { kind: 'index', position: 2 }, { kind: 'field', name: 'description' }]);
-    apply('Description', 'Taxi', 2);
-    apply('Amount (CHF)', '5000', 2);
+      [{ kind: 'field', name: 'report' }, { kind: 'field', name: 'expenses' }, { kind: 'index', position: 2 }, { kind: 'field', name: 'description' }]);
+    apply('Description', 'Taxi');
+    apply('Amount (CHF)', '5000');
     // The report limit is checked once every expense is valid.
     assert.deepEqual(messages(model.snapshot().view), ['Attach a receipt for CHF 100 or more.']);
     // Only expenses of CHF 100 or more show a receipt checkbox.
-    apply('Receipt attached', true, 1);
+    apply('Receipt attached', true);
     assert.deepEqual(messages(model.snapshot().view), ["A report is limited to CHF 5'000."]);
     apply('Remove', null, 0);
     assert.deepEqual(expenses().map(e => e.description), ['Hotel', 'Taxi']);
@@ -379,5 +378,57 @@ test('expenses table adds, removes, and validates items', async () => {
     assert.equal(model.snapshot().effects.length, 0);
     model.send('reset');
     assert.equal(expenses().length, 2);
+  } finally { model.dispose(); }
+});
+
+test('table selection edits the selected item and follows row removal', async () => {
+  const model = await open(fixture('expenses').start);
+  const controls = () => model.snapshot().controls;
+  const key = (label, nth = 0) => controls().filter(control => control.label === label)[nth].key;
+  const send = (key, argument = null) => model.send({ event: { message: { apply: { key, argument } } } });
+  const apply = (label, argument = null, nth = 0) => send(key(label, nth), argument);
+  const table = () => page(model).body[0].group.children[1].table;
+  const value = () => model.snapshot().submission.value;
+  try {
+    const first = key('Select');
+    const second = key('Select', 1);
+    assert.equal(value().selection, 'none');
+    assert.equal(controls().some(control => control.label === 'Description'), false);
+    send(second);
+    assert.deepEqual(value().selection, { row: { index: 1 } });
+    assert.deepEqual(table().rows.map(row => row.selected), [false, true]);
+    assert.equal(table().footer.button.label, 'Add expense');
+    assert.equal(page(model).body[0].group.children[2].group.label, 'Selected expense');
+    const oldDescription = key('Description');
+    assert.ok(model.snapshot().draftFields.includes(oldDescription));
+    apply('Description', 'Hotel Zürich');
+    assert.deepEqual(value().report.expenses.map(expense => expense.description), ['Train to Bern', 'Hotel Zürich']);
+    assert.equal(table().rows[1].cells[0].output.value, 'Hotel Zürich');
+    send(first);
+    const before = value();
+    const rejected = send(oldDescription, 'Stale');
+    assert.match(rejected.rejection, /control is no longer shown/);
+    assert.deepEqual(value(), before);
+    send(second);
+    apply('Remove');
+    assert.deepEqual(value().selection, { row: { index: 0 } });
+    assert.deepEqual(table().rows.map(row => row.selected), [true]);
+    assert.equal(table().rows[0].cells[0].output.value, 'Hotel Zürich');
+    apply('Amount (CHF)', 'abc');
+    assert.match(model.snapshot().rejection, /non-negative whole number/);
+    assert.equal(value().report.expenses[0].amount, 180);
+    apply('Amount (CHF)', '200');
+    assert.equal(value().report.expenses[0].amount, 200);
+    apply('Remove');
+    assert.equal(value().selection, 'none');
+    assert.equal(table().rows.length, 0);
+    assert.equal(controls().some(control => control.label === 'Description'), false);
+    apply('Add expense');
+    assert.equal(value().selection, 'none');
+    apply('Select');
+    assert.ok(controls().some(control => control.label === 'Description'));
+    model.send('reset');
+    assert.equal(value().selection, 'none');
+    assert.equal(table().rows.length, 2);
   } finally { model.dispose(); }
 });

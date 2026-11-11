@@ -49,8 +49,8 @@ def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
 
 def tableRowsToReact (pending : Bool) : List Display.TableRow → List FormsReact.TableRow
   | [] => []
-  | ⟨label, cells⟩ :: rest =>
-    { label, cells := tableCellsToReact pending cells } :: tableRowsToReact pending rest
+  | ⟨label, cells, selected⟩ :: rest =>
+    { label, selected, cells := tableCellsToReact pending cells } :: tableRowsToReact pending rest
 
 /-- Hidden cells stay empty so later cells keep their column. -/
 def tableCellsToReact (pending : Bool) : List View → List FormsReact.Component

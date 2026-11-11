@@ -19,8 +19,10 @@ def Component.requests {raw : Type} : Component raw → HttpRequest.Cache → ra
   | .choiceOf path _ branches, cache, current => branches.requests cache (path.get current)
   | .list path _ _ _ body, cache, current =>
     (path.get current).flatMap fun item => body.requests cache item
-  | .table path _ _ _ columns, cache, current =>
+  | .table path _ _ _ columns _, cache, current =>
     (path.get current).flatMap fun item => columns.requests cache item
+  | .focus target body, cache, current =>
+    ((target.eval current).get? current).toList.flatMap fun value => body.requests cache value
   | .load source body, cache, current =>
     let source := source.eval current
     source.request?.toList ++ (body (source.resolve cache)).requests cache current

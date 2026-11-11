@@ -8,6 +8,8 @@ import Tests.FormsReact
 import Tests.Invocation
 import Tests.Remote
 import Tests.Table
+import Tests.Focus
+import Tests.TableSelection
 
 meta import Forms.Model.Computation.Theorems
 meta import Forms.Runtime.ModelView.Theorems
@@ -21,3 +23,5 @@ public def main : IO Unit := do
   Tests.Invocation.run
   Tests.Remote.run
   Tests.Table.run
+  Tests.Focus.run
+  Tests.TableSelection.run

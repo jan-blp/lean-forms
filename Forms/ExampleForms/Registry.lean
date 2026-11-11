@@ -15,7 +15,7 @@ def forms : List (String × RegisteredForm) := [
   ("person", { definition := .ofModel Person Person.form Person.initial, submitUrl := "/api/submit" }),
   ("order", { definition := .ofModel Order Order.form Order.initial, submitUrl := "/api/submit" }),
   ("expenses", {
-    definition := .ofModel ExpenseReport ExpenseReport.form ExpenseReport.initial
+    definition := .ofModel ExpenseBrowser ExpenseBrowser.form ExpenseBrowser.initial
     submitUrl := "/api/submit" })]
 
 /-- Responses of the example application's data endpoints; it has none. -/

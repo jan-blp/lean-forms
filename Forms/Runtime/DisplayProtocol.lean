@@ -17,12 +17,14 @@ inductive Action where
   | select
   | add
   | remove
+  | selectRow
 
 def Action.name : Action → String
   | .edit => "edit"
   | .select => "select"
   | .add => "add"
   | .remove => "remove"
+  | .selectRow => "selectRow"
 
 def stepToJson : Feedback.Step → Json
   | .field name => toJson name

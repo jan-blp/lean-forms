@@ -11,6 +11,6 @@ export type Button = { "label": string; "variant": ButtonVariant; "disabled": bo
 export type ButtonVariant = "primary" | "secondary";
 export type Group = { "label": string | null; "children": Component[]; "error": string | null };
 export type Table = { "label": string; "headers": string[]; "rows": TableRow[]; "footer": Component; "error": string | null };
-export type TableRow = { "label": string; "cells": Component[] };
+export type TableRow = { "label": string; "cells": Component[]; "selected": boolean | null };
 export type Page = { "title": string; "busy": boolean; "body": Component[]; "toolbar": Component[]; "notice": Notice; "result": string | null };
 export type Notice = { "info": { "message": string } } | { "error": { "message": string } };

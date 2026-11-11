@@ -111,4 +111,40 @@ def ExpenseReport.form : Component ExpenseReport.Raw :=
     (initial := ⟨"", 0, false⟩)
     (columns := Expense.columns))
 
+structure ExpenseBrowser where
+  report : ExpenseReport
+  selection : RowSelection
+  deriving FormModel
+
+def ExpenseBrowser.initial : ExpenseBrowser.Raw := ⟨ExpenseReport.initial, .none⟩
+
+def ExpenseBrowser.form : Component ExpenseBrowser.Raw :=
+  .group (label := "Expense report") (children := [
+    .field
+      (path := path[ExpenseBrowser.Field.report, ExpenseReport.Field.employee])
+      (label := "Employee") (editor := .text),
+    .table
+      (path := path[ExpenseBrowser.Field.report, ExpenseReport.Field.expenses])
+      (label := "Expenses")
+      (itemLabel := "Expense")
+      (initial := ⟨"", 0, false⟩)
+      (columns := columns[
+        "Description" => .computed "Description" {
+          inputs := inputs[path[Expense.Field.description]], run := id },
+        "Amount (CHF)" => .computed "Amount (CHF)" {
+          inputs := inputs[path[Expense.Field.amount]], run := fun amount => s!"CHF {swiss amount}" },
+        "Receipt" => .computed "Receipt" {
+          inputs := inputs[path[Expense.Field.receipt]], run := fun receipt => if receipt then "Yes" else "No" }])
+      (selection := some path[ExpenseBrowser.Field.selection]),
+    .focus
+      (target := {
+        inputs := inputs[path[ExpenseBrowser.Field.selection]]
+        run := RowSelection.itemPath path[ExpenseBrowser.Field.report, ExpenseReport.Field.expenses]
+      })
+      (body := .groupOf (label := "Selected expense") (children := Expense.columns.components)),
+    .computed (label := "Total") (value := {
+      inputs := inputs[path[ExpenseBrowser.Field.report, ExpenseReport.Field.expenses]]
+      run := fun expenses => s!"CHF {swiss (expenses.map (·.amount)).sum}"
+    })])
+
 end Forms.ExampleForms

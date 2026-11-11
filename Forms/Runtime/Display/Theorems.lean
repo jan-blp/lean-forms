@@ -62,7 +62,7 @@ theorem View.dedupeRows_spec
     (View.dedupeRows seen rows).seen.Nodup := by
   match rows with
   | [] => simp [View.dedupeRows, View.controlsRows, nodup]
-  | ⟨label, cells⟩ :: rest =>
+  | ⟨label, cells, selected⟩ :: rest =>
     have ⟨head_keys, head_nodup⟩ := View.dedupeAll_spec seen cells nodup
     have ⟨tail_keys, tail_nodup⟩ := View.dedupeRows_spec (View.dedupeAll seen cells).seen rest head_nodup
     refine ⟨?_, ?_⟩

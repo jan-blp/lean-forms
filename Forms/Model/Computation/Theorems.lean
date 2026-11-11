@@ -5,9 +5,11 @@ public import Forms.Model.Computation
 public section
 namespace Forms.Model
 
+universe u
+
 /-- Evaluation depends only on the declared inputs; changes elsewhere do not affect it. -/
 theorem Computation.eval_congr
-  {source result : Type}
+  {source : Type} {result : Type u}
   (computation : Computation source result)
   (first second : source)
   (h : computation.inputs.read first = computation.inputs.read second)

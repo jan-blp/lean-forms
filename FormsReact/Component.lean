@@ -95,6 +95,7 @@ structure Group where
 structure TableRow where
   label : String
   cells : List Component
+  selected : Option Bool
 
 /-- A table's cells can contain any component, including editors and nested groups. -/
 structure Table where
@@ -146,7 +147,7 @@ def draftFieldsOf : List Component → List String
 
 def draftFieldsOfRows : List TableRow → List String
   | [] => []
-  | ⟨_, cells⟩ :: rest => draftFieldsOf cells ++ draftFieldsOfRows rest
+  | ⟨_, cells, _⟩ :: rest => draftFieldsOf cells ++ draftFieldsOfRows rest
 end
 
 end FormsReact

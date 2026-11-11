@@ -10,6 +10,18 @@ inductive ValidListInvocation (length : Nat) (valid : Fin length → Type) where
   | remove (index : Fin length)
   | edit (index : Fin length) (invocation : valid index)
 
+inductive ValidTableInvocation (length : Nat) (valid : Fin length → Type) (selectable : Bool) where
+  | add
+  | remove (index : Fin length)
+  | edit (index : Fin length) (invocation : valid index)
+  | select (enabled : selectable = true) (index : Fin length)
+
+/-- An invocation checked against the value reached by the current partial path. -/
+structure ValidFocusInvocation {item : Type} (found : Option item) (valid : item → Type) where
+  value : item
+  present : found = some value
+  invocation : valid value
+
 /-- A branch invocation checked against `current`, the active payload if this branch is active. -/
 inductive ValidBranchInvocation
     {payload : Type}
@@ -54,9 +66,12 @@ def Component.ValidInvocation {raw : Type} : Component raw → HttpRequest.Cache
   | .list path _ _ _ body, cache, current =>
     ValidListInvocation (path.get current).length fun index =>
       body.ValidInvocation cache ((path.get current).get index)
-  | .table path _ _ _ columns, cache, current =>
-    ValidListInvocation (path.get current).length fun index =>
-      columns.ValidInvocation cache ((path.get current).get index)
+  | .table path _ _ _ columns selection, cache, current =>
+    let items := path.get current
+    ValidTableInvocation items.length (fun index => columns.ValidInvocation cache (items.get index))
+      selection.isSome
+  | .focus target body, cache, current =>
+    ValidFocusInvocation ((target.eval current).get? current) (body.ValidInvocation cache)
   | .load source body, cache, current =>
     (body ((source.eval current).resolve cache)).ValidInvocation cache current
 
@@ -111,14 +126,24 @@ def Component.applyValid
       path.set (items.set index (body.applyValid cache (items.get index) invocation)) current
   | .load source body, invocation =>
     (body ((source.eval current).resolve cache)).applyValid cache current invocation
-  | .table path _ _ initial columns, invocation =>
+  | .table path _ _ initial columns selection, invocation =>
     let items := path.get current
     let Valid index := columns.ValidInvocation cache (items.get index)
-    match (invocation : ValidListInvocation items.length Valid) with
+    match (invocation : ValidTableInvocation items.length Valid selection.isSome) with
     | .add => path.set (items ++ [initial]) current
-    | .remove index => path.set (items.eraseIdx index) current
+    | .remove index =>
+      let next := path.set (items.eraseIdx index) current
+      match selection with
+      | .none => next
+      | some selected => selected.set ((selected.get current).remove index.val) next
     | .edit index invocation =>
       path.set (items.set index (columns.applyValid cache (items.get index) invocation)) current
+    | .select enabled index =>
+      match selection with
+      | none => nomatch enabled
+      | some selected => selected.set (.row index.val) current
+  | .focus target body, invocation =>
+    (target.eval current).set (body.applyValid cache invocation.value invocation.invocation) current
 
 def Components.applyValid
   {raw : Type}

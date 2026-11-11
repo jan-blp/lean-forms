@@ -45,6 +45,15 @@ def pathLocation {source target : Type} : Model.Path source target → Feedback.
   | .self => []
   | @Model.Path.stepField _ _ _ inst f rest => .field (@Fields.key _ inst _ f) :: pathLocation rest
 
+def partialPathLocation {source target : Type} : Model.PartialPath source target → Feedback.Location
+  | .self => []
+  | .empty => []
+  | @Model.PartialPath.field _ _ _ inst f rest =>
+    .field (@Fields.key _ inst _ f) :: partialPathLocation rest
+  | @Model.PartialPath.constructor _ _ _ inst _ ctor rest =>
+    .constructor (@Constructors.key _ inst _ ctor) :: partialPathLocation rest
+  | .index position rest => .index position :: partialPathLocation rest
+
 def choiceControl
   {raw sum : Type}
   (path : Model.Path raw sum)
@@ -119,7 +128,7 @@ def build
     .list label (rows ++ [.control add]) (Feedback.messages errors location)
   | .load source body =>
     build (body ((source.eval value).resolve cache)) value cache errors disabled target location
-  | .table path label itemLabel _ columns =>
+  | .table path label itemLabel _ columns selection =>
     let items := path.get value
     let location := location ++ pathLocation path
     let rows := items.mapIdx fun index item =>
@@ -127,9 +136,24 @@ def build
       let itemLocation := location ++ [.index index]
       let fields := buildColumns columns item cache errors disabled (row.child 0) itemLocation 0
       let remove := button .remove (row.child 1) itemLocation "Remove" disabled
-      ({ label := s!"{itemLabel} {index + 1}", cells := fields ++ [.control remove] } : Display.TableRow)
+      let selected := match selection with
+        | .none => none
+        | some selected => some (selected.get value == .row index)
+      let actions := match selected with
+        | none => Display.View.control remove
+        | some picked =>
+          let select := button .selectRow (row.child 2) itemLocation
+            (if picked then "Selected" else "Select") disabled
+          Display.View.stack none [.control select, .control remove]
+      ({ label := s!"{itemLabel} {index + 1}", selected, cells := fields ++ [actions] } : Display.TableRow)
     let add := button .add target location s!"Add {itemLabel.toLower}" disabled
     .table label (columns.headers ++ ["Actions"]) rows (.control add) (Feedback.messages errors location)
+  | .focus computation body =>
+    let path := computation.eval value
+    match path.get? value with
+    | none => .hidden
+    | some focused =>
+      build body focused cache errors disabled target (location ++ partialPathLocation path)
 
 def buildAll
   {raw : Type}
@@ -277,14 +301,22 @@ def decode
     Model.ValidListInvocation.edit index <$> decode body cache (items.get index) rest argument
   | .load source body, target =>
     decode (body ((source.eval current).resolve cache)) cache current target argument
-  | .table .., [] => noArgument argument Model.ValidListInvocation.add
+  | .table .., [] => noArgument argument Model.ValidTableInvocation.add
   | .table path .., [index, 1] => do
     let index ← checkedIndex index (path.get current).length
-    noArgument argument (Model.ValidListInvocation.remove index)
-  | .table path _ _ _ columns, index :: 0 :: column :: rest => do
+    noArgument argument (Model.ValidTableInvocation.remove index)
+  | .table path _ _ _ columns _, index :: 0 :: column :: rest => do
     let items := path.get current
     let index ← checkedIndex index items.length
-    Model.ValidListInvocation.edit index <$> decodeColumns columns cache (items.get index) column rest argument
+    Model.ValidTableInvocation.edit index <$> decodeColumns columns cache (items.get index) column rest argument
+  | .table path _ _ _ _ (some _), [index, 2] => do
+    let index ← checkedIndex index (path.get current).length
+    noArgument argument (.select rfl index)
+  | .focus computation body, target =>
+    match present : (computation.eval current).get? current with
+    | none => .error (.invalid .absent)
+    | some value => do
+      return ⟨value, present, ← decode body cache value target argument⟩
   | _, _ => .error (.decode (.clientBug .unknownControl))
 
 def decodeAll

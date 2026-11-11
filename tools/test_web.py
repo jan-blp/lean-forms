@@ -105,7 +105,7 @@ def expenses_session():
     with serve('expenses') as (request, start, _):
         initial = {'form': 'expenses', 'fingerprint': start['fingerprint'], 'value': start['value']}
         assert request('/api/submit', initial)[0] == 204
-        value = start['value']
+        value = start['value']['report']
         taxi = {'description': 'Taxi', 'amount': 150, 'receipt': False}
         for changes, message, steps in [
             ({'expenses': []}, 'Add at least one expense.', ['expenses']),
@@ -114,7 +114,8 @@ def expenses_session():
             ({'expenses': [{**taxi, 'amount': 6000, 'receipt': True}]}, "A report is limited to CHF 5'000.",
              ['expenses']),
         ]:
-            validation_error(request, {**initial, 'value': {**value, **changes}}, message, steps)
+            validation_error(request, {**initial, 'value': {**start['value'], 'report': {**value, **changes}}},
+                             message, ['report', *steps])
 
 
 def session(example):
