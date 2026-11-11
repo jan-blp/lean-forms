@@ -34,8 +34,8 @@ private def perform
   (key : ControlKey)
   (argument : Option Input)
   : Except ModelForm.Rejection raw := do
-  let invocation ← (ModelView.decodeKey form key argument).mapError .ofDecode
-  (form.apply {} value invocation).mapError fun error => .stale (.invocation error)
+  let invocation ← (ModelView.decodeKey form {} value key argument).mapError .ofAction
+  return form.applyValid {} value invocation
 
 private def rejected
   {raw : Type}
@@ -68,7 +68,7 @@ def run : IO Unit := do
     ((perform Person.form ⟨"Ada", 20, true, ⟨"Lambda Lane"⟩⟩ street (some (.text "Road"))).toOption.map (·.address.street)
       == some "Road")
   check "InvocationHidden"
-    (rejected Person.form Person.initial street (some (.text "Road")) == stale .hidden)
+    (rejected Person.form Person.initial street (some (.text "Road")) == stale .absent)
   let manyItems := { Order.initial with quantity := 11 }
   check "InvocationDisabled"
     (rejected Order.form manyItems (keyOf Order.form manyItems "Gift wrap") (some (.boolean true))
@@ -79,10 +79,8 @@ def run : IO Unit := do
   check "InvocationInvalidArgument"
     (rejected Person.form Person.initial (keyOf Person.form Person.initial "Age") (some (.text "abc"))
       == some (.input "Enter a non-negative whole number."))
-  check "InvocationUnknownControl"
-    (rejected Person.form Person.initial ⟨"[99]"⟩ none == clientBug .unknownControl)
-  check "InvocationMalformedKey"
-    (rejected Person.form Person.initial ⟨"missing"⟩ none == clientBug .unknownControl)
+  check "InvocationUnknownKey"
+    (rejected Person.form Person.initial ⟨"missing"⟩ none == stale .absent)
   check "InvocationWrongArgument"
     (rejected Person.form Person.initial (keyOf Person.form Person.initial "Age") (some (.boolean true))
       == clientBug (.wrongArgument "text"))
@@ -93,20 +91,20 @@ def run : IO Unit := do
       (·.ui.rejection) == some "Enter a non-negative whole number.")
   check "EventStaleRejects"
     ((ModelForm.event (model := Person) Person.form opened (.apply street (some (.text "Road")))).toOption.bind
-      (·.ui.rejection) == some (toString InvocationError.hidden))
+      (·.ui.rejection) == some (toString InvocationError.absent))
   check "EventProtocolFails"
     !(ModelForm.event (model := Person) Person.form opened (.apply age none)).toBool
   let shipping := keyOf Order.form Order.initial "Shipping"
-  check "InvocationUnknownOption"
+  check "InvocationUnavailableBranch"
     (rejected Order.form Order.initial shipping (some (.text "drone"))
-      == clientBug .unknownOption)
+      == stale (.unavailableBranch "drone"))
   match perform Order.form Order.initial shipping (some (.text "express")) with
   | .error rejection => throw (IO.userError s!"FAIL InvocationSelect: {rejection}")
   | .ok express =>
     let phone := keyOf Order.form express "Phone"
     check "InvocationSelectedBranchEdits" (perform Order.form express phone (some (.text "1"))).toBool
     check "InvocationInactiveBranch"
-      (rejected Order.form Order.initial phone (some (.text "1")) == stale .inactiveBranch)
+      (rejected Order.form Order.initial phone (some (.text "1")) == stale .absent)
     check "InvocationReselectKeeps"
       ((perform Order.form express shipping (some (.text "express"))).toOption.map Lean.toJson
         == some (Lean.toJson express))
@@ -119,8 +117,7 @@ def run : IO Unit := do
   | .ok longer =>
     check "InvocationAdd" (longer.expenses.length == ExpenseReport.initial.expenses.length + 1)
     let removeLast := keyOf ExpenseReport.form longer "Remove" ExpenseReport.initial.expenses.length
-    check "InvocationIndexOutOfBounds"
-      (rejected ExpenseReport.form ExpenseReport.initial removeLast none
-        == stale (.indexOutOfBounds 2 2))
+    check "InvocationMissingItem"
+      (rejected ExpenseReport.form ExpenseReport.initial removeLast none == stale .absent)
 
 end Tests.Invocation

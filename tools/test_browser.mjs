@@ -200,22 +200,6 @@ try {
     await type(itemInput(2, 'Description'), 'Lunch');
     await type(itemInput(2, 'Amount (CHF)'), '25');
   `);
-
-  // Choices load over HTTP after the page starts.
-  await example('invoice', `
-    const choice = label => [...document.querySelectorAll('fieldset.choice')]
-      .find(f => f.querySelector('legend').textContent === label);
-    const choose = async (label, option) => {
-      [...choice(label).querySelectorAll('input[type=radio]')]
-        .find(r => r.parentElement.textContent === option).click();
-      await tick();
-    };
-    await wait(() => choice('Supplier'));
-    await choose('Supplier', 'ACME AG');
-    await wait(() => choice('Contact') && field('Purchase order'));
-    await choose('Contact', 'Ben Keller');
-    await edit('Purchase order', 'PO-1');
-  `);
 } finally {
   socket?.close();
   await stop(firefox);

@@ -11,11 +11,27 @@ open Lean
 namespace DisplayProtocol
 open Display
 
-def controlKey (target : Target) : ControlKey :=
-  ⟨(toJson target.indices).compress⟩
+/-- What a control does to the value at its location. -/
+inductive Action where
+  | edit
+  | select
+  | add
+  | remove
 
-def keyTarget (key : ControlKey) : Option Target :=
-  (Json.parse key.value >>= fromJson?).toOption.map Target.mk
+def Action.name : Action → String
+  | .edit => "edit"
+  | .select => "select"
+  | .add => "add"
+  | .remove => "remove"
+
+def stepToJson : Feedback.Step → Json
+  | .field name => toJson name
+  | .constructor tag => Json.mkObj [("constructor", toJson tag)]
+  | .index position => toJson position
+
+/-- Names `action` on the value at `location`, independent of where the control is shown. -/
+def controlKey (action : Action) (location : Feedback.Location) : ControlKey :=
+  ⟨(Json.arr (#[toJson action.name] ++ (location.map stepToJson).toArray)).compress⟩
 
 def messageFields (messages : Option String) : List (String × Json) :=
   messages.toList.map fun message => ("messages", toJson message)
