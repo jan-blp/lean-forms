@@ -76,47 +76,8 @@ def Path.trans
   | .self => second
   | @stepField _ _ _ inst f rest => @Path.stepField _ _ _ inst f (rest.trans second)
 
-theorem Path.get_set
-  {source target : Type}
-  (path : Path source target)
-  (new : target)
-  (value : source)
-  : path.get (path.set new value) = new := by
-  induction path with
-  | self => rfl
-  | @stepField source child target inst f rest ih =>
-    simp only [get, set, Fields.get, Fields.set, (Fields.lawful f).view_set]
-    exact ih _ _
-
-theorem Path.set_get
-  {source target : Type}
-  (path : Path source target)
-  (value : source)
-  : path.set (path.get value) value = value := by
-  induction path with
-  | self => rfl
-  | @stepField source child target inst f rest ih =>
-    simp only [get, set, ih, Fields.get, Fields.set, (Fields.lawful f).set_view]
-
-theorem Path.set_set
-  {source target : Type}
-  (path : Path source target)
-  (first second : target)
-  (value : source)
-  : path.set second (path.set first value) = path.set second value := by
-  induction path with
-  | self => rfl
-  | @stepField source child target inst f rest ih =>
-    simp only [set, Fields.get, Fields.set, (Fields.lawful f).view_set, ih,
-      (Fields.lawful f).set_set]
-
 def Path.toLens {source target : Type} (path : Path source target) : LeanLens.Lens' source target :=
   LeanLens.mkLens path.get path.set
-
-instance {source target : Type} (path : Path source target) : LeanLens.LawfulLens path.toLens where
-  view_set := path.get_set
-  set_view := path.set_get
-  set_set := path.set_set
 
 inductive Location : (raw : Type) → raw → Type 1 where
   | self {raw : Type} {value : raw} : Location raw value

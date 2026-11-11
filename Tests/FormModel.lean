@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.Derive
+meta import Forms.Model.Path.Theorems
 
 @[expose] public section
 
