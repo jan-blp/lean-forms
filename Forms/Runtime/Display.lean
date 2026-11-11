@@ -31,6 +31,7 @@ inductive Editor where
   | action
   deriving BEq
 
+/-- An interactive leaf of the view: an editor or button bound to one form value. -/
 structure Control where
   key : ControlKey
   target : Target

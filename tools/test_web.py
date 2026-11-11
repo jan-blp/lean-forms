@@ -117,21 +117,6 @@ def expenses_session():
             validation_error(request, {**initial, 'value': {**value, **changes}}, message, steps)
 
 
-def invoice_session():
-    with serve('invoice') as (request, start, _):
-        status, headers, body = request('/api/suppliers', {})
-        assert status == 200 and headers['Content-Type'] == 'application/json'
-        assert [option['key'] for option in json.loads(body)] == ['acme', 'globex', 'initech']
-        status, _, body = request('/api/supplier', 'acme')
-        assert status == 200 and json.loads(body)['requiresPurchaseOrder'] is True
-        assert request('/api/supplier', 'missing')[0] == 404
-        assert request('/api/suppliers')[0] == 404
-        initial = {'form': 'invoice', 'fingerprint': start['fingerprint'], 'value': start['value']}
-        validation_error(request, {**initial, 'value': {'amount': 0}}, 'Enter an amount of at least CHF 1.',
-                         ['amount'])
-        assert request('/api/submit', initial)[0] == 204
-
-
 def session(example):
     with serve(example) as (request, start, traffic_log):
         for path, mime in [('/', 'text/html'), ('/app.js', 'text/javascript'),
@@ -312,8 +297,7 @@ browser_flag(1)
 session('person')
 order_session()
 expenses_session()
-invoice_session()
 terminal_colors()
 terminal_colors(no_color=True)
 terminal_colors(term='dumb')
-print('PASS: HTTP traffic, person, order, expenses and invoice validation, invoice data endpoints, request errors, terminal colors, NO_COLOR, and --open')
+print('PASS: HTTP traffic, person, order and expenses validation, request errors, terminal colors, NO_COLOR, and --open')

@@ -3,7 +3,6 @@ module
 public import Forms.ExampleForms.Person
 public import Forms.ExampleForms.Order
 public import Forms.ExampleForms.Expenses
-public import Forms.ExampleForms.Invoice
 public import Forms.Runtime.FormDefinition
 public import Std.Data.HashMap
 
@@ -17,12 +16,11 @@ def forms : List (String × RegisteredForm) := [
   ("order", { definition := .ofModel Order Order.form Order.initial, submitUrl := "/api/submit" }),
   ("expenses", {
     definition := .ofModel ExpenseReport ExpenseReport.form ExpenseReport.initial
-    submitUrl := "/api/submit" }),
-  ("invoice", { definition := .ofModel Invoice Invoice.form Invoice.initial, submitUrl := "/api/submit" })]
+    submitUrl := "/api/submit" })]
 
-/-- Responses of the example application's data endpoints. -/
+/-- Responses of the example application's data endpoints; it has none. -/
 def api : Model.HttpRequest → Option Lean.Json :=
-  Model.Api.serve SupplierEndpoint.fixture
+  fun _ => none
 
 def registeredForms : Std.HashMap String RegisteredForm := .ofList forms
 

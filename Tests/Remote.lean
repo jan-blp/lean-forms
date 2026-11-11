@@ -7,6 +7,43 @@ public section
 namespace Tests.Remote
 open Lean Forms.Model Forms.Runtime Forms.ExampleForms
 
+structure SupplierDetails where
+  requiresPurchaseOrder : Bool
+  deriving ToJson, FromJson
+
+/-- The tests' data endpoints. -/
+inductive SupplierEndpoint where
+  /-- All supplier ids. -/
+  | suppliers
+  /-- One supplier's details, by id. -/
+  | supplier
+  deriving DecidableEq, Repr
+
+@[expose] def SupplierEndpoint.signature : SupplierEndpoint → Api.Signature
+  | .suppliers => { Input := Unit, Output := List String }
+  | .supplier => { Input := String, Output := SupplierDetails }
+
+instance : Api SupplierEndpoint where
+  signature := SupplierEndpoint.signature
+  path
+    | .suppliers => "/api/suppliers"
+    | .supplier => "/api/supplier"
+  all := [.suppliers, .supplier]
+  complete := by
+    intro named
+    cases named <;> decide
+  distinct := by decide
+
+def supplierDetails : String → Option SupplierDetails
+  | "acme" => some ⟨true⟩
+  | "globex" => some ⟨false⟩
+  | _ => none
+
+@[expose] def SupplierEndpoint.fixture
+  : (named : SupplierEndpoint) → named.signature.Input → Option named.signature.Output
+  | .suppliers, _ => some ["acme", "globex"]
+  | .supplier, id => supplierDetails id
+
 private def check (message : String) (ok : Bool) : IO Unit := do
   unless ok do throw (IO.userError s!"FAIL {message}")
   IO.println s!"PASS {message}"
@@ -55,7 +92,7 @@ private def fetches (state : State) : List HttpRequest :=
     | .submit => none
 
 private def answer (request : HttpRequest) : Except String Json :=
-  (api request).elim (.error "Not found.") .ok
+  (Api.serve SupplierEndpoint.fixture request).elim (.error "Not found.") .ok
 
 /-- Answers every queued request, and the requests their responses queue. -/
 private def settle (state : State) : IO State := do

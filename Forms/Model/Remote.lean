@@ -120,9 +120,4 @@ def Api.serve
   let output ← handle call.named call.input
   return toJson output
 
-structure KeyedOption (key : Type) where
-  key : key
-  label : String
-  deriving ToJson, FromJson
-
 end Forms.Model
