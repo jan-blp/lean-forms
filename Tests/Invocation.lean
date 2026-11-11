@@ -95,9 +95,9 @@ def run : IO Unit := do
   check "EventProtocolFails"
     !(ModelForm.event (model := Person) Person.form opened (.apply age none)).toBool
   let shipping := keyOf Order.form Order.initial "Shipping"
-  check "InvocationUnknownOption"
+  check "InvocationUnavailableBranch"
     (rejected Order.form Order.initial shipping (some (.text "drone"))
-      == clientBug .unknownOption)
+      == stale (.unavailableBranch "drone"))
   match perform Order.form Order.initial shipping (some (.text "express")) with
   | .error rejection => throw (IO.userError s!"FAIL InvocationSelect: {rejection}")
   | .ok express =>

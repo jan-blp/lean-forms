@@ -128,6 +128,17 @@ private def ordered (layout : Source (List String)) : Component Person.Raw :=
       | "age" => some ageField
       | _ => none))
 
+/-- Loading can remove options while preserving the choice's location and key. -/
+private def shippingChoices : Component Order.Raw :=
+  let pickup : Branch Shipping.Raw :=
+    .of Shipping.Constructor.pickup "Pickup" ⟨⟩ (.computed "" (.const ""))
+  let standard : Branch Shipping.Raw :=
+    .of Shipping.Constructor.standard "Standard" ⟨⟨"", ""⟩⟩ (.computed "" (.const ""))
+  .load (.const (.fetch layoutRequest (fromJson? (α := Bool)))) fun status =>
+    .choice path[Order.Field.shipping] "Shipping" (match status with
+      | .ready _ => [standard]
+      | _ => [pickup, standard])
+
 private def labels
   {raw : Type}
   (form : Component raw)
@@ -200,6 +211,27 @@ def run : IO Unit := do
   let otherLayout : HttpRequest.Cache := ({} : HttpRequest.Cache).insert layoutRequest
     (.loaded (toJson ["name", "age"]))
   check "RemoteReorderedKeepsField" (renamed otherLayout == some "Grace")
+  let shippingState := ModelForm.load shippingChoices (ModelForm.openState Order.initial)
+  let some shipping := (ModelView.render shippingChoices shippingState.value shippingState.cache).controls.head?
+    | throw (IO.userError "FAIL no shipping choice")
+  check "RemoteFallbackOffersPickup" (match shipping.input with
+    | .choice _ options => options.any (·.value == "pickup")
+    | _ => false)
+  let shippingState ← IO.ofExcept (ModelForm.execute (model := Order) shippingChoices shippingState
+    (.event (.loaded layoutRequest (.ok (toJson true)))))
+  check "RemoteLoadedChoiceKeepsKey"
+    ((ModelView.render shippingChoices shippingState.value shippingState.cache).controls.any fun control =>
+      control.key == shipping.key && match control.input with
+        | .choice _ options => options.map (·.value) == ["standard"]
+        | _ => false)
+  let rejected ← IO.ofExcept (ModelForm.execute (model := Order) shippingChoices shippingState
+    (.event (.apply shipping.key (some (.text "pickup")))))
+  check "RemoteRemovedBranchRejectsRecoverably"
+    (rejected.ui.rejection == some (toString (InvocationError.unavailableBranch "pickup")) &&
+      toJson rejected.value == toJson shippingState.value)
+  let recovered ← IO.ofExcept (ModelForm.execute (model := Order) shippingChoices rejected
+    (.event (.apply shipping.key (some (.text "standard")))))
+  check "RemoteChoiceUsableAfterStaleBranch" recovered.ui.rejection.isNone
   let twice : Component Person.Raw := .group (label := "") (children := [nameField, nameField])
   let rendered := ModelView.render twice person {}
   check "RemoteDuplicateShownOnce"

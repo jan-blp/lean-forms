@@ -319,8 +319,16 @@ test('order chooses shipping branches, nests visibility, and validates, alongsid
     apply('Quantity', '3');
     apply('Shipping', 'express');
     assert.equal(shipping().express.phone, '079');
-    assert.throws(() => order.send({ apply: { key: control('Shipping').key, argument: 'drone' } }), /Unknown option/);
+    const beforeRejectedBranch = order.snapshot().submission.value;
+    assert.throws(() => order.send({ apply: { key: control('Shipping').key, argument: 'drone' } }),
+      /branch 'drone' is no longer available/);
+    const rejectedBranch = order.send({ event: { message: {
+      apply: { key: control('Shipping').key, argument: 'drone' },
+    } } });
+    assert.match(rejectedBranch.rejection, /branch 'drone' is no longer available/);
+    assert.deepEqual(rejectedBranch.submission.value, beforeRejectedBranch);
     apply('Shipping', 'pickup');
+    assert.equal(order.snapshot().rejection, null);
     assert.equal(control('Street'), undefined);
     assert.match(outputs(), /Store, Bahnhofstrasse 1/);
     submit();

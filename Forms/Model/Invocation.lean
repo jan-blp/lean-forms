@@ -27,6 +27,8 @@ inductive InvocationError where
   | indexOutOfBounds (index length : Nat)
   /-- No control with the key is shown. -/
   | absent
+  /-- The choice has no branch with the requested key. -/
+  | unavailableBranch (key : String)
   deriving DecidableEq, Repr
 
 instance : ToString InvocationError where
@@ -37,6 +39,7 @@ instance : ToString InvocationError where
     | .indexOutOfBounds index length =>
       s!"This action is unavailable: item {index + 1} of {length}."
     | .absent => "This action is unavailable: the control is no longer shown."
+    | .unavailableBranch key => s!"This action is unavailable: branch '{key}' is no longer available."
 
 mutual
 /-- Invocations that apply to `current`: visible, enabled, in bounds, on the active branch, in the

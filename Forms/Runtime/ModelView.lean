@@ -210,7 +210,7 @@ def selectBranch
   (cache : Model.HttpRequest.Cache)
   (current : sum)
   : (branches : Model.Branches sum) → Except ActionError (branches.ValidInvocation cache current)
-  | .nil => .error (.decode (.clientBug .unknownOption))
+  | .nil => .error (.invalid (.unavailableBranch key))
   | .cons (.mk branchKey ..) tail =>
     if branchKey == key then
       .ok (Sum.inl Model.ValidBranchInvocation.select)
