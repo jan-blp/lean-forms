@@ -127,10 +127,9 @@ def invoice_session():
         assert request('/api/supplier', 'missing')[0] == 404
         assert request('/api/suppliers')[0] == 404
         initial = {'form': 'invoice', 'fingerprint': start['fingerprint'], 'value': start['value']}
-        assert start['value']['supplier'] is None
-        validation_error(request, initial, 'Choose a supplier.', ['supplier'])
-        acme = {'key': 'acme', 'payload': {'contact': {'key': 'ben', 'payload': {}}, 'purchaseOrder': 'PO-1'}}
-        assert request('/api/submit', {**initial, 'value': {**start['value'], 'supplier': acme}})[0] == 204
+        validation_error(request, {**initial, 'value': {'amount': 0}}, 'Enter an amount of at least CHF 1.',
+                         ['amount'])
+        assert request('/api/submit', initial)[0] == 204
 
 
 def session(example):

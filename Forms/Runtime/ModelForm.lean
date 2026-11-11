@@ -126,6 +126,10 @@ def Rejection.ofDecode : DecodeError → Rejection
   | .input message => .input message
   | .clientBug error => .clientBug error
 
+def Rejection.ofAction : ModelView.ActionError → Rejection
+  | .decode error => .ofDecode error
+  | .invalid error => .stale (.invocation error)
+
 /-- The checked invocation that `key` and `argument` name. -/
 def validateAction
   {raw : Type}
@@ -135,8 +139,7 @@ def validateAction
   (argument : Option Input)
   : Except Rejection (form.ValidInvocation state.cache state.value) := do
   if state.ui.pending then throw (.stale .pending)
-  let invocation ← (ModelView.decodeKey form key argument).mapError .ofDecode
-  (form.validate state.cache state.value invocation).mapError fun error => .stale (.invocation error)
+  (ModelView.decodeKey form state.cache state.value key argument).mapError .ofAction
 
 def applyValid
   {raw : Type}

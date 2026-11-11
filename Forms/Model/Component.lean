@@ -53,24 +53,11 @@ inductive Component : Type → Type 1 where
       (initial : item)
       (body : Component item)
       : Component raw
-  /-- Loads `source`; `body` edits the value next to the loaded data. -/
+  /-- Loads `source`; `body` builds the subtree from its status. -/
   | load
       {raw data : Type}
       (source : Computation raw (Source data))
-      (body : Component (Scope data raw))
-      : Component raw
-  /-- Picks a key from `options`, shown and sent as `keyText`; `body` edits the picked key's
-  payload, starting from `initial`, next to the key. -/
-  | keyedChoice
-      {raw key payload : Type}
-      [keyEq : BEq key]
-      [keyHash : Hashable key]
-      (path : Path raw (Selection key payload))
-      (label : String)
-      (keyText : key → String)
-      (options : Computation raw (List (KeyedOption key)))
-      (initial : payload)
-      (body : Component (Scope key payload))
+      (body : Status data → Component raw)
       : Component raw
 
 inductive Components : Type → Type 1 where
@@ -154,17 +141,27 @@ def Component.choice
   : Component raw :=
   .choiceOf path label (.ofList branches)
 
-def Component.keyed
-  {raw key payload : Type}
-  [BEq key]
-  [Hashable key]
-  [ToString key]
-  (path : Path raw (Selection key payload))
-  (label : String)
-  (options : Computation raw (List (KeyedOption key)))
-  (initial : payload)
-  (body : Component (Scope key payload))
+/-- Loads `source`; `body` builds the subtree from the data, with a note while loading or failed. -/
+def Component.bind
+  {raw data : Type}
+  (source : Computation raw (Source data))
+  (body : data → Component raw)
   : Component raw :=
-  .keyedChoice path label toString options initial body
+  .load source fun
+    | .ready data => body data
+    | .loading => .computed "" (.const "Loading…")
+    | .failed message => .computed "" (.const s!"Could not load: {message}")
+
+/-- Loads `source`; `body` builds the subtree from the data, `fallback` stands in until then. -/
+def Component.bindOr
+  {raw data : Type}
+  (source : Computation raw (Source data))
+  (fallback : Component raw)
+  (body : data → Component raw)
+  : Component raw :=
+  .load source fun
+    | .ready data => body data
+    | .loading => fallback
+    | .failed _ => fallback
 
 end Forms.Model

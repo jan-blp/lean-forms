@@ -6,7 +6,7 @@ namespace Forms.Runtime
 
 structure ControlKey where
   value : String
-  deriving BEq, DecidableEq
+  deriving DecidableEq
 
 structure DomId where
   value : String
