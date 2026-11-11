@@ -2,6 +2,7 @@ module
 
 public import Lean.Data.Json
 public import Mathlib.Data.FinEnum
+public meta import Forms.Deriving.FinEnum
 
 public section
 
@@ -18,11 +19,7 @@ inductive Style where
   | string
   | number
   | literal
-  deriving DecidableEq
-
-instance : FinEnum Style :=
-  FinEnum.ofList [.request, .success, .rejection, .failure, .detail, .key, .string, .number, .literal]
-    (by intro style; cases style <;> simp)
+  deriving DecidableEq, FinEnum
 
 inductive AnsiCode where
   | reset
