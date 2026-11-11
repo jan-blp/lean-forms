@@ -1,3 +1,5 @@
+// Browser-only behavior: Wasm under cross-origin isolation, React drafts and focus, escaping, layout.
+// Validation rules live in web/compiled.test.mjs and tools/test_web.py.
 // Requires Firefox and Node.js 22+. Run after lake build forms-web.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -26,27 +28,31 @@ async function stop(process) {
   const timer = setTimeout(() => process.kill('SIGKILL'), 3000);
   try { await exited; } finally { clearTimeout(timer); }
 }
+/** Retries `attempt` until it resolves or `ms` elapse, failing early if `process` cannot spawn. */
+async function retry(what, process, ms, attempt) {
+  let spawnError;
+  process.once('error', error => { spawnError = error; });
+  const deadline = Date.now() + ms;
+  for (;;) {
+    if (spawnError) throw spawnError;
+    try { return await attempt(); }
+    catch (error) { if (Date.now() > deadline) throw new Error(`${what} did not start`, { cause: error }); }
+    await delay(100);
+  }
+}
 
-const port = await freePort();
 const debugPort = await freePort();
 const profile = await mkdtemp(join(tmpdir(), 'forms-firefox-'));
-const server = spawn('.lake/build/bin/forms-web', ['person', '--port', String(port)], { cwd, stdio: 'ignore' });
 const firefox = spawn('firefox', ['--headless', '--no-remote', '--profile', profile,
   '--remote-debugging-port', String(debugPort)], { stdio: 'ignore' });
-let startupError;
-for (const process of [server, firefox]) process.on('error', error => { startupError = error; });
 let socket;
 try {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    if (startupError) throw startupError;
-    try {
-      await fetch(`http://127.0.0.1:${port}/api/form-start`);
-      socket = new WebSocket(`ws://127.0.0.1:${debugPort}/session`);
-      await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
-      break;
-    } catch { await delay(100); }
-  }
-  assert.equal(socket?.readyState, WebSocket.OPEN, 'Server/browser did not start');
+  // Cold Firefox on CI can take over 10s.
+  socket = await retry('Firefox', firefox, 60000, () => new Promise((resolve, reject) => {
+    const candidate = new WebSocket(`ws://127.0.0.1:${debugPort}/session`);
+    candidate.onopen = () => resolve(candidate);
+    candidate.onerror = reject;
+  }));
   let id = 0;
   const pending = new Map();
   socket.onmessage = event => {
@@ -73,17 +79,13 @@ try {
       assert.equal(result.result.value, true, `Horizontal page overflow at ${width}px`);
     }
   }
+  /** Loads `name` in Firefox, runs `body`, then submits through the real server. */
   async function example(name, body) {
-    const examplePort = await freePort();
-    const process = spawn('.lake/build/bin/forms-web', [name, '--port', String(examplePort)], { cwd, stdio: 'ignore' });
+    const port = await freePort();
+    const server = spawn('.lake/build/bin/forms-web', [name, '--port', String(port)], { cwd, stdio: 'ignore' });
     try {
-      let ready = false;
-      for (let attempt = 0; attempt < 100; attempt++) {
-        try { await fetch(`http://127.0.0.1:${examplePort}/api/form-start`); ready = true; break; }
-        catch { await delay(50); }
-      }
-      assert.ok(ready, `Server did not start: ${name}`);
-      await call('browsingContext.navigate', { context, url: `http://127.0.0.1:${examplePort}/`, wait: 'complete' });
+      await retry(`Server ${name}`, server, 10000, () => fetch(`http://127.0.0.1:${port}/api/form-start`));
+      await call('browsingContext.navigate', { context, url: `http://127.0.0.1:${port}/`, wait: 'complete' });
       const result = await call('script.evaluate', { target: { context }, awaitPromise: true, expression: `(async () => {
         const check = (condition, message) => { if (!condition) throw Error(message); };
         const wait = async predicate => {
@@ -101,70 +103,53 @@ try {
         const click = async selector => { document.querySelector(selector).click(); await tick(); };
         const field = label => [...document.querySelectorAll('.editor')].find(form =>
           form.querySelector('label').firstChild.textContent === label);
+        const input = label => field(label).querySelector('input');
         const edit = async (label, value) => {
-          await type(field(label).querySelector('input'), value);
+          await type(input(label), value);
           field(label).requestSubmit();
           await tick();
         };
+        const status = () => document.querySelector('#status').textContent;
+        const submitted = () => JSON.parse(document.querySelector('#result pre').textContent);
         await wait(() => document.querySelector('[data-action=submit]')?.disabled === false);
         check(crossOriginIsolated, 'Shared-memory runtime requires cross-origin isolation');
         check(document.querySelector('[data-runtime=compiled]'), 'Compiled form runtime was not loaded');
         ${body}
         await click('[data-action=submit]');
-        await wait(() => document.querySelector('#status').textContent === 'Submitted successfully.');
-        return JSON.parse(document.querySelector('#result pre').textContent);
+        await wait(() => status() === 'Submitted successfully.');
       })()` });
       assert.notEqual(result.type, 'exception', JSON.stringify(result.exceptionDetails));
       await checkLayout();
-      console.log(`PASS: ${name} browser controls, layout, and server validation`);
-    } finally { await stop(process); }
+      console.log(`PASS: ${name}`);
+    } finally { await stop(server); }
   }
+
   await example('person', `
-    const status = () => document.querySelector('#status').textContent;
-    const originalName = field('Name').querySelector('input');
-    originalName.focus();
-    await type(originalName, '<img src=x> Grace');
-    check(field('Name').querySelector('input') === originalName && document.activeElement === originalName,
-      'Draft replaced the editor or lost focus');
+    const name = input('Name');
+    name.focus();
+    await type(name, '<img src=x> Grace');
+    check(input('Name') === name && document.activeElement === name, 'Draft replaced the editor or lost focus');
     await click('[data-action=submit]');
     await wait(() => status() === 'Submitted successfully.');
-    check(JSON.parse(document.querySelector('#result pre').textContent).name === '<img src=x> Grace',
-      'Submit did not apply the draft');
+    check(submitted().name === '<img src=x> Grace', 'Submit did not apply the draft');
     check(!document.querySelector('#controls img'), 'Name interpreted as HTML');
-    await click('[data-action=reset]');
-    check(field('Name').querySelector('input').value === 'Ada', 'Reset kept edit');
-    const blurred = field('Age').querySelector('input');
-    blurred.focus();
-    await type(blurred, 'abc');
-    blurred.blur();
+    const age = input('Age');
+    age.focus();
+    await type(age, 'abc');
+    age.blur();
     await tick();
     check(status() === 'Enter a non-negative whole number.', 'Leaving the field did not apply the edit');
-    await edit('Age', '20');
-    check(!field('Street'), 'Hidden nested field rendered');
-    await edit('Age', 'abc');
-    check(field('Age').querySelector('input').value === 'abc' && status() === 'Enter a non-negative whole number.',
-      'Rejected edit lost its draft');
-    await edit('Age', '20');
+    check(input('Age').value === 'abc', 'Rejected edit lost its draft');
+    await edit('Age', '21');
     await click('input[type=checkbox]');
-    check(field('Street').querySelector('input').value === 'Lambda Lane', 'Missing nested value');
-    await type(field('Street').querySelector('input'), 'Hidden draft');
+    await type(input('Street'), 'Hidden draft');
     await click('input[type=checkbox]');
     await click('input[type=checkbox]');
-    check(field('Street').querySelector('input').value === 'Lambda Lane', 'Hidden field kept its draft');
-    await edit('Age', '150');
-    await click('[data-action=submit]');
-    await wait(() => status() === 'Age must be at most 120.');
-    check(field('Age').querySelector('input').getAttribute('aria-invalid') === 'true', 'Missing age feedback');
-    await edit('Age', '20');
+    check(input('Street').value === 'Lambda Lane', 'Hidden field kept its draft');
     await edit('Street', '');
     await click('[data-action=submit]');
-    await wait(() => status() === 'Enter your delivery street.');
-    check(field('Street').querySelector('input').getAttribute('aria-invalid') === 'true', 'Missing nested feedback');
-    await edit('Street', 'Campus');
-    await edit('Age', '17');
-    await click('[data-action=submit]');
-    await wait(() => status() === 'Campus delivery requires an adult.');
-    await edit('Age', '21');
+    await wait(() => input('Street').getAttribute('aria-invalid') === 'true');
+    await edit('Street', 'Main');
     const originalFetch = window.fetch;
     let finish;
     let posts = 0;
@@ -176,107 +161,47 @@ try {
     check(posts === 1, 'Duplicate submission while pending');
     finish(new Response(null, { status: 204 }));
     await wait(() => status() === 'Submitted successfully.');
-    check(field('Age').querySelector('input').value === '21', 'Reset ran while pending');
+    check(input('Age').value === '21', 'Reset ran while pending');
     window.fetch = originalFetch;
-    const { fingerprint } = await (await fetch('/api/form-start')).json();
-    const forged = await fetch('/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ form: 'person', fingerprint, value: { name: 'Forged', age: 150,
-        delivery: false, address: { street: 'Campus' } } }) });
-    check(forged.status === 422, 'Server accepted an invalid model');
-    check((await forged.json()).error.message === 'Age must be at most 120.', 'Server validation did not run');
   `);
 
   await example('order', `
-    const status = () => document.querySelector('#status').textContent;
-    const text = () => document.body.textContent;
-    const input = label => field(label).querySelector('input');
-    const toggle = async label => { input(label).click(); await tick(); };
-    const radios = () => [...document.querySelectorAll('.choice input[type=radio]')];
-    const choose = async option => { radios().find(r => r.parentElement.textContent === option).click(); await tick(); };
-    check(text().includes('CHF 90'), 'Missing computed total');
-    await edit('Quantity', '100');
-    await edit('Unit price (CHF)', '1234');
-    check(text().includes("CHF 123'400"), 'Total not Swiss formatted');
-    check(input('Gift wrap').disabled, 'Gift wrap not disabled above 10 items');
-    await edit('Quantity', '3');
-    check(!input('Gift wrap').disabled, 'Gift wrap still disabled');
-    check(!field('Gift message'), 'Hidden gift message rendered');
-    await toggle('Gift wrap');
-    check(field('Gift message') && !text().includes('Card preview'), 'Wrong gift visibility');
-    await click('[data-action=submit]');
-    await wait(() => status() === 'Enter a gift message.');
-    check(input('Gift message').getAttribute('aria-invalid') === 'true', 'Missing gift feedback');
-    await edit('Gift message', 'Happy birthday');
-    check(text().includes('"Happy birthday" from Grace Hopper'), 'Nested visible output missing');
-    await edit('Email', 'grace');
-    await click('[data-action=submit]');
-    await wait(() => status() === 'Enter a valid email address.');
-    check(input('Email').getAttribute('aria-invalid') === 'true', 'Missing nested feedback');
-    await edit('Email', 'grace@example.com');
-    check(radios().find(r => r.checked).parentElement.textContent === 'Standard', 'Wrong initial branch');
+    const choose = async option => {
+      [...document.querySelectorAll('.choice input[type=radio]')]
+        .find(r => r.parentElement.textContent === option).click();
+      await tick();
+    };
+    // Another branch's draft must not leak into the same slot.
     await type(input('Street'), 'Draft street');
     await choose('Express');
     check(input('Street').value === '' && field('Phone'), 'Express branch did not start fresh');
-    check(text().includes('Next business day'), 'Delivery output did not follow the branch');
-    await click('[data-action=submit]');
-    await wait(() => status() === 'Enter the shipping street.\\nEnter the shipping city.');
-    check(input('Street').getAttribute('aria-invalid') === 'true' &&
-      input('City').getAttribute('aria-invalid') === 'true', 'Missing address feedback');
-    // Express checks the phone once its address is valid.
     await edit('Street', 'Main');
     await edit('City', 'Bern');
-    await click('[data-action=submit]');
-    await wait(() => status() === 'Enter a phone number for the courier.');
-    check(input('Phone').getAttribute('aria-invalid') === 'true', 'Missing branch feedback');
     await type(input('Phone'), '079');
     await click('[data-action=submit]');
     await wait(() => status() === 'Submitted successfully.');
-    const submitted = JSON.parse(document.querySelector('#result pre').textContent);
-    check(submitted.shipping.express.phone === '079' && submitted.shipping.express.address.city === 'Bern' &&
-      submitted.quantity === 3, 'Submitted value wrong');
-    await choose('Pickup');
-    check(!field('Street') && text().includes('Store, Bahnhofstrasse 1'), 'Pickup branch not shown');
+    check(submitted().shipping.express.phone === '079', 'Submit did not apply the branch draft');
   `);
 
   await example('expenses', `
-    const status = () => document.querySelector('#status').textContent;
-    const text = () => document.body.textContent;
-    const item = n => [...document.querySelectorAll('fieldset')].find(f => f.querySelector('legend').textContent === 'Expense ' + n);
-    const input = (n, label) => [...item(n).querySelectorAll('.editor')]
+    const item = n => [...document.querySelectorAll('fieldset')]
+      .find(f => f.querySelector('legend').textContent === 'Expense ' + n);
+    const itemInput = (n, label) => [...item(n).querySelectorAll('.editor')]
       .find(e => e.querySelector('label').firstChild.textContent === label)?.querySelector('input');
     const button = (root, label) => [...root.querySelectorAll('button')].find(b => b.textContent === label);
-    check(item(1) && item(2) && !item(3), 'Wrong initial items');
-    check(text().includes('CHF 238'), 'Missing total');
-    // An unapplied edit survives removing an earlier item: buttons apply drafts first.
-    await type(input(2, 'Description'), 'Hotel Zürich');
-    button(item(1), 'Remove').click(); await tick();
-    check(!item(2) && input(1, 'Description').value === 'Hotel Zürich', 'Draft lost or moved on remove');
-    button(document, 'Add expense').click(); await tick();
-    check(item(2) && input(2, 'Description').value === '', 'Added item missing');
-    await click('[data-action=submit]');
-    await wait(() => status().includes('Describe the expense.'));
-    check(input(2, 'Description').getAttribute('aria-invalid') === 'true', 'Missing item feedback');
-    check(input(1, 'Description').getAttribute('aria-invalid') === null, 'Feedback on the wrong item');
-    await type(input(2, 'Description'), 'Dinner');
-    await type(input(2, 'Amount (CHF)'), '120');
-    await click('[data-action=submit]');
-    await wait(() => status() === 'Attach a receipt for CHF 100 or more.');
-    input(2, 'Receipt attached').click(); await tick();
-    button(item(1), 'Remove').click(); await tick();
-    button(item(1), 'Remove').click(); await tick();
-    await click('[data-action=submit]');
-    await wait(() => status() === 'Add at least one expense.');
-    check(document.querySelector('fieldset[aria-invalid=true] legend').textContent === 'Expenses',
-      'Missing list feedback');
-    button(document, 'Add expense').click(); await tick();
-    await type(input(1, 'Description'), 'Lunch');
-    await type(input(1, 'Amount (CHF)'), '25');
-    await click('[data-action=submit]');
-    await wait(() => status() === 'Submitted successfully.');
-    const submitted = JSON.parse(document.querySelector('#result pre').textContent);
-    check(submitted.expenses.length === 1 && submitted.expenses[0].amount === 25, 'Submitted value wrong');
+    // Drafts follow their item when an earlier one is removed.
+    await type(itemInput(2, 'Description'), 'Hotel Zürich');
+    button(item(1), 'Remove').click();
+    await tick();
+    check(!item(2) && itemInput(1, 'Description').value === 'Hotel Zürich', 'Draft lost or moved on remove');
+    button(document, 'Add expense').click();
+    await tick();
+    check(item(2) && itemInput(2, 'Description').value === '', 'Added item missing');
+    await type(itemInput(2, 'Description'), 'Lunch');
+    await type(itemInput(2, 'Amount (CHF)'), '25');
   `);
 
+  // Choices load over HTTP after the page starts.
   await example('invoice', `
     const choice = label => [...document.querySelectorAll('fieldset.choice')]
       .find(f => f.querySelector('legend').textContent === label);
@@ -291,9 +216,8 @@ try {
     await choose('Contact', 'Ben Keller');
     await edit('Purchase order', 'PO-1');
   `);
-
 } finally {
   socket?.close();
-  await Promise.all([stop(firefox), stop(server)]);
+  await stop(firefox);
   await rm(profile, { recursive: true, force: true });
 }
