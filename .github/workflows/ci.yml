@@ -36,7 +36,7 @@ jobs:
           path: |
             .lake/wasm/toolchains
             .lake/wasm/full-runtime-*
-          key: wasm-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'wasm/makefile', 'wasm/*.patch') }}
+          key: wasm-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'wasm/runtime.mk', 'wasm/*.patch') }}
 
       - name: Build Wasm
         run: |
@@ -53,17 +53,35 @@ jobs:
             .lake/wasm/full-runtime-*
           key: ${{ steps.wasm-cache.outputs.cache-primary-key }}
 
-      - name: Install Fish
-        run: sudo apt-get update && sudo apt-get install -y fish
-
       - name: Compiled forms
         run: node --test web/compiled.test.mjs
 
       - name: HTTP server
         run: python3 tools/test_web.py
 
-      - name: CLI completion
-        run: python3 tools/test_cli.py
-
       - name: Browser
         run: node tools/test_browser.mjs
+
+  # Needs only the native build, so it runs alongside the Wasm build.
+  cli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: leanprover/lean-action@v1
+        with:
+          test: false
+
+      - name: Install Fish
+        run: sudo apt-get update && sudo apt-get install -y fish
+
+      - name: CLI completion
+        run: python3 tools/test_cli.py
