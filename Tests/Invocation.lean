@@ -35,7 +35,7 @@ private def perform
   (argument : Option Input)
   : Except ModelForm.Rejection raw := do
   let invocation ← (ModelView.decodeKey form {} value key argument).mapError .ofAction
-  return form.applyValid {} value invocation
+  return (form.applyValid {} value {} invocation).value
 
 private def rejected
   {raw : Type}
@@ -64,7 +64,7 @@ def run : IO Unit := do
   check "InvocationOrderControls" (everyControlApplies Order.form Order.initial)
   check "InvocationExpensesControls" (everyControlApplies ExpenseReport.listForm ExpenseReport.initial)
   check "InvocationTableControls" (everyControlApplies ExpenseReport.form ExpenseReport.initial)
-  check "InvocationSelectableTableControls" (everyControlApplies ExpenseBrowser.form ExpenseBrowser.initial)
+  check "InvocationSelectableTableControls" (everyControlApplies ExpenseReport.focusForm ExpenseReport.initial)
   let street := keyOf Person.form ⟨"Ada", 20, true, ⟨"Lambda Lane"⟩⟩ "Street"
   check "InvocationEdit"
     ((perform Person.form ⟨"Ada", 20, true, ⟨"Lambda Lane"⟩⟩ street (some (.text "Road"))).toOption.map (·.address.street)

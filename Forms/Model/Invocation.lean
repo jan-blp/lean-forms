@@ -54,45 +54,54 @@ instance : ToString InvocationError where
     | .unavailableBranch key => s!"This action is unavailable: branch '{key}' is no longer available."
 
 mutual
-/-- Invocations that apply to `current`: visible, enabled, in bounds, on the active branch, in the
-subtree each load builds from its current status. -/
-def Component.ValidInvocation {raw : Type} : Component raw → HttpRequest.Cache → raw → Type
-  | @Component.field _ value .., _, _ => value
-  | .groupOf _ children, cache, current => children.ValidInvocation cache current
-  | .computed .., _, _ => Empty
-  | .withAvailability availability body, cache, current =>
-    { _invocation : body.ValidInvocation cache current // availability.eval current = .enabled }
-  | .choiceOf path _ branches, cache, current => branches.ValidInvocation cache (path.get current)
-  | .list path _ _ _ body, cache, current =>
+/-- Invocations checked against the current model, UI state, and loaded responses. -/
+def Component.ValidInvocation {raw : Type} (component : Component raw) (cache : HttpRequest.Cache)
+    (current : raw) (state : UiState := {}) : Type :=
+  match component with
+  | @Component.field _ value .. => value
+  | .groupOf _ children => children.ValidInvocation cache current state
+  | .computed .. => Empty
+  | .withAvailability availability body =>
+    { _invocation : body.ValidInvocation cache current state // availability.eval current state = .enabled }
+  | .choiceOf path _ branches => branches.ValidInvocation cache (path.get current) state
+  | .list path _ _ _ body =>
     ValidListInvocation (path.get current).length fun index =>
-      body.ValidInvocation cache ((path.get current).get index)
-  | .table path _ _ _ columns selection, cache, current =>
+      body.ValidInvocation cache ((path.get current).get index) state
+  | .table path _ _ _ columns selection =>
     let items := path.get current
-    ValidTableInvocation items.length (fun index => columns.ValidInvocation cache (items.get index))
+    ValidTableInvocation items.length (fun index => columns.ValidInvocation cache (items.get index) state)
       selection.isSome
-  | .focus target body, cache, current =>
-    ValidFocusInvocation ((target.eval current).get? current) (body.ValidInvocation cache)
-  | .load source body, cache, current =>
-    (body ((source.eval current).resolve cache)).ValidInvocation cache current
+  | .focus target body =>
+    ValidFocusInvocation ((target.eval current state).get? current) (fun value => body.ValidInvocation cache value state)
+  | .load source body =>
+    (body ((source.eval current state).resolve cache)).ValidInvocation cache current state
 
-def Components.ValidInvocation {raw : Type} : Components raw → HttpRequest.Cache → raw → Type
-  | .nil, _, _ => Empty
-  | .cons head tail, cache, current =>
-    head.ValidInvocation cache current ⊕ tail.ValidInvocation cache current
+def Components.ValidInvocation {raw : Type} (children : Components raw) (cache : HttpRequest.Cache)
+    (current : raw) (state : UiState := {}) : Type :=
+  match children with
+  | .nil => Empty
+  | .cons head tail =>
+    head.ValidInvocation cache current state ⊕ tail.ValidInvocation cache current state
 
-def Columns.ValidInvocation {raw : Type} : Columns raw → HttpRequest.Cache → raw → Type
-  | .nil, _, _ => Empty
-  | .cons _ head tail, cache, current =>
-    head.ValidInvocation cache current ⊕ tail.ValidInvocation cache current
+def Columns.ValidInvocation {raw : Type} (columns : Columns raw) (cache : HttpRequest.Cache)
+    (current : raw) (state : UiState := {}) : Type :=
+  match columns with
+  | .nil => Empty
+  | .cons _ head tail =>
+    head.ValidInvocation cache current state ⊕ tail.ValidInvocation cache current state
 
-def Branch.ValidInvocation {sum : Type} : Branch sum → HttpRequest.Cache → sum → Type
-  | .mk _ _ _ project _ body, cache, current =>
-    ValidBranchInvocation (project current) fun payload => body.ValidInvocation cache payload
+def Branch.ValidInvocation {sum : Type} (branch : Branch sum) (cache : HttpRequest.Cache)
+    (current : sum) (state : UiState := {}) : Type :=
+  match branch with
+  | .mk _ _ _ project _ body =>
+    ValidBranchInvocation (project current) fun payload => body.ValidInvocation cache payload state
 
-def Branches.ValidInvocation {sum : Type} : Branches sum → HttpRequest.Cache → sum → Type
-  | .nil, _, _ => Empty
-  | .cons head tail, cache, current =>
-    head.ValidInvocation cache current ⊕ tail.ValidInvocation cache current
+def Branches.ValidInvocation {sum : Type} (branches : Branches sum) (cache : HttpRequest.Cache)
+    (current : sum) (state : UiState := {}) : Type :=
+  match branches with
+  | .nil => Empty
+  | .cons head tail =>
+    head.ValidInvocation cache current state ⊕ tail.ValidInvocation cache current state
 end
 
 def checkedIndex (index length : Nat) : Except InvocationError (Fin length) :=
@@ -101,106 +110,99 @@ def checkedIndex (index length : Nat) : Except InvocationError (Fin length) :=
   else
     .error (.indexOutOfBounds index length)
 
+/-- The model and UI state after a checked invocation. -/
+structure ComponentUpdate (raw : Type) where
+  value : raw
+  state : UiState
+
+def ComponentUpdate.mapValue {source target : Type} (update : ComponentUpdate source)
+    (f : source → target) : ComponentUpdate target :=
+  { value := f update.value, state := update.state }
+
 mutual
-def Component.applyValid
-  {raw : Type}
-  (component : Component raw)
-  (cache : HttpRequest.Cache)
-  (current : raw)
-  (invocation : component.ValidInvocation cache current)
-  : raw :=
+def Component.applyValid {raw : Type} (component : Component raw) (cache : HttpRequest.Cache)
+    (current : raw) (state : UiState) (invocation : component.ValidInvocation cache current state)
+    : ComponentUpdate raw :=
   match component, invocation with
-  | .field path .., value => path.set value current
-  | .groupOf _ children, invocation => children.applyValid cache current invocation
+  | .field path .., value => ⟨path.set value current, state⟩
+  | .groupOf _ children, invocation => children.applyValid cache current state invocation
   | .computed .., invocation => nomatch invocation
-  | .withAvailability _ body, invocation => body.applyValid cache current invocation.val
+  | .withAvailability _ body, invocation => body.applyValid cache current state invocation.val
   | .choiceOf path _ branches, invocation =>
-    path.set (branches.applyValid cache (path.get current) invocation) current
+    (branches.applyValid cache (path.get current) state invocation).mapValue (fun value => path.set value current)
   | .list path _ _ initial body, invocation =>
     let items := path.get current
-    let Valid index := body.ValidInvocation cache (items.get index)
+    let Valid index := body.ValidInvocation cache (items.get index) state
     match (invocation : ValidListInvocation items.length Valid) with
-    | .add => path.set (items ++ [initial]) current
-    | .remove index => path.set (items.eraseIdx index) current
+    | .add => ⟨path.set (items ++ [initial]) current, state⟩
+    | .remove index => ⟨path.set (items.eraseIdx index) current, state⟩
     | .edit index invocation =>
-      path.set (items.set index (body.applyValid cache (items.get index) invocation)) current
+      (body.applyValid cache (items.get index) state invocation).mapValue fun value =>
+        path.set (items.set index value) current
   | .load source body, invocation =>
-    (body ((source.eval current).resolve cache)).applyValid cache current invocation
+    (body ((source.eval current state).resolve cache)).applyValid cache current state invocation
   | .table path _ _ initial columns selection, invocation =>
     let items := path.get current
-    let Valid index := columns.ValidInvocation cache (items.get index)
+    let Valid index := columns.ValidInvocation cache (items.get index) state
     match (invocation : ValidTableInvocation items.length Valid selection.isSome) with
-    | .add => path.set (items ++ [initial]) current
+    | .add => ⟨path.set (items ++ [initial]) current, state⟩
     | .remove index =>
       let next := path.set (items.eraseIdx index) current
-      match selection with
-      | .none => next
-      | some selected => selected.set ((selected.get current).remove index.val) next
+      let state := match selection with
+        | none => state
+        | some selected => selected.set ((selected.get state).remove index.val) state
+      ⟨next, state⟩
     | .edit index invocation =>
-      path.set (items.set index (columns.applyValid cache (items.get index) invocation)) current
+      (columns.applyValid cache (items.get index) state invocation).mapValue fun value =>
+        path.set (items.set index value) current
     | .select enabled index =>
       match selection with
       | none => nomatch enabled
-      | some selected => selected.set (.row index.val) current
+      | some selected => ⟨current, selected.set (.row index.val) state⟩
   | .focus target body, invocation =>
-    (target.eval current).set (body.applyValid cache invocation.value invocation.invocation) current
+    (body.applyValid cache invocation.value state invocation.invocation).mapValue fun value =>
+      (target.eval current state).set value current
 
-def Components.applyValid
-  {raw : Type}
-  (children : Components raw)
-  (cache : HttpRequest.Cache)
-  (current : raw)
-  (invocation : children.ValidInvocation cache current)
-  : raw :=
+def Components.applyValid {raw : Type} (children : Components raw) (cache : HttpRequest.Cache)
+    (current : raw) (state : UiState) (invocation : children.ValidInvocation cache current state)
+    : ComponentUpdate raw :=
   match children, invocation with
   | .nil, invocation => nomatch invocation
   | .cons head tail, invocation =>
-    match (invocation : head.ValidInvocation cache current ⊕ tail.ValidInvocation cache current) with
-    | .inl invocation => head.applyValid cache current invocation
-    | .inr invocation => tail.applyValid cache current invocation
+    match (invocation : head.ValidInvocation cache current state ⊕ tail.ValidInvocation cache current state) with
+    | .inl invocation => head.applyValid cache current state invocation
+    | .inr invocation => tail.applyValid cache current state invocation
 
-def Columns.applyValid
-  {raw : Type}
-  (children : Columns raw)
-  (cache : HttpRequest.Cache)
-  (current : raw)
-  (invocation : children.ValidInvocation cache current)
-  : raw :=
-  match children, invocation with
+def Columns.applyValid {raw : Type} (columns : Columns raw) (cache : HttpRequest.Cache)
+    (current : raw) (state : UiState) (invocation : columns.ValidInvocation cache current state)
+    : ComponentUpdate raw :=
+  match columns, invocation with
   | .nil, invocation => nomatch invocation
   | .cons _ head tail, invocation =>
-    match (invocation : head.ValidInvocation cache current ⊕ tail.ValidInvocation cache current) with
-    | .inl invocation => head.applyValid cache current invocation
-    | .inr invocation => tail.applyValid cache current invocation
+    match (invocation : head.ValidInvocation cache current state ⊕ tail.ValidInvocation cache current state) with
+    | .inl invocation => head.applyValid cache current state invocation
+    | .inr invocation => tail.applyValid cache current state invocation
 
 /-- Re-selecting the active branch keeps its payload. -/
-def Branch.applyValid
-  {sum : Type}
-  (branch : Branch sum)
-  (cache : HttpRequest.Cache)
-  (current : sum)
-  (invocation : branch.ValidInvocation cache current)
-  : sum :=
-  match branch, invocation with
-  | .mk _ _ inject project initial body, invocation =>
-    let Valid payload := body.ValidInvocation cache payload
+def Branch.applyValid {sum : Type} (branch : Branch sum) (cache : HttpRequest.Cache)
+    (current : sum) (state : UiState) (invocation : branch.ValidInvocation cache current state)
+    : ComponentUpdate sum :=
+  match branch with
+  | .mk _ _ inject project initial body =>
+    let Valid payload := body.ValidInvocation cache payload state
     match (invocation : ValidBranchInvocation (project current) Valid) with
-    | .select => if (project current).isSome then current else inject initial
-    | .edit payload _ invocation => inject (body.applyValid cache payload invocation)
+    | .select => ⟨if (project current).isSome then current else inject initial, state⟩
+    | .edit payload _ invocation => (body.applyValid cache payload state invocation).mapValue inject
 
-def Branches.applyValid
-  {sum : Type}
-  (branches : Branches sum)
-  (cache : HttpRequest.Cache)
-  (current : sum)
-  (invocation : branches.ValidInvocation cache current)
-  : sum :=
+def Branches.applyValid {sum : Type} (branches : Branches sum) (cache : HttpRequest.Cache)
+    (current : sum) (state : UiState) (invocation : branches.ValidInvocation cache current state)
+    : ComponentUpdate sum :=
   match branches, invocation with
   | .nil, invocation => nomatch invocation
   | .cons head tail, invocation =>
-    match (invocation : head.ValidInvocation cache current ⊕ tail.ValidInvocation cache current) with
-    | .inl invocation => head.applyValid cache current invocation
-    | .inr invocation => tail.applyValid cache current invocation
+    match (invocation : head.ValidInvocation cache current state ⊕ tail.ValidInvocation cache current state) with
+    | .inl invocation => head.applyValid cache current state invocation
+    | .inr invocation => tail.applyValid cache current state invocation
 end
 
 end Forms.Model

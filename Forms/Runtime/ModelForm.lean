@@ -34,7 +34,7 @@ def openState {raw : Type} (value : raw) : State raw where
 
 /-- Marks the requests `form` reads but has not loaded as loading, and queues them. -/
 def load {raw : Type} (form : Model.Component raw) (state : State raw) : State raw :=
-  let missing := ((form.requests state.cache state.value).filter (!state.cache.contains ·)).eraseDups
+  let missing := ((form.requests state.cache state.value state.ui.components).filter (!state.cache.contains ·)).eraseDups
   { state with
     cache := missing.foldl (fun cache request => cache.insert request .loading) state.cache
     outbox := state.outbox ++ missing.map .fetch }
@@ -92,7 +92,7 @@ def snapshot
   let visible := match state.serverFeedback with
     | some feedback => feedback.errors
     | none => if state.validationStarted then errors else []
-  let rendered := ModelView.render form state.value state.cache visible
+  let rendered := ModelView.render form state.value state.cache visible state.ui.components
   { view := rendered.view, controls := rendered.controls, value := state.value,
     ui := state.ui, errors,
     summary := state.serverFeedback.map (·.message) |>.getD (Feedback.summary visible),
@@ -137,20 +137,21 @@ def validateAction
   (state : State raw)
   (key : ControlKey)
   (argument : Option Input)
-  : Except Rejection (form.ValidInvocation state.cache state.value) := do
+  : Except Rejection (form.ValidInvocation state.cache state.value state.ui.components) := do
   if state.ui.pending then throw (.stale .pending)
-  (ModelView.decodeKey form state.cache state.value key argument).mapError .ofAction
+  (ModelView.decodeKey form state.cache state.value key argument state.ui.components).mapError .ofAction
 
 def applyValid
   {raw : Type}
   (form : Model.Component raw)
   (state : State raw)
-  (invocation : form.ValidInvocation state.cache state.value)
+  (invocation : form.ValidInvocation state.cache state.value state.ui.components)
   : State raw :=
+  let updated := form.applyValid state.cache state.value state.ui.components invocation
   { state with
-    value := form.applyValid state.cache state.value invocation
+    value := updated.value
     serverFeedback := none
-    ui := { state.ui with notice := .info "", resultVisible := false } }
+    ui := { state.ui with components := updated.state, notice := .info "", resultVisible := false } }
 
 def apply
   {raw : Type}

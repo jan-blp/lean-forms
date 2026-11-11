@@ -11,13 +11,24 @@ private def check (message : String) (ok : Bool) : IO Unit := do
   unless ok do throw (IO.userError s!"FAIL {message}")
   IO.println s!"PASS {message}"
 
-private def perform {raw : Type} (form : Component raw) (current : raw)
-    (key : ControlKey) (argument : Option Input) : Except ModelForm.Rejection raw := do
-  let invocation ← (ModelView.decodeKey form {} current key argument).mapError .ofAction
-  return form.applyValid {} current invocation
+private def perform
+  {raw : Type}
+  (form : Component raw)
+  (current : raw)
+  (key : ControlKey)
+  (argument : Option Input)
+  (state : UiState := {})
+  : Except ModelForm.Rejection raw := do
+  let invocation ← (ModelView.decodeKey form {} current key argument state).mapError .ofAction
+  return (form.applyValid {} current state invocation).value
 
-private def firstControl {raw : Type} (form : Component raw) (value : raw) : IO Display.Control := do
-  let some control := (ModelView.render form value {}).controls.head?
+private def firstControl
+  {raw : Type}
+  (form : Component raw)
+  (value : raw)
+  (state : UiState := {})
+  : IO Display.Control := do
+  let some control := (ModelView.render form value {} [] state).controls.head?
     | throw (IO.userError "FAIL missing focused control")
   return control
 
@@ -70,28 +81,30 @@ def run : IO Unit := do
   check "FocusMatchesValidationMessages"
     (snapshot.controls.head?.bind (·.messages) == some "Enter a phone number for the courier.")
   -- A selected-item focus works by itself, with no table in the component tree.
-  let details : Component ExpenseBrowser.Raw := .focus
-    { inputs := inputs[path[ExpenseBrowser.Field.selection]]
-      run := RowSelection.itemPath path[ExpenseBrowser.Field.report, ExpenseReport.Field.expenses] }
+  let details : Component ExpenseReport.Raw := .focus
+    { inputs := inputs[.ui ExpenseReport.selection]
+      run := RowSelection.itemPath path[ExpenseReport.Field.expenses] }
     (.field path[Expense.Field.description] "Description" .text)
-  let selected : ExpenseBrowser.Raw := { ExpenseBrowser.initial with selection := .row 1 }
-  let detail ← firstControl details selected
-  let edited ← IO.ofExcept ((perform details selected detail.key (some (.text "Independent"))).mapError toString)
+  let selected := ExpenseReport.initial
+  let selectedUi := ExpenseReport.selection.set (.row 1) {}
+  let detail ← firstControl details selected selectedUi
+  let edited ← IO.ofExcept ((perform details selected detail.key (some (.text "Independent")) selectedUi).mapError toString)
   check "FocusIndependentOfTable"
-    (edited.report.expenses.map (·.description) == ["Train to Bern", "Independent"] &&
-      edited.selection == .row 1)
-  let invalidValue : ExpenseBrowser.Raw := { selected with report := { selected.report with
-    expenses := [⟨"Train to Bern", 58, false⟩, ⟨"", 180, true⟩] } }
-  let invalidState := { ModelForm.openState invalidValue with validationStarted := true }
-  let invalidDetails := ModelForm.snapshot (model := ExpenseBrowser) details invalidState
+    (edited.expenses.map (·.description) == ["Train to Bern", "Independent"] &&
+      edited.employee == selected.employee)
+  let invalidValue : ExpenseReport.Raw := { selected with
+    expenses := [⟨"Train to Bern", 58, false⟩, ⟨"", 180, true⟩] }
+  let invalidState := { ModelForm.openState invalidValue with
+    validationStarted := true, ui := { Interaction.State.initial with components := selectedUi } }
+  let invalidDetails := ModelForm.snapshot (model := ExpenseReport) details invalidState
   check "FocusListValidationLocation"
     (invalidDetails.controls.head?.bind (·.messages) == some "Describe the expense." &&
-      detail.location == [.field "report", .field "expenses", .index 1, .field "description"])
-  let moved : Component ExpenseBrowser.Raw := .group "Elsewhere" [
+      detail.location == [.field "expenses", .index 1, .field "description"])
+  let moved : Component ExpenseReport.Raw := .group "Elsewhere" [
     .computed "Summary" (.const "Summary"), .group "Details" [details]]
-  let movedControl ← firstControl moved selected
-  let movedEdit ← IO.ofExcept ((perform moved selected detail.key (some (.text "Moved"))).mapError toString)
+  let movedControl ← firstControl moved selected selectedUi
+  let movedEdit ← IO.ofExcept ((perform moved selected detail.key (some (.text "Moved")) selectedUi).mapError toString)
   check "FocusKeySurvivesLayoutChange"
-    (movedControl.key == detail.key && movedEdit.report.expenses.map (·.description) == ["Train to Bern", "Moved"])
+    (movedControl.key == detail.key && movedEdit.expenses.map (·.description) == ["Train to Bern", "Moved"])
 
 end Tests.Focus

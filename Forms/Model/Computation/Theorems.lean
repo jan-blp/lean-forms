@@ -12,8 +12,9 @@ theorem Computation.eval_congr
   {source : Type} {result : Type u}
   (computation : Computation source result)
   (first second : source)
-  (h : computation.inputs.read first = computation.inputs.read second)
-  : computation.eval first = computation.eval second :=
+  (firstState secondState : UiState)
+  (h : computation.inputs.read first firstState = computation.inputs.read second secondState)
+  : computation.eval first firstState = computation.eval second secondState :=
   congrArg (Inputs.apply computation.run) h
 
 theorem Inputs.apply_map

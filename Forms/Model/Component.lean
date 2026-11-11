@@ -1,11 +1,11 @@
 module
 
 public import Forms.Model.PartialPath
+public import Forms.Model.RowSelection
 public import Forms.Model.Remote
 
 @[expose] public section
 namespace Forms.Model
-open Lean
 
 inductive Editor : Type → Type where
   | text : Editor String
@@ -18,25 +18,11 @@ inductive Availability where
   | disabled
   deriving DecidableEq, Repr
 
-/-- The selected row of a table, if any. -/
-inductive RowSelection where
-  | none
-  | row (index : Nat)
-  deriving ToJson, FromJson, DecidableEq, Repr
-
-@[reducible] instance : FormModel RowSelection := ⟨RowSelection, id⟩
-instance : Validation RowSelection := ⟨fun value => .ok ⟨value, rfl⟩⟩
-
-/-- Removing a row keeps the same item selected, unless that item was removed. -/
-def RowSelection.remove (removed : Nat) : RowSelection → RowSelection
-  | .none => .none
-  | .row index =>
-    if index == removed then .none
-    else .row (if removed < index then index - 1 else index)
-
 /-- Turns a row selection into a concrete path to that list item. -/
-def RowSelection.itemPath {raw item : Type} (items : Path raw (List item))
-    : RowSelection → PartialPath raw item
+def RowSelection.itemPath
+  {raw item : Type}
+  (items : Path raw (List item))
+  : RowSelection → PartialPath raw item
   | .none => .empty
   | .row index => (PartialPath.ofPath items).trans (.index index .self)
 
@@ -85,7 +71,7 @@ inductive Component : Type → Type 1 where
       (label itemLabel : String)
       (initial : item)
       (columns : Columns item)
-      (selection : Option (Path raw RowSelection) := none)
+      (selection : Option (UiStateKey RowSelection) := none)
       : Component raw
   /-- Edits the value at the current partial path; a missing target renders nothing. -/
   | focus

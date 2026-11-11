@@ -1,8 +1,9 @@
 module
 
 public import Forms.Model.Basic
+public import Forms.Model.UiState
 
-/-! Computations declare typed input paths and receive only the selected values. -/
+/-! Computations declare model and UI inputs and receive only their selected values. -/
 
 @[expose] public section
 namespace Forms.Model
@@ -17,11 +18,17 @@ inductive Inputs (source : Type) : List Type → Type 1 where
       (path : Path source value)
       (inputs : Inputs source rest)
       : Inputs source (value :: rest)
+  | ui {value : Type} {rest : List Type} [Lean.FromJson value]
+      (key : UiStateKey value) (inputs : Inputs source rest)
+      : Inputs source (value :: rest)
 
+/-- Declares dependencies, e.g. `inputs[path[field], .ui key]`. -/
 macro "inputs[" paths:term,* "]" : term => do
   let mut result ← `(Inputs.nil)
   for path in paths.getElems.reverse do
-    result ← `(Inputs.cons $path $result)
+    match path with
+    | `(.ui $key) => result ← `(Inputs.ui $key $result)
+    | _ => result ← `(Inputs.cons $path $result)
   return result
 
 def Inputs.weaken
@@ -33,6 +40,7 @@ def Inputs.weaken
   match inputs with
   | .nil => .nil
   | .cons input rest => .cons (path.trans input) (rest.weaken path)
+  | @ui _ _ _ _inst key rest => .ui key (rest.weaken path)
 
 def Inputs.Values : List Type → Type
   | [] => Unit
@@ -48,10 +56,12 @@ def Inputs.read
   {types : List Type}
   (inputs : Inputs source types)
   (sourceValue : source)
+  (state : UiState := {})
   : Values types :=
   match inputs with
   | .nil => ()
-  | .cons path rest => (path.get sourceValue, rest.read sourceValue)
+  | .cons path rest => (path.get sourceValue, rest.read sourceValue state)
+  | @ui _ _ _ _inst key rest => (key.get state, rest.read sourceValue state)
 
 def Inputs.apply
   {result : Type u}
@@ -79,7 +89,11 @@ structure Computation (source : Type) (result : Type u) where
   run : Inputs.Function types result
 
 /-- A computation without inputs. -/
-def Computation.const {source : Type} {result : Type u} (value : result) : Computation source result where
+def Computation.const
+  {source : Type}
+  {result : Type u}
+  (value : result)
+  : Computation source result where
   inputs := .nil
   run := value
 
@@ -87,8 +101,9 @@ def Computation.eval
   {source : Type} {result : Type u}
   (computation : Computation source result)
   (value : source)
+  (state : UiState := {})
   : result :=
-  Inputs.apply computation.run (computation.inputs.read value)
+  Inputs.apply computation.run (computation.inputs.read value state)
 
 instance {source : Type} : Functor (Computation source) where
   map f computation := ⟨computation.inputs, Inputs.Function.map f computation.run⟩

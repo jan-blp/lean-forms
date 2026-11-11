@@ -13,7 +13,8 @@ theorem render_keys_nodup
   (value : raw)
   (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error)
-  : ((render component value cache errors).controls.map (·.key)).Nodup :=
+  (state : Model.UiState := {})
+  : ((render component value cache errors state).controls.map (·.key)).Nodup :=
   Display.View.dedupe_keys_nodup _
 
 end Forms.Runtime.ModelView

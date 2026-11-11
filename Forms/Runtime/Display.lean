@@ -56,7 +56,7 @@ inductive View where
 structure TableRow where
   label : String
   cells : List View
-  selected : Option Bool := none
+  selected : Option Bool
 end
 
 deriving instance BEq for View, TableRow

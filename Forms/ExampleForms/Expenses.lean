@@ -111,20 +111,15 @@ def ExpenseReport.form : Component ExpenseReport.Raw :=
     (initial := ⟨"", 0, false⟩)
     (columns := Expense.columns))
 
-structure ExpenseBrowser where
-  report : ExpenseReport
-  selection : RowSelection
-  deriving FormModel
+def ExpenseReport.selection : UiStateKey RowSelection := ⟨"expense", .none⟩
 
-def ExpenseBrowser.initial : ExpenseBrowser.Raw := ⟨ExpenseReport.initial, .none⟩
-
-def ExpenseBrowser.form : Component ExpenseBrowser.Raw :=
+def ExpenseReport.focusForm : Component ExpenseReport.Raw :=
   .group (label := "Expense report") (children := [
     .field
-      (path := path[ExpenseBrowser.Field.report, ExpenseReport.Field.employee])
+      (path := path[ExpenseReport.Field.employee])
       (label := "Employee") (editor := .text),
     .table
-      (path := path[ExpenseBrowser.Field.report, ExpenseReport.Field.expenses])
+      (path := path[ExpenseReport.Field.expenses])
       (label := "Expenses")
       (itemLabel := "Expense")
       (initial := ⟨"", 0, false⟩)
@@ -135,15 +130,15 @@ def ExpenseBrowser.form : Component ExpenseBrowser.Raw :=
           inputs := inputs[path[Expense.Field.amount]], run := fun amount => s!"CHF {swiss amount}" },
         "Receipt" => .computed "Receipt" {
           inputs := inputs[path[Expense.Field.receipt]], run := fun receipt => if receipt then "Yes" else "No" }])
-      (selection := some path[ExpenseBrowser.Field.selection]),
+      (selection := some ExpenseReport.selection),
     .focus
       (target := {
-        inputs := inputs[path[ExpenseBrowser.Field.selection]]
-        run := RowSelection.itemPath path[ExpenseBrowser.Field.report, ExpenseReport.Field.expenses]
+        inputs := inputs[.ui ExpenseReport.selection]
+        run := RowSelection.itemPath path[ExpenseReport.Field.expenses]
       })
       (body := .groupOf (label := "Selected expense") (children := Expense.columns.components)),
     .computed (label := "Total") (value := {
-      inputs := inputs[path[ExpenseBrowser.Field.report, ExpenseReport.Field.expenses]]
+      inputs := inputs[path[ExpenseReport.Field.expenses]]
       run := fun expenses => s!"CHF {swiss (expenses.map (·.amount)).sum}"
     })])
 
