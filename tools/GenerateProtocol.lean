@@ -7,7 +7,7 @@ open Lean Forms.Protocol Forms.Runtime.Wire Forms.Runtime.Web
 
 /-- Server paths, keyed by route name. -/
 def routesModule : String :=
-  let entries := GetRoute.all.map fun route => s!"  {(toJson route).compress}: {(toJson route.path).compress},\n"
+  let entries := (FinEnum.toList GetRoute).map fun route => s!"  {(toJson route).compress}: {(toJson route.path).compress},\n"
   "export const routes = {\n" ++ String.join entries ++ "} as const;\n"
 
 /-- Each output directory is replaced wholesale by its files. -/

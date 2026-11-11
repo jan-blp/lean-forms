@@ -3,6 +3,7 @@ module
 public import Std.Http
 public import Forms.Runtime.TrafficLog
 public import Forms.ExampleForms.FormFingerprint
+public meta import Forms.Deriving.FinEnum
 
 @[expose] public section
 
@@ -19,7 +20,7 @@ inductive GetRoute where
   | wasmBinary
   | stylesheet
   | formStart
-  deriving DecidableEq, Lean.ToJson
+  deriving DecidableEq, FinEnum, Lean.ToJson
 
 /-- Also generated into `web/generated/routes.ts`. -/
 def GetRoute.path : GetRoute → String
@@ -30,11 +31,8 @@ def GetRoute.path : GetRoute → String
   | .stylesheet => "/style.css"
   | .formStart => "/api/form-start"
 
-def GetRoute.all : List GetRoute :=
-  [.index, .script, .wasmLoader, .wasmBinary, .stylesheet, .formStart]
-
 def GetRoute.ofPath (path : String) : Option GetRoute :=
-  all.find? (·.path == path)
+  (FinEnum.toList GetRoute).find? (·.path == path)
 
 inductive Route where
   | get (route : GetRoute)

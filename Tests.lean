@@ -10,7 +10,6 @@ import Tests.Remote
 
 meta import Forms.Model.Computation.Theorems
 meta import Forms.Runtime.ModelView.Theorems
-meta import Forms.Runtime.Web.Theorems
 
 public def main : IO Unit := do
   Tests.FormModel.run
