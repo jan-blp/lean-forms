@@ -7,6 +7,7 @@ import Tests.Wire
 import Tests.FormsReact
 import Tests.Invocation
 import Tests.Remote
+import Tests.Table
 
 meta import Forms.Model.Computation.Theorems
 meta import Forms.Runtime.ModelView.Theorems
@@ -19,3 +20,4 @@ public def main : IO Unit := do
   Tests.FormsReact.run
   Tests.Invocation.run
   Tests.Remote.run
+  Tests.Table.run

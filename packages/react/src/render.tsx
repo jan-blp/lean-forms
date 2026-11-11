@@ -28,6 +28,7 @@ const named = {
   output: false,
   button: false,
   group: false,
+  table: false,
   page: false,
 } as const satisfies { [K in Kind]: Props<K> extends { name: string } ? true : false };
 

@@ -42,6 +42,7 @@ structure Control where
   messages : Option String := none
   deriving BEq
 
+mutual
 inductive View where
   | hidden
   | control (control : Control)
@@ -49,7 +50,15 @@ inductive View where
   | computed (label text : String)
   /-- Items, then the add button; `messages` are about the list as a whole. -/
   | list (label : String) (children : List View) (messages : Option String)
-  deriving BEq
+  | table (label : String) (headers : List String) (rows : List TableRow)
+      (footer : View) (messages : Option String)
+
+structure TableRow where
+  label : String
+  cells : List View
+end
+
+deriving instance BEq for View, TableRow
 
 mutual
 /-- The controls of `view`, in display order. -/
@@ -57,12 +66,17 @@ def View.controls : View → List Control
   | .control c => [c]
   | .stack _ children => View.controlsAll children
   | .list _ children _ => View.controlsAll children
+  | .table _ _ rows footer _ => View.controlsRows rows ++ footer.controls
   | .hidden => []
   | .computed .. => []
 
 def View.controlsAll : List View → List Control
   | [] => []
   | view :: rest => view.controls ++ View.controlsAll rest
+
+def View.controlsRows : List TableRow → List Control
+  | [] => []
+  | ⟨_, cells⟩ :: rest => View.controlsAll cells ++ View.controlsRows rest
 end
 
 def duplicateNote : String := "Duplicate control: this value is edited elsewhere in the form."
@@ -86,6 +100,10 @@ def View.dedupeFrom (seen : List ControlKey) : View → DedupeResult View
   | .list label children messages =>
     let result := View.dedupeAll seen children
     { deduped := .list label result.deduped messages, seen := result.seen }
+  | .table label headers rows footer messages =>
+    let rows := View.dedupeRows seen rows
+    let footer := footer.dedupeFrom rows.seen
+    { deduped := .table label headers rows.deduped footer.deduped messages, seen := footer.seen }
   | .hidden => { deduped := .hidden, seen }
   | .computed label text => { deduped := .computed label text, seen }
 
@@ -95,6 +113,13 @@ def View.dedupeAll (seen : List ControlKey) : List View → DedupeResult (List V
     let head := view.dedupeFrom seen
     let tail := View.dedupeAll head.seen rest
     { deduped := head.deduped :: tail.deduped, seen := tail.seen }
+
+def View.dedupeRows (seen : List ControlKey) : List TableRow → DedupeResult (List TableRow)
+  | [] => { deduped := [], seen }
+  | ⟨label, cells⟩ :: rest =>
+    let head := View.dedupeAll seen cells
+    let tail := View.dedupeRows head.seen rest
+    { deduped := ⟨label, head.deduped⟩ :: tail.deduped, seen := tail.seen }
 end
 
 /-- Replaces each control whose key appeared earlier with a note. -/
@@ -106,6 +131,7 @@ def View.title (view : View) : String :=
     | .control c => c.label
     | .stack label _ => label.getD ""
     | .list label .. => label
+    | .table label .. => label
     | .computed label .. => label
     | _ => ""
   if label.isEmpty then "Form" else label

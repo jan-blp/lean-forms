@@ -56,12 +56,20 @@ def Component.ValidInvocation {raw : Type} : Component raw → HttpRequest.Cache
   | .list path _ _ _ body, cache, current =>
     ValidListInvocation (path.get current).length fun index =>
       body.ValidInvocation cache ((path.get current).get index)
+  | .table path _ _ _ columns, cache, current =>
+    ValidListInvocation (path.get current).length fun index =>
+      columns.ValidInvocation cache ((path.get current).get index)
   | .load source body, cache, current =>
     (body ((source.eval current).resolve cache)).ValidInvocation cache current
 
 def Components.ValidInvocation {raw : Type} : Components raw → HttpRequest.Cache → raw → Type
   | .nil, _, _ => Empty
   | .cons head tail, cache, current =>
+    head.ValidInvocation cache current ⊕ tail.ValidInvocation cache current
+
+def Columns.ValidInvocation {raw : Type} : Columns raw → HttpRequest.Cache → raw → Type
+  | .nil, _, _ => Empty
+  | .cons _ head tail, cache, current =>
     head.ValidInvocation cache current ⊕ tail.ValidInvocation cache current
 
 def Branch.ValidInvocation {sum : Type} : Branch sum → HttpRequest.Cache → sum → Type
@@ -106,6 +114,14 @@ def Component.applyValid
       path.set (items.set index (body.applyValid cache (items.get index) invocation)) current
   | .load source body, invocation =>
     (body ((source.eval current).resolve cache)).applyValid cache current invocation
+  | .table path _ _ initial columns, invocation =>
+    let items := path.get current
+    let Valid index := columns.ValidInvocation cache (items.get index)
+    match (invocation : ValidListInvocation items.length Valid) with
+    | .add => path.set (items ++ [initial]) current
+    | .remove index => path.set (items.eraseIdx index) current
+    | .edit index invocation =>
+      path.set (items.set index (columns.applyValid cache (items.get index) invocation)) current
 
 def Components.applyValid
   {raw : Type}
@@ -117,6 +133,20 @@ def Components.applyValid
   match children, invocation with
   | .nil, invocation => nomatch invocation
   | .cons head tail, invocation =>
+    match (invocation : head.ValidInvocation cache current ⊕ tail.ValidInvocation cache current) with
+    | .inl invocation => head.applyValid cache current invocation
+    | .inr invocation => tail.applyValid cache current invocation
+
+def Columns.applyValid
+  {raw : Type}
+  (children : Columns raw)
+  (cache : HttpRequest.Cache)
+  (current : raw)
+  (invocation : children.ValidInvocation cache current)
+  : raw :=
+  match children, invocation with
+  | .nil, invocation => nomatch invocation
+  | .cons _ head tail, invocation =>
     match (invocation : head.ValidInvocation cache current ⊕ tail.ValidInvocation cache current) with
     | .inl invocation => head.applyValid cache current invocation
     | .inr invocation => tail.applyValid cache current invocation

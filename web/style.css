@@ -100,6 +100,17 @@ pre { background: var(--surface); border: 1px solid var(--border); padding: var(
 table { width: 100%; border-collapse: collapse; background: var(--surface); }
 th, td { vertical-align: top; padding: var(--space-xs) var(--space-s); border-bottom: 1px solid var(--border); text-align: left; white-space: pre-wrap; }
 th { font-weight: 500; }
+caption { text-align: left; font-size: 16px; font-weight: 500; padding-bottom: var(--space-s); }
+.table-component { min-width: 0; }
+.table-component .table-scroll { border: 1px solid var(--border); border-radius: var(--radius-s); }
+.table-component table { min-width: 36rem; }
+.table-component .editor { margin: 0; }
+.table-component td > .editor > label { font-size: 0; }
+.table-component td > .editor > label input { font-size: 14px; margin-top: 0; }
+.table-component th:last-child, .table-component td:last-child { width: 1%; white-space: nowrap; }
+.table-component td > .computed { margin: 0; }
+.table-component td > .computed > label { font-size: 0; }
+.table-component td > .computed output { font-size: 14px; margin-top: 0; }
 
 .empty { color: var(--text-secondary); margin: var(--space-m) 0; }
 

@@ -92,6 +92,18 @@ structure Group where
   children : List Component
   error : Option String
 
+structure TableRow where
+  label : String
+  cells : List Component
+
+/-- A table's cells can contain any component, including editors and nested groups. -/
+structure Table where
+  label : String
+  headers : List String
+  rows : List TableRow
+  footer : Component
+  error : Option String
+
 structure Page where
   title : String
   busy : Bool
@@ -109,10 +121,11 @@ inductive Component where
   | output : Output → Component
   | button : Button → Component
   | group : Group → Component
+  | table : Table → Component
   | page : Page → Component
 end
 
-deriving instance ToJson, FromJson, BEq, Repr for Group, Page, Component
+deriving instance ToJson, FromJson, BEq, Repr for Group, TableRow, Table, Page, Component
 
 mutual
 /-- Names of the enabled fields that commit typed text, whose drafts React keeps. -/
@@ -124,11 +137,16 @@ def Component.draftFields : Component → List String
   | .output _ => []
   | .button _ => []
   | .group { children, .. } => draftFieldsOf children
+  | .table { rows, footer, .. } => draftFieldsOfRows rows ++ footer.draftFields
   | .page { body, toolbar, .. } => draftFieldsOf body ++ draftFieldsOf toolbar
 
 def draftFieldsOf : List Component → List String
   | [] => []
   | component :: rest => component.draftFields ++ draftFieldsOf rest
+
+def draftFieldsOfRows : List TableRow → List String
+  | [] => []
+  | ⟨_, cells⟩ :: rest => draftFieldsOf cells ++ draftFieldsOfRows rest
 end
 
 end FormsReact

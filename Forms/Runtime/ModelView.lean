@@ -119,6 +119,17 @@ def build
     .list label (rows ++ [.control add]) (Feedback.messages errors location)
   | .load source body =>
     build (body ((source.eval value).resolve cache)) value cache errors disabled target location
+  | .table path label itemLabel _ columns =>
+    let items := path.get value
+    let location := location ++ pathLocation path
+    let rows := items.mapIdx fun index item =>
+      let row := target.child index
+      let itemLocation := location ++ [.index index]
+      let fields := buildColumns columns item cache errors disabled (row.child 0) itemLocation 0
+      let remove := button .remove (row.child 1) itemLocation "Remove" disabled
+      ({ label := s!"{itemLabel} {index + 1}", cells := fields ++ [.control remove] } : Display.TableRow)
+    let add := button .add target location s!"Add {itemLabel.toLower}" disabled
+    .table label (columns.headers ++ ["Actions"]) rows (.control add) (Feedback.messages errors location)
 
 def buildAll
   {raw : Type}
@@ -136,6 +147,23 @@ def buildAll
   | .cons head tail =>
     build head value cache errors disabled (target.child index) location ::
       buildAll tail value cache errors disabled target location (index + 1)
+
+def buildColumns
+  {raw : Type}
+  (children : Model.Columns raw)
+  (value : raw)
+  (cache : Model.HttpRequest.Cache)
+  (errors : List Feedback.Error)
+  (disabled : Bool)
+  (target : Display.Target)
+  (location : Feedback.Location)
+  (index : Nat)
+  : List Display.View :=
+  match children with
+  | .nil => []
+  | .cons _ head tail =>
+    build head value cache errors disabled (target.child index) location ::
+      buildColumns tail value cache errors disabled target location (index + 1)
 
 /-- Builds the body of the branch that `current` was built by, at `target.child index`. -/
 def buildActive
@@ -255,6 +283,14 @@ def decode
     Model.ValidListInvocation.edit index <$> decode body cache (items.get index) rest argument
   | .load source body, target =>
     decode (body ((source.eval current).resolve cache)) cache current target argument
+  | .table .., [] => noArgument argument Model.ValidListInvocation.add
+  | .table path .., [index, 1] => do
+    let index ← checkedIndex index (path.get current).length
+    noArgument argument (Model.ValidListInvocation.remove index)
+  | .table path _ _ _ columns, index :: 0 :: column :: rest => do
+    let items := path.get current
+    let index ← checkedIndex index items.length
+    Model.ValidListInvocation.edit index <$> decodeColumns columns cache (items.get index) column rest argument
   | _, _ => .error (.decode (.clientBug .unknownControl))
 
 def decodeAll
@@ -270,6 +306,20 @@ def decodeAll
   | .nil, _ => .error (.decode (.clientBug .unknownControl))
   | .cons head _, 0 => Sum.inl <$> decode head cache current target argument
   | .cons _ tail, index + 1 => Sum.inr <$> decodeAll tail cache current index target argument
+
+def decodeColumns
+  {raw : Type}
+  (children : Model.Columns raw)
+  (cache : Model.HttpRequest.Cache)
+  (current : raw)
+  (index : Nat)
+  (target : List Nat)
+  (argument : Option Input)
+  : Except ActionError (children.ValidInvocation cache current) :=
+  match children, index with
+  | .nil, _ => .error (.decode (.clientBug .unknownControl))
+  | .cons _ head _, 0 => Sum.inl <$> decode head cache current target argument
+  | .cons _ _ tail, index + 1 => Sum.inr <$> decodeColumns tail cache current index target argument
 
 def decodeBranch
   {sum : Type}
