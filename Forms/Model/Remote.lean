@@ -2,6 +2,7 @@ module
 
 public import Forms.Model.Basic
 public import Std.Data.HashMap
+public import Mathlib.Data.FinEnum
 
 @[expose] public section
 namespace Forms.Model
@@ -70,20 +71,19 @@ attribute [instance]
 
 /-- Typed HTTP endpoints: a call to `named` sends its signature's `Input` and returns its `Output`.
 Calls are POSTs of the JSON input to the endpoint's `path`. -/
-class Api (endpoint : Type) where
+class Api (endpoint : Type) [FinEnum endpoint] where
   signature : endpoint → Api.Signature
   path : endpoint → String
-  all : List endpoint
-  complete : ∀ named, named ∈ all
-  distinct : (all.map path).Nodup
+  distinct : FinEnum.toList endpoint |>.map path |>.Nodup
 
 /-- An endpoint and its input. -/
-structure Api.Call (endpoint : Type) [Api endpoint] where
+structure Api.Call (endpoint : Type) [FinEnum endpoint] [Api endpoint] where
   named : endpoint
   input : (Api.signature named).Input
 
 def Api.request
   {endpoint : Type}
+  [FinEnum endpoint]
   [Api endpoint]
   (named : endpoint)
   (input : (Api.signature named).Input)
@@ -92,6 +92,7 @@ def Api.request
 
 def Api.source
   {endpoint : Type}
+  [FinEnum endpoint]
   [Api endpoint]
   (named : endpoint)
   (input : (Api.signature named).Input)
@@ -101,17 +102,19 @@ def Api.source
 /-- The call `request` names. -/
 def Api.parse
   {endpoint : Type}
+  [FinEnum endpoint]
   [Api endpoint]
   (request : HttpRequest)
   : Option (Api.Call endpoint) := do
   guard (request.method == .post)
-  let named ← (Api.all : List endpoint).find? (Api.path · == request.url)
+  let named ← (FinEnum.toList endpoint).find? (Api.path · == request.url)
   let input ← (Json.parse (request.body.getD "") >>= fromJson?).toOption
   return ⟨named, input⟩
 
 /-- The encoded response `handle` gives to `request`. -/
 def Api.serve
   {endpoint : Type}
+  [FinEnum endpoint]
   [Api endpoint]
   (handle : (named : endpoint) → (Api.signature named).Input → Option (Api.signature named).Output)
   (request : HttpRequest)

@@ -2,6 +2,7 @@ module
 
 public import Forms.ExampleForms.Registry
 meta import Forms.Model.Derive
+meta import Forms.Deriving.FinEnum
 
 public section
 namespace Tests.Remote
@@ -17,7 +18,7 @@ inductive SupplierEndpoint where
   | suppliers
   /-- One supplier's details, by id. -/
   | supplier
-  deriving DecidableEq, Repr
+  deriving DecidableEq, FinEnum, Repr
 
 @[expose] def SupplierEndpoint.signature : SupplierEndpoint → Api.Signature
   | .suppliers => { Input := Unit, Output := List String }
@@ -28,10 +29,6 @@ instance : Api SupplierEndpoint where
   path
     | .suppliers => "/api/suppliers"
     | .supplier => "/api/supplier"
-  all := [.suppliers, .supplier]
-  complete := by
-    intro named
-    cases named <;> decide
   distinct := by decide
 
 def supplierDetails : String → Option SupplierDetails
