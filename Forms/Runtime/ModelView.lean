@@ -95,11 +95,11 @@ def build
   | .groupOf label children =>
     .stack (some label) (buildAll children value cache errors disabled target location 0)
   | .computed label computation => .computed label (computation.eval value)
-  | .visibleWhen condition body =>
-    if condition.eval value then build body value cache errors disabled target location
-    else .hidden
-  | .disabledWhen condition body =>
-    build body value cache errors (disabled || condition.eval value) target location
+  | .withAvailability availability body =>
+    match availability.eval value with
+    | .enabled => build body value cache errors disabled target location
+    | .hidden => .hidden
+    | .disabled => build body value cache errors true target location
   | .choiceOf path label branches =>
     let location := location ++ pathLocation path
     let selector := choiceControl path branches.toList value target location label disabled errors
@@ -254,18 +254,12 @@ def decode
     | some input => (Input.decode widget input).mapError .decode
     | none => .error (.decode (.clientBug .missingArgument))
   | .groupOf _ children, index :: rest => decodeAll children cache current index rest argument
-  | .visibleWhen condition body, target => do
+  | .withAvailability availability body, target => do
     let invocation ← decode body cache current target argument
-    if h : condition.eval current = true then
-      return ⟨invocation, h⟩
-    else
-      throw (.invalid .hidden)
-  | .disabledWhen condition body, target => do
-    let invocation ← decode body cache current target argument
-    if h : condition.eval current = false then
-      return ⟨invocation, h⟩
-    else
-      throw (.invalid .disabled)
+    match h : availability.eval current with
+    | .enabled => return ⟨invocation, h⟩
+    | .hidden => throw (.invalid .hidden)
+    | .disabled => throw (.invalid .disabled)
   | .choiceOf path _ branches, [] =>
     match argument with
     | some (.text key) => selectBranch key cache (path.get current) branches
