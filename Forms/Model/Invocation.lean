@@ -17,19 +17,19 @@ inductive ValidTableInvocation (length : Nat) (valid : Fin length → Type) (sel
   | select (enabled : selectable = true) (index : Fin length)
 
 /-- An invocation checked against the value reached by the current partial path. -/
-structure ValidFocusInvocation {item : Type} (found : Option item) (valid : item → Type) where
-  value : item
+structure ValidFocusInvocation {α : Type} (found : Option α) (valid : α → Type) where
+  value : α
   present : found = some value
   invocation : valid value
 
 /-- A branch invocation checked against `current`, the active payload if this branch is active. -/
 inductive ValidBranchInvocation
-    {payload : Type}
-    (current : Option payload)
-    (valid : payload → Type)
+    {α : Type}
+    (current : Option α)
+    (valid : α → Type)
     : Type where
   | select
-  | edit (payload : payload) (active : current = some payload) (invocation : valid payload)
+  | edit (payload : α) (active : current = some payload) (invocation : valid payload)
 
 /-- Why an invocation does not apply to the current value. -/
 inductive InvocationError where
@@ -54,11 +54,18 @@ instance : ToString InvocationError where
     | .unavailableBranch key => s!"This action is unavailable: branch '{key}' is no longer available."
 
 mutual
-/-- Invocations checked against the current model, context, and localType bindings. -/
-def Component.ValidInvocation {Γ : Context} {raw : Type} (component : Component Γ raw) (cache : HttpRequest.Cache)
-    (current : raw) (state : Env Γ) (locals : component.LocalState := component.initialState) : Type :=
+/-- Invocations checked against the current model, context, and local bindings. -/
+def Component.ValidInvocation
+  {Γ : Context}
+  {α : Type}
+  (component : Component Γ α)
+  (cache : HttpRequest.Cache)
+  (current : α)
+  (state : Env Γ)
+  (locals : component.LocalState := component.initialState)
+  : Type :=
   match component with
-  | @Component.field _ _ value .. => value
+  | @Component.field _ _ β .. => β
   | .groupOf _ children => children.ValidInvocation cache current state locals
   | .computed .. => Empty
   | .button .. => Unit
@@ -79,28 +86,56 @@ def Component.ValidInvocation {Γ : Context} {raw : Type} (component : Component
     let status := (source.eval current state).resolve cache
     (body status).ValidInvocation cache current state (locals.at status (body status).initialState)
 
-def Components.ValidInvocation {Γ : Context} {raw : Type} (children : Components Γ raw) (cache : HttpRequest.Cache)
-    (current : raw) (state : Env Γ) (locals : children.LocalState := children.initialState) : Type :=
+def Components.ValidInvocation
+  {Γ : Context}
+  {α : Type}
+  (children : Components Γ α)
+  (cache : HttpRequest.Cache)
+  (current : α)
+  (state : Env Γ)
+  (locals : children.LocalState := children.initialState)
+  : Type :=
   match children with
   | .nil => Empty
   | .cons head tail =>
     head.ValidInvocation cache current state locals.value ⊕ tail.ValidInvocation cache current state locals.tail
 
-def Columns.ValidInvocation {Γ : Context} {raw : Type} (columns : Columns Γ raw) (cache : HttpRequest.Cache)
-    (current : raw) (state : Env Γ) (locals : columns.LocalState := columns.initialState) : Type :=
+def Columns.ValidInvocation
+  {Γ : Context}
+  {α : Type}
+  (columns : Columns Γ α)
+  (cache : HttpRequest.Cache)
+  (current : α)
+  (state : Env Γ)
+  (locals : columns.LocalState := columns.initialState)
+  : Type :=
   match columns with
   | .nil => Empty
   | .cons _ head tail =>
     head.ValidInvocation cache current state locals.value ⊕ tail.ValidInvocation cache current state locals.tail
 
-def Branch.ValidInvocation {Γ : Context} {sum : Type} (branch : Branch Γ sum) (cache : HttpRequest.Cache)
-    (current : sum) (state : Env Γ) (locals : branch.LocalState := branch.initialState) : Type :=
+def Branch.ValidInvocation
+  {Γ : Context}
+  {α : Type}
+  (branch : Branch Γ α)
+  (cache : HttpRequest.Cache)
+  (current : α)
+  (state : Env Γ)
+  (locals : branch.LocalState := branch.initialState)
+  : Type :=
   match branch with
   | .mk _ _ _ project _ body =>
     ValidBranchInvocation (project current) fun payload => body.ValidInvocation cache payload state locals
 
-def Branches.ValidInvocation {Γ : Context} {sum : Type} (branches : Branches Γ sum) (cache : HttpRequest.Cache)
-    (current : sum) (state : Env Γ) (locals : branches.LocalState := branches.initialState) : Type :=
+def Branches.ValidInvocation
+  {Γ : Context}
+  {α : Type}
+  (branches : Branches Γ α)
+  (cache : HttpRequest.Cache)
+  (current : α)
+  (state : Env Γ)
+  (locals : branches.LocalState := branches.initialState)
+  : Type :=
   match branches with
   | .nil => Empty
   | .cons head tail =>
@@ -113,24 +148,39 @@ def checkedIndex (index length : Nat) : Except InvocationError (Fin length) :=
   else
     .error (.indexOutOfBounds index length)
 
-/-- The model, context, and localType bindings after a checked invocation. -/
-structure ComponentUpdate (Γ : Context) (raw localType : Type) where
-  value : raw
+/-- The model, context, and local bindings after a checked invocation. -/
+structure ComponentUpdate (Γ : Context) (α localState : Type) where
+  value : α
   state : Env Γ
-  locals : localType
+  locals : localState
 
-def ComponentUpdate.mapValue {Γ : Context} {source target localType : Type}
-    (update : ComponentUpdate Γ source localType) (f : source → target) : ComponentUpdate Γ target localType :=
+def ComponentUpdate.mapValue
+  {Γ : Context}
+  {α β localState : Type}
+  (update : ComponentUpdate Γ α localState)
+  (f : α → β)
+  : ComponentUpdate Γ β localState :=
   { update with value := f update.value }
 
-def ComponentUpdate.mapLocals {Γ : Context} {raw before after : Type}
-    (update : ComponentUpdate Γ raw before) (f : before → after) : ComponentUpdate Γ raw after :=
+def ComponentUpdate.mapLocals
+  {Γ : Context}
+  {α β γ : Type}
+  (update : ComponentUpdate Γ α β)
+  (f : β → γ)
+  : ComponentUpdate Γ α γ :=
   { update with locals := f update.locals }
 
 mutual
-def Component.applyValid {Γ : Context} {raw : Type} (component : Component Γ raw) (cache : HttpRequest.Cache)
-    (current : raw) (state : Env Γ) (locals : component.LocalState)
-    (invocation : component.ValidInvocation cache current state locals) : ComponentUpdate Γ raw component.LocalState :=
+def Component.applyValid
+  {Γ : Context}
+  {α : Type}
+  (component : Component Γ α)
+  (cache : HttpRequest.Cache)
+  (current : α)
+  (state : Env Γ)
+  (locals : component.LocalState)
+  (invocation : component.ValidInvocation cache current state locals)
+  : ComponentUpdate Γ α component.LocalState :=
   match component, locals, invocation with
   | .field path .., locals, value => ⟨path.set value current, state, locals⟩
   | .groupOf _ children, locals, invocation => children.applyValid cache current state locals invocation
@@ -179,9 +229,16 @@ def Component.applyValid {Γ : Context} {raw : Type} (component : Component Γ r
     ((body status).applyValid cache current state (locals.at status (body status).initialState) invocation).mapLocals
       (fun updated => ⟨status, updated⟩)
 
-def Components.applyValid {Γ : Context} {raw : Type} (children : Components Γ raw) (cache : HttpRequest.Cache)
-    (current : raw) (state : Env Γ) (locals : children.LocalState)
-    (invocation : children.ValidInvocation cache current state locals) : ComponentUpdate Γ raw children.LocalState :=
+def Components.applyValid
+  {Γ : Context}
+  {α : Type}
+  (children : Components Γ α)
+  (cache : HttpRequest.Cache)
+  (current : α)
+  (state : Env Γ)
+  (locals : children.LocalState)
+  (invocation : children.ValidInvocation cache current state locals)
+  : ComponentUpdate Γ α children.LocalState :=
   match children, locals, invocation with
   | .nil, _locals, invocation => nomatch invocation
   | .cons head tail, locals, invocation =>
@@ -189,9 +246,16 @@ def Components.applyValid {Γ : Context} {raw : Type} (children : Components Γ 
     | .inl invocation => (head.applyValid cache current state locals.value invocation).mapLocals (⟨·, locals.tail⟩)
     | .inr invocation => (tail.applyValid cache current state locals.tail invocation).mapLocals (⟨locals.value, ·⟩)
 
-def Columns.applyValid {Γ : Context} {raw : Type} (columns : Columns Γ raw) (cache : HttpRequest.Cache)
-    (current : raw) (state : Env Γ) (locals : columns.LocalState)
-    (invocation : columns.ValidInvocation cache current state locals) : ComponentUpdate Γ raw columns.LocalState :=
+def Columns.applyValid
+  {Γ : Context}
+  {α : Type}
+  (columns : Columns Γ α)
+  (cache : HttpRequest.Cache)
+  (current : α)
+  (state : Env Γ)
+  (locals : columns.LocalState)
+  (invocation : columns.ValidInvocation cache current state locals)
+  : ComponentUpdate Γ α columns.LocalState :=
   match columns, locals, invocation with
   | .nil, _locals, invocation => nomatch invocation
   | .cons _ head tail, locals, invocation =>
@@ -200,9 +264,16 @@ def Columns.applyValid {Γ : Context} {raw : Type} (columns : Columns Γ raw) (c
     | .inr invocation => (tail.applyValid cache current state locals.tail invocation).mapLocals (⟨locals.value, ·⟩)
 
 /-- Re-selecting the active branch keeps its payload. -/
-def Branch.applyValid {Γ : Context} {sum : Type} (branch : Branch Γ sum) (cache : HttpRequest.Cache)
-    (current : sum) (state : Env Γ) (locals : branch.LocalState)
-    (invocation : branch.ValidInvocation cache current state locals) : ComponentUpdate Γ sum branch.LocalState :=
+def Branch.applyValid
+  {Γ : Context}
+  {α : Type}
+  (branch : Branch Γ α)
+  (cache : HttpRequest.Cache)
+  (current : α)
+  (state : Env Γ)
+  (locals : branch.LocalState)
+  (invocation : branch.ValidInvocation cache current state locals)
+  : ComponentUpdate Γ α branch.LocalState :=
   match branch, locals, invocation with
   | .mk _ _ inject project initial body, locals, invocation =>
     let Valid payload := body.ValidInvocation cache payload state locals
@@ -210,9 +281,16 @@ def Branch.applyValid {Γ : Context} {sum : Type} (branch : Branch Γ sum) (cach
     | .select => ⟨if (project current).isSome then current else inject initial, state, locals⟩
     | .edit payload _ invocation => (body.applyValid cache payload state locals invocation).mapValue inject
 
-def Branches.applyValid {Γ : Context} {sum : Type} (branches : Branches Γ sum) (cache : HttpRequest.Cache)
-    (current : sum) (state : Env Γ) (locals : branches.LocalState)
-    (invocation : branches.ValidInvocation cache current state locals) : ComponentUpdate Γ sum branches.LocalState :=
+def Branches.applyValid
+  {Γ : Context}
+  {α : Type}
+  (branches : Branches Γ α)
+  (cache : HttpRequest.Cache)
+  (current : α)
+  (state : Env Γ)
+  (locals : branches.LocalState)
+  (invocation : branches.ValidInvocation cache current state locals)
+  : ComponentUpdate Γ α branches.LocalState :=
   match branches, locals, invocation with
   | .nil, _locals, invocation => nomatch invocation
   | .cons head tail, locals, invocation =>

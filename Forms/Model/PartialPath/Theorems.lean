@@ -6,10 +6,10 @@ public section
 namespace Forms.Model
 
 theorem PartialPath.set_get
-  {source target : Type}
-  (path : PartialPath source target)
-  (value : source)
-  (old : target)
+  {α β : Type}
+  (path : PartialPath α β)
+  (value : α)
+  (old : β)
   (present : path.get? value = some old)
   : path.set old value = value := by
   induction path with
@@ -23,10 +23,10 @@ theorem PartialPath.set_get
   | index position rest ih => grind [get?, set, List.set_getElem_self]
 
 theorem PartialPath.get_set
-  {source target : Type}
-  (path : PartialPath source target)
-  (value : source)
-  (old new : target)
+  {α β : Type}
+  (path : PartialPath α β)
+  (value : α)
+  (old new : β)
   (present : path.get? value = some old)
   : path.get? (path.set new value) = some new := by
   induction path with
@@ -40,10 +40,10 @@ theorem PartialPath.get_set
   | index position rest ih => grind [get?, set]
 
 theorem PartialPath.set_absent
-  {source target : Type}
-  (path : PartialPath source target)
-  (value : source)
-  (new : target)
+  {α β : Type}
+  (path : PartialPath α β)
+  (value : α)
+  (new : β)
   (absent : path.get? value = none)
   : path.set new value = value := by
   induction path with
@@ -57,10 +57,10 @@ theorem PartialPath.set_absent
   | index position rest ih => grind [get?, set, List.set_getElem_self]
 
 theorem PartialPath.set_set
-  {source target : Type}
-  (path : PartialPath source target)
-  (value : source)
-  (first second : target)
+  {α β : Type}
+  (path : PartialPath α β)
+  (value : α)
+  (first second : β)
   : path.set second (path.set first value) = path.set second value := by
   induction path with
   | self => rfl

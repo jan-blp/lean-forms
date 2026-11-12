@@ -10,8 +10,13 @@ private def check (message : String) (ok : Bool) : IO Unit := do
   unless ok do throw (IO.userError s!"FAIL {message}")
   IO.println s!"PASS {message}"
 
-private def control {raw : Type} {form : Component [] raw} (state : ModelForm.State form)
-    (label : String) (nth : Nat := 0) : IO ControlKey := do
+private def control
+  {α : Type}
+  {form : Component [] α}
+  (state : ModelForm.State form)
+  (label : String)
+  (nth : Nat := 0)
+  : IO ControlKey := do
   let controls := (ModelView.render form state.value state.cache [] Env.nil state.locals).controls
   let some found := (controls.filter (·.label == label))[nth]?
     | throw (IO.userError s!"FAIL missing local control {label} {nth}")

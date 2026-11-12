@@ -214,7 +214,7 @@ private def ModelInfo.liftError
   : CommandElabM TermSyntax := do
   if model.record then return error
   let constructor := global (model.name ++ `Constructor ++ Name.mkSimple ctor.name.getString!)
-  `(Forms.Model.Error.inConstructor (raw := $(global model.raw)) $constructor $error)
+  `(Forms.Model.Error.inConstructor (α := $(global model.raw)) $constructor $error)
 
 private def emitShapes (model : ModelInfo) : CommandElabM Unit := do
   for ctor in model.constructors do
@@ -263,12 +263,12 @@ private def emitConstructors (model : ModelInfo) : CommandElabM Unit := do
   let inject := global (model.name ++ `Constructor.inject)
   let project := global (model.name ++ `Constructor.project)
   let keyName := global (model.name ++ `Constructor.key)
-  emit (← `(command| @[expose] def $inject:ident {payload : Type}
-    ($selected:ident : $constructor payload) ($value:ident : payload) : $raw := $injection))
-  emit (← `(command| @[expose] def $project:ident {payload : Type}
-    ($selected:ident : $constructor payload) ($value:ident : $raw) : Option payload := $projection))
-  emit (← `(command| @[expose] def $keyName:ident {payload : Type}
-    ($selected:ident : $constructor payload) : String := $key))
+  emit (← `(command| @[expose] def $inject:ident {α : Type}
+    ($selected:ident : $constructor α) ($value:ident : α) : $raw := $injection))
+  emit (← `(command| @[expose] def $project:ident {α : Type}
+    ($selected:ident : $constructor α) ($value:ident : $raw) : Option α := $projection))
+  emit (← `(command| @[expose] def $keyName:ident {α : Type}
+    ($selected:ident : $constructor α) : String := $key))
   emit (← `(command| @[expose, reducible] instance $(global (model.name ++ `constructors)):ident :
       Forms.Model.Constructors $raw where
     Constructor := $constructor

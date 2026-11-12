@@ -13,21 +13,21 @@ private def check (message : String) (ok : Bool) : IO Unit := do
 
 private def perform
   {Γ : Context}
-  {raw : Type}
-  (form : Component Γ raw)
-  (current : raw)
+  {α : Type}
+  (form : Component Γ α)
+  (current : α)
   (key : ControlKey)
   (argument : Option Input)
   (state : Env Γ)
-  : Except ModelForm.Rejection raw := do
+  : Except ModelForm.Rejection α := do
   let invocation ← (ModelView.decodeKey form {} current key argument state).mapError .ofAction
   return (form.applyValid {} current state form.initialState invocation).value
 
 private def firstControl
   {Γ : Context}
-  {raw : Type}
-  (form : Component Γ raw)
-  (value : raw)
+  {α : Type}
+  (form : Component Γ α)
+  (value : α)
   (state : Env Γ)
   : IO Display.Control := do
   let some control := (ModelView.render form value {} [] state).controls.head?

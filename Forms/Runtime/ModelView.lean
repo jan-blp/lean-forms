@@ -29,23 +29,23 @@ def editor
   { key := DisplayProtocol.controlKey .edit location, target, label, disabled, location, input
     messages := Feedback.messages errors location }
 
-def location {raw : Type} {value : raw} : Model.Location value → Feedback.Location
+def location {α : Type} {value : α} : Model.Location value → Feedback.Location
   | .self => []
   | @Model.Location.field _ _ inst _ f rest => .field (@Fields.key _ inst _ f) :: location rest
   | @Model.Location.constructor _ _ inst _ c rest => .constructor (@Constructors.key _ inst _ c) :: location rest
   | .index position rest => .index position.val :: location rest
 
-def error {raw : Type} {value : raw} (error : Model.Error value) : Feedback.Error where
+def error {α : Type} {value : α} (error : Model.Error value) : Feedback.Error where
   message := error.message
   targets := match error.targets with
     | .global => .global
     | .locations first rest => .locations (location first) (rest.map location)
 
-def pathLocation {source target : Type} : Model.Path source target → Feedback.Location
+def pathLocation {α β : Type} : Model.Path α β → Feedback.Location
   | .self => []
   | @Model.Path.stepField _ _ _ inst f rest => .field (@Fields.key _ inst _ f) :: pathLocation rest
 
-def partialPathLocation {source target : Type} : Model.PartialPath source target → Feedback.Location
+def partialPathLocation {α β : Type} : Model.PartialPath α β → Feedback.Location
   | .self => []
   | .empty => []
   | @Model.PartialPath.field _ _ _ inst f rest =>
@@ -56,10 +56,10 @@ def partialPathLocation {source target : Type} : Model.PartialPath source target
 
 def choiceControl
   {Γ : Context}
-  {raw sum : Type}
-  (path : Model.Path raw sum)
-  (branches : List (Model.Branch Γ sum))
-  (value : raw)
+  {α β : Type}
+  (path : Model.Path α β)
+  (branches : List (Model.Branch Γ β))
+  (value : α)
   (target : Display.Target)
   (location : Feedback.Location)
   (label : String)
@@ -90,14 +90,14 @@ def button
 abbrev WireScopes := Nat → List Nat
 
 mutual
-/-- `location` is where `raw` sits in the form's value; duplicates are kept. -/
+/-- `location` is where `value` sits in the form's value; duplicates are kept. -/
 def build
   {Γ : Context}
-  {raw : Type}
+  {α : Type}
   (state : Model.Env Γ)
   (scopes : WireScopes)
-  (component : Model.Component Γ raw)
-  (value : raw)
+  (component : Model.Component Γ α)
+  (value : α)
   (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error)
   (disabled : Bool)
@@ -176,11 +176,11 @@ def build
 
 def buildAll
   {Γ : Context}
-  {raw : Type}
+  {α : Type}
   (state : Model.Env Γ)
   (scopes : WireScopes)
-  (children : Model.Components Γ raw)
-  (value : raw)
+  (children : Model.Components Γ α)
+  (value : α)
   (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error)
   (disabled : Bool)
@@ -197,11 +197,11 @@ def buildAll
 
 def buildColumns
   {Γ : Context}
-  {raw : Type}
+  {α : Type}
   (state : Model.Env Γ)
   (scopes : WireScopes)
-  (children : Model.Columns Γ raw)
-  (value : raw)
+  (children : Model.Columns Γ α)
+  (value : α)
   (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error)
   (disabled : Bool)
@@ -219,11 +219,11 @@ def buildColumns
 /-- Builds the body of the branch that `current` was built by, at `target.child index`. -/
 def buildActive
   {Γ : Context}
-  {sum : Type}
+  {α : Type}
   (state : Model.Env Γ)
   (scopes : WireScopes)
-  (branches : Model.Branches Γ sum)
-  (current : sum)
+  (branches : Model.Branches Γ α)
+  (current : α)
   (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error)
   (disabled : Bool)
@@ -242,11 +242,11 @@ def buildActive
 /-- The branch's body, when `current` was built by its constructor. -/
 def buildBranch
   {Γ : Context}
-  {sum : Type}
+  {α : Type}
   (state : Model.Env Γ)
   (scopes : WireScopes)
-  (branch : Model.Branch Γ sum)
-  (current : sum)
+  (branch : Model.Branch Γ α)
+  (current : α)
   (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error)
   (disabled : Bool)
@@ -263,9 +263,9 @@ end
 /-- The view of `component`; a control whose key is already shown becomes a note. -/
 def render
   {Γ : Context}
-  {raw : Type}
-  (component : Model.Component Γ raw)
-  (value : raw)
+  {α : Type}
+  (component : Model.Component Γ α)
+  (value : α)
   (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error := [])
   (state : Model.Env Γ)
@@ -285,9 +285,13 @@ def noArgument {α : Type} (argument : Option Input) (invocation : α) : Except 
   | some _ => .error (.decode (.clientBug .unexpectedArgument))
 
 def selectBranch
-  {Γ : Context} {sum : Type} (state : Model.Env Γ) (key : String)
-  (cache : Model.HttpRequest.Cache) (current : sum)
-  : (branches : Model.Branches Γ sum) → (locals : branches.LocalState) →
+  {Γ : Context}
+  {α : Type}
+  (state : Model.Env Γ)
+  (key : String)
+  (cache : Model.HttpRequest.Cache)
+  (current : α)
+  : (branches : Model.Branches Γ α) → (locals : branches.LocalState) →
       Except ActionError (branches.ValidInvocation cache current state locals)
   | .nil, _ => .error (.invalid (.unavailableBranch key))
   | .cons (.mk branchKey ..) tail, locals =>
@@ -301,11 +305,11 @@ mutual
 /-- The invocation of the control `render` puts at `target`, checked against `current`. -/
 def decode
   {Γ : Context}
-  {raw : Type}
+  {α : Type}
   (state : Model.Env Γ)
-  (component : Model.Component Γ raw)
+  (component : Model.Component Γ α)
   (cache : Model.HttpRequest.Cache)
-  (current : raw)
+  (current : α)
   (target : List Nat)
   (argument : Option Input)
   (locals : component.LocalState)
@@ -363,11 +367,11 @@ def decode
 
 def decodeAll
   {Γ : Context}
-  {raw : Type}
+  {α : Type}
   (state : Model.Env Γ)
-  (children : Model.Components Γ raw)
+  (children : Model.Components Γ α)
   (cache : Model.HttpRequest.Cache)
-  (current : raw)
+  (current : α)
   (index : Nat)
   (target : List Nat)
   (argument : Option Input)
@@ -380,11 +384,11 @@ def decodeAll
 
 def decodeColumns
   {Γ : Context}
-  {raw : Type}
+  {α : Type}
   (state : Model.Env Γ)
-  (children : Model.Columns Γ raw)
+  (children : Model.Columns Γ α)
   (cache : Model.HttpRequest.Cache)
-  (current : raw)
+  (current : α)
   (index : Nat)
   (target : List Nat)
   (argument : Option Input)
@@ -397,11 +401,11 @@ def decodeColumns
 
 def decodeBranch
   {Γ : Context}
-  {sum : Type}
+  {α : Type}
   (state : Model.Env Γ)
-  (branch : Model.Branch Γ sum)
+  (branch : Model.Branch Γ α)
   (cache : Model.HttpRequest.Cache)
-  (current : sum)
+  (current : α)
   (target : List Nat)
   (argument : Option Input)
   (locals : branch.LocalState)
@@ -415,11 +419,11 @@ def decodeBranch
 
 def decodeBranches
   {Γ : Context}
-  {sum : Type}
+  {α : Type}
   (state : Model.Env Γ)
-  (branches : Model.Branches Γ sum)
+  (branches : Model.Branches Γ α)
   (cache : Model.HttpRequest.Cache)
-  (current : sum)
+  (current : α)
   (index : Nat)
   (target : List Nat)
   (argument : Option Input)
@@ -433,10 +437,10 @@ end
 
 def decodeKey
   {Γ : Context}
-  {raw : Type}
-  (component : Model.Component Γ raw)
+  {α : Type}
+  (component : Model.Component Γ α)
   (cache : Model.HttpRequest.Cache)
-  (current : raw)
+  (current : α)
   (key : ControlKey)
   (argument : Option Input)
   (state : Model.Env Γ)

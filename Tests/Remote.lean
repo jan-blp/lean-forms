@@ -140,21 +140,21 @@ private def shippingChoices : Component [] Order.Raw :=
       | _ => [pickup, standard])
 
 private def labels
-  {raw : Type}
-  (form : Component [] raw)
-  (value : raw)
+  {α : Type}
+  (form : Component [] α)
+  (value : α)
   (cache : HttpRequest.Cache)
   : List String :=
   (ModelView.render form value cache [] Env.nil).controls.map (·.label)
 
 private def performIn
-  {raw : Type}
-  (form : Component [] raw)
+  {α : Type}
+  (form : Component [] α)
   (cache : HttpRequest.Cache)
-  (value : raw)
+  (value : α)
   (key : ControlKey)
   (argument : Option Input)
-  : Except ModelForm.Rejection raw := do
+  : Except ModelForm.Rejection α := do
   let invocation ← (ModelView.decodeKey form cache value key argument Env.nil).mapError .ofAction
   return (form.applyValid cache value Env.nil form.initialState invocation).value
 

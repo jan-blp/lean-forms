@@ -18,9 +18,9 @@ private def argument : Display.Editor → Option Input
   | .action => none
 
 private def keyOf
-  {raw : Type}
-  (form : Component [] raw)
-  (value : raw)
+  {α : Type}
+  (form : Component [] α)
+  (value : α)
   (label : String)
   (nth : Nat := 0)
   : ControlKey :=
@@ -28,19 +28,19 @@ private def keyOf
   (controls[nth]?.map (·.key)).getD ⟨"missing"⟩
 
 private def perform
-  {raw : Type}
-  (form : Component [] raw)
-  (value : raw)
+  {α : Type}
+  (form : Component [] α)
+  (value : α)
   (key : ControlKey)
   (argument : Option Input)
-  : Except ModelForm.Rejection raw := do
+  : Except ModelForm.Rejection α := do
   let invocation ← (ModelView.decodeKey form {} value key argument Env.nil).mapError .ofAction
   return (form.applyValid {} value Env.nil form.initialState invocation).value
 
 private def rejected
-  {raw : Type}
-  (form : Component [] raw)
-  (value : raw)
+  {α : Type}
+  (form : Component [] α)
+  (value : α)
   (key : ControlKey)
   (argument : Option Input)
   : Option ModelForm.Rejection :=
@@ -55,7 +55,7 @@ private def clientBug (error : ClientBug) : Option ModelForm.Rejection :=
   some (.clientBug error)
 
 /-- Every control `render` emits decodes and applies to the value it was rendered from. -/
-private def everyControlApplies {raw : Type} (form : Component [] raw) (value : raw) : Bool :=
+private def everyControlApplies {α : Type} (form : Component [] α) (value : α) : Bool :=
   (ModelView.render form value {} [] Env.nil).controls.all fun control =>
     (perform form value control.key (argument control.input)).toBool
 
