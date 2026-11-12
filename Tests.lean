@@ -8,6 +8,7 @@ import Tests.FormsReact
 import Tests.Invocation
 import Tests.Remote
 import Tests.Table
+import Tests.Endpoints
 
 meta import Forms.Model.Computation.Theorems
 meta import Forms.Runtime.ModelView.Theorems
