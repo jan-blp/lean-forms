@@ -184,46 +184,105 @@ try {
   `);
 
   await example('expenses', `
-    const table = () => document.querySelector('table');
-    const rows = () => [...table().querySelectorAll('tbody tr')];
-    const rowInput = (row, column) => rows()[row].cells[column].querySelector('input');
+    const rows = () => [...document.querySelectorAll('table tbody tr')];
     const button = (root, label) => [...root.querySelectorAll('button')].find(b => b.textContent === label);
-    check(table().caption.textContent === 'Expenses', 'Table caption missing');
-    check([...table().querySelectorAll('th')].map(th => th.textContent).join('|') ===
+    const select = async index => { button(rows()[index], 'Select').click(); await tick(); };
+    const table = document.querySelector('table');
+    check(table.caption.textContent === 'Expenses', 'Table caption missing');
+    check([...table.querySelectorAll('th')].map(th => th.textContent).join('|') ===
       'Description|Amount (CHF)|Receipt|Actions', 'Table headers changed');
     check(rows().every(row => row.cells.length === 4), 'Table cells lost their columns');
-    check(!rowInput(0, 2) && rowInput(1, 2)?.type === 'checkbox', 'Hidden cell shifted the action column');
-    const description = rowInput(1, 0);
+    check(document.body.textContent.includes('CHF 238'), 'Expense total missing');
+    check(!field('Description'), 'Details shown without a selection');
+    await select(1);
+    check(input('Description').value === 'Hotel', 'Selected row details missing');
+    check(!document.querySelector('.table-component').contains(field('Description')),
+      'Detail editor is still nested in the table component');
+    check(rows()[1].getAttribute('aria-selected') === 'true', 'Selected row not marked');
+    const description = input('Description');
     description.focus();
     await type(description, 'Hotel Zürich');
-    check(rowInput(1, 0) === description && document.activeElement === description, 'Table edit lost focus');
+    // Selecting another row must save the current draft before changing its editor.
+    await select(0);
+    check(rows()[1].cells[0].textContent.includes('Hotel Zürich'), 'Switching rows lost the detail draft');
+    check(input('Description').value === 'Train to Bern', 'New selection kept the old draft');
+    await select(1);
+    await type(input('Amount (CHF)'), 'abc');
+    await select(0);
+    check(rows()[1].getAttribute('aria-selected') === 'true', 'Invalid draft changed selection');
+    check(input('Amount (CHF)').value === 'abc', 'Invalid draft was discarded');
+    await edit('Amount (CHF)', '200');
     button(rows()[0], 'Remove').click();
     await tick();
-    check(rows().length === 1 && rowInput(0, 0).value === 'Hotel Zürich', 'Table draft lost on remove');
+    check(rows().length === 1 && rows()[0].getAttribute('aria-selected') === 'true',
+      'Removing an earlier row lost selection');
+    check(input('Description').value === 'Hotel Zürich', 'Details changed after removing an earlier row');
     button(rows()[0], 'Remove').click();
     await tick();
-    check(rows().length === 0 && table().querySelectorAll('th').length === 4, 'Empty table lost headers');
+    check(rows().length === 0 && !field('Description'), 'Removing selected row kept its details');
+    check(table.querySelectorAll('th').length === 4, 'Empty table lost headers');
     check(document.querySelector('.empty').textContent === 'No items.', 'Empty table message missing');
     button(document, 'Add expense').click();
     await tick();
-    check(rows().length === 1 && rowInput(0, 0).value === '', 'Table add missing');
-    await type(rowInput(0, 0), 'Lunch');
-    rowInput(0, 0).focus();
-    rowInput(0, 0).blur();
+    await select(0);
+    await edit('Description', 'Lunch');
+    await edit('Amount (CHF)', '25');
+  `);
+  await example('projects', `
+    const projects = () => [...document.querySelectorAll('fieldset')].filter(group =>
+      /^Project [0-9]+$/.test(group.querySelector(':scope > legend')?.textContent ?? ''));
+    const rows = index => [...projects()[index].querySelectorAll('table tbody tr')];
+    const button = (root, label) => [...root.querySelectorAll('button')].find(b => b.textContent === label);
+    const select = async (project, row) => { button(rows(project)[row], 'Select').click(); await tick(); };
+    const projectField = (index, label) => [...projects()[index].querySelectorAll('.editor')]
+      .find(editor => editor.querySelector('label').firstChild.textContent === label);
+    const projectInput = (index, label) => projectField(index, label)?.querySelector('input');
+    const editIn = async (index, label, value) => {
+      await type(projectInput(index, label), value);
+      projectField(index, label).requestSubmit();
+      await tick();
+    };
+    check(projects().length === 2, 'Initial projects missing');
+    check(document.body.textContent.includes('2 projects · 5 tasks · 1 complete · 15 h planned'),
+      'Planner overview missing');
+    check(!projectField(0, 'Task title') && !projectField(1, 'Task title'), 'Details shown before selection');
+    await select(0, 1);
+    await select(1, 0);
+    check(projectInput(0, 'Task title').value === 'Build accessible navigation', 'First project selection missing');
+    check(projectInput(1, 'Task title').value === 'Draft the welcome email', 'Second project changed the first selection');
+    check(!projects()[0].querySelector('.table-component').contains(projectField(0, 'Task title')),
+      'Task editor is nested inside the table');
+    await type(projectInput(0, 'Task title'), 'Build keyboard navigation');
+    await select(1, 1);
+    check(rows(0)[1].cells[0].textContent.includes('Build keyboard navigation'), 'Switching projects lost a draft');
+    check(projectInput(0, 'Task title').value === 'Build keyboard navigation', 'First project lost its selected task');
+    check(projectInput(1, 'Task title').value === 'Measure activation', 'Second project did not switch tasks');
+    await type(projectInput(1, 'Estimated hours'), 'oops');
+    await select(0, 0);
+    check(rows(0)[1].getAttribute('aria-selected') === 'true', 'Invalid draft changed selection');
+    check(projectInput(1, 'Estimated hours').value === 'oops', 'Invalid draft was discarded');
+    await editIn(1, 'Estimated hours', '4');
+    projectInput(0, 'Completed').click();
     await tick();
-    await type(rowInput(0, 1), 'abc');
-    rowInput(0, 1).focus();
-    rowInput(0, 1).blur();
+    check(projects()[0].textContent.includes('2 / 3 tasks complete'), 'Progress did not update');
+    projects()[0].querySelector(':scope > button').click();
     await tick();
-    check(status() === 'Enter a non-negative whole number.', 'Table accepted invalid number');
-    check(rowInput(0, 1).value === 'abc', 'Table rejected draft was lost');
-    await type(rowInput(0, 1), '100');
-    rowInput(0, 1).closest('form').requestSubmit();
+    check(projects().length === 1 && projectInput(0, 'Project name').value === 'Customer onboarding',
+      'Removed the wrong project');
+    check(projectInput(0, 'Task title').value === 'Measure activation', 'Selection did not follow the project');
+    button(document, 'Add project').click();
     await tick();
-    check(rowInput(0, 2)?.type === 'checkbox' && rows()[0].cells[3].querySelector('button'),
-      'Showing a cell shifted the action column');
-    rowInput(0, 2).click();
+    check(projects().length === 2 && !projectField(1, 'Task title'), 'New project inherited a selection');
+    check(projectInput(0, 'Task title').value === 'Measure activation', 'Adding a project changed an existing selection');
+    await select(1, 0);
+    await editIn(1, 'Task title', 'Plan follow-up');
+    button(rows(0)[1], 'Remove').click();
     await tick();
+    check(!projectField(0, 'Task title') && projectInput(1, 'Task title').value === 'Plan follow-up',
+      'Removing a task affected another project');
+    await click('[data-action=reset]');
+    check(projects().length === 2 && !projectField(0, 'Task title') && !projectField(1, 'Task title'),
+      'Reset did not clear project selections');
   `);
 } finally {
   socket?.close();

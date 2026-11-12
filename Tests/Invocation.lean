@@ -19,27 +19,27 @@ private def argument : Display.Editor → Option Input
 
 private def keyOf
   {raw : Type}
-  (form : Component raw)
+  (form : Component [] raw)
   (value : raw)
   (label : String)
   (nth : Nat := 0)
   : ControlKey :=
-  let controls := (ModelView.render form value {}).controls.filter (·.label == label)
+  let controls := (ModelView.render form value {} [] Env.nil).controls.filter (·.label == label)
   (controls[nth]?.map (·.key)).getD ⟨"missing"⟩
 
 private def perform
   {raw : Type}
-  (form : Component raw)
+  (form : Component [] raw)
   (value : raw)
   (key : ControlKey)
   (argument : Option Input)
   : Except ModelForm.Rejection raw := do
-  let invocation ← (ModelView.decodeKey form {} value key argument).mapError .ofAction
-  return form.applyValid {} value invocation
+  let invocation ← (ModelView.decodeKey form {} value key argument Env.nil).mapError .ofAction
+  return (form.applyValid {} value Env.nil form.initialState invocation).value
 
 private def rejected
   {raw : Type}
-  (form : Component raw)
+  (form : Component [] raw)
   (value : raw)
   (key : ControlKey)
   (argument : Option Input)
@@ -55,8 +55,8 @@ private def clientBug (error : ClientBug) : Option ModelForm.Rejection :=
   some (.clientBug error)
 
 /-- Every control `render` emits decodes and applies to the value it was rendered from. -/
-private def everyControlApplies {raw : Type} (form : Component raw) (value : raw) : Bool :=
-  (ModelView.render form value {}).controls.all fun control =>
+private def everyControlApplies {raw : Type} (form : Component [] raw) (value : raw) : Bool :=
+  (ModelView.render form value {} [] Env.nil).controls.all fun control =>
     (perform form value control.key (argument control.input)).toBool
 
 def run : IO Unit := do
@@ -85,7 +85,7 @@ def run : IO Unit := do
   check "InvocationWrongArgument"
     (rejected Person.form Person.initial (keyOf Person.form Person.initial "Age") (some (.boolean true))
       == clientBug (.wrongArgument "text"))
-  let opened := ModelForm.openState Person.initial
+  let opened := ModelForm.openState Person.form Person.initial Env.nil
   let age := keyOf Person.form Person.initial "Age"
   check "EventInputRejects"
     ((ModelForm.event (model := Person) Person.form opened (.apply age (some (.text "abc")))).toOption.bind

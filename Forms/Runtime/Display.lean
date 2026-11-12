@@ -56,6 +56,7 @@ inductive View where
 structure TableRow where
   label : String
   cells : List View
+  selected : Option Bool
 end
 
 deriving instance BEq for View, TableRow
@@ -76,7 +77,7 @@ def View.controlsAll : List View → List Control
 
 def View.controlsRows : List TableRow → List Control
   | [] => []
-  | ⟨_, cells⟩ :: rest => View.controlsAll cells ++ View.controlsRows rest
+  | ⟨_, cells, _⟩ :: rest => View.controlsAll cells ++ View.controlsRows rest
 end
 
 def duplicateNote : String := "Duplicate control: this value is edited elsewhere in the form."
@@ -116,10 +117,10 @@ def View.dedupeAll (seen : List ControlKey) : List View → DedupeResult (List V
 
 def View.dedupeRows (seen : List ControlKey) : List TableRow → DedupeResult (List TableRow)
   | [] => { deduped := [], seen }
-  | ⟨label, cells⟩ :: rest =>
+  | ⟨label, cells, selected⟩ :: rest =>
     let head := View.dedupeAll seen cells
     let tail := View.dedupeRows head.seen rest
-    { deduped := ⟨label, head.deduped⟩ :: tail.deduped, seen := tail.seen }
+    { deduped := ⟨label, head.deduped, selected⟩ :: tail.deduped, seen := tail.seen }
 end
 
 /-- Replaces each control whose key appeared earlier with a note. -/

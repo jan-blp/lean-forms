@@ -337,7 +337,7 @@ test('order chooses shipping branches, nests visibility, and validates, alongsid
   } finally { order.dispose(); person.dispose(); }
 });
 
-test('expenses table adds, removes, and validates items', async () => {
+test('expenses adds, removes, and validates items', async () => {
   const model = await open(fixture('expenses').start);
   const key = (label, nth = 0) => model.snapshot().controls.filter(c => c.label === label)[nth].key;
   const apply = (label, argument, nth = 0) =>
@@ -353,20 +353,19 @@ test('expenses table adds, removes, and validates items', async () => {
     assert.deepEqual(items.table.headers, ['Description', 'Amount (CHF)', 'Receipt', 'Actions']);
     assert.deepEqual(items.table.rows.map(row => row.label), ['Expense 1', 'Expense 2', 'Expense 3']);
     assert.equal(items.table.rows.every(row => row.cells.length === 4), true);
-    assert.deepEqual(items.table.rows[0].cells[2], { group: { label: null, children: [], error: null } });
     assert.equal(items.table.footer.button.label, 'Add expense');
-    const description = key('Description', 2);
-    assert.ok(model.snapshot().draftFields.includes(description));
+    apply('Select', null, 2);
+    assert.ok(model.snapshot().draftFields.includes(key('Description')));
     submit();
     assert.deepEqual(messages(model.snapshot().view), ['Describe the expense.', 'Enter an amount of at least CHF 1.']);
     assert.deepEqual(model.snapshot().errors[0].targets.locations[0],
       [{ kind: 'field', name: 'expenses' }, { kind: 'index', position: 2 }, { kind: 'field', name: 'description' }]);
-    apply('Description', 'Taxi', 2);
-    apply('Amount (CHF)', '5000', 2);
+    apply('Description', 'Taxi');
+    apply('Amount (CHF)', '5000');
     // The report limit is checked once every expense is valid.
     assert.deepEqual(messages(model.snapshot().view), ['Attach a receipt for CHF 100 or more.']);
     // Only expenses of CHF 100 or more show a receipt checkbox.
-    apply('Receipt attached', true, 1);
+    apply('Receipt attached', true);
     assert.deepEqual(messages(model.snapshot().view), ["A report is limited to CHF 5'000."]);
     apply('Remove', null, 0);
     assert.deepEqual(expenses().map(e => e.description), ['Hotel', 'Taxi']);
@@ -379,5 +378,132 @@ test('expenses table adds, removes, and validates items', async () => {
     assert.equal(model.snapshot().effects.length, 0);
     model.send('reset');
     assert.equal(expenses().length, 2);
+  } finally { model.dispose(); }
+});
+
+test('table selection edits the selected item and follows row removal', async () => {
+  const model = await open(fixture('expenses').start);
+  const independent = await open(fixture('expenses').start);
+  const controls = () => model.snapshot().controls;
+  const key = (label, nth = 0) => controls().filter(control => control.label === label)[nth].key;
+  const send = (key, argument = null) => model.send({ event: { message: { apply: { key, argument } } } });
+  const apply = (label, argument = null, nth = 0) => send(key(label, nth), argument);
+  const table = () => page(model).body[0].group.children[1].table;
+  const value = () => model.snapshot().submission.value;
+  const selection = () => table().rows.findIndex(row => row.selected === true);
+  try {
+    const first = key('Select');
+    const second = key('Select', 1);
+    assert.equal(selection(), -1);
+    assert.deepEqual(Object.keys(value()).sort(), ['employee', 'expenses']);
+    const beforeSelection = value();
+    assert.equal(controls().some(control => control.label === 'Description'), false);
+    send(second);
+    assert.deepEqual(value(), beforeSelection);
+    assert.ok(page(independent).body[0].group.children[1].table.rows.every(row => row.selected === false));
+    assert.equal(selection(), 1);
+    assert.deepEqual(table().rows.map(row => row.selected), [false, true]);
+    assert.equal(table().footer.button.label, 'Add expense');
+    assert.equal(page(model).body[0].group.children[2].group.label, 'Selected expense');
+    const oldDescription = key('Description');
+    assert.ok(model.snapshot().draftFields.includes(oldDescription));
+    apply('Description', 'Hotel Zürich');
+    assert.deepEqual(value().expenses.map(expense => expense.description), ['Train to Bern', 'Hotel Zürich']);
+    assert.equal(table().rows[1].cells[0].output.value, 'Hotel Zürich');
+    send(first);
+    const before = value();
+    const rejected = send(oldDescription, 'Stale');
+    assert.match(rejected.rejection, /control is no longer shown/);
+    assert.deepEqual(value(), before);
+    send(second);
+    apply('Remove');
+    assert.equal(selection(), 0);
+    assert.deepEqual(table().rows.map(row => row.selected), [true]);
+    assert.equal(table().rows[0].cells[0].output.value, 'Hotel Zürich');
+    apply('Amount (CHF)', 'abc');
+    assert.match(model.snapshot().rejection, /non-negative whole number/);
+    assert.equal(value().expenses[0].amount, 180);
+    apply('Amount (CHF)', '200');
+    assert.equal(value().expenses[0].amount, 200);
+    apply('Remove');
+    assert.equal(selection(), -1);
+    assert.equal(table().rows.length, 0);
+    assert.equal(controls().some(control => control.label === 'Description'), false);
+    apply('Add expense');
+    assert.equal(selection(), -1);
+    apply('Select');
+    assert.ok(controls().some(control => control.label === 'Description'));
+    model.send('reset');
+    assert.equal(selection(), -1);
+    assert.equal(table().rows.length, 2);
+  } finally { model.dispose(); independent.dispose(); }
+});
+
+test('project planner keeps task selections local to each project', async () => {
+  const model = await open(fixture('projects').start);
+  const value = () => model.snapshot().submission.value;
+  const projectRows = () => page(model).body[0].group.children
+    .find(component => component.group?.label === 'Projects').group.children.filter(component => component.group);
+  const body = index => projectRows()[index].group.children[0].group;
+  const table = index => body(index).children.find(component => component.table).table;
+  const details = index => body(index).children.find(component => component.group?.label === 'Task details');
+  const selected = index => table(index).rows.findIndex(row => row.selected === true);
+  const send = (key, argument = null) => model.send({ event: { message: { apply: { key, argument } } } });
+  const field = (label, nth = 0) => model.snapshot().controls.filter(control => control.label === label)[nth].key;
+  const buttonKey = button => button.onClick.press.name;
+  const rowButton = (project, row, label) => table(project).rows[row].cells.at(-1).group.children
+    .find(component => component.button?.label === label).button;
+  const select = (project, row) => send(buttonKey(rowButton(project, row, 'Select')));
+  const removeProject = index => send(buttonKey(projectRows()[index].group.children
+    .find(component => component.button?.label === 'Remove').button));
+  const addProject = () => send(field('Add project'));
+  try {
+    assert.match(JSON.stringify(page(model).body), /2 projects · 5 tasks · 1 complete · 15 h planned/);
+    assert.deepEqual([selected(0), selected(1)], [-1, -1]);
+    const initialValue = value();
+    select(0, 1);
+    select(1, 0);
+    assert.deepEqual(value(), initialValue);
+    assert.deepEqual([selected(0), selected(1)], [1, 0]);
+    assert.ok(details(0) && details(1));
+    assert.equal(table(0).footer.button.label, 'Add task');
+    send(field('Task title'), 'Build keyboard navigation');
+    send(field('Completed'), true);
+    assert.equal(value().projects[0].tasks[1].title, 'Build keyboard navigation');
+    assert.equal(value().projects[1].tasks[0].title, 'Draft the welcome email');
+    assert.equal(table(0).rows[1].cells[0].output.value, 'Build keyboard navigation');
+    assert.match(JSON.stringify(body(0)), /2 \/ 3 tasks complete/);
+    select(1, 1);
+    assert.deepEqual([selected(0), selected(1)], [1, 1]);
+    removeProject(0);
+    assert.equal(value().projects[0].name, 'Customer onboarding');
+    assert.equal(selected(0), 1);
+    assert.ok(details(0));
+    addProject();
+    assert.deepEqual([selected(0), selected(1)], [1, -1]);
+    assert.equal(details(1), undefined);
+    select(1, 0);
+    send(field('Task title', 1), 'Plan follow-up');
+    send(buttonKey(rowButton(0, 1, 'Remove')));
+    assert.deepEqual([selected(0), selected(1)], [-1, 0]);
+    assert.equal(details(0), undefined);
+    assert.equal(value().projects[1].tasks[0].title, 'Plan follow-up');
+    model.send('reset');
+    assert.deepEqual(value(), initialValue);
+    assert.deepEqual([selected(0), selected(1)], [-1, -1]);
+    select(0, 0);
+    send(field('Task title'), '');
+    model.send({ event: { message: 'submit' } });
+    assert.deepEqual(messages(model.snapshot().view), ['Give the task a title.']);
+    assert.deepEqual(model.snapshot().errors[0].targets.locations[0], [
+      { kind: 'field', name: 'projects' }, { kind: 'index', position: 0 },
+      { kind: 'field', name: 'tasks' }, { kind: 'index', position: 0 }, { kind: 'field', name: 'title' },
+    ]);
+    send(field('Task title'), 'Map the new navigation');
+    model.send({ event: { message: 'submit' } });
+    const submitted = JSON.parse(model.snapshot().effects[0].submit.request.body).value;
+    assert.deepEqual(Object.keys(submitted).sort(), ['name', 'projects']);
+    assert.deepEqual(Object.keys(submitted.projects[0]).sort(), ['name', 'tasks']);
+    assert.deepEqual(Object.keys(submitted.projects[0].tasks[0]).sort(), ['completed', 'hours', 'notes', 'owner', 'title']);
   } finally { model.dispose(); }
 });

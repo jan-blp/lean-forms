@@ -108,6 +108,8 @@ caption { text-align: left; font-size: 16px; font-weight: 500; padding-bottom: v
 .table-component td > .editor > label { font-size: 0; }
 .table-component td > .editor > label input { font-size: 14px; margin-top: 0; }
 .table-component th:last-child, .table-component td:last-child { width: 1%; white-space: nowrap; }
+.table-component tr.selected { background: var(--primary-light); }
+.table-component td:last-child .stack { display: flex; gap: var(--space-xs); }
 .table-component td > .computed { margin: 0; }
 .table-component td > .computed > label { font-size: 0; }
 .table-component td > .computed output { font-size: 14px; margin-top: 0; }

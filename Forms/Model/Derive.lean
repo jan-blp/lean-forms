@@ -275,6 +275,18 @@ private def emitConstructors (model : ModelInfo) : CommandElabM Unit := do
     inject := $inject
     project := $project
     key := $keyName))
+  -- `split` stays linear in constructors; a single-constructor match reduces, so case on `source`.
+  emit (← `(command| instance $(global (model.name ++ `lawfulConstructors)):ident :
+      Forms.Model.LawfulConstructors $raw where
+    project_inject := by
+      intro payload selected value
+      cases selected <;> rfl
+    inject_project := by
+      intro payload selected source value h
+      change $inject selected value = source
+      change $project selected source = some value at h
+      cases selected <;> simp only [$project:ident] at h <;> (first | split at h | cases source) <;>
+        simp_all [$inject:ident]))
 
 private def emitErasure (model : ModelInfo) : CommandElabM Unit := do
   let value ← fresh `value

@@ -10,7 +10,7 @@ open Lean Forms.Model Forms.Runtime Forms.ExampleForms
 
 structure SupplierDetails where
   requiresPurchaseOrder : Bool
-  deriving ToJson, FromJson
+  deriving ToJson, FromJson, DecidableEq
 
 /-- The tests' data endpoints. -/
 inductive SupplierEndpoint where
@@ -53,10 +53,13 @@ structure Lookup where
 
 private def Lookup.initial : Lookup.Raw := ⟨"acme", ""⟩
 
-private def Lookup.form : Component Lookup.Raw :=
+instance : DecidableEq (Api.signature SupplierEndpoint.supplier).Output :=
+  inferInstanceAs (DecidableEq SupplierDetails)
+
+private def Lookup.form : Component [] Lookup.Raw :=
   .group (label := "Lookup") (children := [
     .field (path := path[Lookup.Field.supplier]) (label := "Supplier") (editor := .text),
-    .bind
+    .loadWith
       (source := {
         inputs := inputs[path[Lookup.Field.supplier]]
         run := Api.source SupplierEndpoint.supplier
@@ -68,7 +71,7 @@ private def Lookup.form : Component Lookup.Raw :=
           (label := "Purchase order")
           (editor := .text)))])
 
-private abbrev State := ModelForm.State Lookup.Raw
+private abbrev State := ModelForm.State Lookup.form
 
 private def execute (state : State) (command : ModelForm.Command) : IO State :=
   IO.ofExcept (ModelForm.execute (model := Lookup) Lookup.form state command)
@@ -109,15 +112,15 @@ private def suppliers : HttpRequest := Api.request SupplierEndpoint.suppliers ()
 
 private def layoutRequest : HttpRequest := { method := .post, url := "/api/layout", body := none }
 
-private def nameField : Component Person.Raw :=
+private def nameField : Component [] Person.Raw :=
   .field (path := path[Person.Field.name]) (label := "Name") (editor := .text)
 
-private def ageField : Component Person.Raw :=
+private def ageField : Component [] Person.Raw :=
   .field (path := path[Person.Field.age]) (label := "Age") (editor := .natural)
 
 /-- Name and age in the loaded order; only the name while loading. -/
-private def ordered (layout : Source (List String)) : Component Person.Raw :=
-  .bindOr
+private def ordered (layout : Source (List String)) : Component [] Person.Raw :=
+  .loadOr
     (source := .const layout)
     (fallback := .group (label := "") (children := [nameField]))
     (body := fun order => .group (label := "") (children := order.filterMap fun
@@ -126,10 +129,10 @@ private def ordered (layout : Source (List String)) : Component Person.Raw :=
       | _ => none))
 
 /-- Loading can remove options while preserving the choice's location and key. -/
-private def shippingChoices : Component Order.Raw :=
-  let pickup : Branch Shipping.Raw :=
+private def shippingChoices : Component [] Order.Raw :=
+  let pickup : Branch [] Shipping.Raw :=
     .of Shipping.Constructor.pickup "Pickup" ⟨⟩ (.computed "" (.const ""))
-  let standard : Branch Shipping.Raw :=
+  let standard : Branch [] Shipping.Raw :=
     .of Shipping.Constructor.standard "Standard" ⟨⟨"", ""⟩⟩ (.computed "" (.const ""))
   .load (.const (.fetch layoutRequest (fromJson? (α := Bool)))) fun status =>
     .choice path[Order.Field.shipping] "Shipping" (match status with
@@ -138,22 +141,22 @@ private def shippingChoices : Component Order.Raw :=
 
 private def labels
   {raw : Type}
-  (form : Component raw)
+  (form : Component [] raw)
   (value : raw)
   (cache : HttpRequest.Cache)
   : List String :=
-  (ModelView.render form value cache).controls.map (·.label)
+  (ModelView.render form value cache [] Env.nil).controls.map (·.label)
 
 private def performIn
   {raw : Type}
-  (form : Component raw)
+  (form : Component [] raw)
   (cache : HttpRequest.Cache)
   (value : raw)
   (key : ControlKey)
   (argument : Option Input)
   : Except ModelForm.Rejection raw := do
-  let invocation ← (ModelView.decodeKey form cache value key argument).mapError .ofAction
-  return form.applyValid cache value invocation
+  let invocation ← (ModelView.decodeKey form cache value key argument Env.nil).mapError .ofAction
+  return (form.applyValid cache value Env.nil form.initialState invocation).value
 
 def run : IO Unit := do
   check "RemoteApiRoundtrip" ([suppliers, supplier "acme"].all fun request =>
@@ -195,7 +198,7 @@ def run : IO Unit := do
   let loadedLayout : HttpRequest.Cache := ({} : HttpRequest.Cache).insert layoutRequest
     (.loaded (toJson ["age", "name"]))
   check "RemoteFallbackWhileLoading" (labels pending person {} == ["Name"])
-  let some fallbackName := (ModelView.render pending person {}).controls.find? (·.label == "Name")
+  let some fallbackName := (ModelView.render pending person {} [] Env.nil).controls.find? (·.label == "Name")
     | throw (IO.userError "FAIL no fallback control")
   let fallbackName := fallbackName.key
   check "RemoteFallbackEditable"
@@ -208,8 +211,8 @@ def run : IO Unit := do
   let otherLayout : HttpRequest.Cache := ({} : HttpRequest.Cache).insert layoutRequest
     (.loaded (toJson ["name", "age"]))
   check "RemoteReorderedKeepsField" (renamed otherLayout == some "Grace")
-  let shippingState := ModelForm.load shippingChoices (ModelForm.openState Order.initial)
-  let some shipping := (ModelView.render shippingChoices shippingState.value shippingState.cache).controls.head?
+  let shippingState := ModelForm.load shippingChoices (ModelForm.openState shippingChoices Order.initial Env.nil)
+  let some shipping := (ModelView.render shippingChoices shippingState.value shippingState.cache [] Env.nil).controls.head?
     | throw (IO.userError "FAIL no shipping choice")
   check "RemoteFallbackOffersPickup" (match shipping.input with
     | .choice _ options => options.any (·.value == "pickup")
@@ -217,7 +220,7 @@ def run : IO Unit := do
   let shippingState ← IO.ofExcept (ModelForm.execute (model := Order) shippingChoices shippingState
     (.event (.loaded layoutRequest (.ok (toJson true)))))
   check "RemoteLoadedChoiceKeepsKey"
-    ((ModelView.render shippingChoices shippingState.value shippingState.cache).controls.any fun control =>
+    ((ModelView.render shippingChoices shippingState.value shippingState.cache [] Env.nil).controls.any fun control =>
       control.key == shipping.key && match control.input with
         | .choice _ options => options.map (·.value) == ["standard"]
         | _ => false)
@@ -229,8 +232,8 @@ def run : IO Unit := do
   let recovered ← IO.ofExcept (ModelForm.execute (model := Order) shippingChoices rejected
     (.event (.apply shipping.key (some (.text "standard")))))
   check "RemoteChoiceUsableAfterStaleBranch" recovered.ui.rejection.isNone
-  let twice : Component Person.Raw := .group (label := "") (children := [nameField, nameField])
-  let rendered := ModelView.render twice person {}
+  let twice : Component [] Person.Raw := .group (label := "") (children := [nameField, nameField])
+  let rendered := ModelView.render twice person {} [] Env.nil
   check "RemoteDuplicateShownOnce"
     (rendered.controls.map (·.label) == ["Name"] && match rendered.view with
       | .stack _ [.control _, .computed "Name" note] => note == Display.duplicateNote

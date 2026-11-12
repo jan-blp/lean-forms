@@ -45,10 +45,20 @@ def pathLocation {source target : Type} : Model.Path source target → Feedback.
   | .self => []
   | @Model.Path.stepField _ _ _ inst f rest => .field (@Fields.key _ inst _ f) :: pathLocation rest
 
+def partialPathLocation {source target : Type} : Model.PartialPath source target → Feedback.Location
+  | .self => []
+  | .empty => []
+  | @Model.PartialPath.field _ _ _ inst f rest =>
+    .field (@Fields.key _ inst _ f) :: partialPathLocation rest
+  | @Model.PartialPath.constructor _ _ _ inst _ ctor rest =>
+    .constructor (@Constructors.key _ inst _ ctor) :: partialPathLocation rest
+  | .index position rest => .index position :: partialPathLocation rest
+
 def choiceControl
+  {Γ : List Type}
   {raw sum : Type}
   (path : Model.Path raw sum)
-  (branches : List (Model.Branch sum))
+  (branches : List (Model.Branch Γ sum))
   (value : raw)
   (target : Display.Target)
   (location : Feedback.Location)
@@ -76,34 +86,41 @@ def button
   { key := DisplayProtocol.controlKey action location, target, label, disabled, location
     input := .action }
 
+/-- Lexical binder addresses used only for frontend control keys. -/
+abbrev WireScopes := Nat → List Nat
+
 mutual
 /-- `location` is where `raw` sits in the form's value; duplicates are kept. -/
 def build
+  {Γ : List Type}
   {raw : Type}
-  (component : Model.Component raw)
+  (state : Model.Env Γ)
+  (scopes : WireScopes)
+  (component : Model.Component Γ raw)
   (value : raw)
   (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error)
   (disabled : Bool)
   (target : Display.Target)
   (location : Feedback.Location)
+  (locals : component.LocalState)
   : Display.View :=
   match component with
   | .field path label widget =>
     let location := location ++ pathLocation path
     .control (editor widget (path.get value) target location label disabled errors)
   | .groupOf label children =>
-    .stack (some label) (buildAll children value cache errors disabled target location 0)
-  | .computed label computation => .computed label (computation.eval value)
+    .stack (some label) (buildAll state scopes children value cache errors disabled target location 0 locals)
+  | .computed label computation => .computed label (computation.eval value state)
   | .withAvailability availability body =>
-    match availability.eval value with
-    | .enabled => build body value cache errors disabled target location
+    match availability.eval value state with
+    | .enabled => build state scopes body value cache errors disabled target location locals
     | .hidden => .hidden
-    | .disabled => build body value cache errors true target location
+    | .disabled => build state scopes body value cache errors true target location locals
   | .choiceOf path label branches =>
     let location := location ++ pathLocation path
     let selector := choiceControl path branches.toList value target location label disabled errors
-    match buildActive branches (path.get value) cache errors disabled target location 0 with
+    match buildActive state scopes branches (path.get value) cache errors disabled target location 0 locals with
     | some body => .stack none [.control selector, body]
     | none => .control selector
   | .list path label itemLabel _ body =>
@@ -112,28 +129,53 @@ def build
     let rows := items.mapIdx fun index item =>
       let row := target.child index
       let itemLocation := location ++ [.index index]
-      let fields := build body item cache errors disabled (row.child 0) itemLocation
+      let fields := build state scopes body item cache errors disabled (row.child 0) itemLocation (locals[index]?.getD body.initialState)
       let remove := button .remove (row.child 1) itemLocation "Remove" disabled
       Display.View.stack (some s!"{itemLabel} {index + 1}") [fields, .control remove]
     let add := button .add target location s!"Add {itemLabel.toLower}" disabled
     .list label (rows ++ [.control add]) (Feedback.messages errors location)
-  | .load source body =>
-    build (body ((source.eval value).resolve cache)) value cache errors disabled target location
-  | .table path label itemLabel _ columns =>
+  | @Component.load _ _ _ _inst source body =>
+    let status := (source.eval value state).resolve cache
+    build state scopes (body status) value cache errors disabled target location (locals.at status (body status).initialState)
+  | .table path label itemLabel _ columns selection =>
     let items := path.get value
     let location := location ++ pathLocation path
     let rows := items.mapIdx fun index item =>
       let row := target.child index
       let itemLocation := location ++ [.index index]
-      let fields := buildColumns columns item cache errors disabled (row.child 0) itemLocation 0
+      let fields := buildColumns state scopes columns item cache errors disabled (row.child 0) itemLocation 0 (locals[index]?.getD columns.initialState)
       let remove := button .remove (row.child 1) itemLocation "Remove" disabled
-      ({ label := s!"{itemLabel} {index + 1}", cells := fields ++ [.control remove] } : Display.TableRow)
+      let selected := match selection with
+        | .none => none
+        | some selected => some (selected.get state == .row index)
+      let actions := match selection with
+        | none => Display.View.control remove
+        | some handle =>
+          let select := { button .selectRow (row.child 2) itemLocation
+            (if selected.getD false then "Selected" else "Select") disabled with
+            key := DisplayProtocol.controlKey .selectRow ((scopes handle.index).map Feedback.Step.index ++ [.index index]) }
+          Display.View.stack none [.control select, .control remove]
+      ({ label := s!"{itemLabel} {index + 1}", selected, cells := fields ++ [actions] } : Display.TableRow)
     let add := button .add target location s!"Add {itemLabel.toLower}" disabled
     .table label (columns.headers ++ ["Actions"]) rows (.control add) (Feedback.messages errors location)
+  | .focus computation body =>
+    let path := computation.eval value state
+    match path.get? value with
+    | none => .hidden
+    | some focused =>
+      build state scopes body focused cache errors disabled target (location ++ partialPathLocation path) locals
+  | .bind _ body =>
+    let scopes := fun index => match index with
+      | 0 => 1 :: target.indices
+      | index + 1 => scopes index
+    build (Env.cons locals.value state) scopes body value cache errors disabled (target.child 0) location locals.tail
 
 def buildAll
+  {Γ : List Type}
   {raw : Type}
-  (children : Model.Components raw)
+  (state : Model.Env Γ)
+  (scopes : WireScopes)
+  (children : Model.Components Γ raw)
   (value : raw)
   (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error)
@@ -141,16 +183,20 @@ def buildAll
   (target : Display.Target)
   (location : Feedback.Location)
   (index : Nat)
+  (locals : children.LocalState)
   : List Display.View :=
   match children with
   | .nil => []
   | .cons head tail =>
-    build head value cache errors disabled (target.child index) location ::
-      buildAll tail value cache errors disabled target location (index + 1)
+    build state scopes head value cache errors disabled (target.child index) location locals.value ::
+      buildAll state scopes tail value cache errors disabled target location (index + 1) locals.tail
 
 def buildColumns
+  {Γ : List Type}
   {raw : Type}
-  (children : Model.Columns raw)
+  (state : Model.Env Γ)
+  (scopes : WireScopes)
+  (children : Model.Columns Γ raw)
   (value : raw)
   (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error)
@@ -158,17 +204,21 @@ def buildColumns
   (target : Display.Target)
   (location : Feedback.Location)
   (index : Nat)
+  (locals : children.LocalState)
   : List Display.View :=
   match children with
   | .nil => []
   | .cons _ head tail =>
-    build head value cache errors disabled (target.child index) location ::
-      buildColumns tail value cache errors disabled target location (index + 1)
+    build state scopes head value cache errors disabled (target.child index) location locals.value ::
+      buildColumns state scopes tail value cache errors disabled target location (index + 1) locals.tail
 
 /-- Builds the body of the branch that `current` was built by, at `target.child index`. -/
 def buildActive
+  {Γ : List Type}
   {sum : Type}
-  (branches : Model.Branches sum)
+  (state : Model.Env Γ)
+  (scopes : WireScopes)
+  (branches : Model.Branches Γ sum)
   (current : sum)
   (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error)
@@ -176,40 +226,48 @@ def buildActive
   (target : Display.Target)
   (location : Feedback.Location)
   (index : Nat)
+  (locals : branches.LocalState)
   : Option Display.View :=
   match branches with
   | .nil => none
   | .cons head tail =>
-    match buildBranch head current cache errors disabled (target.child index) location with
+    match buildBranch state scopes head current cache errors disabled (target.child index) location locals.value with
     | some view => some view
-    | none => buildActive tail current cache errors disabled target location (index + 1)
+    | none => buildActive state scopes tail current cache errors disabled target location (index + 1) locals.tail
 
 /-- The branch's body, when `current` was built by its constructor. -/
 def buildBranch
+  {Γ : List Type}
   {sum : Type}
-  (branch : Model.Branch sum)
+  (state : Model.Env Γ)
+  (scopes : WireScopes)
+  (branch : Model.Branch Γ sum)
   (current : sum)
   (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error)
   (disabled : Bool)
   (target : Display.Target)
   (location : Feedback.Location)
+  (locals : branch.LocalState)
   : Option Display.View :=
   match branch with
   | .mk key _ _ project _ body =>
     (project current).map fun payload =>
-      build body payload cache errors disabled target (location ++ [.constructor key])
+      build state scopes body payload cache errors disabled target (location ++ [.constructor key]) locals
 end
 
 /-- The view of `component`; a control whose key is already shown becomes a note. -/
 def render
+  {Γ : List Type}
   {raw : Type}
-  (component : Model.Component raw)
+  (component : Model.Component Γ raw)
   (value : raw)
   (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error := [])
+  (state : Model.Env Γ)
+  (locals : component.LocalState := component.initialState)
   : Rendered :=
-  let view := (build component value cache errors false {} []).dedupe
+  let view := (build state (fun index => [0, index]) component value cache errors false {} [] locals).dedupe
   ⟨view, view.controls⟩
 
 /-- Why a control key and argument name no invocation that applies. -/
@@ -223,17 +281,14 @@ def noArgument {α : Type} (argument : Option Input) (invocation : α) : Except 
   | some _ => .error (.decode (.clientBug .unexpectedArgument))
 
 def selectBranch
-  {sum : Type}
-  (key : String)
-  (cache : Model.HttpRequest.Cache)
-  (current : sum)
-  : (branches : Model.Branches sum) → Except ActionError (branches.ValidInvocation cache current)
-  | .nil => .error (.invalid (.unavailableBranch key))
-  | .cons (.mk branchKey ..) tail =>
-    if branchKey == key then
-      .ok (Sum.inl Model.ValidBranchInvocation.select)
-    else
-      Sum.inr <$> selectBranch key cache current tail
+  {Γ : List Type} {sum : Type} (state : Model.Env Γ) (key : String)
+  (cache : Model.HttpRequest.Cache) (current : sum)
+  : (branches : Model.Branches Γ sum) → (locals : branches.LocalState) →
+      Except ActionError (branches.ValidInvocation cache current state locals)
+  | .nil, _ => .error (.invalid (.unavailableBranch key))
+  | .cons (.mk branchKey ..) tail, locals =>
+    if branchKey == key then .ok (Sum.inl Model.ValidBranchInvocation.select)
+    else Sum.inr <$> selectBranch state key cache current tail locals.tail
 
 def checkedIndex (index length : Nat) : Except ActionError (Fin length) :=
   (Model.checkedIndex index length).mapError .invalid
@@ -241,32 +296,35 @@ def checkedIndex (index length : Nat) : Except ActionError (Fin length) :=
 mutual
 /-- The invocation of the control `render` puts at `target`, checked against `current`. -/
 def decode
+  {Γ : List Type}
   {raw : Type}
-  (component : Model.Component raw)
+  (state : Model.Env Γ)
+  (component : Model.Component Γ raw)
   (cache : Model.HttpRequest.Cache)
   (current : raw)
   (target : List Nat)
   (argument : Option Input)
-  : Except ActionError (component.ValidInvocation cache current) :=
+  (locals : component.LocalState)
+  : Except ActionError (component.ValidInvocation cache current state locals) :=
   match component, target with
   | .field _ _ widget, [] =>
     match argument with
     | some input => (Input.decode widget input).mapError .decode
     | none => .error (.decode (.clientBug .missingArgument))
-  | .groupOf _ children, index :: rest => decodeAll children cache current index rest argument
+  | .groupOf _ children, index :: rest => decodeAll state children cache current index rest argument locals
   | .withAvailability availability body, target => do
-    let invocation ← decode body cache current target argument
-    match h : availability.eval current with
+    let invocation ← decode state body cache current target argument locals
+    match h : availability.eval current state with
     | .enabled => return ⟨invocation, h⟩
     | .hidden => throw (.invalid .hidden)
     | .disabled => throw (.invalid .disabled)
   | .choiceOf path _ branches, [] =>
     match argument with
-    | some (.text key) => selectBranch key cache (path.get current) branches
+    | some (.text key) => selectBranch state key cache (path.get current) branches locals
     | some _ => .error (.decode (.clientBug (.wrongArgument "an option")))
     | none => .error (.decode (.clientBug .missingArgument))
   | .choiceOf path _ branches, index :: rest =>
-    decodeBranches branches cache (path.get current) index rest argument
+    decodeBranches state branches cache (path.get current) index rest argument locals
   | .list .., [] => noArgument argument Model.ValidListInvocation.add
   | .list path .., [index, 1] => do
     let index ← checkedIndex index (path.get current).length
@@ -274,87 +332,113 @@ def decode
   | .list path _ _ _ body, index :: 0 :: rest => do
     let items := path.get current
     let index ← checkedIndex index items.length
-    Model.ValidListInvocation.edit index <$> decode body cache (items.get index) rest argument
-  | .load source body, target =>
-    decode (body ((source.eval current).resolve cache)) cache current target argument
-  | .table .., [] => noArgument argument Model.ValidListInvocation.add
+    Model.ValidListInvocation.edit index <$> decode state body cache (items.get index) rest argument (locals[index.val]?.getD body.initialState)
+  | @Component.load _ _ _ _inst source body, target =>
+    let status := (source.eval current state).resolve cache
+    decode state (body status) cache current target argument (locals.at status (body status).initialState)
+  | .table .., [] => noArgument argument Model.ValidTableInvocation.add
   | .table path .., [index, 1] => do
     let index ← checkedIndex index (path.get current).length
-    noArgument argument (Model.ValidListInvocation.remove index)
-  | .table path _ _ _ columns, index :: 0 :: column :: rest => do
+    noArgument argument (Model.ValidTableInvocation.remove index)
+  | .table path _ _ _ columns _, index :: 0 :: column :: rest => do
     let items := path.get current
     let index ← checkedIndex index items.length
-    Model.ValidListInvocation.edit index <$> decodeColumns columns cache (items.get index) column rest argument
+    Model.ValidTableInvocation.edit index <$> decodeColumns state columns cache (items.get index) column rest argument (locals[index.val]?.getD columns.initialState)
+  | .table path _ _ _ _ (some _), [index, 2] => do
+    let index ← checkedIndex index (path.get current).length
+    noArgument argument (.select rfl index)
+  | .focus computation body, target =>
+    match present : (computation.eval current state).get? current with
+    | none => .error (.invalid .absent)
+    | some value => do
+      return ⟨value, present, ← decode state body cache value target argument locals⟩
+  | .bind _ body, 0 :: rest =>
+    decode (Env.cons locals.value state) body cache current rest argument locals.tail
   | _, _ => .error (.decode (.clientBug .unknownControl))
 
 def decodeAll
+  {Γ : List Type}
   {raw : Type}
-  (children : Model.Components raw)
+  (state : Model.Env Γ)
+  (children : Model.Components Γ raw)
   (cache : Model.HttpRequest.Cache)
   (current : raw)
   (index : Nat)
   (target : List Nat)
   (argument : Option Input)
-  : Except ActionError (children.ValidInvocation cache current) :=
+  (locals : children.LocalState)
+  : Except ActionError (children.ValidInvocation cache current state locals) :=
   match children, index with
   | .nil, _ => .error (.decode (.clientBug .unknownControl))
-  | .cons head _, 0 => Sum.inl <$> decode head cache current target argument
-  | .cons _ tail, index + 1 => Sum.inr <$> decodeAll tail cache current index target argument
+  | .cons head _, 0 => Sum.inl <$> decode state head cache current target argument locals.value
+  | .cons _ tail, index + 1 => Sum.inr <$> decodeAll state tail cache current index target argument locals.tail
 
 def decodeColumns
+  {Γ : List Type}
   {raw : Type}
-  (children : Model.Columns raw)
+  (state : Model.Env Γ)
+  (children : Model.Columns Γ raw)
   (cache : Model.HttpRequest.Cache)
   (current : raw)
   (index : Nat)
   (target : List Nat)
   (argument : Option Input)
-  : Except ActionError (children.ValidInvocation cache current) :=
+  (locals : children.LocalState)
+  : Except ActionError (children.ValidInvocation cache current state locals) :=
   match children, index with
   | .nil, _ => .error (.decode (.clientBug .unknownControl))
-  | .cons _ head _, 0 => Sum.inl <$> decode head cache current target argument
-  | .cons _ _ tail, index + 1 => Sum.inr <$> decodeColumns tail cache current index target argument
+  | .cons _ head _, 0 => Sum.inl <$> decode state head cache current target argument locals.value
+  | .cons _ _ tail, index + 1 => Sum.inr <$> decodeColumns state tail cache current index target argument locals.tail
 
 def decodeBranch
+  {Γ : List Type}
   {sum : Type}
-  (branch : Model.Branch sum)
+  (state : Model.Env Γ)
+  (branch : Model.Branch Γ sum)
   (cache : Model.HttpRequest.Cache)
   (current : sum)
   (target : List Nat)
   (argument : Option Input)
-  : Except ActionError (branch.ValidInvocation cache current) :=
+  (locals : branch.LocalState)
+  : Except ActionError (branch.ValidInvocation cache current state locals) :=
   match branch with
   | .mk _ _ _ project _ body =>
     match active : project current with
     | some payload =>
-      Model.ValidBranchInvocation.edit payload active <$> decode body cache payload target argument
+      Model.ValidBranchInvocation.edit payload active <$> decode state body cache payload target argument locals
     | none => .error (.invalid .inactiveBranch)
 
 def decodeBranches
+  {Γ : List Type}
   {sum : Type}
-  (branches : Model.Branches sum)
+  (state : Model.Env Γ)
+  (branches : Model.Branches Γ sum)
   (cache : Model.HttpRequest.Cache)
   (current : sum)
   (index : Nat)
   (target : List Nat)
   (argument : Option Input)
-  : Except ActionError (branches.ValidInvocation cache current) :=
+  (locals : branches.LocalState)
+  : Except ActionError (branches.ValidInvocation cache current state locals) :=
   match branches, index with
   | .nil, _ => .error (.decode (.clientBug .unknownControl))
-  | .cons head _, 0 => Sum.inl <$> decodeBranch head cache current target argument
-  | .cons _ tail, index + 1 => Sum.inr <$> decodeBranches tail cache current index target argument
+  | .cons head _, 0 => Sum.inl <$> decodeBranch state head cache current target argument locals.value
+  | .cons _ tail, index + 1 => Sum.inr <$> decodeBranches state tail cache current index target argument locals.tail
 end
 
 def decodeKey
+  {Γ : List Type}
   {raw : Type}
-  (component : Model.Component raw)
+  (component : Model.Component Γ raw)
   (cache : Model.HttpRequest.Cache)
   (current : raw)
   (key : ControlKey)
   (argument : Option Input)
-  : Except ActionError (component.ValidInvocation cache current) :=
-  match ((render component current cache).controls.find? (·.key == key)) with
-  | some control => decode component cache current control.target.indices argument
+  (state : Model.Env Γ)
+  (locals : component.LocalState := component.initialState)
+  : Except ActionError (component.ValidInvocation cache current state locals) :=
+  match ((render component current cache [] state locals).controls.find? (·.key == key)) with
+  | some control => decode state component cache current control.target.indices argument locals
   | none => .error (.invalid .absent)
 
 end Forms.Runtime.ModelView

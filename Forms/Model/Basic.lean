@@ -3,14 +3,16 @@ module
 public import Lean.Data.Json
 public import LeanLens.Lawful
 public import Std.Data.HashMap
+open LeanLens
 
 @[expose] public section
 namespace Forms.Model
 
+/-- Describes a record's typed fields. -/
 class Fields (raw : Type) where
   Field : Type → Type
-  lens : {value : Type} → Field value → LeanLens.Lens' raw value
-  lawful : ∀ {value} (field : Field value), LeanLens.LawfulLens (lens field)
+  lens : {value : Type} → Field value → Lens' raw value
+  lawful : ∀ {value} (field : Field value), LawfulLens (lens field)
   /-- The field name used in serialization . -/
   key : {value : Type} → Field value → String
   key_injective : ∀ {α β : Type} (a : Field α) (b : Field β), key a = key b → a ≍ b
@@ -27,6 +29,7 @@ def Fields.set
   : value → raw → raw :=
   LeanLens.set (Fields.lens field)
 
+/-- Describes a sum type's constructors. -/
 class Constructors (raw : Type) where
   Constructor : Type → Type
   inject : {payload : Type} → Constructor payload → payload → raw
@@ -35,6 +38,13 @@ class Constructors (raw : Type) where
   key : {payload : Type} → Constructor payload → String
 
 attribute [reducible] Constructors.Constructor
+
+/-- Constructor injection and projection describe the same payload. -/
+class LawfulConstructors (raw : Type) [Constructors raw] : Prop where
+  project_inject : ∀ {payload : Type} (c : Constructors.Constructor raw payload) (value : payload),
+    Constructors.project c (Constructors.inject c value) = some value
+  inject_project : ∀ {payload : Type} (c : Constructors.Constructor raw payload) (source : raw) (value : payload),
+    Constructors.project c source = some value → Constructors.inject c value = source
 
 inductive Path : Type → Type → Type 1 where
   | self {value : Type} : Path value value
@@ -76,7 +86,7 @@ def Path.trans
   | .self => second
   | @stepField _ _ _ inst f rest => @Path.stepField _ _ _ inst f (rest.trans second)
 
-def Path.toLens {source target : Type} (path : Path source target) : LeanLens.Lens' source target :=
+def Path.toLens {source target : Type} (path : Path source target) : Lens' source target :=
   LeanLens.mkLens path.get path.set
 
 inductive Location : (raw : Type) → raw → Type 1 where
