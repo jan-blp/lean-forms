@@ -29,7 +29,7 @@ def editor
   { key := DisplayProtocol.controlKey .edit location, target, label, disabled, location, input
     messages := Feedback.messages errors location }
 
-def location {raw : Type} {value : raw} : Model.Location raw value → Feedback.Location
+def location {raw : Type} {value : raw} : Model.Location value → Feedback.Location
   | .self => []
   | @Model.Location.field _ _ inst _ f rest => .field (@Fields.key _ inst _ f) :: location rest
   | @Model.Location.constructor _ _ inst _ c rest => .constructor (@Constructors.key _ inst _ c) :: location rest

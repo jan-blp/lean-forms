@@ -89,30 +89,30 @@ def Path.trans
 def Path.toLens {source target : Type} (path : Path source target) : Lens' source target :=
   LeanLens.mkLens path.get path.set
 
-inductive Location : (raw : Type) → raw → Type 1 where
-  | self {raw : Type} {value : raw} : Location raw value
+inductive Location : {raw : Type} → raw → Type 1 where
+  | self {raw : Type} {value : raw} : Location value
   | field
       {raw child : Type}
       [Fields raw]
       {value : raw}
       (field : Fields.Field raw child)
-      (rest : Location child (Fields.get field value))
-      : Location raw value
+      (rest : Location (Fields.get field value))
+      : Location value
   | constructor
       {raw payload : Type}
       [Constructors raw]
       {value : payload}
       (constructor : Constructors.Constructor raw payload)
-      (rest : Location payload value)
-      : Location raw (Constructors.inject constructor value)
+      (rest : Location value)
+      : Location (Constructors.inject constructor value)
   | index
       {item : Type}
       {value : List item}
       (position : Fin value.length)
-      (rest : Location item (value.get position))
-      : Location (List item) value
+      (rest : Location (value.get position))
+      : Location value
 
-def Location.keys {raw : Type} {value : raw} : Location raw value → List String
+def Location.keys {raw : Type} {value : raw} : Location value → List String
   | .self => []
   | @field _ _ inst _ f rest => @Fields.key _ inst _ f :: rest.keys
   | @constructor _ _ inst _ c rest => @Constructors.key _ inst _ c :: rest.keys
@@ -120,7 +120,7 @@ def Location.keys {raw : Type} {value : raw} : Location raw value → List Strin
 
 inductive Targets (raw : Type) (value : raw) where
   | global
-  | locations (first : Location raw value) (rest : List (Location raw value) := [])
+  | locations (first : Location value) (rest : List (Location value) := [])
 
 syntax locationPath := sepBy1(term:max, " / ")
 
@@ -142,7 +142,7 @@ def Error.mapLocations
   {source target : Type}
   {value : source}
   {outer : target}
-  (step : Location source value → Location target outer)
+  (step : Location value → Location outer)
   (error : Error value)
   : Error outer where
   message := error.message
