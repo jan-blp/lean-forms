@@ -1,6 +1,7 @@
 module
 
 public import Forms.Runtime.ModelProtocol
+public import Forms.Model.Component.LocalState
 
 @[expose] public section
 namespace Forms.Runtime
@@ -39,14 +40,14 @@ def FormDefinition.ofModel
   [Model.Validation model]
   [ToJson (FormModel.Raw model)]
   [FromJson (FormModel.Raw model)]
-  (form : Model.Component (FormModel.Raw model))
+  (form : Model.Component [] (FormModel.Raw model))
   (initial : FormModel.Raw model)
   : FormDefinition where
-  State := ModelForm.State (FormModel.Raw model)
+  State := ModelForm.State form
   Raw := FormModel.Raw model
   initial := toJson initial
   openState value := do
-    let state := ModelForm.load form (ModelForm.openState (← fromJson? value))
+    let state := ModelForm.load form (ModelForm.openState form (← fromJson? value) Model.Env.nil)
     pure (state, ModelForm.snapshot (model := model) form state)
   execute state command := do
     let state ← ModelForm.execute (model := model) form state command

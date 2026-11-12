@@ -10,13 +10,13 @@ private def check (message : String) (ok : Bool) : IO Unit := do
   unless ok do throw (IO.userError s!"FAIL {message}")
   IO.println s!"PASS {message}"
 
-private abbrev State := ModelForm.State ExpenseReport.Raw
+private abbrev State := ModelForm.State (ExpenseReport.form (Γ := []))
 
 private def execute (state : State) (command : ModelForm.Command) : IO State :=
   IO.ofExcept (ModelForm.execute (model := ExpenseReport) ExpenseReport.form state command)
 
 private def rendered (state : State) : ModelView.Rendered :=
-  ModelView.render ExpenseReport.form state.value state.cache
+  ModelView.render ExpenseReport.form state.value state.cache [] Env.nil state.locals
 
 private def key (state : State) (label : String) (nth : Nat := 0) : IO ControlKey := do
   let some control := ((rendered state).controls.filter (·.label == label))[nth]?
@@ -28,7 +28,7 @@ private def apply (state : State) (label : String) (argument : Option Input) (nt
   execute state (.event (.apply (← key state label nth) argument))
 
 def run : IO Unit := do
-  let opened := ModelForm.openState ExpenseReport.initial
+  let opened := ModelForm.openState ExpenseReport.form ExpenseReport.initial Env.nil
   check "TableHeadersAndRows" (match (rendered opened).view with
     | .stack _ [_, .table "Expenses" headers rows _ _, _] =>
       headers == ["Description", "Amount (CHF)", "Receipt", "Actions"] &&
@@ -54,7 +54,7 @@ def run : IO Unit := do
   let visible ← apply edited "Amount (CHF)" (some (.text "100"))
   check "TableCellVisibility" (((rendered visible).controls.filter (·.label == "Receipt attached")).length == 2)
   let disabled := Component.disabledWhen (.const true) ExpenseReport.form
-  let disabledState ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) disabled opened
+  let disabledState ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) disabled (ModelForm.openState disabled ExpenseReport.initial Env.nil)
     (.event (.apply (← key opened "Remove") none)))
   check "TableDisabledRemoveRejects"
     (disabledState.ui.rejection == some (toString InvocationError.disabled) &&
@@ -79,12 +79,12 @@ def run : IO Unit := do
     ((ModelForm.snapshot (model := ExpenseReport) ExpenseReport.form validated).errors.map (·.message) ==
       ["Describe the expense.", "Enter an amount of at least CHF 1."])
   let request (amount : Nat) : HttpRequest := { method := .post, url := s!"/api/expense/{amount}", body := none }
-  let loading : Component ExpenseReport.Raw := .table
+  let loading : Component [] ExpenseReport.Raw := .table
     path[ExpenseReport.Field.expenses] "Expenses" "Expense" ⟨"", 0, false⟩
-    columns["Details" => .bind
+    columns["Details" => .loadWith
       { inputs := inputs[path[Expense.Field.amount]], run := fun amount =>
           Source.fetch (request amount) (fromJson? (α := String)) }
       (fun details => .computed "Details" (.const details))]
-  check "TableRequestsEveryRow" (loading.requests {} opened.value == [request 58, request 180])
+  check "TableRequestsEveryRow" (loading.requests {} opened.value Env.nil == [request 58, request 180])
 
 end Tests.Table

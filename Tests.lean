@@ -1,6 +1,8 @@
 module
 
 import Tests.FormModel
+import Tests.LocalBind
+import Tests.Context
 import Tests.Dependencies
 import Tests.InputProtocol
 import Tests.Wire
@@ -16,6 +18,8 @@ meta import Forms.Runtime.ModelView.Theorems
 
 public def main : IO Unit := do
   Tests.FormModel.run
+  Tests.LocalBind.run
+  Tests.Context.run
   Tests.Dependencies.run
   Tests.InputProtocol.run
   Tests.Wire.run

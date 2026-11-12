@@ -68,7 +68,7 @@ instance ExpenseReport.limit_valid_rule : ConstraintRule ExpenseReport.Constrain
 def ExpenseReport.initial : ExpenseReport.Raw :=
   ⟨"Ada Lovelace", [⟨"Train to Bern", 58, false⟩, ⟨"Hotel", 180, true⟩]⟩
 
-def Expense.columns : Columns Expense.Raw := columns[
+def Expense.columns {Γ : List Type} : Columns Γ Expense.Raw := columns[
   "Description" => .field
     (path := path[Expense.Field.description]) (label := "Description") (editor := .text),
   "Amount (CHF)" => .field
@@ -81,7 +81,7 @@ def Expense.columns : Columns Expense.Raw := columns[
     (body := .field
       (path := path[Expense.Field.receipt]) (label := "Receipt attached") (editor := .checkbox))]
 
-def ExpenseReport.withItems (items : Component ExpenseReport.Raw) : Component ExpenseReport.Raw :=
+def ExpenseReport.withItems {Γ : List Type} (items : Component Γ ExpenseReport.Raw) : Component Γ ExpenseReport.Raw :=
   .group (label := "Expense report") (children := [
     .field
       (path := path[ExpenseReport.Field.employee])
@@ -95,7 +95,7 @@ def ExpenseReport.withItems (items : Component ExpenseReport.Raw) : Component Ex
         run := fun expenses => s!"CHF {swiss (expenses.map (·.amount)).sum}"
       })])
 
-def ExpenseReport.listForm : Component ExpenseReport.Raw :=
+def ExpenseReport.listForm {Γ : List Type} : Component Γ ExpenseReport.Raw :=
   ExpenseReport.withItems (.list
     (path := path[ExpenseReport.Field.expenses])
     (label := "Expenses")
@@ -103,7 +103,7 @@ def ExpenseReport.listForm : Component ExpenseReport.Raw :=
     (initial := ⟨"", 0, false⟩)
     (body := .groupOf (label := "") (children := Expense.columns.components)))
 
-def ExpenseReport.form : Component ExpenseReport.Raw :=
+def ExpenseReport.form {Γ : List Type} : Component Γ ExpenseReport.Raw :=
   ExpenseReport.withItems (.table
     (path := path[ExpenseReport.Field.expenses])
     (label := "Expenses")
@@ -111,10 +111,8 @@ def ExpenseReport.form : Component ExpenseReport.Raw :=
     (initial := ⟨"", 0, false⟩)
     (columns := Expense.columns))
 
-def ExpenseReport.selection : UiStateKey RowSelection := ⟨"expense", .none⟩
-
-def ExpenseReport.focusForm : Component ExpenseReport.Raw :=
-  .group (label := "Expense report") (children := [
+def ExpenseReport.focusForm : Component [] ExpenseReport.Raw :=
+  .bind RowSelection.none (.group (label := "Expense report") (children := [
     .field
       (path := path[ExpenseReport.Field.employee])
       (label := "Employee") (editor := .text),
@@ -130,16 +128,16 @@ def ExpenseReport.focusForm : Component ExpenseReport.Raw :=
           inputs := inputs[path[Expense.Field.amount]], run := fun amount => s!"CHF {swiss amount}" },
         "Receipt" => .computed "Receipt" {
           inputs := inputs[path[Expense.Field.receipt]], run := fun receipt => if receipt then "Yes" else "No" }])
-      (selection := some ExpenseReport.selection),
+      (selection := some .here),
     .focus
       (target := {
-        inputs := inputs[.ui ExpenseReport.selection]
+        inputs := inputs[.ui .here]
         run := RowSelection.itemPath path[ExpenseReport.Field.expenses]
       })
       (body := .groupOf (label := "Selected expense") (children := Expense.columns.components)),
     .computed (label := "Total") (value := {
       inputs := inputs[path[ExpenseReport.Field.expenses]]
       run := fun expenses => s!"CHF {swiss (expenses.map (·.amount)).sum}"
-    })])
+    })]))
 
 end Forms.ExampleForms

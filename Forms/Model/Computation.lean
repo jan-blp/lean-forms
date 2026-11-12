@@ -1,26 +1,26 @@
 module
 
 public import Forms.Model.Basic
-public import Forms.Model.UiState
+public import Forms.Model.Context
 
 /-! Computations declare model and UI inputs and receive only their selected values. -/
 
 @[expose] public section
 namespace Forms.Model
 
-universe u
+universe u v
 
-inductive Inputs (source : Type) : List Type → Type 1 where
-  | nil : Inputs source []
+inductive Inputs (Γ : List Type) (source : Type) : List Type → Type 1 where
+  | nil : Inputs Γ source []
   | cons
       {value : Type}
       {rest : List Type}
       (path : Path source value)
-      (inputs : Inputs source rest)
-      : Inputs source (value :: rest)
-  | ui {value : Type} {rest : List Type} [Lean.FromJson value]
-      (key : UiStateKey value) (inputs : Inputs source rest)
-      : Inputs source (value :: rest)
+      (inputs : Inputs Γ source rest)
+      : Inputs Γ source (value :: rest)
+  | ui {value : Type} {rest : List Type}
+      (key : Var Γ value) (inputs : Inputs Γ source rest)
+      : Inputs Γ source (value :: rest)
 
 /-- Declares dependencies, e.g. `inputs[path[field], .ui key]`. -/
 macro "inputs[" paths:term,* "]" : term => do
@@ -32,15 +32,16 @@ macro "inputs[" paths:term,* "]" : term => do
   return result
 
 def Inputs.weaken
+  {Γ : List Type}
   {outer source : Type}
   {types : List Type}
   (path : Path outer source)
-  (inputs : Inputs source types)
-  : Inputs outer types :=
+  (inputs : Inputs Γ source types)
+  : Inputs Γ outer types :=
   match inputs with
   | .nil => .nil
   | .cons input rest => .cons (path.trans input) (rest.weaken path)
-  | @ui _ _ _ _inst key rest => .ui key (rest.weaken path)
+  | .ui key rest => .ui key (rest.weaken path)
 
 def Inputs.Values : List Type → Type
   | [] => Unit
@@ -52,16 +53,17 @@ def Inputs.Function (types : List Type) (result : Type u) : Type u :=
   | value :: rest => value → Function rest result
 
 def Inputs.read
+  {Γ : List Type}
   {source : Type}
   {types : List Type}
-  (inputs : Inputs source types)
+  (inputs : Inputs Γ source types)
   (sourceValue : source)
-  (state : UiState := {})
+  (state : Env Γ)
   : Values types :=
   match inputs with
   | .nil => ()
   | .cons path rest => (path.get sourceValue, rest.read sourceValue state)
-  | @ui _ _ _ _inst key rest => (key.get state, rest.read sourceValue state)
+  | .ui key rest => (key.get state, rest.read sourceValue state)
 
 def Inputs.apply
   {result : Type u}
@@ -75,7 +77,7 @@ def Inputs.apply
 
 def Inputs.Function.map
   {types : List Type}
-  {result mapped : Type}
+  {result : Type u} {mapped : Type v}
   (f : result → mapped)
   (fn : Function types result)
   : Function types mapped :=
@@ -83,36 +85,39 @@ def Inputs.Function.map
   | [] => f fn
   | _ :: _ => fun value => map f (fn value)
 
-structure Computation (source : Type) (result : Type u) where
+structure Computation (Γ : List Type) (source : Type) (result : Type u) where
   {types : List Type}
-  inputs : Inputs source types
+  inputs : Inputs Γ source types
   run : Inputs.Function types result
 
 /-- A computation without inputs. -/
 def Computation.const
+  {Γ : List Type}
   {source : Type}
   {result : Type u}
   (value : result)
-  : Computation source result where
+  : Computation Γ source result where
   inputs := .nil
   run := value
 
 def Computation.eval
+  {Γ : List Type}
   {source : Type} {result : Type u}
-  (computation : Computation source result)
+  (computation : Computation Γ source result)
   (value : source)
-  (state : UiState := {})
+  (state : Env Γ)
   : result :=
   Inputs.apply computation.run (computation.inputs.read value state)
 
-instance {source : Type} : Functor (Computation source) where
+instance {Γ : List Type} {source : Type} : Functor (Computation Γ source) where
   map f computation := ⟨computation.inputs, Inputs.Function.map f computation.run⟩
 
 def Computation.weaken
+  {Γ : List Type}
   {outer source : Type} {result : Type u}
   (path : Path outer source)
-  (computation : Computation source result)
-  : Computation outer result :=
+  (computation : Computation Γ source result)
+  : Computation Γ outer result :=
   ⟨computation.inputs.weaken path, computation.run⟩
 
 end Forms.Model

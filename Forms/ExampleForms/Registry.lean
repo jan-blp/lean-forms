@@ -8,7 +8,7 @@ public import Std.Data.HashMap
 
 @[expose] public section
 namespace Forms.ExampleForms
-open Forms.Runtime
+open Forms.Runtime Forms.Model
 
 /-- Forms of the example application, shared by its native and Wasm builds; the first is the default. -/
 def forms : List (String × RegisteredForm) := [

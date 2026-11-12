@@ -1,7 +1,5 @@
 module
 
-public import Lean.Data.Json
-
 @[expose] public section
 namespace Forms.Model
 
@@ -9,7 +7,7 @@ namespace Forms.Model
 inductive RowSelection where
   | none
   | row (index : Nat)
-  deriving Lean.ToJson, Lean.FromJson, BEq, DecidableEq, Repr
+  deriving BEq, DecidableEq, Repr
 
 /-- Removing a row keeps the same item selected, unless that item was removed. -/
 def RowSelection.remove (removed : Nat) : RowSelection → RowSelection

@@ -5,21 +5,22 @@ public import Forms.Model.Computation
 public section
 namespace Forms.Model
 
-universe u
+universe u v w
 
 /-- Evaluation depends only on the declared inputs; changes elsewhere do not affect it. -/
 theorem Computation.eval_congr
+  {Γ : List Type}
   {source : Type} {result : Type u}
-  (computation : Computation source result)
+  (computation : Computation Γ source result)
   (first second : source)
-  (firstState secondState : UiState)
+  (firstState secondState : Env Γ)
   (h : computation.inputs.read first firstState = computation.inputs.read second secondState)
   : computation.eval first firstState = computation.eval second secondState :=
   congrArg (Inputs.apply computation.run) h
 
 theorem Inputs.apply_map
   {types : List Type}
-  {result mapped : Type}
+  {result : Type u} {mapped : Type v}
   (f : result → mapped)
   (fn : Inputs.Function types result)
   (values : Inputs.Values types)
@@ -30,7 +31,7 @@ theorem Inputs.apply_map
 
 theorem Inputs.Function.map_id
   {types : List Type}
-  {result : Type}
+  {result : Type u}
   (fn : Inputs.Function types result)
   : Inputs.Function.map id fn = fn := by
   induction types with
@@ -41,7 +42,7 @@ theorem Inputs.Function.map_id
 
 theorem Inputs.Function.map_comp
   {types : List Type}
-  {result middle mapped : Type}
+  {result : Type u} {middle : Type v} {mapped : Type w}
   (g : result → middle)
   (h : middle → mapped)
   (fn : Inputs.Function types result)
@@ -52,7 +53,7 @@ theorem Inputs.Function.map_comp
   | cons _ _ ih =>
     exact funext fun value => ih (fn value)
 
-instance {source : Type} : LawfulFunctor (Computation source) where
+instance {Γ : List Type} {source : Type} : LawfulFunctor (Computation Γ source) where
   map_const := rfl
   id_map computation := by
     cases computation
@@ -63,11 +64,13 @@ instance {source : Type} : LawfulFunctor (Computation source) where
 
 @[simp]
 theorem Computation.eval_map
-  {source result mapped : Type}
+  {Γ : List Type}
+  {source : Type} {result mapped : Type u}
   (f : result → mapped)
-  (computation : Computation source result)
+  (computation : Computation Γ source result)
   (value : source)
-  : (f <$> computation).eval value = f (computation.eval value) :=
-  Inputs.apply_map f computation.run (computation.inputs.read value)
+  (state : Env Γ)
+  : (f <$> computation).eval value state = f (computation.eval value state) :=
+  Inputs.apply_map f computation.run (computation.inputs.read value state)
 
 end Forms.Model

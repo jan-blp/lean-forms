@@ -39,6 +39,7 @@ inductive Status (α : Type) where
   | loading
   | ready (value : α)
   | failed (message : String)
+  deriving DecidableEq
 
 def Source.resolve {α : Type} (cache : HttpRequest.Cache) : Source α → Status α
   | .pure value => .ready value

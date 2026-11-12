@@ -1,7 +1,6 @@
 module
 
 public import Forms.Runtime.Identity
-public import Forms.Model.UiState
 
 @[expose] public section
 
@@ -12,7 +11,6 @@ inductive Notice where
   | error (message : String)
 
 structure State where
-  components : Model.UiState := {}
   /-- A submission was sent and its outcome has not arrived. -/
   pending : Bool
   notice : Notice
