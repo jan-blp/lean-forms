@@ -61,6 +61,7 @@ def Component.ValidInvocation {Γ : Context} {raw : Type} (component : Component
   | @Component.field _ _ value .. => value
   | .groupOf _ children => children.ValidInvocation cache current state locals
   | .computed .. => Empty
+  | .button .. => Unit
   | .withAvailability availability body =>
     { _invocation : body.ValidInvocation cache current state locals // availability.eval current state = .enabled }
   | .choiceOf path _ branches => branches.ValidInvocation cache (path.get current) state locals
@@ -134,6 +135,7 @@ def Component.applyValid {Γ : Context} {raw : Type} (component : Component Γ r
   | .field path .., locals, value => ⟨path.set value current, state, locals⟩
   | .groupOf _ children, locals, invocation => children.applyValid cache current state locals invocation
   | .computed .., _locals, invocation => nomatch invocation
+  | .button _ action, locals, _invocation => ⟨current, action.run current state, locals⟩
   | .withAvailability _ body, locals, invocation => body.applyValid cache current state locals invocation.val
   | .choiceOf path _ branches, locals, invocation =>
     (branches.applyValid cache (path.get current) state locals invocation).mapValue (fun value => path.set value current)

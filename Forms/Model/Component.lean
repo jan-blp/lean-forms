@@ -1,5 +1,6 @@
 module
 
+public import Forms.Model.Action
 public import Forms.Model.PartialPath
 public import Forms.Model.RowSelection
 public import Forms.Model.Remote
@@ -43,6 +44,12 @@ inductive Component : Context → Type → Type 1 where
       {raw : Type}
       (label : String)
       (value : Computation Γ raw String)
+      : Component Γ raw
+  /-- Runs a UI state action when pressed. -/
+  | button {Γ : Context}
+      {raw : Type}
+      (label : String)
+      (action : Action Γ raw)
       : Component Γ raw
   /-- Offers the same subtree as enabled, hidden, or disabled. -/
   | withAvailability {Γ : Context}

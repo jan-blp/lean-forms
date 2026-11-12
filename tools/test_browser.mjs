@@ -258,6 +258,9 @@ try {
     check(projectInput(0, 'Task title').value === 'Build keyboard navigation', 'First project lost its selected task');
     check(projectInput(1, 'Task title').value === 'Measure activation', 'Second project did not switch tasks');
     await type(projectInput(1, 'Estimated hours'), 'oops');
+    button(projects()[1], 'Close task').click();
+    await tick();
+    check(projectInput(1, 'Task title'), 'Close task discarded an invalid draft');
     await select(0, 0);
     check(rows(0)[1].getAttribute('aria-selected') === 'true', 'Invalid draft changed selection');
     check(projectInput(1, 'Estimated hours').value === 'oops', 'Invalid draft was discarded');
@@ -265,6 +268,13 @@ try {
     projectInput(0, 'Completed').click();
     await tick();
     check(projects()[0].textContent.includes('2 / 3 tasks complete'), 'Progress did not update');
+    await type(projectInput(0, 'Notes'), 'Saved when closing');
+    button(projects()[0], 'Close task').click();
+    await tick();
+    check(!projectField(0, 'Task title'), 'Close task left the editor open');
+    check(projectInput(1, 'Task title').value === 'Measure activation', 'Close task affected another project');
+    await select(0, 1);
+    check(projectInput(0, 'Notes').value === 'Saved when closing', 'Close task lost a draft');
     projects()[0].querySelector(':scope > button').click();
     await tick();
     check(projects().length === 1 && projectInput(0, 'Project name').value === 'Customer onboarding',

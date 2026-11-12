@@ -473,6 +473,18 @@ test('project planner keeps task selections local to each project', async () => 
     assert.equal(value().projects[1].tasks[0].title, 'Draft the welcome email');
     assert.equal(table(0).rows[1].cells[0].output.value, 'Build keyboard navigation');
     assert.match(JSON.stringify(body(0)), /2 \/ 3 tasks complete/);
+    const staleTitle = field('Task title');
+    const close = field('Close task');
+    const beforeClose = value();
+    send(close);
+    assert.deepEqual([selected(0), selected(1)], [-1, 0]);
+    assert.equal(details(0), undefined);
+    assert.ok(details(1));
+    assert.deepEqual(value(), beforeClose);
+    assert.match(send(close).rejection, /control is no longer shown/);
+    assert.match(send(staleTitle, 'Stale').rejection, /control is no longer shown/);
+    assert.deepEqual(value(), beforeClose);
+    select(0, 1);
     select(1, 1);
     assert.deepEqual([selected(0), selected(1)], [1, 1]);
     removeProject(0);

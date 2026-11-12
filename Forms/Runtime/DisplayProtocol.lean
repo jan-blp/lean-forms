@@ -11,7 +11,6 @@ open Lean
 namespace DisplayProtocol
 open Display
 
-/-- What a control does to the value at its location. -/
 inductive Action where
   | edit
   | select
@@ -34,6 +33,10 @@ def stepToJson : Feedback.Step → Json
 /-- Names `action` on the value at `location`, independent of where the control is shown. -/
 def controlKey (action : Action) (location : Feedback.Location) : ControlKey :=
   ⟨(Json.arr (#[toJson action.name] ++ (location.map stepToJson).toArray)).compress⟩
+
+def buttonKey (target : Target) (location : Feedback.Location) : ControlKey :=
+  ⟨(Json.arr #[toJson ("press" : String), toJson target.indices,
+    Json.arr (location.map stepToJson).toArray]).compress⟩
 
 def messageFields (messages : Option String) : List (String × Json) :=
   messages.toList.map fun message => ("messages", toJson message)

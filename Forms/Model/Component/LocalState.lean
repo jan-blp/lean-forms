@@ -26,6 +26,7 @@ mutual
 @[reducible] def Component.LocalState {Γ : Context} {raw : Type} : Component Γ raw → Type
   | .field .. => Unit
   | .computed .. => Unit
+  | .button .. => Unit
   | .groupOf _ children => children.LocalState
   | .withAvailability _ body => body.LocalState
   | .choiceOf (branches := branches) .. => branches.LocalState
@@ -57,6 +58,7 @@ def Component.initialState {Γ : Context} {raw : Type} (component : Component Γ
   match component with
   | .field .. => ()
   | .computed .. => ()
+  | .button .. => ()
   | .groupOf _ children => children.initialState
   | .withAvailability _ body => body.initialState
   | .choiceOf (branches := branches) .. => branches.initialState
@@ -98,6 +100,7 @@ def Component.normalize {Γ : Context} {raw : Type} (component : Component Γ ra
   match component with
   | .field .. => locals
   | .computed .. => locals
+  | .button .. => locals
   | .groupOf _ children => children.normalize cache current env locals
   | .withAvailability _ body => body.normalize cache current env locals
   | .choiceOf path _ branches => branches.normalize cache (path.get current) env locals

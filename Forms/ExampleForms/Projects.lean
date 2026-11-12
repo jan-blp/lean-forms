@@ -83,6 +83,9 @@ def PlannerProject.form {Γ : Context} : Component Γ PlannerProject.Raw :=
       .visibleWhen
         { inputs := inputs[.ui selectedTask], run := fun selected => selected == .none }
         (.computed "" (.const "Choose a task to see its details.")),
+      .visibleWhen
+        { inputs := inputs[.ui selectedTask], run := fun selected => selected != .none }
+        (.button "Close task" (.set selectedTask (.const .none))),
       .focus
         { inputs := inputs[.ui selectedTask]
           run := RowSelection.itemPath path[PlannerProject.Field.tasks] }

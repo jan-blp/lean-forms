@@ -112,6 +112,10 @@ def build
   | .groupOf label children =>
     .stack (some label) (buildAll state scopes children value cache errors disabled target location 0 locals)
   | .computed label computation => .computed label (computation.eval value state)
+  | .button label _ => .control {
+      key := DisplayProtocol.buttonKey target location
+      target, location, label, disabled
+      input := .action }
   | .withAvailability availability body =>
     match availability.eval value state with
     | .enabled => build state scopes body value cache errors disabled target location locals
@@ -311,6 +315,7 @@ def decode
     match argument with
     | some input => (Input.decode widget input).mapError .decode
     | none => .error (.decode (.clientBug .missingArgument))
+  | .button .., [] => noArgument argument ()
   | .groupOf _ children, index :: rest => decodeAll state children cache current index rest argument locals
   | .withAvailability availability body, target => do
     let invocation ← decode state body cache current target argument locals
