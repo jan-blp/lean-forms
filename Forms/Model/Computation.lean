@@ -61,6 +61,16 @@ def Inputs.apply
   | [] => fn
   | _ :: _ => apply (fn values.1) values.2
 
+def Inputs.Function.map
+  {types : List Type}
+  {result mapped : Type}
+  (f : result → mapped)
+  (fn : Function types result)
+  : Function types mapped :=
+  match types with
+  | [] => f fn
+  | _ :: _ => fun value => map f (fn value)
+
 structure Computation (source result : Type) where
   {types : List Type}
   inputs : Inputs source types
@@ -77,6 +87,9 @@ def Computation.eval
   (value : source)
   : result :=
   Inputs.apply computation.run (computation.inputs.read value)
+
+instance {source : Type} : Functor (Computation source) where
+  map f computation := ⟨computation.inputs, Inputs.Function.map f computation.run⟩
 
 def Computation.weaken
   {outer source result : Type}

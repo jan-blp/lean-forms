@@ -48,10 +48,8 @@ def Component.ValidInvocation {raw : Type} : Component raw → HttpRequest.Cache
   | @Component.field _ value .., _, _ => value
   | .groupOf _ children, cache, current => children.ValidInvocation cache current
   | .computed .., _, _ => Empty
-  | .visibleWhen condition body, cache, current =>
-    { _invocation : body.ValidInvocation cache current // condition.eval current = true }
-  | .disabledWhen condition body, cache, current =>
-    { _invocation : body.ValidInvocation cache current // condition.eval current = false }
+  | .withAvailability availability body, cache, current =>
+    { _invocation : body.ValidInvocation cache current // availability.eval current = .enabled }
   | .choiceOf path _ branches, cache, current => branches.ValidInvocation cache (path.get current)
   | .list path _ _ _ body, cache, current =>
     ValidListInvocation (path.get current).length fun index =>
@@ -100,8 +98,7 @@ def Component.applyValid
   | .field path .., value => path.set value current
   | .groupOf _ children, invocation => children.applyValid cache current invocation
   | .computed .., invocation => nomatch invocation
-  | .visibleWhen _ body, invocation => body.applyValid cache current invocation.val
-  | .disabledWhen _ body, invocation => body.applyValid cache current invocation.val
+  | .withAvailability _ body, invocation => body.applyValid cache current invocation.val
   | .choiceOf path _ branches, invocation =>
     path.set (branches.applyValid cache (path.get current) invocation) current
   | .list path _ _ initial body, invocation =>

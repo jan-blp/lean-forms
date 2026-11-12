@@ -11,9 +11,11 @@ def Component.requests {raw : Type} : Component raw → HttpRequest.Cache → ra
   | .field .., _, _ => []
   | .groupOf _ children, cache, current => children.requests cache current
   | .computed .., _, _ => []
-  | .visibleWhen condition body, cache, current =>
-    if condition.eval current then body.requests cache current else []
-  | .disabledWhen _ body, cache, current => body.requests cache current
+  | .withAvailability availability body, cache, current =>
+    match availability.eval current with
+    | .enabled => body.requests cache current
+    | .hidden => []
+    | .disabled => body.requests cache current
   | .choiceOf path _ branches, cache, current => branches.requests cache (path.get current)
   | .list path _ _ _ body, cache, current =>
     (path.get current).flatMap fun item => body.requests cache item

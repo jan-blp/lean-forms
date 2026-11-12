@@ -11,6 +11,12 @@ inductive Editor : Type → Type where
   | natural : Editor Nat
   | checkbox : Editor Bool
 
+inductive Availability where
+  | enabled
+  | hidden
+  | disabled
+  deriving DecidableEq, Repr
+
 mutual
 inductive Component : Type → Type 1 where
   | field
@@ -29,14 +35,10 @@ inductive Component : Type → Type 1 where
       (label : String)
       (value : Computation raw String)
       : Component raw
-  | visibleWhen
+  /-- Offers `body` as `availability` evaluates. -/
+  | withAvailability
       {raw : Type}
-      (condition : Computation raw Bool)
-      (body : Component raw)
-      : Component raw
-  | disabledWhen
-      {raw : Type}
-      (condition : Computation raw Bool)
+      (availability : Computation raw Availability)
       (body : Component raw)
       : Component raw
   | choiceOf
@@ -173,6 +175,22 @@ def Branches.ofList {sum : Type} : List (Branch sum) → Branches sum
 def Branches.toList {sum : Type} : Branches sum → List (Branch sum)
   | .nil => []
   | .cons head tail => head :: tail.toList
+
+/-- Shows `body` only while `condition` holds. -/
+def Component.visibleWhen
+  {raw : Type}
+  (condition : Computation raw Bool)
+  (body : Component raw)
+  : Component raw :=
+  .withAvailability ((fun visible => if visible then .enabled else .hidden) <$> condition) body
+
+/-- Shows `body` read-only while `condition` holds. -/
+def Component.disabledWhen
+  {raw : Type}
+  (condition : Computation raw Bool)
+  (body : Component raw)
+  : Component raw :=
+  .withAvailability ((fun disabled => if disabled then .disabled else .enabled) <$> condition) body
 
 /-- Picks a constructor of the sum at `path`; the chosen branch edits its payload. -/
 def Component.choice
