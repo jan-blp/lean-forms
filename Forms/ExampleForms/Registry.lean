@@ -3,6 +3,7 @@ module
 public import Forms.ExampleForms.Person
 public import Forms.ExampleForms.Order
 public import Forms.ExampleForms.Expenses
+public import Forms.ExampleForms.Projects
 public import Forms.Runtime.FormDefinition
 public import Std.Data.HashMap
 
@@ -16,6 +17,9 @@ def forms : List (String × RegisteredForm) := [
   ("order", { definition := .ofModel Order Order.form Order.initial, submitUrl := "/api/submit" }),
   ("expenses", {
     definition := .ofModel ExpenseReport ExpenseReport.focusForm ExpenseReport.initial
+    submitUrl := "/api/submit" }),
+  ("projects", {
+    definition := .ofModel ProjectPlanner ProjectPlanner.form ProjectPlanner.initial
     submitUrl := "/api/submit" })]
 
 /-- Responses of the example application's data endpoints; it has none. -/

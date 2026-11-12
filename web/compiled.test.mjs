@@ -438,3 +438,72 @@ test('table selection edits the selected item and follows row removal', async ()
     assert.equal(table().rows.length, 2);
   } finally { model.dispose(); independent.dispose(); }
 });
+
+test('project planner keeps task selections local to each project', async () => {
+  const model = await open(fixture('projects').start);
+  const value = () => model.snapshot().submission.value;
+  const projectRows = () => page(model).body[0].group.children
+    .find(component => component.group?.label === 'Projects').group.children.filter(component => component.group);
+  const body = index => projectRows()[index].group.children[0].group;
+  const table = index => body(index).children.find(component => component.table).table;
+  const details = index => body(index).children.find(component => component.group?.label === 'Task details');
+  const selected = index => table(index).rows.findIndex(row => row.selected === true);
+  const send = (key, argument = null) => model.send({ event: { message: { apply: { key, argument } } } });
+  const field = (label, nth = 0) => model.snapshot().controls.filter(control => control.label === label)[nth].key;
+  const buttonKey = button => button.onClick.press.name;
+  const rowButton = (project, row, label) => table(project).rows[row].cells.at(-1).group.children
+    .find(component => component.button?.label === label).button;
+  const select = (project, row) => send(buttonKey(rowButton(project, row, 'Select')));
+  const removeProject = index => send(buttonKey(projectRows()[index].group.children
+    .find(component => component.button?.label === 'Remove').button));
+  const addProject = () => send(field('Add project'));
+  try {
+    assert.match(JSON.stringify(page(model).body), /2 projects · 5 tasks · 1 complete · 15 h planned/);
+    assert.deepEqual([selected(0), selected(1)], [-1, -1]);
+    const initialValue = value();
+    select(0, 1);
+    select(1, 0);
+    assert.deepEqual(value(), initialValue);
+    assert.deepEqual([selected(0), selected(1)], [1, 0]);
+    assert.ok(details(0) && details(1));
+    assert.equal(table(0).footer.button.label, 'Add task');
+    send(field('Task title'), 'Build keyboard navigation');
+    send(field('Completed'), true);
+    assert.equal(value().projects[0].tasks[1].title, 'Build keyboard navigation');
+    assert.equal(value().projects[1].tasks[0].title, 'Draft the welcome email');
+    assert.equal(table(0).rows[1].cells[0].output.value, 'Build keyboard navigation');
+    assert.match(JSON.stringify(body(0)), /2 \/ 3 tasks complete/);
+    select(1, 1);
+    assert.deepEqual([selected(0), selected(1)], [1, 1]);
+    removeProject(0);
+    assert.equal(value().projects[0].name, 'Customer onboarding');
+    assert.equal(selected(0), 1);
+    assert.ok(details(0));
+    addProject();
+    assert.deepEqual([selected(0), selected(1)], [1, -1]);
+    assert.equal(details(1), undefined);
+    select(1, 0);
+    send(field('Task title', 1), 'Plan follow-up');
+    send(buttonKey(rowButton(0, 1, 'Remove')));
+    assert.deepEqual([selected(0), selected(1)], [-1, 0]);
+    assert.equal(details(0), undefined);
+    assert.equal(value().projects[1].tasks[0].title, 'Plan follow-up');
+    model.send('reset');
+    assert.deepEqual(value(), initialValue);
+    assert.deepEqual([selected(0), selected(1)], [-1, -1]);
+    select(0, 0);
+    send(field('Task title'), '');
+    model.send({ event: { message: 'submit' } });
+    assert.deepEqual(messages(model.snapshot().view), ['Give the task a title.']);
+    assert.deepEqual(model.snapshot().errors[0].targets.locations[0], [
+      { kind: 'field', name: 'projects' }, { kind: 'index', position: 0 },
+      { kind: 'field', name: 'tasks' }, { kind: 'index', position: 0 }, { kind: 'field', name: 'title' },
+    ]);
+    send(field('Task title'), 'Map the new navigation');
+    model.send({ event: { message: 'submit' } });
+    const submitted = JSON.parse(model.snapshot().effects[0].submit.request.body).value;
+    assert.deepEqual(Object.keys(submitted).sort(), ['name', 'projects']);
+    assert.deepEqual(Object.keys(submitted.projects[0]).sort(), ['name', 'tasks']);
+    assert.deepEqual(Object.keys(submitted.projects[0].tasks[0]).sort(), ['completed', 'hours', 'notes', 'owner', 'title']);
+  } finally { model.dispose(); }
+});
