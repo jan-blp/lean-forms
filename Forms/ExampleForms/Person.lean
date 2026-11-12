@@ -48,7 +48,7 @@ instance : ConstraintRule Person.Constraint.campus_valid where
 
 def Person.initial : Person.Raw := ⟨"Ada", 20, false, ⟨"Lambda Lane"⟩⟩
 
-def Person.form {Γ : List Type} : Component Γ Person.Raw :=
+def Person.form {Γ : Context} : Component Γ Person.Raw :=
   .group (label := "Person") (children := [
     .field
       (path := path[Person.Field.name])

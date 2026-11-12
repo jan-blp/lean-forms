@@ -77,7 +77,7 @@ def run : IO Unit := do
   let request : HttpRequest := { method := .post, url := "/api/details", body := none }
   let loading : Component [] ExpenseReport.Raw := .bind RowSelection.none (.focus
     (target := {
-      inputs := inputs[.ui (Var.here : Var [RowSelection] RowSelection)]
+      inputs := inputs[.ui (Ref.here : Var [⟨.writable, RowSelection⟩] RowSelection)]
       run := RowSelection.itemPath path[ExpenseReport.Field.expenses]
     })
     (body := .loadWith (.const (.fetch request (fromJson? (α := String))))
@@ -108,5 +108,18 @@ def run : IO Unit := do
     (.event (.apply nestedSelect.key none)))
   check "FocusPreservesNestedUiUpdates"
     (nestedSelected.locals.value == .row 0 && toJson nestedSelected.value == toJson nestedOpened.value)
+  let mixed : Component [⟨.readOnly, RowSelection⟩, ⟨.writable, RowSelection⟩] ExpenseReport.Raw :=
+    .bind false (.table path[ExpenseReport.Field.expenses] "Expenses" "Expense" ⟨"", 0, false⟩
+      columns[] (some (.there (.there .here))))
+  let mixedOpened := ModelForm.openState mixed ExpenseReport.initial env[.row 1, .none]
+  let some mixedSelect := (ModelView.render mixed mixedOpened.value {} [] mixedOpened.env).controls.find?
+      (·.label == "Select")
+    | throw (IO.userError "FAIL missing selection in mixed context")
+  let mixedSelected ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) mixed mixedOpened
+    (.event (.apply mixedSelect.key none)))
+  check "TableSelectionPreservesReadOnlyInputs"
+    (mixedSelected.env.value == .row 1 && mixedSelected.env.tail.value == .row 0 &&
+      mixedSelected.locals.value == false &&
+      toJson mixedSelected.value == toJson mixedOpened.value)
 
 end Tests.TableSelection

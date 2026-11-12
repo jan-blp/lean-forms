@@ -23,7 +23,7 @@ def LoadedState.at
 
 mutual
 /-- Local state follows the component structure, so every binding keeps its own typed value. -/
-@[reducible] def Component.LocalState {Γ : List Type} {raw : Type} : Component Γ raw → Type
+@[reducible] def Component.LocalState {Γ : Context} {raw : Type} : Component Γ raw → Type
   | .field .. => Unit
   | .computed .. => Unit
   | .groupOf _ children => children.LocalState
@@ -35,24 +35,24 @@ mutual
   | .bind (α := α) (body := body) .. => Binding α body.LocalState
   | .load (data := data) (inst := _inst) (body := body) .. => LoadedState data (fun status => (body status).LocalState)
 
-@[reducible] def Components.LocalState {Γ : List Type} {raw : Type} : Components Γ raw → Type
+@[reducible] def Components.LocalState {Γ : Context} {raw : Type} : Components Γ raw → Type
   | .nil => Unit
   | .cons head tail => Binding head.LocalState tail.LocalState
 
-@[reducible] def Columns.LocalState {Γ : List Type} {raw : Type} : Columns Γ raw → Type
+@[reducible] def Columns.LocalState {Γ : Context} {raw : Type} : Columns Γ raw → Type
   | .nil => Unit
   | .cons _ head tail => Binding head.LocalState tail.LocalState
 
-@[reducible] def Branch.LocalState {Γ : List Type} {raw : Type} : Branch Γ raw → Type
+@[reducible] def Branch.LocalState {Γ : Context} {raw : Type} : Branch Γ raw → Type
   | .mk (body := body) .. => body.LocalState
 
-@[reducible] def Branches.LocalState {Γ : List Type} {raw : Type} : Branches Γ raw → Type
+@[reducible] def Branches.LocalState {Γ : Context} {raw : Type} : Branches Γ raw → Type
   | .nil => Unit
   | .cons head tail => Binding head.LocalState tail.LocalState
 end
 
 mutual
-def Component.initialState {Γ : List Type} {raw : Type} (component : Component Γ raw)
+def Component.initialState {Γ : Context} {raw : Type} (component : Component Γ raw)
     : component.LocalState :=
   match component with
   | .field .. => ()
@@ -66,24 +66,24 @@ def Component.initialState {Γ : List Type} {raw : Type} (component : Component 
   | .bind initial body => ⟨initial, body.initialState⟩
   | .load (inst := _inst) (body := body) .. => ⟨.loading, (body .loading).initialState⟩
 
-def Components.initialState {Γ : List Type} {raw : Type} (children : Components Γ raw)
+def Components.initialState {Γ : Context} {raw : Type} (children : Components Γ raw)
     : children.LocalState :=
   match children with
   | .nil => ()
   | .cons head tail => ⟨head.initialState, tail.initialState⟩
 
-def Columns.initialState {Γ : List Type} {raw : Type} (columns : Columns Γ raw)
+def Columns.initialState {Γ : Context} {raw : Type} (columns : Columns Γ raw)
     : columns.LocalState :=
   match columns with
   | .nil => ()
   | .cons _ head tail => ⟨head.initialState, tail.initialState⟩
 
-def Branch.initialState {Γ : List Type} {raw : Type} (branch : Branch Γ raw)
+def Branch.initialState {Γ : Context} {raw : Type} (branch : Branch Γ raw)
     : branch.LocalState :=
   match branch with
   | .mk (body := body) .. => body.initialState
 
-def Branches.initialState {Γ : List Type} {raw : Type} (branches : Branches Γ raw)
+def Branches.initialState {Γ : Context} {raw : Type} (branches : Branches Γ raw)
     : branches.LocalState :=
   match branches with
   | .nil => ()
@@ -92,7 +92,7 @@ end
 
 mutual
 /-- Initializes new rows and resets loaded subtree state when its status changes. -/
-def Component.normalize {Γ : List Type} {raw : Type} (component : Component Γ raw)
+def Component.normalize {Γ : Context} {raw : Type} (component : Component Γ raw)
     (cache : HttpRequest.Cache) (current : raw) (env : Env Γ) (locals : component.LocalState)
     : component.LocalState :=
   match component with
@@ -116,21 +116,21 @@ def Component.normalize {Γ : List Type} {raw : Type} (component : Component Γ 
     let status := (source.eval current env).resolve cache
     ⟨status, (body status).normalize cache current env (locals.at status (body status).initialState)⟩
 
-def Components.normalize {Γ : List Type} {raw : Type} (children : Components Γ raw)
+def Components.normalize {Γ : Context} {raw : Type} (children : Components Γ raw)
     (cache : HttpRequest.Cache) (current : raw) (env : Env Γ) (locals : children.LocalState)
     : children.LocalState :=
   match children with
   | .nil => locals
   | .cons head tail => ⟨head.normalize cache current env locals.value, tail.normalize cache current env locals.tail⟩
 
-def Columns.normalize {Γ : List Type} {raw : Type} (columns : Columns Γ raw)
+def Columns.normalize {Γ : Context} {raw : Type} (columns : Columns Γ raw)
     (cache : HttpRequest.Cache) (current : raw) (env : Env Γ) (locals : columns.LocalState)
     : columns.LocalState :=
   match columns with
   | .nil => locals
   | .cons _ head tail => ⟨head.normalize cache current env locals.value, tail.normalize cache current env locals.tail⟩
 
-def Branch.normalize {Γ : List Type} {raw : Type} (branch : Branch Γ raw)
+def Branch.normalize {Γ : Context} {raw : Type} (branch : Branch Γ raw)
     (cache : HttpRequest.Cache) (current : raw) (env : Env Γ) (locals : branch.LocalState)
     : branch.LocalState :=
   match branch with
@@ -139,7 +139,7 @@ def Branch.normalize {Γ : List Type} {raw : Type} (branch : Branch Γ raw)
     | none => locals
     | some value => body.normalize cache value env locals
 
-def Branches.normalize {Γ : List Type} {raw : Type} (branches : Branches Γ raw)
+def Branches.normalize {Γ : Context} {raw : Type} (branches : Branches Γ raw)
     (cache : HttpRequest.Cache) (current : raw) (env : Env Γ) (locals : branches.LocalState)
     : branches.LocalState :=
   match branches with

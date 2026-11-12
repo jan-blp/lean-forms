@@ -39,7 +39,7 @@ private def loadedBody : Status Bool → Component [] ExpenseReport.Raw
   | .ready true => .bind RowSelection.none (.table path[ExpenseReport.Field.expenses]
       "Expenses" "Expense" ⟨"", 0, false⟩ columns[] (some .here))
   | .ready false => .bind (fun n : Nat => n + 1) (.computed "Function" {
-      inputs := inputs[.ui (Var.here : Var [Nat → Nat] (Nat → Nat))]
+      inputs := inputs[.ui (Ref.here : Var [⟨.writable, Nat → Nat⟩] (Nat → Nat))]
       run := fun f => toString (f 41) })
   | _ => .computed "Status" (.const "Loading")
 

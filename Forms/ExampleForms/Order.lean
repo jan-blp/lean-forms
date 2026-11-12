@@ -108,7 +108,7 @@ def Order.initial : Order.Raw :=
   ⟨⟨"Grace Hopper", "grace@example.com"⟩, 2, 45, false, "", .standard ⟨⟨"Bahnhofstrasse 1", "Zürich"⟩⟩⟩
 
 /-- Street and city of the address at `path`. -/
-def addressFields {Γ : List Type} {raw : Type} (path : Path raw ShippingAddress.Raw) : List (Component Γ raw) := [
+def addressFields {Γ : Context} {raw : Type} (path : Path raw ShippingAddress.Raw) : List (Component Γ raw) := [
   .field
     (path := path.trans path[ShippingAddress.Field.street])
     (label := "Street")
@@ -118,7 +118,7 @@ def addressFields {Γ : List Type} {raw : Type} (path : Path raw ShippingAddress
     (label := "City")
     (editor := .text)]
 
-def Order.form {Γ : List Type} : Component Γ Order.Raw :=
+def Order.form {Γ : Context} : Component Γ Order.Raw :=
   .group (label := "Order") (children := [
     .group (label := "Customer") (children := [
       .field

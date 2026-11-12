@@ -3,14 +3,14 @@ module
 public import Forms.Model.Basic
 public import Forms.Model.Context
 
-/-! Computations declare model and UI inputs and receive only their selected values. -/
+/-! Computations declare model and context inputs and receive only their selected values. -/
 
 @[expose] public section
 namespace Forms.Model
 
 universe u v
 
-inductive Inputs (Γ : List Type) (source : Type) : List Type → Type 1 where
+inductive Inputs (Γ : Context) (source : Type) : List Type → Type 1 where
   | nil : Inputs Γ source []
   | cons
       {value : Type}
@@ -18,8 +18,12 @@ inductive Inputs (Γ : List Type) (source : Type) : List Type → Type 1 where
       (path : Path source value)
       (inputs : Inputs Γ source rest)
       : Inputs Γ source (value :: rest)
-  | ui {value : Type} {rest : List Type}
-      (key : Var Γ value) (inputs : Inputs Γ source rest)
+  /-- Reads a context entry, whether read-only or writable. -/
+  | ui {access : Access}
+      {value : Type}
+      {rest : List Type}
+      (key : Ref Γ access value)
+      (inputs : Inputs Γ source rest)
       : Inputs Γ source (value :: rest)
 
 /-- Declares dependencies, e.g. `inputs[path[field], .ui key]`. -/
@@ -32,7 +36,7 @@ macro "inputs[" paths:term,* "]" : term => do
   return result
 
 def Inputs.weaken
-  {Γ : List Type}
+  {Γ : Context}
   {outer source : Type}
   {types : List Type}
   (path : Path outer source)
@@ -53,7 +57,7 @@ def Inputs.Function (types : List Type) (result : Type u) : Type u :=
   | value :: rest => value → Function rest result
 
 def Inputs.read
-  {Γ : List Type}
+  {Γ : Context}
   {source : Type}
   {types : List Type}
   (inputs : Inputs Γ source types)
@@ -85,14 +89,14 @@ def Inputs.Function.map
   | [] => f fn
   | _ :: _ => fun value => map f (fn value)
 
-structure Computation (Γ : List Type) (source : Type) (result : Type u) where
+structure Computation (Γ : Context) (source : Type) (result : Type u) where
   {types : List Type}
   inputs : Inputs Γ source types
   run : Inputs.Function types result
 
 /-- A computation without inputs. -/
 def Computation.const
-  {Γ : List Type}
+  {Γ : Context}
   {source : Type}
   {result : Type u}
   (value : result)
@@ -101,7 +105,7 @@ def Computation.const
   run := value
 
 def Computation.eval
-  {Γ : List Type}
+  {Γ : Context}
   {source : Type} {result : Type u}
   (computation : Computation Γ source result)
   (value : source)
@@ -109,11 +113,11 @@ def Computation.eval
   : result :=
   Inputs.apply computation.run (computation.inputs.read value state)
 
-instance {Γ : List Type} {source : Type} : Functor (Computation Γ source) where
+instance {Γ : Context} {source : Type} : Functor (Computation Γ source) where
   map f computation := ⟨computation.inputs, Inputs.Function.map f computation.run⟩
 
 def Computation.weaken
-  {Γ : List Type}
+  {Γ : Context}
   {outer source : Type} {result : Type u}
   (path : Path outer source)
   (computation : Computation Γ source result)

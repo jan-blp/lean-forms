@@ -68,7 +68,7 @@ instance ExpenseReport.limit_valid_rule : ConstraintRule ExpenseReport.Constrain
 def ExpenseReport.initial : ExpenseReport.Raw :=
   ⟨"Ada Lovelace", [⟨"Train to Bern", 58, false⟩, ⟨"Hotel", 180, true⟩]⟩
 
-def Expense.columns {Γ : List Type} : Columns Γ Expense.Raw := columns[
+def Expense.columns {Γ : Context} : Columns Γ Expense.Raw := columns[
   "Description" => .field
     (path := path[Expense.Field.description]) (label := "Description") (editor := .text),
   "Amount (CHF)" => .field
@@ -81,7 +81,7 @@ def Expense.columns {Γ : List Type} : Columns Γ Expense.Raw := columns[
     (body := .field
       (path := path[Expense.Field.receipt]) (label := "Receipt attached") (editor := .checkbox))]
 
-def ExpenseReport.withItems {Γ : List Type} (items : Component Γ ExpenseReport.Raw) : Component Γ ExpenseReport.Raw :=
+def ExpenseReport.withItems {Γ : Context} (items : Component Γ ExpenseReport.Raw) : Component Γ ExpenseReport.Raw :=
   .group (label := "Expense report") (children := [
     .field
       (path := path[ExpenseReport.Field.employee])
@@ -95,7 +95,7 @@ def ExpenseReport.withItems {Γ : List Type} (items : Component Γ ExpenseReport
         run := fun expenses => s!"CHF {swiss (expenses.map (·.amount)).sum}"
       })])
 
-def ExpenseReport.listForm {Γ : List Type} : Component Γ ExpenseReport.Raw :=
+def ExpenseReport.listForm {Γ : Context} : Component Γ ExpenseReport.Raw :=
   ExpenseReport.withItems (.list
     (path := path[ExpenseReport.Field.expenses])
     (label := "Expenses")
@@ -103,7 +103,7 @@ def ExpenseReport.listForm {Γ : List Type} : Component Γ ExpenseReport.Raw :=
     (initial := ⟨"", 0, false⟩)
     (body := .groupOf (label := "") (children := Expense.columns.components)))
 
-def ExpenseReport.form {Γ : List Type} : Component Γ ExpenseReport.Raw :=
+def ExpenseReport.form {Γ : Context} : Component Γ ExpenseReport.Raw :=
   ExpenseReport.withItems (.table
     (path := path[ExpenseReport.Field.expenses])
     (label := "Expenses")

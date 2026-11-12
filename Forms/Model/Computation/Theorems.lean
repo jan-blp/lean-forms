@@ -9,7 +9,7 @@ universe u v w
 
 /-- Evaluation depends only on the declared inputs; changes elsewhere do not affect it. -/
 theorem Computation.eval_congr
-  {Γ : List Type}
+  {Γ : Context}
   {source : Type} {result : Type u}
   (computation : Computation Γ source result)
   (first second : source)
@@ -53,7 +53,7 @@ theorem Inputs.Function.map_comp
   | cons _ _ ih =>
     exact funext fun value => ih (fn value)
 
-instance {Γ : List Type} {source : Type} : LawfulFunctor (Computation Γ source) where
+instance {Γ : Context} {source : Type} : LawfulFunctor (Computation Γ source) where
   map_const := rfl
   id_map computation := by
     cases computation
@@ -64,7 +64,7 @@ instance {Γ : List Type} {source : Type} : LawfulFunctor (Computation Γ source
 
 @[simp]
 theorem Computation.eval_map
-  {Γ : List Type}
+  {Γ : Context}
   {source : Type} {result mapped : Type u}
   (f : result → mapped)
   (computation : Computation Γ source result)

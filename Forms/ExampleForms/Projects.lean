@@ -38,7 +38,7 @@ instance PlannerTask.hours_valid_rule : ConstraintRule PlannerTask.Constraint.ho
 
 def PlannerTask.initial : PlannerTask.Raw := ⟨"New task", "Unassigned", 1, false, ""⟩
 
-def PlannerTask.details {Γ : List Type} : Component Γ PlannerTask.Raw :=
+def PlannerTask.details {Γ : Context} : Component Γ PlannerTask.Raw :=
   .group "Task details" [
     .field path[PlannerTask.Field.title] "Task title" .text,
     .field path[PlannerTask.Field.owner] "Owner" .text,
@@ -46,7 +46,7 @@ def PlannerTask.details {Γ : List Type} : Component Γ PlannerTask.Raw :=
     .field path[PlannerTask.Field.completed] "Completed" .checkbox,
     .field path[PlannerTask.Field.notes] "Notes" .text]
 
-def PlannerTask.columns {Γ : List Type} : Columns Γ PlannerTask.Raw := columns[
+def PlannerTask.columns {Γ : Context} : Columns Γ PlannerTask.Raw := columns[
   "Task" => .computed "Task" { inputs := inputs[path[PlannerTask.Field.title]], run := id },
   "Owner" => .computed "Owner" { inputs := inputs[path[PlannerTask.Field.owner]], run := id },
   "Estimate" => .computed "Estimate" {
@@ -69,9 +69,9 @@ instance PlannerProject.name_valid_rule : ConstraintRule PlannerProject.Constrai
 def PlannerProject.initial : PlannerProject.Raw := ⟨"New project", [PlannerTask.initial]⟩
 
 /-- Every project instance owns its selection. The table and editor share only that local variable. -/
-def PlannerProject.form {Γ : List Type} : Component Γ PlannerProject.Raw :=
+def PlannerProject.form {Γ : Context} : Component Γ PlannerProject.Raw :=
   .bind RowSelection.none <|
-    let selectedTask : Var (RowSelection :: Γ) RowSelection := .here
+    let selectedTask : Var (⟨.writable, RowSelection⟩ :: Γ) RowSelection := .here
     .group "" [
       .field path[PlannerProject.Field.name] "Project name" .text,
       .computed "Progress" {
