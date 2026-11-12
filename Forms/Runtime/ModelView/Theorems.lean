@@ -8,7 +8,7 @@ namespace Forms.Runtime.ModelView
 
 /-- No two controls `render` shows share a key, so a key names at most one control. -/
 theorem render_keys_nodup
-  {Γ : List Type}
+  {Γ : Model.Context}
   {raw : Type}
   (component : Model.Component Γ raw)
   (value : raw)

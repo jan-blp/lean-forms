@@ -51,11 +51,11 @@ def run : IO Unit := do
     .mk (inputs[path[Address.Field.street]]) (fun street => street ++ "!")
   let embedded := street.weaken (path[Person.Field.address])
   check "DependenciesComposeWhenEmbedded" (embedded.eval person Env.nil == street.eval person.address Env.nil)
-  let selection : Var [RowSelection, RowSelection] RowSelection := .here
-  let other : Var [RowSelection, RowSelection] RowSelection := .there .here
-  let ui : Env [RowSelection, RowSelection] := env[.row 1, .none]
-  let initial : Env [RowSelection, RowSelection] := env[.none, .none]
-  let selectedStreet : Computation [RowSelection, RowSelection] Address.Raw String :=
+  let selection : Var [⟨.writable, RowSelection⟩, ⟨.writable, RowSelection⟩] RowSelection := .here
+  let other : Var [⟨.writable, RowSelection⟩, ⟨.writable, RowSelection⟩] RowSelection := .there .here
+  let ui : Env [⟨.writable, RowSelection⟩, ⟨.writable, RowSelection⟩] := env[.row 1, .none]
+  let initial : Env [⟨.writable, RowSelection⟩, ⟨.writable, RowSelection⟩] := env[.none, .none]
+  let selectedStreet : Computation [⟨.writable, RowSelection⟩, ⟨.writable, RowSelection⟩] Address.Raw String :=
     .mk (inputs[path[Address.Field.street], .ui selection]) fun street selected =>
       if selected == .row 1 then street else "Nothing selected"
   let selectedEmbedded := selectedStreet.weaken path[Person.Field.address]
@@ -64,15 +64,15 @@ def run : IO Unit := do
       selectedStreet.eval person.address initial == "Nothing selected")
   check "DependenciesWeakenKeepsSharedUi"
     (selectedEmbedded.eval person ui == selectedStreet.eval person.address ui)
-  let readSelection : Computation [RowSelection, RowSelection] Nat RowSelection :=
+  let readSelection : Computation [⟨.writable, RowSelection⟩, ⟨.writable, RowSelection⟩] Nat RowSelection :=
     .mk (inputs[.ui selection]) id
   check "DependenciesSelectionIndependentOfModelType" (readSelection.eval 42 ui == .row 1)
   check "DependenciesVariablesIndependent" (other.get ui == .none)
-  let expanded : Var [Bool, String] Bool := .here
-  let filter : Var [Bool, String] String := .there .here
-  let genericUi : Env [Bool, String] := env[true, "hotel"]
-  let initialUi : Env [Bool, String] := env[false, ""]
-  let visibleFilter : Computation [Bool, String] Nat String :=
+  let expanded : Var [⟨.writable, Bool⟩, ⟨.writable, String⟩] Bool := .here
+  let filter : Var [⟨.writable, Bool⟩, ⟨.writable, String⟩] String := .there .here
+  let genericUi : Env [⟨.writable, Bool⟩, ⟨.writable, String⟩] := env[true, "hotel"]
+  let initialUi : Env [⟨.writable, Bool⟩, ⟨.writable, String⟩] := env[false, ""]
+  let visibleFilter : Computation [⟨.writable, Bool⟩, ⟨.writable, String⟩] Nat String :=
     .mk (inputs[.ui expanded, .ui filter]) fun isExpanded text => if isExpanded then text else "hidden"
   check "DependenciesReadGenericUiValues"
     (visibleFilter.eval 42 genericUi == "hotel" && visibleFilter.eval 42 initialUi == "hidden")

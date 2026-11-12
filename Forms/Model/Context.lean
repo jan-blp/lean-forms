@@ -3,24 +3,45 @@ module
 @[expose] public section
 namespace Forms.Model
 
-/-- A reference to a variable in a typed context. -/
-inductive Var : (Γ : List Type) → Type → Type 1 where
-  | here {α : Type} {Γ : List Type} : Var (α :: Γ) α
-  | there {α β : Type} {Γ : List Type} (ref : Var Γ α) : Var (β :: Γ) α
+/-- Whether UI actions may update a context entry. -/
+inductive Access where
+  | readOnly
+  | writable
+
+structure Entry where
+  access : Access
+  type : Type
+
+/-- Entries in scope. -/
+abbrev Context := List Entry
+
+/-- A reference to a context entry, tracking its access and value type. -/
+inductive Ref : (Γ : Context) → Access → Type → Type 1 where
+  | here {access : Access} {α : Type} {Γ : Context}
+      : Ref (⟨access, α⟩ :: Γ) access α
+  | there {access : Access} {α : Type} {entry : Entry} {Γ : Context}
+      (ref : Ref Γ access α)
+      : Ref (entry :: Γ) access α
+
+/-- A reference to writable state in a typed context. -/
+abbrev Var (Γ : Context) (α : Type) := Ref Γ .writable α
+
+/-- A reference to a read-only input in a typed context. -/
+abbrev InputRef (Γ : Context) (α : Type) := Ref Γ .readOnly α
 
 structure Binding (α rest : Type) where
   value : α
   tail : rest
 
-/-- Values for every variable in a typed context. -/
-def Env : List Type → Type
+/-- Values for every entry in a typed context. -/
+def Env : Context → Type
   | [] => Unit
-  | α :: Γ => Binding α (Env Γ)
+  | entry :: Γ => Binding entry.type (Env Γ)
 
-variable {α : Type}
+variable {Γ : Context} {α : Type} {access : Access}
 
 abbrev Env.nil : Env [] := ()
-abbrev Env.cons {Γ : List Type} (value : α) (tail : Env Γ) : Env (α :: Γ) :=
+abbrev Env.cons (value : α) (tail : Env Γ) : Env (⟨access, α⟩ :: Γ) :=
   ⟨value, tail⟩
 
 macro "env[" values:term,* "]" : term => do
@@ -29,18 +50,30 @@ macro "env[" values:term,* "]" : term => do
     result ← `(Env.cons $value $result)
   return result
 
-def Var.get {Γ : List Type} (ref : Var Γ α) (state : Env Γ) : α :=
+/-- Reads a reference. -/
+def Ref.get
+  {Γ : Context}
+  (ref : Ref Γ access α)
+  (env : Env Γ)
+  : α :=
   match ref with
-  | .here => state.value
-  | .there ref => ref.get state.tail
+  | .here => env.value
+  | .there ref => ref.get env.tail
 
-def Var.set {Γ : List Type} (ref : Var Γ α) (value : α) (state : Env Γ) : Env Γ :=
+/-- Updates writable state. -/
+def Ref.set
+  {Γ : Context}
+  (ref : Var Γ α)
+  (value : α)
+  (env : Env Γ)
+  : Env Γ :=
   match ref with
-  | .here => ⟨value, state.tail⟩
-  | .there ref => ⟨state.value, ref.set value state.tail⟩
+  | .here => ⟨value, env.tail⟩
+  | .there ref => ⟨env.value, ref.set value env.tail⟩
 
-/-- Identifies the UI variable in control keys sent to the frontend. -/
-def Var.index {Γ : List Type} : Var Γ α → Nat
+/-- Identifies the context entry in control keys sent to the frontend. -/
+def Ref.index {Γ : Context} (ref : Ref Γ access α) : Nat :=
+  match ref with
   | .here => 0
   | .there ref => ref.index + 1
 

@@ -13,7 +13,7 @@ inductive Effect where
   | fetch (request : Model.HttpRequest)
   deriving BEq
 
-structure State {Γ : List Type} {raw : Type} (form : Model.Component Γ raw) where
+structure State {Γ : Model.Context} {raw : Type} (form : Model.Component Γ raw) where
   locals : form.LocalState
   initial : raw
   initialEnv : Model.Env Γ
@@ -26,7 +26,7 @@ structure State {Γ : List Type} {raw : Type} (form : Model.Component Γ raw) wh
   /-- Effects of the last command, sent with its snapshot. -/
   outbox : List Effect
 
-def openState {Γ : List Type} {raw : Type} (form : Model.Component Γ raw) (value : raw) (env : Model.Env Γ) : State form where
+def openState {Γ : Model.Context} {raw : Type} (form : Model.Component Γ raw) (value : raw) (env : Model.Env Γ) : State form where
   locals := form.initialState
   initial := value
   initialEnv := env
@@ -39,7 +39,7 @@ def openState {Γ : List Type} {raw : Type} (form : Model.Component Γ raw) (val
   outbox := []
 
 /-- Marks the requests `form` reads but has not loaded as loading, and queues them. -/
-def load {Γ : List Type} {raw : Type} (form : Model.Component Γ raw) (state : State form) : State form :=
+def load {Γ : Model.Context} {raw : Type} (form : Model.Component Γ raw) (state : State form) : State form :=
   let locals := form.normalize state.cache state.value state.env state.locals
   let missing := ((form.requests state.cache state.value state.env locals).filter (!state.cache.contains ·)).eraseDups
   { state with
@@ -48,7 +48,7 @@ def load {Γ : List Type} {raw : Type} (form : Model.Component Γ raw) (state : 
     outbox := state.outbox ++ missing.map .fetch }
 
 /-- Starts over from `initial`, keeping loaded responses; failed requests are retried. -/
-def restart {Γ : List Type} {raw : Type} {form : Model.Component Γ raw} (state : State form) : State form :=
+def restart {Γ : Model.Context} {raw : Type} {form : Model.Component Γ raw} (state : State form) : State form :=
   { openState form state.initial state.initialEnv with
     cache := state.cache.filter fun _ response => match response with
       | .failed _ => false
@@ -89,7 +89,7 @@ structure Snapshot (raw : Type) where
   submissionBlocked : Bool
   effects : List Effect
 
-def snapshot {Γ : List Type}
+def snapshot {Γ : Model.Context}
   {model : Type}
   [FormModel model]
   [Model.Validation model]
@@ -139,7 +139,7 @@ def Rejection.ofAction : ModelView.ActionError → Rejection
   | .invalid error => .stale (.invocation error)
 
 /-- The checked invocation that `key` and `argument` name. -/
-def validateAction {Γ : List Type}
+def validateAction {Γ : Model.Context}
   {raw : Type}
   (form : Model.Component Γ raw)
   (state : State form)
@@ -149,7 +149,7 @@ def validateAction {Γ : List Type}
   if state.ui.pending then throw (.stale .pending)
   (ModelView.decodeKey form state.cache state.value key argument state.env state.locals).mapError .ofAction
 
-def applyValid {Γ : List Type}
+def applyValid {Γ : Model.Context}
   {raw : Type}
   (form : Model.Component Γ raw)
   (state : State form)
@@ -163,7 +163,7 @@ def applyValid {Γ : List Type}
     serverFeedback := none
     ui := { state.ui with notice := .info "", resultVisible := false } }
 
-def apply {Γ : List Type}
+def apply {Γ : Model.Context}
   {raw : Type}
   (form : Model.Component Γ raw)
   (state : State form)
@@ -173,7 +173,7 @@ def apply {Γ : List Type}
   return applyValid form state (← validateAction form state key argument)
 
 def submit
-  {Γ : List Type}
+  {Γ : Model.Context}
   {model : Type}
   [FormModel model]
   [Model.Validation model]
@@ -190,7 +190,7 @@ def submit
   else
     { state with ui := state.ui.announce (Feedback.summary errors) true }
 
-def event {Γ : List Type}
+def event {Γ : Model.Context}
   {model : Type}
   [FormModel model]
   [Model.Validation model]
@@ -229,7 +229,7 @@ def event {Γ : List Type}
       pure { state with cache := state.cache.insert request cached }
     | _ => pure state
 
-def step {Γ : List Type}
+def step {Γ : Model.Context}
   {model : Type}
   [FormModel model]
   [Model.Validation model]
@@ -244,7 +244,7 @@ def step {Γ : List Type}
   | .inspect => .ok state
 
 /-- Runs `command`, then queues the requests the new state reads. -/
-def execute {Γ : List Type}
+def execute {Γ : Model.Context}
   {model : Type}
   [FormModel model]
   [Model.Validation model]

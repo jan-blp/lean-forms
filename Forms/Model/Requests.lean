@@ -7,7 +7,7 @@ namespace Forms.Model
 
 mutual
 /-- Requests read from the current model, UI state, and loaded responses. -/
-def Component.requests {Γ : List Type} {raw : Type} (component : Component Γ raw) (cache : HttpRequest.Cache)
+def Component.requests {Γ : Context} {raw : Type} (component : Component Γ raw) (cache : HttpRequest.Cache)
     (current : raw) (state : Env Γ) (locals : component.LocalState := component.initialState) : List HttpRequest :=
   match component with
   | .field .. => []
@@ -32,19 +32,19 @@ def Component.requests {Γ : List Type} {raw : Type} (component : Component Γ r
     let status := source.resolve cache
     source.request?.toList ++ (body status).requests cache current state (locals.at status (body status).initialState)
 
-def Components.requests {Γ : List Type} {raw : Type} (children : Components Γ raw) (cache : HttpRequest.Cache)
+def Components.requests {Γ : Context} {raw : Type} (children : Components Γ raw) (cache : HttpRequest.Cache)
     (current : raw) (state : Env Γ) (locals : children.LocalState := children.initialState) : List HttpRequest :=
   match children with
   | .nil => []
   | .cons head tail => head.requests cache current state locals.value ++ tail.requests cache current state locals.tail
 
-def Columns.requests {Γ : List Type} {raw : Type} (columns : Columns Γ raw) (cache : HttpRequest.Cache)
+def Columns.requests {Γ : Context} {raw : Type} (columns : Columns Γ raw) (cache : HttpRequest.Cache)
     (current : raw) (state : Env Γ) (locals : columns.LocalState := columns.initialState) : List HttpRequest :=
   match columns with
   | .nil => []
   | .cons _ head tail => head.requests cache current state locals.value ++ tail.requests cache current state locals.tail
 
-def Branch.requests {Γ : List Type} {sum : Type} (branch : Branch Γ sum) (cache : HttpRequest.Cache)
+def Branch.requests {Γ : Context} {sum : Type} (branch : Branch Γ sum) (cache : HttpRequest.Cache)
     (current : sum) (state : Env Γ) (locals : branch.LocalState := branch.initialState) : List HttpRequest :=
   match branch with
   | .mk _ _ _ project _ body =>
@@ -52,7 +52,7 @@ def Branch.requests {Γ : List Type} {sum : Type} (branch : Branch Γ sum) (cach
     | some payload => body.requests cache payload state locals
     | none => []
 
-def Branches.requests {Γ : List Type} {sum : Type} (branches : Branches Γ sum) (cache : HttpRequest.Cache)
+def Branches.requests {Γ : Context} {sum : Type} (branches : Branches Γ sum) (cache : HttpRequest.Cache)
     (current : sum) (state : Env Γ) (locals : branches.LocalState := branches.initialState) : List HttpRequest :=
   match branches with
   | .nil => []

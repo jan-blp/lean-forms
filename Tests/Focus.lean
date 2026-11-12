@@ -12,7 +12,7 @@ private def check (message : String) (ok : Bool) : IO Unit := do
   IO.println s!"PASS {message}"
 
 private def perform
-  {Γ : List Type}
+  {Γ : Context}
   {raw : Type}
   (form : Component Γ raw)
   (current : raw)
@@ -24,7 +24,7 @@ private def perform
   return (form.applyValid {} current state form.initialState invocation).value
 
 private def firstControl
-  {Γ : List Type}
+  {Γ : Context}
   {raw : Type}
   (form : Component Γ raw)
   (value : raw)
@@ -83,12 +83,12 @@ def run : IO Unit := do
   check "FocusMatchesValidationMessages"
     (snapshot.controls.head?.bind (·.messages) == some "Enter a phone number for the courier.")
   -- A selected-item focus works by itself, with no table in the component tree.
-  let details : Component [RowSelection] ExpenseReport.Raw := .focus
-    { inputs := inputs[.ui (Var.here : Var [RowSelection] RowSelection)]
+  let details : Component [⟨.writable, RowSelection⟩] ExpenseReport.Raw := .focus
+    { inputs := inputs[.ui (Ref.here : Var [⟨.writable, RowSelection⟩] RowSelection)]
       run := RowSelection.itemPath path[ExpenseReport.Field.expenses] }
     (.field path[Expense.Field.description] "Description" .text)
   let selected := ExpenseReport.initial
-  let selectedUi : Env [RowSelection] := env[.row 1]
+  let selectedUi : Env [⟨.writable, RowSelection⟩] := env[.row 1]
   let detail ← firstControl details selected selectedUi
   let edited ← IO.ofExcept ((perform details selected detail.key (some (.text "Independent")) selectedUi).mapError toString)
   check "FocusIndependentOfTable"
@@ -102,7 +102,7 @@ def run : IO Unit := do
   check "FocusListValidationLocation"
     (invalidDetails.controls.head?.bind (·.messages) == some "Describe the expense." &&
       detail.location == [.field "expenses", .index 1, .field "description"])
-  let moved : Component [RowSelection] ExpenseReport.Raw := .group "Elsewhere" [
+  let moved : Component [⟨.writable, RowSelection⟩] ExpenseReport.Raw := .group "Elsewhere" [
     .computed "Summary" (.const "Summary"), .group "Details" [details]]
   let movedControl ← firstControl moved selected selectedUi
   let movedEdit ← IO.ofExcept ((perform moved selected detail.key (some (.text "Moved")) selectedUi).mapError toString)

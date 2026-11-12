@@ -55,7 +55,7 @@ def partialPathLocation {source target : Type} : Model.PartialPath source target
   | .index position rest => .index position :: partialPathLocation rest
 
 def choiceControl
-  {Γ : List Type}
+  {Γ : Context}
   {raw sum : Type}
   (path : Model.Path raw sum)
   (branches : List (Model.Branch Γ sum))
@@ -92,7 +92,7 @@ abbrev WireScopes := Nat → List Nat
 mutual
 /-- `location` is where `raw` sits in the form's value; duplicates are kept. -/
 def build
-  {Γ : List Type}
+  {Γ : Context}
   {raw : Type}
   (state : Model.Env Γ)
   (scopes : WireScopes)
@@ -171,7 +171,7 @@ def build
     build (Env.cons locals.value state) scopes body value cache errors disabled (target.child 0) location locals.tail
 
 def buildAll
-  {Γ : List Type}
+  {Γ : Context}
   {raw : Type}
   (state : Model.Env Γ)
   (scopes : WireScopes)
@@ -192,7 +192,7 @@ def buildAll
       buildAll state scopes tail value cache errors disabled target location (index + 1) locals.tail
 
 def buildColumns
-  {Γ : List Type}
+  {Γ : Context}
   {raw : Type}
   (state : Model.Env Γ)
   (scopes : WireScopes)
@@ -214,7 +214,7 @@ def buildColumns
 
 /-- Builds the body of the branch that `current` was built by, at `target.child index`. -/
 def buildActive
-  {Γ : List Type}
+  {Γ : Context}
   {sum : Type}
   (state : Model.Env Γ)
   (scopes : WireScopes)
@@ -237,7 +237,7 @@ def buildActive
 
 /-- The branch's body, when `current` was built by its constructor. -/
 def buildBranch
-  {Γ : List Type}
+  {Γ : Context}
   {sum : Type}
   (state : Model.Env Γ)
   (scopes : WireScopes)
@@ -258,7 +258,7 @@ end
 
 /-- The view of `component`; a control whose key is already shown becomes a note. -/
 def render
-  {Γ : List Type}
+  {Γ : Context}
   {raw : Type}
   (component : Model.Component Γ raw)
   (value : raw)
@@ -281,7 +281,7 @@ def noArgument {α : Type} (argument : Option Input) (invocation : α) : Except 
   | some _ => .error (.decode (.clientBug .unexpectedArgument))
 
 def selectBranch
-  {Γ : List Type} {sum : Type} (state : Model.Env Γ) (key : String)
+  {Γ : Context} {sum : Type} (state : Model.Env Γ) (key : String)
   (cache : Model.HttpRequest.Cache) (current : sum)
   : (branches : Model.Branches Γ sum) → (locals : branches.LocalState) →
       Except ActionError (branches.ValidInvocation cache current state locals)
@@ -296,7 +296,7 @@ def checkedIndex (index length : Nat) : Except ActionError (Fin length) :=
 mutual
 /-- The invocation of the control `render` puts at `target`, checked against `current`. -/
 def decode
-  {Γ : List Type}
+  {Γ : Context}
   {raw : Type}
   (state : Model.Env Γ)
   (component : Model.Component Γ raw)
@@ -357,7 +357,7 @@ def decode
   | _, _ => .error (.decode (.clientBug .unknownControl))
 
 def decodeAll
-  {Γ : List Type}
+  {Γ : Context}
   {raw : Type}
   (state : Model.Env Γ)
   (children : Model.Components Γ raw)
@@ -374,7 +374,7 @@ def decodeAll
   | .cons _ tail, index + 1 => Sum.inr <$> decodeAll state tail cache current index target argument locals.tail
 
 def decodeColumns
-  {Γ : List Type}
+  {Γ : Context}
   {raw : Type}
   (state : Model.Env Γ)
   (children : Model.Columns Γ raw)
@@ -391,7 +391,7 @@ def decodeColumns
   | .cons _ _ tail, index + 1 => Sum.inr <$> decodeColumns state tail cache current index target argument locals.tail
 
 def decodeBranch
-  {Γ : List Type}
+  {Γ : Context}
   {sum : Type}
   (state : Model.Env Γ)
   (branch : Model.Branch Γ sum)
@@ -409,7 +409,7 @@ def decodeBranch
     | none => .error (.invalid .inactiveBranch)
 
 def decodeBranches
-  {Γ : List Type}
+  {Γ : Context}
   {sum : Type}
   (state : Model.Env Γ)
   (branches : Model.Branches Γ sum)
@@ -427,7 +427,7 @@ def decodeBranches
 end
 
 def decodeKey
-  {Γ : List Type}
+  {Γ : Context}
   {raw : Type}
   (component : Model.Component Γ raw)
   (cache : Model.HttpRequest.Cache)
