@@ -9,51 +9,51 @@ open LeanLens
 namespace Forms.Model
 
 /-- Describes a record's typed fields. -/
-class Fields (raw : Type) where
+class Fields (α : Type) where
   Field : Type → Type
-  lens : {value : Type} → Field value → Lens' raw value
-  lawful : ∀ {value} (field : Field value), LawfulLens (lens field)
+  lens : {β : Type} → Field β → Lens' α β
+  lawful : ∀ {β} (field : Field β), LawfulLens (lens field)
   /-- The field name used in serialization . -/
-  key : {value : Type} → Field value → String
-  key_injective : ∀ {α β : Type} (a : Field α) (b : Field β), key a = key b → a ≍ b
+  key : {β : Type} → Field β → String
+  key_injective : ∀ {β γ : Type} (a : Field β) (b : Field γ), key a = key b → a ≍ b
 
 attribute [reducible] Fields.Field
 
-def Fields.get {raw value : Type} [Fields raw] (field : Fields.Field raw value) : raw → value :=
+def Fields.get {α β : Type} [Fields α] (field : Fields.Field α β) : α → β :=
   LeanLens.view (Fields.lens field)
 
 def Fields.set
-  {raw value : Type}
-  [Fields raw]
-  (field : Fields.Field raw value)
-  : value → raw → raw :=
+  {α β : Type}
+  [Fields α]
+  (field : Fields.Field α β)
+  : β → α → α :=
   LeanLens.set (Fields.lens field)
 
 /-- Describes a sum type's constructors. -/
-class Constructors (raw : Type) where
+class Constructors (α : Type) where
   Constructor : Type → Type
-  inject : {payload : Type} → Constructor payload → payload → raw
+  inject : {β : Type} → Constructor β → β → α
   /-- The payload of a value built by `constructor`. -/
-  project : {payload : Type} → Constructor payload → raw → Option payload
-  key : {payload : Type} → Constructor payload → String
+  project : {β : Type} → Constructor β → α → Option β
+  key : {β : Type} → Constructor β → String
 
 attribute [reducible] Constructors.Constructor
 
 /-- Constructor injection and projection describe the same payload. -/
-class LawfulConstructors (raw : Type) [Constructors raw] : Prop where
-  project_inject : ∀ {payload : Type} (c : Constructors.Constructor raw payload) (value : payload),
+class LawfulConstructors (α : Type) [Constructors α] : Prop where
+  project_inject : ∀ {β : Type} (c : Constructors.Constructor α β) (value : β),
     Constructors.project c (Constructors.inject c value) = some value
-  inject_project : ∀ {payload : Type} (c : Constructors.Constructor raw payload) (source : raw) (value : payload),
+  inject_project : ∀ {β : Type} (c : Constructors.Constructor α β) (source : α) (value : β),
     Constructors.project c source = some value → Constructors.inject c value = source
 
 inductive Path : Type → Type → Type 1 where
-  | self {value : Type} : Path value value
+  | self {α : Type} : Path α α
   | stepField
-      {source child target : Type}
-      [Fields source]
-      (field : Fields.Field source child)
-      (rest : Path child target)
-      : Path source target
+      {α β γ : Type}
+      [Fields α]
+      (field : Fields.Field α β)
+      (rest : Path β γ)
+      : Path α γ
 
 macro "path[" fields:term,* "]" : term => do
   let mut result ← `(Path.self)
@@ -61,64 +61,64 @@ macro "path[" fields:term,* "]" : term => do
     result ← `(Path.stepField (field := $field) (rest := $result))
   return result
 
-def Path.get {source target : Type} (path : Path source target) (value : source) : target :=
+def Path.get {α β : Type} (path : Path α β) (value : α) : β :=
   match path with
   | .self => value
   | @stepField _ _ _ inst f rest => rest.get (@Fields.get _ _ inst f value)
 
 def Path.set
-  {source target : Type}
-  (path : Path source target)
-  (new : target)
-  (value : source)
-  : source :=
+  {α β : Type}
+  (path : Path α β)
+  (new : β)
+  (value : α)
+  : α :=
   match path with
   | .self => new
   | @stepField _ _ _ inst f rest =>
     @Fields.set _ _ inst f (rest.set new (@Fields.get _ _ inst f value)) value
 
 def Path.trans
-  {source middle target : Type}
-  (first : Path source middle)
-  (second : Path middle target)
-  : Path source target :=
+  {α β γ : Type}
+  (first : Path α β)
+  (second : Path β γ)
+  : Path α γ :=
   match first with
   | .self => second
   | @stepField _ _ _ inst f rest => @Path.stepField _ _ _ inst f (rest.trans second)
 
-def Path.toLens {source target : Type} (path : Path source target) : Lens' source target :=
+def Path.toLens {α β : Type} (path : Path α β) : Lens' α β :=
   LeanLens.mkLens path.get path.set
 
-inductive Location : {raw : Type} → raw → Type 1 where
-  | self {raw : Type} {value : raw} : Location value
+inductive Location : {α : Type} → α → Type 1 where
+  | self {α : Type} {value : α} : Location value
   | field
-      {raw child : Type}
-      [Fields raw]
-      {value : raw}
-      (field : Fields.Field raw child)
+      {α β : Type}
+      [Fields α]
+      {value : α}
+      (field : Fields.Field α β)
       (rest : Location (Fields.get field value))
       : Location value
   | constructor
-      {raw payload : Type}
-      [Constructors raw]
-      {value : payload}
-      (constructor : Constructors.Constructor raw payload)
+      {α β : Type}
+      [Constructors α]
+      {value : β}
+      (constructor : Constructors.Constructor α β)
       (rest : Location value)
       : Location (Constructors.inject constructor value)
   | index
-      {item : Type}
-      {value : List item}
+      {α : Type}
+      {value : List α}
       (position : Fin value.length)
       (rest : Location (value.get position))
       : Location value
 
-def Location.keys {raw : Type} {value : raw} : Location value → List String
+def Location.keys {α : Type} {value : α} : Location value → List String
   | .self => []
   | @field _ _ inst _ f rest => @Fields.key _ inst _ f :: rest.keys
   | @constructor _ _ inst _ c rest => @Constructors.key _ inst _ c :: rest.keys
   | index position rest => toString position.val :: rest.keys
 
-inductive Targets (raw : Type) (value : raw) where
+inductive Targets (α : Type) (value : α) where
   | global
   | locations (first : Location value) (rest : List (Location value) := [])
 
@@ -134,14 +134,14 @@ macro "locations[" paths:sepBy1(locationPath, ", ") "]" : term => do
   let rest := locations.extract 1 locations.size
   `(Targets.locations (first := $(locations[0]!)) (rest := [$rest,*]))
 
-structure Error {raw : Type} (value : raw) where
+structure Error {α : Type} (value : α) where
   message : String
-  targets : Targets raw value
+  targets : Targets α value
 
 def Error.mapLocations
-  {source target : Type}
-  {value : source}
-  {outer : target}
+  {α β : Type}
+  {value : α}
+  {outer : β}
   (step : Location value → Location outer)
   (error : Error value)
   : Error outer where
@@ -151,31 +151,31 @@ def Error.mapLocations
     | .locations first rest => .locations (step first) (rest.map step)
 
 def Error.lift
-  {raw child : Type}
-  [Fields raw]
-  {value : raw}
-  (field : Fields.Field raw child)
+  {α β : Type}
+  [Fields α]
+  {value : α}
+  (field : Fields.Field α β)
   (error : Error (Fields.get field value))
   : Error value :=
   error.mapLocations (.field field)
 
 def Error.inConstructor
-  {raw payload : Type}
-  [Constructors raw]
-  {value : payload}
-  (constructor : Constructors.Constructor raw payload)
+  {α β : Type}
+  [Constructors α]
+  {value : β}
+  (constructor : Constructors.Constructor α β)
   (error : Error value)
   : Error (Constructors.inject constructor value) :=
   error.mapLocations (.constructor constructor)
 
-inductive Decision (property : Prop) {raw : Type} (value : raw) where
+inductive Decision (property : Prop) {α : Type} (value : α) where
   | valid (proof : property)
-  | invalid (proof : ¬ property) (message : String) (targets : Targets raw value)
+  | invalid (proof : ¬ property) (message : String) (targets : Targets α value)
 
 def Decision.errors
   {property : Prop}
-  {raw : Type}
-  {value : raw}
+  {α : Type}
+  {value : α}
   : Decision property value → List (Error value)
   | .valid _ => []
   | .invalid _ message targets => [{ message, targets }]
@@ -208,7 +208,7 @@ abbrev Validated (model : Type) [FormModel model] (raw : FormModel.Raw model) :=
 class Validation (model : Type) [FormModel model] where
   validate : (raw : FormModel.Raw model) → Except (List (Error raw)) (Validated model raw)
 
-def errors {error value : Type _} : Except (List error) value → List error
+def errors {α β : Type _} : Except (List α) β → List α
   | .ok _ => []
   | .error errors => errors
 

@@ -21,128 +21,128 @@ inductive Availability where
 
 /-- Turns a row selection into a concrete path to that list item. -/
 def RowSelection.itemPath
-  {raw item : Type}
-  (items : Path raw (List item))
-  : RowSelection → PartialPath raw item
+  {α β : Type}
+  (items : Path α (List β))
+  : RowSelection → PartialPath α β
   | .none => .empty
   | .row index => (PartialPath.ofPath items).trans (.index index .self)
 
 mutual
 inductive Component : Context → Type → Type 1 where
   | field {Γ : Context}
-      {raw value : Type}
-      (path : Path raw value)
+      {α β : Type}
+      (path : Path α β)
       (label : String)
-      (editor : Editor value)
-      : Component Γ raw
+      (editor : Editor β)
+      : Component Γ α
   | groupOf {Γ : Context}
-      {raw : Type}
+      {α : Type}
       (label : String)
-      (children : Components Γ raw)
-      : Component Γ raw
+      (children : Components Γ α)
+      : Component Γ α
   | computed {Γ : Context}
-      {raw : Type}
+      {α : Type}
       (label : String)
-      (value : Computation Γ raw String)
-      : Component Γ raw
+      (value : Computation Γ α String)
+      : Component Γ α
   /-- Runs a UI state action when pressed. -/
   | button {Γ : Context}
-      {raw : Type}
+      {α : Type}
       (label : String)
-      (action : Action Γ raw)
-      : Component Γ raw
+      (action : Action Γ α)
+      : Component Γ α
   /-- Offers the same subtree as enabled, hidden, or disabled. -/
   | withAvailability {Γ : Context}
-      {raw : Type}
-      (availability : Computation Γ raw Availability)
-      (body : Component Γ raw)
-      : Component Γ raw
+      {α : Type}
+      (availability : Computation Γ α Availability)
+      (body : Component Γ α)
+      : Component Γ α
   | choiceOf {Γ : Context}
-      {raw sum : Type}
-      (path : Path raw sum)
+      {α β : Type}
+      (path : Path α β)
       (label : String)
-      (branches : Branches Γ sum)
-      : Component Γ raw
+      (branches : Branches Γ β)
+      : Component Γ α
   /-- Edits each item of the list at `path` with `body`; added items start from `initial`. -/
   | list {Γ : Context}
-      {raw item : Type}
-      (path : Path raw (List item))
+      {α β : Type}
+      (path : Path α (List β))
       (label itemLabel : String)
-      (initial : item)
-      (body : Component Γ item)
-      : Component Γ raw
+      (initial : β)
+      (body : Component Γ β)
+      : Component Γ α
   /-- A list editor with one row per item and one component per column. -/
   | table {Γ : Context}
-      {raw item : Type}
-      (path : Path raw (List item))
+      {α β : Type}
+      (path : Path α (List β))
       (label itemLabel : String)
-      (initial : item)
-      (columns : Columns Γ item)
+      (initial : β)
+      (columns : Columns Γ β)
       (selection : Option (Var Γ RowSelection) := none)
-      : Component Γ raw
+      : Component Γ α
   /-- Edits the value at the current partial path if present. -/
   | focus {Γ : Context}
-      {raw value : Type}
-      (target : Computation Γ raw (PartialPath raw value))
-      (body : Component Γ value)
-      : Component Γ raw
+      {α β : Type}
+      (target : Computation Γ α (PartialPath α β))
+      (body : Component Γ β)
+      : Component Γ α
   /-- Introduces writable local UI state for `body`. -/
   | bind {Γ : Context}
-      {raw α : Type}
-      (initial : α)
-      (body : Component (⟨.writable, α⟩ :: Γ) raw)
-      : Component Γ raw
+      {α β : Type}
+      (initial : β)
+      (body : Component (⟨.writable, β⟩ :: Γ) α)
+      : Component Γ α
   /-- Loads `source`; `body` builds the subtree from its status.
   Local bindings persist while that status is equal and reset when it changes. -/
   | load {Γ : Context}
-      {raw data : Type}
+      {α data : Type}
       [inst : DecidableEq data]
-      (source : Computation Γ raw (Source data))
-      (body : Status data → Component Γ raw)
-      : Component Γ raw
+      (source : Computation Γ α (Source data))
+      (body : Status data → Component Γ α)
+      : Component Γ α
 
 inductive Columns : Context → Type → Type 1 where
-  | nil {Γ : Context} {item : Type} : Columns Γ item
+  | nil {Γ : Context} {α : Type} : Columns Γ α
   | cons {Γ : Context}
-      {item : Type}
+      {α : Type}
       (header : String)
-      (cell : Component Γ item)
-      (rest : Columns Γ item)
-      : Columns Γ item
+      (cell : Component Γ α)
+      (rest : Columns Γ α)
+      : Columns Γ α
 
 inductive Components : Context → Type → Type 1 where
-  | nil {Γ : Context} {raw : Type} : Components Γ raw
+  | nil {Γ : Context} {α : Type} : Components Γ α
   | cons {Γ : Context}
-      {raw : Type}
-      (head : Component Γ raw)
-      (tail : Components Γ raw)
-      : Components Γ raw
+      {α : Type}
+      (head : Component Γ α)
+      (tail : Components Γ α)
+      : Components Γ α
 
 /-- One constructor of a `choice`; `body` edits its payload, starting from `initial` when chosen. -/
 inductive Branch : Context → Type → Type 1 where
   | mk {Γ : Context}
-      {sum payload : Type}
+      {α β : Type}
       (key label : String)
-      (inject : payload → sum)
-      (project : sum → Option payload)
-      (initial : payload)
-      (body : Component Γ payload)
-      : Branch Γ sum
+      (inject : β → α)
+      (project : α → Option β)
+      (initial : β)
+      (body : Component Γ β)
+      : Branch Γ α
 
 inductive Branches : Context → Type → Type 1 where
-  | nil {Γ : Context} {sum : Type} : Branches Γ sum
+  | nil {Γ : Context} {α : Type} : Branches Γ α
   | cons {Γ : Context}
-      {sum : Type}
-      (head : Branch Γ sum)
-      (tail : Branches Γ sum)
-      : Branches Γ sum
+      {α : Type}
+      (head : Branch Γ α)
+      (tail : Branches Γ α)
+      : Branches Γ α
 end
 
-def Components.ofList {Γ : Context} {raw : Type} : List (Component Γ raw) → Components Γ raw
+def Components.ofList {Γ : Context} {α : Type} : List (Component Γ α) → Components Γ α
   | [] => .nil
   | head :: tail => .cons head (ofList tail)
 
-def Columns.ofList {Γ : Context} {item : Type} : List (String × Component Γ item) → Columns Γ item
+def Columns.ofList {Γ : Context} {α : Type} : List (String × Component Γ α) → Columns Γ α
   | [] => .nil
   | (header, cell) :: rest => .cons header cell (ofList rest)
 
@@ -159,101 +159,106 @@ macro "columns[" columns:tableColumn,* "]" : term => do
     | _ => Lean.Macro.throwUnsupported
   return result
 
-def Columns.headers {Γ : Context} {item : Type} : Columns Γ item → List String
+def Columns.headers {Γ : Context} {α : Type} : Columns Γ α → List String
   | .nil => []
   | .cons header _ rest => header :: rest.headers
 
-def Columns.components {Γ : Context} {item : Type} : Columns Γ item → Components Γ item
+def Columns.components {Γ : Context} {α : Type} : Columns Γ α → Components Γ α
   | .nil => .nil
   | .cons _ cell rest => .cons cell rest.components
 
-def Component.group {Γ : Context}
-  {raw : Type}
+def Component.group
+  {Γ : Context}
+  {α : Type}
   (label : String)
-  (children : List (Component Γ raw))
-  : Component Γ raw :=
+  (children : List (Component Γ α))
+  : Component Γ α :=
   .groupOf label (.ofList children)
 
-def Branch.of {Γ : Context}
-  {sum payload : Type}
-  [Constructors sum]
-  (constructor : Constructors.Constructor sum payload)
+def Branch.of
+  {Γ : Context}
+  {α β : Type}
+  [Constructors α]
+  (constructor : Constructors.Constructor α β)
   (label : String)
-  (initial : payload)
-  (body : Component Γ payload)
-  : Branch Γ sum :=
+  (initial : β)
+  (body : Component Γ β)
+  : Branch Γ α :=
   .mk (Constructors.key constructor) label (Constructors.inject constructor)
     (Constructors.project constructor) initial body
 
-def Branch.key {Γ : Context} {sum : Type} : Branch Γ sum → String
+def Branch.key {Γ : Context} {α : Type} : Branch Γ α → String
   | .mk key .. => key
 
-def Branch.label {Γ : Context} {sum : Type} : Branch Γ sum → String
+def Branch.label {Γ : Context} {α : Type} : Branch Γ α → String
   | .mk _ label .. => label
 
 /-- Whether `value` was built by this branch's constructor. -/
-def Branch.matches {Γ : Context} {sum : Type} : Branch Γ sum → sum → Bool
+def Branch.matches {Γ : Context} {α : Type} : Branch Γ α → α → Bool
   | .mk _ _ _ project .., value => (project value).isSome
 
 /-- The value a newly chosen branch starts from. -/
-def Branch.start {Γ : Context} {sum : Type} : Branch Γ sum → sum
+def Branch.start {Γ : Context} {α : Type} : Branch Γ α → α
   | .mk _ _ inject _ initial _ => inject initial
 
-def Branches.ofList {Γ : Context} {sum : Type} : List (Branch Γ sum) → Branches Γ sum
+def Branches.ofList {Γ : Context} {α : Type} : List (Branch Γ α) → Branches Γ α
   | [] => .nil
   | head :: tail => .cons head (ofList tail)
 
-def Branches.toList {Γ : Context} {sum : Type} : Branches Γ sum → List (Branch Γ sum)
+def Branches.toList {Γ : Context} {α : Type} : Branches Γ α → List (Branch Γ α)
   | .nil => []
   | .cons head tail => head :: tail.toList
 
 /-- Shows `body` only while `condition` holds. -/
 def Component.visibleWhen
   {Γ : Context}
-  {raw : Type}
-  (condition : Computation Γ raw Bool)
-  (body : Component Γ raw)
-  : Component Γ raw :=
+  {α : Type}
+  (condition : Computation Γ α Bool)
+  (body : Component Γ α)
+  : Component Γ α :=
   .withAvailability ((fun visible => if visible then .enabled else .hidden) <$> condition) body
 
 /-- Shows `body` read-only while `condition` holds. -/
 def Component.disabledWhen
   {Γ : Context}
-  {raw : Type}
-  (condition : Computation Γ raw Bool)
-  (body : Component Γ raw)
-  : Component Γ raw :=
+  {α : Type}
+  (condition : Computation Γ α Bool)
+  (body : Component Γ α)
+  : Component Γ α :=
   .withAvailability ((fun disabled => if disabled then .disabled else .enabled) <$> condition) body
 
 /-- Picks a constructor of the sum at `path`; the chosen branch edits its payload. -/
-def Component.choice {Γ : Context}
-  {raw sum : Type}
-  (path : Path raw sum)
+def Component.choice
+  {Γ : Context}
+  {α β : Type}
+  (path : Path α β)
   (label : String)
-  (branches : List (Branch Γ sum))
-  : Component Γ raw :=
+  (branches : List (Branch Γ β))
+  : Component Γ α :=
   .choiceOf path label (.ofList branches)
 
 /-- Loads `source`; `body` builds the subtree from the data, with a note while loading or failed. -/
-def Component.loadWith {Γ : Context}
-  {raw data : Type}
+def Component.loadWith
+  {Γ : Context}
+  {α data : Type}
   [DecidableEq data]
-  (source : Computation Γ raw (Source data))
-  (body : data → Component Γ raw)
-  : Component Γ raw :=
+  (source : Computation Γ α (Source data))
+  (body : data → Component Γ α)
+  : Component Γ α :=
   .load source fun
     | .ready data => body data
     | .loading => .computed "" (.const "Loading…")
     | .failed message => .computed "" (.const s!"Could not load: {message}")
 
 /-- Loads `source`; `body` builds the subtree from the data, `fallback` stands in until then. -/
-def Component.loadOr {Γ : Context}
-  {raw data : Type}
+def Component.loadOr
+  {Γ : Context}
+  {α data : Type}
   [DecidableEq data]
-  (source : Computation Γ raw (Source data))
-  (fallback : Component Γ raw)
-  (body : data → Component Γ raw)
-  : Component Γ raw :=
+  (source : Computation Γ α (Source data))
+  (fallback : Component Γ α)
+  (body : data → Component Γ α)
+  : Component Γ α :=
   .load source fun
     | .ready data => body data
     | .loading => fallback

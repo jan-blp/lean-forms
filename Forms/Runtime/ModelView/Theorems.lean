@@ -9,9 +9,9 @@ namespace Forms.Runtime.ModelView
 /-- No two controls `render` shows share a key, so a key names at most one control. -/
 theorem render_keys_nodup
   {Γ : Model.Context}
-  {raw : Type}
-  (component : Model.Component Γ raw)
-  (value : raw)
+  {α : Type}
+  (component : Model.Component Γ α)
+  (value : α)
   (cache : Model.HttpRequest.Cache)
   (errors : List Feedback.Error)
   (state : Model.Env Γ)

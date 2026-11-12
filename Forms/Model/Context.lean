@@ -30,9 +30,9 @@ abbrev Var (Γ : Context) (α : Type) := Ref Γ .writable α
 /-- A reference to a read-only input in a typed context. -/
 abbrev InputRef (Γ : Context) (α : Type) := Ref Γ .readOnly α
 
-structure Binding (α rest : Type) where
+structure Binding (α β : Type) where
   value : α
-  tail : rest
+  tail : β
 
 /-- Values for every entry in a typed context. -/
 def Env : Context → Type

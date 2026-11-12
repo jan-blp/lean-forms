@@ -136,7 +136,7 @@ def check (name : String) (passed : Bool) : IO Unit := do
   unless passed do throw (IO.userError ("FAIL " ++ name))
   IO.println ("PASS " ++ name)
 
-def targetKeys {raw : Type} {value : raw} (error : Error value) :=
+def targetKeys {α : Type} {value : α} (error : Error value) :=
   match error.targets with
   | .global => []
   | .locations first rest => (first :: rest).map Location.keys

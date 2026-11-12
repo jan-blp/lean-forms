@@ -7,36 +7,36 @@ namespace Forms.Model
 
 /-- A type-preserving affine traversal represented as an inspectable path to zero or one value. -/
 inductive PartialPath : Type → Type → Type 1 where
-  | self {value : Type} : PartialPath value value
-  | empty {source target : Type} : PartialPath source target
+  | self {α : Type} : PartialPath α α
+  | empty {α β : Type} : PartialPath α β
   | field
-      {source child target : Type}
-      [Fields source]
-      (f : Fields.Field source child)
-      (rest : PartialPath child target)
-      : PartialPath source target
+      {α β γ : Type}
+      [Fields α]
+      (f : Fields.Field α β)
+      (rest : PartialPath β γ)
+      : PartialPath α γ
   | constructor
-      {source child target : Type}
-      [Constructors source]
-      [LawfulConstructors source]
-      (ctor : Constructors.Constructor source child)
-      (rest : PartialPath child target)
-      : PartialPath source target
+      {α β γ : Type}
+      [Constructors α]
+      [LawfulConstructors α]
+      (ctor : Constructors.Constructor α β)
+      (rest : PartialPath β γ)
+      : PartialPath α γ
   | index
-      {item target : Type}
+      {α β : Type}
       (position : Nat)
-      (rest : PartialPath item target)
-      : PartialPath (List item) target
+      (rest : PartialPath α β)
+      : PartialPath (List α) β
 
-def PartialPath.ofPath {source target : Type} : Path source target → PartialPath source target
+def PartialPath.ofPath {α β : Type} : Path α β → PartialPath α β
   | .self => .self
   | @Path.stepField _ _ _ _inst f rest => .field f (.ofPath rest)
 
 def PartialPath.trans
-  {source middle target : Type}
-  (first : PartialPath source middle)
-  (second : PartialPath middle target)
-  : PartialPath source target :=
+  {α β γ : Type}
+  (first : PartialPath α β)
+  (second : PartialPath β γ)
+  : PartialPath α γ :=
   match first with
   | .self => second
   | .empty => .empty
@@ -45,10 +45,10 @@ def PartialPath.trans
   | .index position rest => .index position (rest.trans second)
 
 def PartialPath.get?
-  {source target : Type}
-  (path : PartialPath source target)
-  (value : source)
-  : Option target :=
+  {α β : Type}
+  (path : PartialPath α β)
+  (value : α)
+  : Option β :=
   match path with
   | .self => some value
   | .empty => none
@@ -57,11 +57,11 @@ def PartialPath.get?
   | .index position rest => (value[position]?).bind rest.get?
 
 def PartialPath.set
-  {source target : Type}
-  (path : PartialPath source target)
-  (new : target)
-  (value : source)
-  : source :=
+  {α β : Type}
+  (path : PartialPath α β)
+  (new : β)
+  (value : α)
+  : α :=
   match path with
   | .self => new
   | .empty => value

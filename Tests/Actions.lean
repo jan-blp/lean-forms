@@ -20,8 +20,8 @@ example : True := by
 
 private def key
   {Γ : Context}
-  {raw : Type}
-  {form : Component Γ raw}
+  {α : Type}
+  {form : Component Γ α}
   (state : ModelForm.State form)
   (label : String)
   (nth : Nat := 0)

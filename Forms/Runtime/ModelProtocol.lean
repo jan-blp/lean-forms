@@ -10,10 +10,10 @@ namespace Forms.Runtime
 open Lean
 
 /-- A form's registered name, the fingerprint of the code that produced it, and submitted value. -/
-structure Submission (raw : Type) where
+structure Submission (α : Type) where
   form : String
   fingerprint : String
-  value : raw
+  value : α
   deriving ToJson, FromJson
 
 def fetchEffect (request : Model.HttpRequest) : Wire.Effect :=
@@ -29,12 +29,12 @@ def fetchedRequest (id : String) : Except String Model.HttpRequest :=
   Json.parse id >>= fromJson?
 
 def ModelForm.Snapshot.toWire
-  {raw : Type}
-  [ToJson raw]
-  (snapshot : ModelForm.Snapshot raw)
+  {α : Type}
+  [ToJson α]
+  (snapshot : ModelForm.Snapshot α)
   (formName fingerprint submitUrl : String)
   : Wire.Snapshot :=
-  let submission := toJson ({ form := formName, fingerprint, value := snapshot.value } : Submission raw)
+  let submission := toJson ({ form := formName, fingerprint, value := snapshot.value } : Submission α)
   let view := snapshot.view.toReactPage snapshot.ui (toJson snapshot.value).pretty
   { title := snapshot.view.title
     view

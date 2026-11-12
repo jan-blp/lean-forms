@@ -10,21 +10,21 @@ namespace Forms.Model
 
 universe u v
 
-inductive Inputs (Γ : Context) (source : Type) : List Type → Type 1 where
-  | nil : Inputs Γ source []
+inductive Inputs (Γ : Context) (α : Type) : List Type → Type 1 where
+  | nil : Inputs Γ α []
   | cons
-      {value : Type}
+      {β : Type}
       {rest : List Type}
-      (path : Path source value)
-      (inputs : Inputs Γ source rest)
-      : Inputs Γ source (value :: rest)
+      (path : Path α β)
+      (inputs : Inputs Γ α rest)
+      : Inputs Γ α (β :: rest)
   /-- Reads a context entry, whether read-only or writable. -/
   | ui {access : Access}
-      {value : Type}
+      {β : Type}
       {rest : List Type}
-      (key : Ref Γ access value)
-      (inputs : Inputs Γ source rest)
-      : Inputs Γ source (value :: rest)
+      (key : Ref Γ access β)
+      (inputs : Inputs Γ α rest)
+      : Inputs Γ α (β :: rest)
 
 /-- Declares dependencies, e.g. `inputs[path[field], .ui key]`. -/
 macro "inputs[" paths:term,* "]" : term => do
@@ -37,11 +37,11 @@ macro "inputs[" paths:term,* "]" : term => do
 
 def Inputs.weaken
   {Γ : Context}
-  {outer source : Type}
+  {α β : Type}
   {types : List Type}
-  (path : Path outer source)
-  (inputs : Inputs Γ source types)
-  : Inputs Γ outer types :=
+  (path : Path α β)
+  (inputs : Inputs Γ β types)
+  : Inputs Γ α types :=
   match inputs with
   | .nil => .nil
   | .cons input rest => .cons (path.trans input) (rest.weaken path)
@@ -49,19 +49,19 @@ def Inputs.weaken
 
 def Inputs.Values : List Type → Type
   | [] => Unit
-  | value :: rest => value × Values rest
+  | α :: rest => α × Values rest
 
-def Inputs.Function (types : List Type) (result : Type u) : Type u :=
+def Inputs.Function (types : List Type) (β : Type u) : Type u :=
   match types with
-  | [] => result
-  | value :: rest => value → Function rest result
+  | [] => β
+  | α :: rest => α → Function rest β
 
 def Inputs.read
   {Γ : Context}
-  {source : Type}
+  {α : Type}
   {types : List Type}
-  (inputs : Inputs Γ source types)
-  (sourceValue : source)
+  (inputs : Inputs Γ α types)
+  (sourceValue : α)
   (state : Env Γ)
   : Values types :=
   match inputs with
@@ -70,58 +70,61 @@ def Inputs.read
   | .ui key rest => (key.get state, rest.read sourceValue state)
 
 def Inputs.apply
-  {result : Type u}
+  {α : Type u}
   {types : List Type}
-  (fn : Function types result)
+  (fn : Function types α)
   (values : Values types)
-  : result :=
+  : α :=
   match types with
   | [] => fn
   | _ :: _ => apply (fn values.1) values.2
 
 def Inputs.Function.map
   {types : List Type}
-  {result : Type u} {mapped : Type v}
-  (f : result → mapped)
-  (fn : Function types result)
-  : Function types mapped :=
+  {α : Type u}
+  {β : Type v}
+  (f : α → β)
+  (fn : Function types α)
+  : Function types β :=
   match types with
   | [] => f fn
   | _ :: _ => fun value => map f (fn value)
 
-structure Computation (Γ : Context) (source : Type) (result : Type u) where
+structure Computation (Γ : Context) (α : Type) (β : Type u) where
   {types : List Type}
-  inputs : Inputs Γ source types
-  run : Inputs.Function types result
+  inputs : Inputs Γ α types
+  run : Inputs.Function types β
 
 /-- A computation without inputs. -/
 def Computation.const
   {Γ : Context}
-  {source : Type}
-  {result : Type u}
-  (value : result)
-  : Computation Γ source result where
+  {α : Type}
+  {β : Type u}
+  (value : β)
+  : Computation Γ α β where
   inputs := .nil
   run := value
 
 def Computation.eval
   {Γ : Context}
-  {source : Type} {result : Type u}
-  (computation : Computation Γ source result)
-  (value : source)
+  {α : Type}
+  {β : Type u}
+  (computation : Computation Γ α β)
+  (value : α)
   (state : Env Γ)
-  : result :=
+  : β :=
   Inputs.apply computation.run (computation.inputs.read value state)
 
-instance {Γ : Context} {source : Type} : Functor (Computation Γ source) where
+instance {Γ : Context} {α : Type} : Functor (Computation Γ α) where
   map f computation := ⟨computation.inputs, Inputs.Function.map f computation.run⟩
 
 def Computation.weaken
   {Γ : Context}
-  {outer source : Type} {result : Type u}
-  (path : Path outer source)
-  (computation : Computation Γ source result)
-  : Computation Γ outer result :=
+  {α β : Type}
+  {γ : Type u}
+  (path : Path α β)
+  (computation : Computation Γ β γ)
+  : Computation Γ α γ :=
   ⟨computation.inputs.weaken path, computation.run⟩
 
 end Forms.Model

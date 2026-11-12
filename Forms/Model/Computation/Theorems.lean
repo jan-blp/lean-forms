@@ -10,9 +10,9 @@ universe u v w
 /-- Evaluation depends only on the declared inputs; changes elsewhere do not affect it. -/
 theorem Computation.eval_congr
   {Γ : Context}
-  {source : Type} {result : Type u}
-  (computation : Computation Γ source result)
-  (first second : source)
+  {α : Type} {β : Type u}
+  (computation : Computation Γ α β)
+  (first second : α)
   (firstState secondState : Env Γ)
   (h : computation.inputs.read first firstState = computation.inputs.read second secondState)
   : computation.eval first firstState = computation.eval second secondState :=
@@ -20,9 +20,9 @@ theorem Computation.eval_congr
 
 theorem Inputs.apply_map
   {types : List Type}
-  {result : Type u} {mapped : Type v}
-  (f : result → mapped)
-  (fn : Inputs.Function types result)
+  {α : Type u} {β : Type v}
+  (f : α → β)
+  (fn : Inputs.Function types α)
   (values : Inputs.Values types)
   : Inputs.apply (Inputs.Function.map f fn) values = f (Inputs.apply fn values) := by
   induction types with
@@ -31,8 +31,8 @@ theorem Inputs.apply_map
 
 theorem Inputs.Function.map_id
   {types : List Type}
-  {result : Type u}
-  (fn : Inputs.Function types result)
+  {α : Type u}
+  (fn : Inputs.Function types α)
   : Inputs.Function.map id fn = fn := by
   induction types with
   | nil =>
@@ -42,10 +42,10 @@ theorem Inputs.Function.map_id
 
 theorem Inputs.Function.map_comp
   {types : List Type}
-  {result : Type u} {middle : Type v} {mapped : Type w}
-  (g : result → middle)
-  (h : middle → mapped)
-  (fn : Inputs.Function types result)
+  {α : Type u} {β : Type v} {γ : Type w}
+  (g : α → β)
+  (h : β → γ)
+  (fn : Inputs.Function types α)
   : Inputs.Function.map (h ∘ g) fn = Inputs.Function.map h (Inputs.Function.map g fn) := by
   induction types with
   | nil =>
@@ -53,7 +53,7 @@ theorem Inputs.Function.map_comp
   | cons _ _ ih =>
     exact funext fun value => ih (fn value)
 
-instance {Γ : Context} {source : Type} : LawfulFunctor (Computation Γ source) where
+instance {Γ : Context} {α : Type} : LawfulFunctor (Computation Γ α) where
   map_const := rfl
   id_map computation := by
     cases computation
@@ -65,10 +65,10 @@ instance {Γ : Context} {source : Type} : LawfulFunctor (Computation Γ source) 
 @[simp]
 theorem Computation.eval_map
   {Γ : Context}
-  {source : Type} {result mapped : Type u}
-  (f : result → mapped)
-  (computation : Computation Γ source result)
-  (value : source)
+  {α : Type} {β γ : Type u}
+  (f : β → γ)
+  (computation : Computation Γ α β)
+  (value : α)
   (state : Env Γ)
   : (f <$> computation).eval value state = f (computation.eval value state) :=
   Inputs.apply_map f computation.run (computation.inputs.read value state)

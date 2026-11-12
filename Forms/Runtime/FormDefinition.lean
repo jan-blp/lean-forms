@@ -22,14 +22,14 @@ structure FormDefinition where
 
 /-- Checked first, so a stale client gets a reload hint instead of a decode error. -/
 def decodeSubmission
-  (raw : Type)
-  [FromJson raw]
+  (α : Type)
+  [FromJson α]
   (name fingerprint : String)
   (json : Json)
-  : Except String raw := do
+  : Except String α := do
   unless (json.getObjValAs? String "fingerprint").toOption == some fingerprint do
     throw "This form is out of date. Reload the page."
-  let submission ← fromJson? (α := Submission raw) json
+  let submission ← fromJson? (α := Submission α) json
   unless submission.form == name do throw "Wrong form."
   pure submission.value
 

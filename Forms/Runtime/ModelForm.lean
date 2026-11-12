@@ -13,12 +13,12 @@ inductive Effect where
   | fetch (request : Model.HttpRequest)
   deriving BEq
 
-structure State {Γ : Model.Context} {raw : Type} (form : Model.Component Γ raw) where
+structure State {Γ : Model.Context} {α : Type} (form : Model.Component Γ α) where
   locals : form.LocalState
-  initial : raw
+  initial : α
   initialEnv : Model.Env Γ
   env : Model.Env Γ
-  value : raw
+  value : α
   ui : Interaction.State
   validationStarted : Bool
   serverFeedback : Option Feedback.ServerError
@@ -26,7 +26,13 @@ structure State {Γ : Model.Context} {raw : Type} (form : Model.Component Γ raw
   /-- Effects of the last command, sent with its snapshot. -/
   outbox : List Effect
 
-def openState {Γ : Model.Context} {raw : Type} (form : Model.Component Γ raw) (value : raw) (env : Model.Env Γ) : State form where
+def openState
+  {Γ : Model.Context}
+  {α : Type}
+  (form : Model.Component Γ α)
+  (value : α)
+  (env : Model.Env Γ)
+  : State form where
   locals := form.initialState
   initial := value
   initialEnv := env
@@ -39,7 +45,12 @@ def openState {Γ : Model.Context} {raw : Type} (form : Model.Component Γ raw) 
   outbox := []
 
 /-- Marks the requests `form` reads but has not loaded as loading, and queues them. -/
-def load {Γ : Model.Context} {raw : Type} (form : Model.Component Γ raw) (state : State form) : State form :=
+def load
+  {Γ : Model.Context}
+  {α : Type}
+  (form : Model.Component Γ α)
+  (state : State form)
+  : State form :=
   let locals := form.normalize state.cache state.value state.env state.locals
   let missing := ((form.requests state.cache state.value state.env locals).filter (!state.cache.contains ·)).eraseDups
   { state with
@@ -48,7 +59,12 @@ def load {Γ : Model.Context} {raw : Type} (form : Model.Component Γ raw) (stat
     outbox := state.outbox ++ missing.map .fetch }
 
 /-- Starts over from `initial`, keeping loaded responses; failed requests are retried. -/
-def restart {Γ : Model.Context} {raw : Type} {form : Model.Component Γ raw} (state : State form) : State form :=
+def restart
+  {Γ : Model.Context}
+  {α : Type}
+  {form : Model.Component Γ α}
+  (state : State form)
+  : State form :=
   { openState form state.initial state.initialEnv with
     cache := state.cache.filter fun _ response => match response with
       | .failed _ => false
@@ -79,10 +95,10 @@ def validationErrors
   : List Feedback.Error :=
   (Model.errors (Model.Validation.validate (model := model) value)).map ModelView.error
 
-structure Snapshot (raw : Type) where
+structure Snapshot (α : Type) where
   view : Display.View
   controls : List Display.Control
-  value : raw
+  value : α
   ui : Interaction.State
   errors : List Feedback.Error
   summary : String
@@ -139,9 +155,10 @@ def Rejection.ofAction : ModelView.ActionError → Rejection
   | .invalid error => .stale (.invocation error)
 
 /-- The checked invocation that `key` and `argument` name. -/
-def validateAction {Γ : Model.Context}
-  {raw : Type}
-  (form : Model.Component Γ raw)
+def validateAction
+  {Γ : Model.Context}
+  {α : Type}
+  (form : Model.Component Γ α)
   (state : State form)
   (key : ControlKey)
   (argument : Option Input)
@@ -149,9 +166,10 @@ def validateAction {Γ : Model.Context}
   if state.ui.pending then throw (.stale .pending)
   (ModelView.decodeKey form state.cache state.value key argument state.env state.locals).mapError .ofAction
 
-def applyValid {Γ : Model.Context}
-  {raw : Type}
-  (form : Model.Component Γ raw)
+def applyValid
+  {Γ : Model.Context}
+  {α : Type}
+  (form : Model.Component Γ α)
   (state : State form)
   (invocation : form.ValidInvocation state.cache state.value state.env state.locals)
   : State form :=
@@ -163,9 +181,10 @@ def applyValid {Γ : Model.Context}
     serverFeedback := none
     ui := { state.ui with notice := .info "", resultVisible := false } }
 
-def apply {Γ : Model.Context}
-  {raw : Type}
-  (form : Model.Component Γ raw)
+def apply
+  {Γ : Model.Context}
+  {α : Type}
+  (form : Model.Component Γ α)
   (state : State form)
   (key : ControlKey)
   (argument : Option Input)
