@@ -13,6 +13,7 @@ def Component.requests {Γ : Context} {raw : Type} (component : Component Γ raw
   | .field .. => []
   | .groupOf _ children => children.requests cache current state locals
   | .computed .. => []
+  | .button .. => []
   | .withAvailability availability body =>
     match availability.eval current state with
     | .hidden => []

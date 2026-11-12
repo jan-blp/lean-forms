@@ -29,7 +29,7 @@ def editor
   { key := DisplayProtocol.controlKey .edit location, target, label, disabled, location, input
     messages := Feedback.messages errors location }
 
-def location {raw : Type} {value : raw} : Model.Location raw value → Feedback.Location
+def location {raw : Type} {value : raw} : Model.Location value → Feedback.Location
   | .self => []
   | @Model.Location.field _ _ inst _ f rest => .field (@Fields.key _ inst _ f) :: location rest
   | @Model.Location.constructor _ _ inst _ c rest => .constructor (@Constructors.key _ inst _ c) :: location rest
@@ -112,6 +112,10 @@ def build
   | .groupOf label children =>
     .stack (some label) (buildAll state scopes children value cache errors disabled target location 0 locals)
   | .computed label computation => .computed label (computation.eval value state)
+  | .button label _ => .control {
+      key := DisplayProtocol.buttonKey target location
+      target, location, label, disabled
+      input := .action }
   | .withAvailability availability body =>
     match availability.eval value state with
     | .enabled => build state scopes body value cache errors disabled target location locals
@@ -311,6 +315,7 @@ def decode
     match argument with
     | some input => (Input.decode widget input).mapError .decode
     | none => .error (.decode (.clientBug .missingArgument))
+  | .button .., [] => noArgument argument ()
   | .groupOf _ children, index :: rest => decodeAll state children cache current index rest argument locals
   | .withAvailability availability body, target => do
     let invocation ← decode state body cache current target argument locals

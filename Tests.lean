@@ -3,6 +3,7 @@ module
 import Tests.FormModel
 import Tests.LocalBind
 import Tests.Context
+import Tests.Actions
 import Tests.Dependencies
 import Tests.InputProtocol
 import Tests.Wire
@@ -20,6 +21,7 @@ public def main : IO Unit := do
   Tests.FormModel.run
   Tests.LocalBind.run
   Tests.Context.run
+  Tests.Actions.run
   Tests.Dependencies.run
   Tests.InputProtocol.run
   Tests.Wire.run
