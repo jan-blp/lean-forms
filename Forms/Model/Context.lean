@@ -3,7 +3,8 @@ module
 @[expose] public section
 namespace Forms.Model
 
-/-- Whether UI actions may update a context entry. -/
+/-- Whether UI actions may update a context entry.
+NOTE: Access enforcement relies on modifying the environment only through `Ref.set`. -/
 inductive Access where
   | readOnly
   | writable
