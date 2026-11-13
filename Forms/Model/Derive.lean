@@ -146,8 +146,9 @@ private def emitFields
       if f.name == g.name then (new : TermSyntax) else binder
     let fieldSetter := global (ns ++ `Field ++ `set ++ f.name)
     let rawMk := global (ns ++ `Raw ++ `mk)
-    emit (← `(command| @[expose] def $fieldSetter:ident ($new:ident : FormModel.Raw $type) : $raw → $raw
-      | $(← app rawMk (binders.map (·))) => $(← app rawMk values)))
+    -- `casesOn` instead of `match` avoids compiling an n-field matcher per setter.
+    emit (← `(command| @[expose] def $fieldSetter:ident ($new:ident : FormModel.Raw $type) ($old:ident : $raw) : $raw :=
+      $(global (ns ++ `Raw ++ `casesOn)) (motive := fun _ => $raw) $old fun $binders* => $(← app rawMk values)))
     setters := setters.push (← alternative #[pattern] (← `($fieldSetter $new $old)))
     keys := keys.push (← alternative #[pattern] (Syntax.mkStrLit f.name.getString!))
   let getter ← if fields.isEmpty then `(nomatch $selected) else matchOn #[selected] getters
