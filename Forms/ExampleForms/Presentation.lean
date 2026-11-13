@@ -45,33 +45,34 @@ def pane
 def sharedTabs : Component [] Nat Nat :=
   .present <|
     .bind (0 : Nat) <|
-      .bind (0 : Nat) <|
-        let shared : Var [⟨.writable, Nat⟩, ⟨.writable, Nat⟩] Nat := .there .here
-        let active : Var [⟨.writable, Nat⟩, ⟨.writable, Nat⟩] Nat := .here
-        .own (.tabBar "Panes" active ["First pane", "Second pane"]) <|
-          .own (pane shared.there "First pane") <|
-            .own (pane shared.there.there "Second pane") <|
-              let shared := shared.there.there.there
-              let active := active.there.there.there
-              .layout { inputs := inputs[.ui shared], run := id } {
-                inputs := inputs[.ui active]
-                run := fun active => .group (some "Shared state across tabs") [
-                  .place (.there (.there .here)),
-                  .tabs active [.place (.there .here), .place .here]] }
+      .tabs "Panes" ["First pane", "Second pane"] <|
+        let shared : Var [⟨.readOnly, Unit⟩, ⟨.writable, Nat⟩, ⟨.writable, Nat⟩] Nat :=
+          .there (.there .here)
+        let active : Var [⟨.readOnly, Unit⟩, ⟨.writable, Nat⟩, ⟨.writable, Nat⟩] Nat := .there .here
+        .own (pane shared "First pane") <|
+          .own (pane shared.there "Second pane") <|
+            .layout { inputs := inputs[.ui shared.there.there], run := id } {
+              inputs := inputs[.ui active.there.there]
+              run := fun active => .group (some "Shared state across tabs") [
+                .place (.there (.there .here)),
+                match active with
+                | 0 => .place (.there .here)
+                | _ => .place .here] }
 
 /-- A presentation inside each list row, with row-local tab state. -/
 def noteTabs {Γ : Context} : Component Γ String :=
   .present <|
-    .bind (0 : Nat) <|
-      let active : Var (⟨.writable, Nat⟩ :: Γ) Nat := .here
-      .own (.tabBar "Note view" active ["Edit", "Preview"]) <|
-        .own (.field .self "Text" .text) <|
-          .own (.computed "Preview" { inputs := inputs[path[]], run := fun text => s!"«{text}»" }) <|
-            .arrange {
-              inputs := inputs[.ui active.there.there.there]
-              run := fun active => .group none [
-                .place (.there (.there .here)),
-                .tabs active [.place (.there .here), .place .here]] }
+    .tabs "Note view" ["Edit", "Preview"] <|
+      let active : Var (⟨.readOnly, Unit⟩ :: ⟨.writable, Nat⟩ :: Γ) Nat := .there .here
+      .own (.field .self "Text" .text) <|
+        .own (.computed "Preview" { inputs := inputs[path[]], run := fun text => s!"«{text}»" }) <|
+          .arrange {
+            inputs := inputs[.ui active.there.there]
+            run := fun active => .group none [
+              .place (.there (.there .here)),
+              match active with
+              | 0 => .place (.there .here)
+              | _ => .place .here] }
 
 /-- An outer presentation that owns rows with their own presentations. -/
 def notes : Component [] (List String) Nat :=

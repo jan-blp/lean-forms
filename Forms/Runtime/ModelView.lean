@@ -235,7 +235,6 @@ def renderLayout
   : Layout slots → Display.View
   | .place slot => views slot
   | .group label children => .stack label (renderAll views children)
-  | .tabs active panes => renderPane views panes active
 
 def renderAll
   {slots : Nat}
@@ -243,14 +242,6 @@ def renderAll
   : List (Layout slots) → List Display.View
   | [] => []
   | child :: rest => renderLayout views child :: renderAll views rest
-
-def renderPane
-  {slots : Nat}
-  (views : Slot slots → Display.View)
-  : List (Layout slots) → Nat → Display.View
-  | [], _ => .hidden
-  | pane :: _, 0 => renderLayout views pane
-  | _ :: rest, index + 1 => renderPane views rest index
 end
 
 /-- Shares list and table updates after their rows have been evaluated. -/

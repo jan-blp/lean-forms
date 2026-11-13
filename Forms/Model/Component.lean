@@ -450,6 +450,18 @@ def Component.loadOr
   : Presentation slots Γ α γ :=
   ⟨Binding β body.LocalState, .bind initial body.node⟩
 
+/-- Binds the active tab and owns its strip; `body` reads the tab as `.there .here` and places the
+strip as `Slot.here`. -/
+@[reducible] def Presentation.tabs
+  {slots : Nat}
+  {Γ : Context}
+  {α β : Type}
+  (label : String)
+  (labels : List String)
+  (body : Presentation (slots + 1) (⟨.readOnly, Unit⟩ :: ⟨.writable, Nat⟩ :: Γ) α β)
+  : Presentation slots Γ α β :=
+  .bind 0 (.own (.tabBar label .here labels) body)
+
 /-- A component whose view is a layout of the components it owns. -/
 @[reducible] def Component.present
   {Γ : Context}

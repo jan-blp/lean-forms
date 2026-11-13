@@ -167,10 +167,6 @@ def run : IO Unit := do
     (match ControlKeyProtocol.fromString (ControlKeyProtocol.toString bar.key) with
       | .ok key => key == bar.key
       | .error _ => false)
-  check "PresentationMissingTabShowsNothing"
-    (match renderLayout (fun _ => .computed "Pane" "") (.tabs 2 [.place .here] : Layout 1) with
-      | .hidden => true
-      | _ => false)
 
   let pending := unplaced.evaluate 0 Env.nil
   check "PresentationPlacementDoesNotSuppressOwnedRequests"

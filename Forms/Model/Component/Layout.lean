@@ -13,7 +13,5 @@ inductive Slot : Nat → Type where
 inductive Layout (slots : Nat) where
   | place (slot : Slot slots)
   | group (label : Option String) (children : List (Layout slots))
-  /-- Shows only the pane at `active`; no pane if it is out of range. -/
-  | tabs (active : Nat) (panes : List (Layout slots))
 
 end Forms.Model
