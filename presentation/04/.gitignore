@@ -1,0 +1,16 @@
+/slides.aux
+/slides.fdb_latexmk
+/slides.fls
+/slides.log
+/slides.nav
+/slides.out
+/slides.pdf
+/slides.snm
+/slides.synctex.gz
+/slides.toc
+*.vrb
+/slides.xdv
+/slides.tex
+/.auctex-auto/
+/assets/architecture.pdf
+/assets/architecture-wasm.pdf
