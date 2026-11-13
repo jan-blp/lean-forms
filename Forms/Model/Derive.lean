@@ -169,7 +169,8 @@ private def emitFields
     let pattern : TermSyntax := global (ns ++ `Field ++ f.name)
     let proof := global (ns ++ `Field ++ (f.name.appendAfter "_lawful"))
     emit (← `(command| theorem $proof:ident : LeanLens.LawfulLens ($lens $pattern) :=
-      Forms.Model.lawfulMkLens (get := $get $pattern) (put := $set $pattern)
+      Forms.Model.lawfulMkLens
+        (get := $(global (ns ++ `Raw ++ f.name))) (put := $(global (ns ++ `Field ++ `set ++ f.name)))
         (fun _ src => by cases src; rfl) (fun src => by cases src; rfl) (fun _ _ src => by cases src; rfl)))
     lawfulCases := lawfulCases.push (← alternative #[pattern] proof)
   let lawfulBody ← if fields.isEmpty then `(nomatch $selected) else matchOn #[selected] lawfulCases
