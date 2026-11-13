@@ -107,6 +107,24 @@ private def alternative
   : CommandElabM Alternative :=
   `(Parser.Term.matchAltExpr| | $[$patterns],* => $body)
 
+/-- `body` if every check matches its pattern, else `.error errors`.
+The errors are bound before the match so its decision tree does not copy them per failure. -/
+private def allOrError
+  (checks : Array TermSyntax)
+  (results : Array Ident)
+  (patterns : Array TermSyntax)
+  (errors : TermSyntax)
+  (body : TermSyntax)
+  : CommandElabM TermSyntax := do
+  let collected ← fresh `errors
+  let wildcards ← results.mapM fun _ => `(_)
+  let mut term ← matchOn (results.map (·)) #[← alternative patterns body,
+    ← alternative wildcards (← `(.error $collected))]
+  term ← `(let $collected:ident := $errors; $term)
+  for (result, check) in (results.zip checks).reverse do
+    term ← `(let $result:ident := $check; $term)
+  return term
+
 private def appendLists (values : Array TermSyntax) : CommandElabM TermSyntax := do
   let mut result ← `([])
   for value in values.reverse do result ← `($value ++ $result)
@@ -142,6 +160,7 @@ private def emitFields
   let mut getters := #[]
   let mut setters := #[]
   let mut keys := #[]
+  let mut decoders := #[]
   for (f, _) in fields do
     let pattern : TermSyntax := global (ns ++ `Field ++ f.name)
     let projection := global (ns ++ `Raw ++ f.name)
@@ -151,17 +170,26 @@ private def emitFields
       else `($(global (ns ++ `Raw ++ g.name)) $old)
     setters := setters.push (← alternative #[pattern] (← app (global (ns ++ `Raw ++ `mk)) values))
     keys := keys.push (← alternative #[pattern] (Syntax.mkStrLit f.name.getString!))
+    decoders := decoders.push (← alternative #[Syntax.mkStrLit f.name.getString!] (← `(some ⟨_, $pattern⟩)))
   let getter ← if fields.isEmpty then `(nomatch $selected) else matchOn #[selected] getters
   let setter ← if fields.isEmpty then `(nomatch $selected) else matchOn #[selected] setters
   let key ← if fields.isEmpty then `(nomatch $selected) else matchOn #[selected] keys
+  let name ← fresh `name
+  let decoder ← matchOn #[name] (decoders.push (← alternative #[← `(_)] (← `(none))))
   let get := global (ns ++ `Field.get)
   let set := global (ns ++ `Field.set)
   let keyName := global (ns ++ `Field.key)
   let lens := global (ns ++ `Field.lens)
   let lawful := global (ns ++ `Field.lawful)
+  let ofKey := global (ns ++ `Field.ofKey)
+  let ofKeyKey := global (ns ++ `Field.ofKey_key)
   emit (← `(command| @[expose] def $get:ident {α : Type} ($selected:ident : $field α) ($old:ident : $raw) : α := $getter))
   emit (← `(command| @[expose] def $set:ident {α : Type} ($selected:ident : $field α) ($new:ident : α) ($old:ident : $raw) : $raw := $setter))
   emit (← `(command| @[expose] def $keyName:ident {α : Type} ($selected:ident : $field α) : String := $key))
+  emit (← `(command| @[expose] def $ofKey:ident ($name:ident : String) : Option ((β : Type) × $field β) := $decoder))
+  emit (← `(command| theorem $ofKeyKey:ident {α : Type} ($selected:ident : $field α) :
+      $ofKey ($keyName $selected) = some ⟨α, $selected⟩ := by
+    cases $selected:term <;> rfl))
   emit (← `(command| @[expose] def $lens:ident {α : Type} ($selected:ident : $field α) : LeanLens.Lens' $raw α :=
     LeanLens.mkLens ($get $selected) ($set $selected)))
   emit (← `(command| instance $lawful:ident {α : Type} ($selected:ident : $field α) : LeanLens.LawfulLens ($lens $selected) := by
@@ -173,7 +201,9 @@ private def emitFields
     key := $keyName
     key_injective := by
       intro α β a b h
-      cases a <;> cases b <;> simp_all [$keyName:term]))
+      have decoded := ($ofKeyKey a).symm.trans ((congrArg $ofKey h).trans ($ofKeyKey b))
+      cases decoded
+      rfl))
 
 private structure ModelInfo where
   name : Name
@@ -381,8 +411,7 @@ private def validationBranch
     unless model.record do
       let error ← fresh `error
       errors ← `(List.map (fun $error:ident => $(← model.liftError ctor error)) $errors)
-    body ← matchOn checks #[← alternative patterns body,
-      ← alternative (proofs.map fun f => f.result) (← `(.error $errors))]
+    body ← allOrError checks (proofs.map (·.result)) patterns errors body
   let toRaw := global (model.parts ctor ++ `toRaw)
   let simpTerms : Array TermSyntax := #[parts, toRaw] ++ data.map (fun f => f.equality)
   let simpArgs ← simpTerms.mapM fun term => `(Parser.Tactic.simpLemma| $term:term)
@@ -400,8 +429,7 @@ private def validationBranch
         (List.map (fun $error:ident => $lifted)))
     let patterns ← data.mapM fun f => `(.ok ⟨$(f.value), $(f.equality)⟩)
     let errors ← appendLists (← data.mapM fun f => `(Forms.Model.errors $(f.result)))
-    body ← matchOn checks #[← alternative patterns body,
-      ← alternative (data.map fun f => f.result) (← `(.error $errors))]
+    body ← allOrError checks (data.map (·.result)) patterns errors body
   alternative #[← model.wrap ctor payload] body
 
 private def emitValidation (model : ModelInfo) : CommandElabM Unit := do
