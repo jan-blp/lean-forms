@@ -156,7 +156,7 @@ private def performIn
   (argument : Option Input)
   : Except ModelForm.Rejection α := do
   let invocation ← (ModelView.decodeKey form cache value key argument Env.nil).mapError .ofAction
-  return (form.applyValid cache value Env.nil form.initialState invocation).value
+  return invocation.value
 
 def run : IO Unit := do
   check "RemoteApiRoundtrip" ([suppliers, supplier "acme"].all fun request =>

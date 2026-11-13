@@ -14,6 +14,9 @@ import Tests.Remote
 import Tests.Table
 import Tests.Focus
 import Tests.TableSelection
+import Tests.SharedState
+import Tests.Outputs
+import Tests.OutputEvaluation
 
 meta import Forms.Model.Computation.Theorems
 meta import Forms.Runtime.ModelView.Theorems
@@ -33,3 +36,6 @@ public def main : IO Unit := do
   Tests.Table.run
   Tests.Focus.run
   Tests.TableSelection.run
+  Tests.SharedState.run
+  Tests.Outputs.run
+  Tests.OutputEvaluation.run

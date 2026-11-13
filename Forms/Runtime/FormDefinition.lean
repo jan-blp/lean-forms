@@ -35,12 +35,13 @@ def decodeSubmission
 
 /-- `model` rendered by `form`, starting from `initial`. -/
 def FormDefinition.ofModel
+  {β : Type}
   (model : Type)
   [FormModel model]
   [Model.Validation model]
   [ToJson (FormModel.Raw model)]
   [FromJson (FormModel.Raw model)]
-  (form : Model.Component [] (FormModel.Raw model))
+  (form : Model.Component [] (FormModel.Raw model) β)
   (initial : FormModel.Raw model)
   : FormDefinition where
   State := ModelForm.State form

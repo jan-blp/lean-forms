@@ -79,7 +79,7 @@ def run : IO Unit := do
     ((ModelForm.snapshot (model := ExpenseReport) ExpenseReport.form validated).errors.map (·.message) ==
       ["Describe the expense.", "Enter an amount of at least CHF 1."])
   let request (amount : Nat) : HttpRequest := { method := .post, url := s!"/api/expense/{amount}", body := none }
-  let loading : Component [] ExpenseReport.Raw := .table
+  let loading : Component [] ExpenseReport.Raw := Component.void <| .table
     path[ExpenseReport.Field.expenses] "Expenses" "Expense" ⟨"", 0, false⟩
     columns["Details" => .loadWith
       { inputs := inputs[path[Expense.Field.amount]], run := fun amount =>
