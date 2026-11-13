@@ -14,8 +14,8 @@ private abbrev form := ExpenseReport.focusForm
 private abbrev BrowserState := ModelForm.State form
 private def selection (state : BrowserState) : RowSelection := state.locals.value
 
-private def browse (state : BrowserState) (command : ModelForm.Command) : IO BrowserState :=
-  IO.ofExcept (ModelForm.execute (model := ExpenseReport) form state command)
+private def browse (state : BrowserState) (input : ModelForm.Event) : IO BrowserState :=
+  IO.ofExcept (ModelForm.execute (model := ExpenseReport) form state input)
 
 private def browserKey
   (state : BrowserState)
@@ -31,7 +31,7 @@ def run : IO Unit := do
   let opened := ModelForm.openState form ExpenseReport.initial Env.nil
   let first ← browserKey opened "Select"
   let second ← browserKey opened "Select" 1
-  let selected ← browse opened (.event (.apply second none))
+  let selected ← browse opened (.apply second none)
   check "TableSelectKeepsItems"
     (selection selected == .row 1 &&
       toJson selected.value == toJson opened.value &&
@@ -40,37 +40,37 @@ def run : IO Unit := do
     | .stack _ (_ :: .table _ _ rows _ _ :: _) => rows.map (·.selected) == [some false, some true]
     | _ => false)
   let description ← browserKey selected "Description"
-  let edited ← browse selected (.event (.apply description (some (.text "Updated hotel"))))
+  let edited ← browse selected (.apply description (some (.text "Updated hotel")))
   check "TableDetailsEditSelectedItem"
     (edited.value.expenses.map (·.description) == ["Train to Bern", "Updated hotel"])
-  let switched ← browse edited (.event (.apply first none))
-  let stale ← browse switched (.event (.apply description (some (.text "Stale"))))
+  let switched ← browse edited (.apply first none)
+  let stale ← browse switched (.apply description (some (.text "Stale")))
   check "TableOldDetailsRejectStaleEdit"
     (stale.ui.rejection == some (toString InvocationError.absent) &&
       toJson stale.value == toJson switched.value)
-  let selectedAgain ← browse edited (.event (.apply second none))
-  let removedEarlier ← browse selectedAgain (.event (.apply (← browserKey selectedAgain "Remove") none))
+  let selectedAgain ← browse edited (.apply second none)
+  let removedEarlier ← browse selectedAgain (.apply (← browserKey selectedAgain "Remove") none)
   check "TableRemoveEarlierKeepsSelectedItem"
     (selection removedEarlier == .row 0 &&
       removedEarlier.value.expenses.map (·.description) == ["Updated hotel"])
   let remainingDetail ← browserKey removedEarlier "Description"
-  let removedSelected ← browse removedEarlier (.event (.apply (← browserKey removedEarlier "Remove") none))
+  let removedSelected ← browse removedEarlier (.apply (← browserKey removedEarlier "Remove") none)
   check "TableRemoveSelectedClearsSelection"
     (selection removedSelected == .none && removedSelected.value.expenses.isEmpty)
-  let staleAfterRemove ← browse removedSelected (.event (.apply remainingDetail (some (.text "Stale"))))
+  let staleAfterRemove ← browse removedSelected (.apply remainingDetail (some (.text "Stale")))
   check "TableRemovedDetailsRejectStaleEdit"
     (staleAfterRemove.ui.rejection == some (toString InvocationError.absent))
-  let reset ← browse edited (.event .reset)
+  let reset ← browse edited .reset
   check "TableResetClearsSelection"
     (selection reset == .none && toJson reset.value == toJson ExpenseReport.initial)
   let disabled := Component.disabledWhen (.const true) form
   let rejected ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) disabled (ModelForm.openState disabled ExpenseReport.initial Env.nil)
-    (.event (.apply second none)))
+    (.apply second none))
   check "TableDisabledSelectionRejects"
     (rejected.ui.rejection == some (toString InvocationError.disabled) &&
       toJson rejected.value == toJson opened.value)
   let pending := { opened with ui := { opened.ui with pending := true } }
-  let rejectedPending ← browse pending (.event (.apply second none))
+  let rejectedPending ← browse pending (.apply second none)
   check "TablePendingSelectionRejects"
     (rejectedPending.ui.rejection == some "Submission is in progress." &&
       toJson rejectedPending.value == toJson opened.value)
@@ -94,7 +94,7 @@ def run : IO Unit := do
   check "LocalBindingsKeepViewsIndependent" (selectors.length == 4)
   let some secondTableRow := selectors[3]? | throw (IO.userError "FAIL missing second table selection")
   let independent ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) twoTables multiple
-    (.event (.apply secondTableRow.key none)))
+    (.apply secondTableRow.key none))
   check "SelectionChangesOnlyItsBinding"
     (independent.locals.value.value == .none && independent.locals.tail.value.value == .row 1 &&
       toJson independent.value == toJson multiple.value)
@@ -105,7 +105,7 @@ def run : IO Unit := do
   let some nestedSelect := (ModelView.render nested nestedOpened.value {} [] Env.nil).controls.find? (·.label == "Select")
     | throw (IO.userError "FAIL missing nested selection")
   let nestedSelected ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) nested nestedOpened
-    (.event (.apply nestedSelect.key none)))
+    (.apply nestedSelect.key none))
   check "FocusPreservesNestedUiUpdates"
     (nestedSelected.locals.value == .row 0 && toJson nestedSelected.value == toJson nestedOpened.value)
   let mixed : Component [⟨.readOnly, RowSelection⟩, ⟨.writable, RowSelection⟩] ExpenseReport.Raw :=
@@ -116,7 +116,7 @@ def run : IO Unit := do
       (·.label == "Select")
     | throw (IO.userError "FAIL missing selection in mixed context")
   let mixedSelected ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) mixed mixedOpened
-    (.event (.apply mixedSelect.key none)))
+    (.apply mixedSelect.key none))
   check "TableSelectionPreservesReadOnlyInputs"
     (mixedSelected.env.value == .row 1 && mixedSelected.env.tail.value == .row 0 &&
       mixedSelected.locals.value == false &&

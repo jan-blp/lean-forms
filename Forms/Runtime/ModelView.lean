@@ -2,7 +2,7 @@ module
 
 public import Forms.Model.Invocation
 public import Forms.Runtime.Input
-public import Forms.Runtime.DisplayProtocol
+public import Forms.Runtime.Display
 
 @[expose] public section
 namespace Forms.Runtime.ModelView
@@ -26,7 +26,7 @@ def editor
     | .text => .text value
     | .natural => .natural value
     | .checkbox => .checkbox value
-  { key := DisplayProtocol.controlKey .edit location, target, label, disabled, location, input
+  { key := .edit location, target, label, disabled, location, input
     messages := Feedback.messages errors location }
 
 def location {α : Type} {value : α} : Model.Location value → Feedback.Location
@@ -67,7 +67,7 @@ def choiceControl
   (errors : List Feedback.Error)
   : Display.Control :=
   let selected := (branches.find? (·.matches (path.get value))).map (·.key)
-  { key := DisplayProtocol.controlKey .select location
+  { key := .select location
     target
     label
     disabled
@@ -77,13 +77,13 @@ def choiceControl
     messages := Feedback.messages errors location }
 
 def button
-  (action : DisplayProtocol.Action)
+  (key : ControlKey)
   (target : Display.Target)
   (location : Feedback.Location)
   (label : String)
   (disabled : Bool)
   : Display.Control :=
-  { key := DisplayProtocol.controlKey action location, target, label, disabled, location
+  { key, target, label, disabled, location
     input := .action }
 
 /-- Lexical binder addresses used only for frontend control keys. -/
@@ -113,7 +113,7 @@ def build
     .stack (some label) (buildAll state scopes children value cache errors disabled target location 0 locals)
   | .computed label computation => .computed label (computation.eval value state)
   | .button label _ => .control {
-      key := DisplayProtocol.buttonKey target location
+      key := .press target.indices location
       target, location, label, disabled
       input := .action }
   | .withAvailability availability body =>
@@ -134,9 +134,9 @@ def build
       let row := target.child index
       let itemLocation := location ++ [.index index]
       let fields := build state scopes body item cache errors disabled (row.child 0) itemLocation (locals[index]?.getD body.initialState)
-      let remove := button .remove (row.child 1) itemLocation "Remove" disabled
+      let remove := button (.remove itemLocation) (row.child 1) itemLocation "Remove" disabled
       Display.View.stack (some s!"{itemLabel} {index + 1}") [fields, .control remove]
-    let add := button .add target location s!"Add {itemLabel.toLower}" disabled
+    let add := button (.add location) target location s!"Add {itemLabel.toLower}" disabled
     .list label (rows ++ [.control add]) (Feedback.messages errors location)
   | @Component.load _ _ _ _inst source body =>
     let status := (source.eval value state).resolve cache
@@ -148,19 +148,18 @@ def build
       let row := target.child index
       let itemLocation := location ++ [.index index]
       let fields := buildColumns state scopes columns item cache errors disabled (row.child 0) itemLocation 0 (locals[index]?.getD columns.initialState)
-      let remove := button .remove (row.child 1) itemLocation "Remove" disabled
+      let remove := button (.remove itemLocation) (row.child 1) itemLocation "Remove" disabled
       let selected := match selection with
         | .none => none
         | some selected => some (selected.get state == .row index)
       let actions := match selection with
         | none => Display.View.control remove
         | some handle =>
-          let select := { button .selectRow (row.child 2) itemLocation
-            (if selected.getD false then "Selected" else "Select") disabled with
-            key := DisplayProtocol.controlKey .selectRow ((scopes handle.index).map Feedback.Step.index ++ [.index index]) }
+          let select := button (.selectRow (scopes handle.index) index) (row.child 2) itemLocation
+            (if selected.getD false then "Selected" else "Select") disabled
           Display.View.stack none [.control select, .control remove]
       ({ label := s!"{itemLabel} {index + 1}", selected, cells := fields ++ [actions] } : Display.TableRow)
-    let add := button .add target location s!"Add {itemLabel.toLower}" disabled
+    let add := button (.add location) target location s!"Add {itemLabel.toLower}" disabled
     .table label (columns.headers ++ ["Actions"]) rows (.control add) (Feedback.messages errors location)
   | .focus computation body =>
     let path := computation.eval value state

@@ -31,7 +31,9 @@ for (const { start, initial, cases } of fixtures) {
         assert.deepEqual(snapshot(model), expected);
         model.send('reset');
         // Reset does not resend requests still in flight.
-        assert.deepEqual(snapshot(model), { ...initial, effects: initial.effects.filter(e => 'submit' in e) });
+        assert.deepEqual(snapshot(model), { ...initial,
+          view: { ...initial.view, page: { ...initial.view.page, notice: { info: { message: 'Started over.' } } } },
+          effects: initial.effects.filter(e => 'submit' in e) });
       }
     } finally { model.dispose(); }
   });
@@ -50,7 +52,7 @@ test('models preserve independent values and reset', async () => {
     assert.equal(a.snapshot().submission.value.age, 30);
     a.send('reset'); assert.equal(a.snapshot().submission.value.age, 25);
     a.dispose(); a.dispose();
-    assert.throws(() => a.send('inspect'), /disposed/);
+    assert.throws(() => a.send('reset'), /disposed/);
   } finally { a.dispose(); b.dispose(); }
 });
 
@@ -71,11 +73,11 @@ test('hidden and disabled controls reject stale edits', async () => {
     apply(person, 'Request delivery', true);
     const street = key(person, 'Street');
     apply(person, 'Request delivery', false);
-    assert.throws(() => person.send({ apply: { key: street, argument: 'Changed' } }), /unavailable/);
+    assert.match(person.send({ apply: { key: street, argument: 'Changed' } }).rejection, /unavailable/);
     assert.equal(person.snapshot().submission.value.address.street, 'Lambda Lane');
     const gift = key(order, 'Gift wrap');
     apply(order, 'Quantity', '11');
-    assert.throws(() => order.send({ apply: { key: gift, argument: true } }), /unavailable/);
+    assert.match(order.send({ apply: { key: gift, argument: true } }).rejection, /unavailable/);
     assert.equal(order.snapshot().submission.value.gift, false);
   } finally { person.dispose(); order.dispose(); }
 });
@@ -85,7 +87,7 @@ test('disposed handles stay invalid and rejected requests leave state unchanged'
   const runtime = await createFormRuntime();
   const call = ({ operation, handle, ...fields }) => runtime.form(JSON.stringify(
     operation === 'open' ? { open: { start: fields } } : operation === 'dispose' ? { dispose: { handle } }
-      : { send: { handle, request: Object.keys(fields).length ? { [operation]: fields } : operation } }));
+      : { send: { handle, event: Object.keys(fields).length ? { [operation]: fields } : operation } }));
   const cycle = () => {
     const opened = call({ operation: 'open', ...fixture('person').start });
     assert.equal(opened.ok, true);
@@ -94,18 +96,21 @@ test('disposed handles stay invalid and rejected requests leave state unchanged'
     assert.equal(call({ operation: 'apply', handle, key, argument: '21' }).ok, true);
     assert.equal(call({ operation: 'reset', handle }).ok, true);
     assert.equal(call({ operation: 'dispose', handle }).ok, true);
-    assert.equal(call({ operation: 'inspect', handle }).ok, false);
+    assert.equal(call({ operation: 'reset', handle }).ok, false);
     return handle;
   };
   cycle();
   const next = call({ operation: 'open', ...fixture('person').start });
-  const handle = next.value.opened.handle;
-  const initial = call({ operation: 'inspect', handle });
+  const { handle, snapshot: initial } = next.value.opened;
   // The prefix must be valid so truncating at NUL would incorrectly succeed.
-  for (const text of ['{', '{}', JSON.stringify({ send: { handle, request: 'inspect' } }) + '\0'])
+  for (const text of ['{', '{}', JSON.stringify({ send: { handle, event: 'submit' } }) + '\0'])
     assert.equal(runtime.form(text).ok, false);
-  assert.equal(call({ operation: 'apply', handle, key: 'missing', argument: null }).ok, false);
-  assert.deepEqual(call({ operation: 'inspect', handle }), initial);
+  // An outcome nobody waits for changes nothing.
+  const unchanged = call({ operation: 'submitted', handle, outcome: { unreachable: { message: 'late' } } });
+  assert.deepEqual(unchanged.value.updated.snapshot, initial);
+  const stale = call({ operation: 'apply', handle, key: JSON.stringify(['edit', 'missing']), argument: null }).value.updated.snapshot;
+  assert.ok(stale.rejection);
+  assert.deepEqual(stale.submission, initial.submission);
   assert.equal(call({ operation: 'dispose', handle }).ok, true);
 });
 
@@ -121,7 +126,12 @@ test('editor normalization preserves whitespace, types, and natural precision', 
       assert.equal(model.snapshot().submission.value.age, 42);
     }
     for (const raw of ['', ' ', '-1', '+1', '1.5', '1e3', '0x10', '1 2', '1_000', '_1', '1_', '١', '１',
-      '\u00851', '\u180e1', '\u200b1', '1\0', 1, false, null, undefined, {}, []]) {
+      '\u00851', '\u180e1', '\u200b1', '1\0']) {
+      const before = model.snapshot().submission;
+      assert.ok(edit('Age', raw).rejection);
+      assert.deepEqual(model.snapshot().submission, before);
+    }
+    for (const raw of [1, false, null, undefined, {}, []]) {
       const before = model.snapshot();
       assert.throws(() => edit('Age', raw));
       assert.deepEqual(model.snapshot(), before);
@@ -132,7 +142,12 @@ test('editor normalization preserves whitespace, types, and natural precision', 
     assert.equal(model.snapshot().submission.value.name, ' 🌍\0 ');
     assert.throws(() => edit('Name', 1));
     for (const raw of ['true', 1, 0, null]) assert.throws(() => edit('Request delivery', raw));
-    assert.throws(() => model.send({ apply: { key: 'missing', argument: null } }));
+    assert.ok(model.send({ apply: { key: JSON.stringify(['edit', 'missing']), argument: null } }).rejection);
+    const beforeMalformed = model.snapshot();
+    for (const key of ['missing', '["unknown"]', '["edit",-1]', '["selectRow"]']) {
+      assert.throws(() => model.send({ apply: { key, argument: null } }), /Invalid control key/);
+      assert.deepEqual(model.snapshot(), beforeMalformed);
+    }
   } finally { model.dispose(); }
 });
 
@@ -153,15 +168,18 @@ test('Wasm exposes only the compiled-form API and recovers using a fresh instanc
 });
 
 
-test('Lean owns validation visibility, server feedback, and recovery', async () => {
+test('Lean shows validation before submission and handles server feedback and recovery', async () => {
   const model = await open(fixture('person').start);
   try {
     const quantity = model.snapshot().controls.find(c => c.label === 'Age');
     model.send({ apply: { key: quantity.key, argument: '150' } });
     assert.ok(model.snapshot().errors.length);
-    assert.deepEqual(messages(model.snapshot().view), []);
-    assert.equal(model.snapshot().summary, '');
-    model.send('validate');
+    assert.deepEqual(messages(model.snapshot().view), ['Age must be at most 120.']);
+    assert.equal(model.snapshot().summary, 'Age must be at most 120.');
+    assert.equal(model.snapshot().submissionBlocked, true);
+    assert.deepEqual(model.snapshot().effects, []);
+    model.send('submit');
+    assert.deepEqual(model.snapshot().effects, []);
     assert.equal(model.snapshot().submissionBlocked, true);
     assert.ok(messages(model.snapshot().view).length);
     assert.ok(model.snapshot().summary);
@@ -170,29 +188,33 @@ test('Lean owns validation visibility, server feedback, and recovery', async () 
     assert.equal(model.snapshot().submissionBlocked, false);
     const location = quantity.location.map(step => ({ ...step, ignored: true }));
     const error = { message: '<b>Literal 🌍</b>', targets: { kind: 'locations', locations: [location] } };
-    model.send({ serverError: { status: 422, body: JSON.stringify({ error: { kind: 'validation', message: 'Server rejected',
-      errors: [error, error, { message: 'Global', targets: { kind: 'global' } }] } }) } });
+    const reject = (status, body) => {
+      model.send('submit');
+      model.send({ submitted: { outcome: { response: { status, body } } } });
+    };
+    reject(422, JSON.stringify({ error: { kind: 'validation', message: 'Server rejected',
+      errors: [error, error, { message: 'Global', targets: { kind: 'global' } }] } }));
     assert.deepEqual(messages(model.snapshot().view), ['<b>Literal 🌍</b>']);
     assert.equal(model.snapshot().summary, 'Server rejected');
     assert.equal(model.snapshot().submissionBlocked, true);
-    const feedback = snapshot(model);
-    assert.throws(() => model.send({ apply: { key: 'missing', argument: null } }));
-    assert.deepEqual(snapshot(model), feedback);
+    assert.ok(model.send({ apply: { key: JSON.stringify(['edit', 'missing']), argument: null } }).rejection);
+    assert.deepEqual(messages(model.snapshot().view), ['<b>Literal 🌍</b>']);
+    assert.equal(model.snapshot().summary, 'Server rejected');
     model.send({ apply: { key: quantity.key, argument: '3' } });
     assert.deepEqual(messages(model.snapshot().view), []);
     assert.equal(model.snapshot().summary, '');
     for (const body of ['not json', '{}', JSON.stringify({ error: { kind: 'validation', message: 'Bad',
       errors: [error, { message: 'Broken', targets: { kind: 'locations', locations: [[{kind: 'item', index: '-1'}]] } }] } })]) {
-      model.send({ serverError: { status: 503, body: body } });
+      reject(503, body);
       assert.equal(model.snapshot().summary, 'Submission failed (HTTP 503).');
       assert.deepEqual(messages(model.snapshot().view), []);
     }
     model.send('reset');
     assert.equal(model.snapshot().summary, '');
     model.send({ apply: { key: quantity.key, argument: '150' } });
-    assert.deepEqual(messages(model.snapshot().view), []);
-    model.send('validate');
+    assert.deepEqual(messages(model.snapshot().view), ['Age must be at most 120.']);
     assert.equal(model.snapshot().submissionBlocked, true);
+    assert.deepEqual(model.snapshot().effects, []);
   } finally { model.dispose(); }
 });
 
@@ -200,7 +222,7 @@ test('Lean owns submission effects, pending locks, and reset', async () => {
   const model = await open(fixture('person').start);
   try {
     const editor = model.snapshot().controls.find(c => c.label === 'Age');
-    const send = (event, fields = {}) => model.send({ event: { message: event === 'submit' || event === 'reset' ? event : { [event]: fields } } });
+    const send = (event, fields = {}) => model.send(event === 'submit' || event === 'reset' ? event : { [event]: fields });
     const respond = (status, body) => send('submitted', { outcome: { response: { status, body } } });
     send('apply', { key: editor.key, argument: '07' });
     assert.equal(model.snapshot().submission.value.age, 7);
@@ -220,8 +242,6 @@ test('Lean owns submission effects, pending locks, and reset', async () => {
       assert.equal((model.snapshot().effects.length > 0), false);
       assert.deepEqual(model.snapshot().submission, submission);
     }
-    assert.throws(() => model.send({ apply: { key: editor.key, argument: '8' } }), /progress/);
-    assert.throws(() => model.send('reset'), /progress/);
     send('submitted', { outcome: { unreachable: { message: 'Network offline' } } });
     assert.equal(submitButton(model).disabled, false);
     assert.equal(status(model), 'Network offline');
@@ -250,12 +270,12 @@ test('UI state stays local to each model', async () => {
   const b = await open(fixture('person').start);
   try {
     const checkbox = a.snapshot().controls.find(c => c.widget === 'checkbox');
-    a.send({ event: { message: { apply: { key: checkbox.key, argument: true } } } });
-    a.send({ event: { message: 'submit' } });
+    a.send({ apply: { key: checkbox.key, argument: true } });
+    a.send('submit');
     assert.equal((a.snapshot().effects.length > 0), true);
     assert.equal(submitButton(b).disabled, false);
     assert.equal(b.snapshot().effects.length, 0);
-    a.send({ event: { message: { submitted: { outcome: { unreachable: { message: 'Offline' } } } } } });
+    a.send({ submitted: { outcome: { unreachable: { message: 'Offline' } } } });
     assert.equal(status(a), 'Offline');
     assert.equal(status(b), '');
   } finally { a.dispose(); b.dispose(); }
@@ -265,11 +285,11 @@ test('rejected applies announce an error and leave the value unchanged', async (
   const model = await open(fixture('person').start);
   try {
     const age = model.snapshot().controls.find(c => c.label === 'Age');
-    model.send({ event: { message: { apply: { key: age.key, argument: 'abc' } } } });
+    model.send({ apply: { key: age.key, argument: 'abc' } });
     assert.equal('error' in page(model).notice, true);
     assert.equal(model.snapshot().rejection, 'Enter a non-negative whole number.');
     assert.equal(model.snapshot().submission.value.age, 20);
-    model.send({ event: { message: { apply: { key: age.key, argument: '21' } } } });
+    model.send({ apply: { key: age.key, argument: '21' } });
     assert.equal(model.snapshot().rejection, null);
     assert.equal('error' in page(model).notice, false);
   } finally { model.dispose(); }
@@ -279,8 +299,8 @@ test('order chooses shipping branches, nests visibility, and validates, alongsid
   const order = await open(fixture('order').start);
   const person = await open(fixture('person').start);
   const control = label => order.snapshot().controls.find(c => c.label === label);
-  const apply = (label, argument) => order.send({ event: { message: { apply: { key: control(label).key, argument } } } });
-  const submit = () => order.send({ event: { message: 'submit' } });
+  const apply = (label, argument) => order.send({ apply: { key: control(label).key, argument } });
+  const submit = () => order.send('submit');
   const outputs = () => JSON.stringify(page(order).body);
   const draftLabels = () => order.snapshot().controls
     .filter(c => order.snapshot().draftFields.includes(c.key)).map(c => c.label);
@@ -320,11 +340,7 @@ test('order chooses shipping branches, nests visibility, and validates, alongsid
     apply('Shipping', 'express');
     assert.equal(shipping().express.phone, '079');
     const beforeRejectedBranch = order.snapshot().submission.value;
-    assert.throws(() => order.send({ apply: { key: control('Shipping').key, argument: 'drone' } }),
-      /branch 'drone' is no longer available/);
-    const rejectedBranch = order.send({ event: { message: {
-      apply: { key: control('Shipping').key, argument: 'drone' },
-    } } });
+    const rejectedBranch = order.send({ apply: { key: control('Shipping').key, argument: 'drone' } });
     assert.match(rejectedBranch.rejection, /branch 'drone' is no longer available/);
     assert.deepEqual(rejectedBranch.submission.value, beforeRejectedBranch);
     apply('Shipping', 'pickup');
@@ -341,8 +357,8 @@ test('expenses adds, removes, and validates items', async () => {
   const model = await open(fixture('expenses').start);
   const key = (label, nth = 0) => model.snapshot().controls.filter(c => c.label === label)[nth].key;
   const apply = (label, argument, nth = 0) =>
-    model.send({ event: { message: { apply: { key: key(label, nth), argument } } } });
-  const submit = () => model.send({ event: { message: 'submit' } });
+    model.send({ apply: { key: key(label, nth), argument } });
+  const submit = () => model.send('submit');
   const expenses = () => model.snapshot().submission.value.expenses;
   const outputs = () => JSON.stringify(page(model).body);
   try {
@@ -386,7 +402,7 @@ test('table selection edits the selected item and follows row removal', async ()
   const independent = await open(fixture('expenses').start);
   const controls = () => model.snapshot().controls;
   const key = (label, nth = 0) => controls().filter(control => control.label === label)[nth].key;
-  const send = (key, argument = null) => model.send({ event: { message: { apply: { key, argument } } } });
+  const send = (key, argument = null) => model.send({ apply: { key, argument } });
   const apply = (label, argument = null, nth = 0) => send(key(label, nth), argument);
   const table = () => page(model).body[0].group.children[1].table;
   const value = () => model.snapshot().submission.value;
@@ -448,7 +464,7 @@ test('project planner keeps task selections local to each project', async () => 
   const table = index => body(index).children.find(component => component.table).table;
   const details = index => body(index).children.find(component => component.group?.label === 'Task details');
   const selected = index => table(index).rows.findIndex(row => row.selected === true);
-  const send = (key, argument = null) => model.send({ event: { message: { apply: { key, argument } } } });
+  const send = (key, argument = null) => model.send({ apply: { key, argument } });
   const field = (label, nth = 0) => model.snapshot().controls.filter(control => control.label === label)[nth].key;
   const buttonKey = button => button.onClick.press.name;
   const rowButton = (project, row, label) => table(project).rows[row].cells.at(-1).group.children
@@ -505,14 +521,14 @@ test('project planner keeps task selections local to each project', async () => 
     assert.deepEqual([selected(0), selected(1)], [-1, -1]);
     select(0, 0);
     send(field('Task title'), '');
-    model.send({ event: { message: 'submit' } });
+    model.send('submit');
     assert.deepEqual(messages(model.snapshot().view), ['Give the task a title.']);
     assert.deepEqual(model.snapshot().errors[0].targets.locations[0], [
       { kind: 'field', name: 'projects' }, { kind: 'index', position: 0 },
       { kind: 'field', name: 'tasks' }, { kind: 'index', position: 0 }, { kind: 'field', name: 'title' },
     ]);
     send(field('Task title'), 'Map the new navigation');
-    model.send({ event: { message: 'submit' } });
+    model.send('submit');
     const submitted = JSON.parse(model.snapshot().effects[0].submit.request.body).value;
     assert.deepEqual(Object.keys(submitted).sort(), ['name', 'projects']);
     assert.deepEqual(Object.keys(submitted.projects[0]).sort(), ['name', 'tasks']);

@@ -9,7 +9,7 @@ interface Runtime { form(request: Wire.Request): Wire.Response }
 /** An open form in the compiled Lean runtime. */
 export interface FormModel {
   snapshot(): Wire.Snapshot;
-  send(command: Wire.Command): Wire.Snapshot;
+  send(event: Wire.Event): Wire.Snapshot;
   dispose(): void;
 }
 
@@ -29,9 +29,9 @@ export async function openForm(start: Wire.FormStart, moduleUrl: string | URL): 
   function check() { if (disposed) throw new Error('Form model is disposed.'); }
   return {
     snapshot() { check(); return structuredClone(snapshot); },
-    send(request) {
+    send(event) {
       check();
-      const response = form({ send: { handle, request } });
+      const response = form({ send: { handle, event } });
       if (typeof response !== 'object' || !('updated' in response)) throw new Error('Expected an updated form.');
       snapshot = response.updated.snapshot;
       return structuredClone(snapshot);

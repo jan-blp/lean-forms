@@ -31,13 +31,12 @@ def run : IO Unit := do
       .submit, .reset, .submitted (.response 200 "ok"), .submitted (.unreachable "offline"),
       .fetched "id" (.response 200 "[]"), .fetched "id" (.unreachable "offline")] do
     roundtrip event
-    roundtrip (Command.event event)
   check "Payload-free constructors encode as strings" (toJson Event.submit == toJson "submit")
   check "Payload constructors encode under their name" ((toJson (Event.apply "key" (toJson "12"))).getObjValD "apply" ==
     Json.mkObj [("key", toJson "key"), ("argument", toJson "12")])
   check "Missing apply argument accepted" (!(fromJson? (Json.mkObj [
     ("apply", Json.mkObj [("key", toJson "key")])]) : Except String Event).isOk)
-  check "Generated schema omitted dependencies" ((typescript% [Forms.Runtime.Wire.Command]).modules.any
+  check "Generated schema omitted dependencies" ((typescript% [Forms.Runtime.Wire.Request]).modules.any
     (·.declarations.any (·.name == "Event")))
   let schema := typescript% [OptionalSample]
   check "Optional structure field was not optional in TS" (schema.modules.any (·.pretty.contains "\"omitted\"?: string"))

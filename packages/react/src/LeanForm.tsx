@@ -52,7 +52,7 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
   useEffect(() => performAll(model.snapshot()), [model]);
 
   function send(event: Wire.Event): Wire.Snapshot {
-    const next = model.send({ event: { message: event } });
+    const next = model.send(event);
     setSnapshot(next);
     setDrafts(drafts => new Map([...drafts].filter(([name]) => next.draftFields.includes(name))));
     performAll(next);

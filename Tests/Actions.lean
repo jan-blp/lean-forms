@@ -41,7 +41,7 @@ private def press
   (label : String)
   (nth : Nat := 0)
   : IO (ModelForm.State form) := do
-  IO.ofExcept (ModelForm.execute (model := model) form state (.event (.apply (← key state label nth) none)))
+  IO.ofExcept (ModelForm.execute (model := model) form state (.apply (← key state label nth) none))
 
 private def counter : Component [⟨.readOnly, Nat⟩] Nat := .bind (0 : Nat) (.group "Counter" [
   .field .self "Model" .natural,
@@ -65,7 +65,7 @@ def run : IO Unit := do
   check "ActionsReadCurrentModelStateAndInputs"
     (twice.locals.value == 24 && twice.value == 10 && twice.env.value == 2)
   let edited ← IO.ofExcept (ModelForm.execute (model := Nat) counter twice
-    (.event (.apply (← key twice "Model") (some (.text "3")))))
+    (.apply (← key twice "Model") (some (.text "3"))))
   let latest ← press (model := Nat) edited "Increment"
   check "ActionsUseLatestModel" (latest.locals.value == 29 && latest.value == 3)
   let cleared ← press (model := Nat) latest "Clear"
@@ -74,7 +74,7 @@ def run : IO Unit := do
   check "ActionResetRestoresLocalState" (reset.locals.value == 0 && reset.value == 10)
   check "ActionRejectsUnexpectedArgument"
     (!(ModelForm.execute (model := Nat) counter opened
-      (.event (.apply increment (some (.text "100"))))).toBool)
+      (.apply increment (some (.text "100")))).toBool)
   let disabled := Component.disabledWhen (.const true) counter
   let disabledOpened := ModelForm.openState disabled 10 env[2]
   let rejected ← press (model := Nat) disabledOpened "Increment"
@@ -82,7 +82,7 @@ def run : IO Unit := do
     (rejected.ui.rejection == some (toString InvocationError.disabled) && rejected.locals.value == 0)
   let hidden := Component.visibleWhen (.const false) counter
   let hiddenOpened := ModelForm.openState hidden 10 env[2]
-  let absent ← IO.ofExcept (ModelForm.execute (model := Nat) hidden hiddenOpened (.event (.apply increment none)))
+  let absent ← IO.ofExcept (ModelForm.execute (model := Nat) hidden hiddenOpened (.apply increment none))
   check "ActionHiddenRejects"
     (absent.ui.rejection == some (toString InvocationError.absent) && absent.locals.value == 0)
   let pending : ModelForm.State counter := { opened with ui := { opened.ui with pending := true } }
@@ -116,14 +116,14 @@ def run : IO Unit := do
   let firstKey ← key first "Next item"
   let second ← press (model := List Nat) first "Next item"
   let secondKey ← key second "Next item"
-  let stale ← IO.ofExcept (ModelForm.execute (model := List Nat) focused second (.event (.apply firstKey none)))
+  let stale ← IO.ofExcept (ModelForm.execute (model := List Nat) focused second (.apply firstKey none))
   check "ActionFocusRejectsStaleLocation"
     (firstKey != secondKey && stale.locals.value == 1 &&
       stale.ui.rejection == some (toString InvocationError.absent))
   check "ActionsUseDraftFlushingButtons" (match
       ((ModelView.render counter opened.value {} [] opened.env opened.locals).view.toReact false) with
     | some (.group group) => group.children.any fun
-        | .button button => button.onClick == .press increment.value
+        | .button button => button.onClick == .press (ControlKeyProtocol.toString increment)
         | _ => false
     | _ => false)
 

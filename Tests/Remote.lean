@@ -73,8 +73,8 @@ private def Lookup.form : Component [] Lookup.Raw :=
 
 private abbrev State := ModelForm.State Lookup.form
 
-private def execute (state : State) (command : ModelForm.Command) : IO State :=
-  IO.ofExcept (ModelForm.execute (model := Lookup) Lookup.form state command)
+private def execute (state : State) (input : ModelForm.Event) : IO State :=
+  IO.ofExcept (ModelForm.execute (model := Lookup) Lookup.form state input)
 
 private def snapshot (state : State) : ModelForm.Snapshot Lookup.Raw :=
   ModelForm.snapshot (model := Lookup) Lookup.form state
@@ -84,7 +84,7 @@ private def control? (state : State) (label : String) : Option Display.Control :
 
 private def apply (state : State) (label : String) (argument : Input) : IO State := do
   let some control := control? state label | throw (IO.userError s!"FAIL no control {label}")
-  execute state (.event (.apply control.key (some argument)))
+  execute state (.apply control.key (some argument))
 
 private def fetches (state : State) : List HttpRequest :=
   state.outbox.filterMap fun
@@ -101,7 +101,7 @@ private def settle (state : State) : IO State := do
   for _ in [0:10] do
     let mut queued := []
     for request in pending do
-      state ← execute state (.event (.loaded request (answer request)))
+      state ← execute state (.loaded request (answer request))
       queued := queued ++ fetches state
     pending := queued
   return state
@@ -173,8 +173,8 @@ def run : IO Unit := do
   let opened : State := opened
   check "RemoteOpenFetches" (fetches opened == [supplier "acme"])
   check "RemoteDetailsLoading" (control? opened "Purchase order").isNone
-  let purchaseOrder := DisplayProtocol.controlKey .edit [.field "purchaseOrder"]
-  let early ← execute opened (.event (.apply purchaseOrder (some (.text "PO-1"))))
+  let purchaseOrder := ControlKey.edit [.field "purchaseOrder"]
+  let early ← execute opened (.apply purchaseOrder (some (.text "PO-1")))
   check "RemoteEditBeforeLoadRejects"
     ((snapshot early).ui.rejection == some (toString InvocationError.absent))
   let loaded ← settle opened
@@ -185,11 +185,11 @@ def run : IO Unit := do
   check "RemoteDetailDrivesVisibility" (control? globex "Purchase order").isNone
   let back ← apply globex "Supplier" (.text "acme")
   check "RemoteRevisitIsCached" (fetches back).isEmpty
-  let failed ← execute opened (.event (.loaded (supplier "acme") (.error "offline")))
+  let failed ← execute opened (.loaded (supplier "acme") (.error "offline"))
   check "RemoteFailureShown" (match (snapshot failed).view with
     | .stack _ [_, failure] => failure == .computed "" "Could not load: offline"
     | _ => false)
-  let retried ← execute failed (.event .reset)
+  let retried ← execute failed .reset
   check "RemoteResetRetries" (fetches retried == [supplier "acme"])
   let person : Person.Raw := ⟨"Ada", 20, true, ⟨"Lambda Lane"⟩⟩
   check "RemoteBindBuildsFromData"
@@ -218,19 +218,19 @@ def run : IO Unit := do
     | .choice _ options => options.any (·.value == "pickup")
     | _ => false)
   let shippingState ← IO.ofExcept (ModelForm.execute (model := Order) shippingChoices shippingState
-    (.event (.loaded layoutRequest (.ok (toJson true)))))
+    (.loaded layoutRequest (.ok (toJson true))))
   check "RemoteLoadedChoiceKeepsKey"
     ((ModelView.render shippingChoices shippingState.value shippingState.cache [] Env.nil).controls.any fun control =>
       control.key == shipping.key && match control.input with
         | .choice _ options => options.map (·.value) == ["standard"]
         | _ => false)
   let rejected ← IO.ofExcept (ModelForm.execute (model := Order) shippingChoices shippingState
-    (.event (.apply shipping.key (some (.text "pickup")))))
+    (.apply shipping.key (some (.text "pickup"))))
   check "RemoteRemovedBranchRejectsRecoverably"
     (rejected.ui.rejection == some (toString (InvocationError.unavailableBranch "pickup")) &&
       toJson rejected.value == toJson shippingState.value)
   let recovered ← IO.ofExcept (ModelForm.execute (model := Order) shippingChoices rejected
-    (.event (.apply shipping.key (some (.text "standard")))))
+    (.apply shipping.key (some (.text "standard"))))
   check "RemoteChoiceUsableAfterStaleBranch" recovered.ui.rejection.isNone
   let twice : Component [] Person.Raw := .group (label := "") (children := [nameField, nameField])
   let rendered := ModelView.render twice person {} [] Env.nil
@@ -238,7 +238,7 @@ def run : IO Unit := do
     (rendered.controls.map (·.label) == ["Name"] && match rendered.view with
       | .stack _ [.control _, .computed "Name" note] => note == Display.duplicateNote
       | _ => false)
-  let late ← execute loaded (.event (.loaded (supplier "initech") (.ok Json.null)))
+  let late ← execute loaded (.loaded (supplier "initech") (.ok Json.null))
   check "RemoteUnrequestedResponseIgnored" !(late.cache.contains (supplier "initech"))
 
 end Tests.Remote

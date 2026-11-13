@@ -153,7 +153,7 @@ apply('Name', 'Grace');
 apply('Request delivery', true);
 apply('Street', 'Campus');
 apply('Age', '25');
-model.send({ event: { message: 'submit' } });
+model.send('submit');
 process.stdout.write(model.snapshot().effects[0].submit.request.body);
 model.dispose();
 """

@@ -42,10 +42,10 @@ def execute
     let handle := store.next
     let store := { store with next := ⟨handle.value + 1⟩, models := store.models.insert handle state }
     pure (store, .opened (toString handle.value) snapshot)
-  | .send text request =>
+  | .send text event =>
     let .ok handle := modelHandle text | throw "Invalid form handle"
     let some state := store.models[handle]? | throw "Unknown or disposed form handle"
-    let (state, snapshot) ← state.execute request
+    let (state, snapshot) ← state.execute event
     pure ({ store with models := store.models.insert handle state }, .updated snapshot)
   | .dispose text =>
     let .ok handle := modelHandle text | throw "Invalid form handle"

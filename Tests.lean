@@ -7,6 +7,7 @@ import Tests.Actions
 import Tests.Dependencies
 import Tests.InputProtocol
 import Tests.Wire
+import Tests.ControlKeys
 import Tests.FormsReact
 import Tests.Invocation
 import Tests.Remote
@@ -25,6 +26,7 @@ public def main : IO Unit := do
   Tests.Dependencies.run
   Tests.InputProtocol.run
   Tests.Wire.run
+  Tests.ControlKeys.run
   Tests.FormsReact.run
   Tests.Invocation.run
   Tests.Remote.run

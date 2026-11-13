@@ -2,6 +2,7 @@ module
 
 public import Forms.Runtime.ModelForm
 public import Forms.Runtime.InputProtocol
+public import Forms.Runtime.DisplayProtocol
 public import Forms.Runtime.ReactView
 public import Forms.Runtime.Wire
 
@@ -56,7 +57,7 @@ def ModelForm.Snapshot.toWire
 def ModelForm.Event.fromWire : Wire.Event → Except String ModelForm.Event
   | .apply key argument => do
     let argument ← InputProtocol.argumentFromJson (if argument == .null then none else some argument)
-    pure (.apply ⟨key⟩ argument)
+    pure (.apply (← ControlKeyProtocol.fromString key) argument)
   | .submit => .ok .submit
   | .reset => .ok .reset
   | .submitted (.response status body) =>
@@ -70,15 +71,5 @@ def ModelForm.Event.fromWire : Wire.Event → Except String ModelForm.Event
         else .error s!"The server responded with status {status}."
       | .unreachable message => .error message
     pure (.loaded (← fetchedRequest id) response)
-
-def ModelForm.Command.fromWire : Wire.Command → Except String ModelForm.Command
-  | .event message => ModelForm.Command.event <$> ModelForm.Event.fromWire message
-  | .apply key argument => do
-    let argument ← InputProtocol.argumentFromJson (if argument == .null then none else some argument)
-    pure (.apply ⟨key⟩ argument)
-  | .reset => .ok .reset
-  | .validate => .ok .validate
-  | .inspect => .ok .inspect
-  | .serverError status body => .ok (.serverError (FeedbackProtocol.serverError status body))
 
 end Forms.Runtime

@@ -16,7 +16,7 @@ structure FormDefinition where
   initial : Json
   /-- Decode the initial value and create the state and first snapshot. -/
   openState (value : Json) : Except String (State × ModelForm.Snapshot Raw)
-  execute : State → ModelForm.Command → Except String (State × ModelForm.Snapshot Raw)
+  execute : State → ModelForm.Event → Except String (State × ModelForm.Snapshot Raw)
   /-- Checks a submission to the form registered as `name`, fingerprint first. -/
   verify (name fingerprint : String) (submission : Json) : Except Json Unit
 
@@ -49,8 +49,8 @@ def FormDefinition.ofModel
   openState value := do
     let state := ModelForm.load form (ModelForm.openState form (← fromJson? value) Model.Env.nil)
     pure (state, ModelForm.snapshot (model := model) form state)
-  execute state command := do
-    let state ← ModelForm.execute (model := model) form state command
+  execute state input := do
+    let state ← ModelForm.execute (model := model) form state input
     pure (state, ModelForm.snapshot (model := model) form state)
   verify name fingerprint json := do
     let value ← (decodeSubmission (FormModel.Raw model) name fingerprint json).mapError fun message =>
@@ -71,7 +71,7 @@ structure RegisteredForm where
 
 /-- An open form. -/
 structure FormInstance where
-  execute : Wire.Command → Except String (FormInstance × Wire.Snapshot)
+  execute : Wire.Event → Except String (FormInstance × Wire.Snapshot)
 
 instance : Inhabited FormInstance := ⟨.mk fun _ => .error "Uninitialized form"⟩
 
@@ -92,9 +92,9 @@ partial def RegisteredForm.instance
   (name fingerprint : String)
   (state : form.definition.State)
   : FormInstance :=
-  .mk fun request => do
-    let command ← ModelForm.Command.fromWire request
-    let (state, snapshot) ← form.definition.execute state command
+  .mk fun message => do
+    let input ← ModelForm.Event.fromWire message
+    let (state, snapshot) ← form.definition.execute state input
     pure (form.instance name fingerprint state, form.toWire name fingerprint snapshot)
 
 def RegisteredForm.open
