@@ -90,6 +90,7 @@ def validationErrors
   : List Feedback.Error :=
   (Model.errors (Model.Validation.validate (model := model) value)).map ModelView.error
 
+-- Message from Lean to Ts (see Wire.Snapshot for serialized type)
 structure Snapshot (α : Type) where
   view : Display.View
   controls : List Display.Control
