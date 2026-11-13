@@ -61,6 +61,14 @@ instance : ConstraintRule Delivery.Constraint.campus_adult where
 structure Empty where
   deriving FormModel
 
+structure LawfulFieldNames where
+  amount : Nat
+  amount_lawful : Nat
+  deriving FormModel
+
+example : LeanLens.LawfulLens (LawfulFieldNames.Field.lens .amount) := inferInstance
+example : LeanLens.LawfulLens (LawfulFieldNames.Field.lens .amount_lawful) := inferInstance
+
 inductive Choice where
   | yes
   | no

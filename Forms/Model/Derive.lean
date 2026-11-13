@@ -122,10 +122,38 @@ private def emitRecord
     emit (← `(command| structure $(global name):ident where
       $fields:structExplicitBinder*))
 
+private def emitFieldLawful
+  (ns raw field : Name)
+  : CommandElabM TermSyntax := do
+  let name := ns ++ `Field.lawful ++ field
+  let (type, value) ← liftTermElabM do
+    let raw := mkConst raw
+    let selected := mkConst (ns ++ `Field ++ field)
+    let type := (← inferType selected).appArg!
+    let get := mkConst (ns ++ `Raw ++ field)
+    let put := mkConst (ns ++ `Field ++ `set ++ field)
+    -- Record eta reduces all three laws to reflexivity.
+    let viewSet ← withLocalDeclD `value type fun value =>
+      withLocalDeclD `source raw fun source => do
+        mkLambdaFVars #[value, source] (← mkEqRefl value)
+    let setView ← withLocalDeclD `source raw fun source => do
+      mkLambdaFVars #[source] (← mkEqRefl source)
+    let setSet ← withLocalDeclD `first type fun first =>
+      withLocalDeclD `last type fun last =>
+        withLocalDeclD `source raw fun source => do
+          mkLambdaFVars #[first, last, source] (← mkEqRefl (mkApp2 put last source))
+    let value := mkAppN (mkConst ``Forms.Model.lawfulMkLens)
+      #[raw, type, get, put, viewSet, setView, setSet]
+    let lens := mkApp2 (mkConst (ns ++ `Field.lens)) type selected
+    return (mkAppN (mkConst ``LeanLens.LawfulLens) #[raw, type, lens], value)
+  liftCoreM <| addDecl (.thmDecl { name, levelParams := [], type, value })
+  return global name
+
 private def emitFields
   (ns raw : Name)
   (fields : Array (FieldInfo × TermSyntax))
   : CommandElabM Unit := do
+  let rawName := raw
   let field := global (ns ++ `Field)
   let raw := global raw
   let ctors ← fields.mapM fun (f, type) =>
@@ -164,15 +192,9 @@ private def emitFields
   emit (← `(command| @[expose] def $keyName:ident {α : Type} ($selected:ident : $field α) : String := $key))
   emit (← `(command| @[expose] def $lens:ident {α : Type} ($selected:ident : $field α) : LeanLens.Lens' $raw α :=
     LeanLens.mkLens ($get $selected) ($set $selected)))
-  let mut lawfulCases := #[]
-  for (f, _) in fields do
-    let pattern : TermSyntax := global (ns ++ `Field ++ f.name)
-    let proof := global (ns ++ `Field ++ (f.name.appendAfter "_lawful"))
-    emit (← `(command| theorem $proof:ident : LeanLens.LawfulLens ($lens $pattern) :=
-      Forms.Model.lawfulMkLens
-        (get := $(global (ns ++ `Raw ++ f.name))) (put := $(global (ns ++ `Field ++ `set ++ f.name)))
-        (fun _ src => by cases src; rfl) (fun src => by cases src; rfl) (fun _ _ src => by cases src; rfl)))
-    lawfulCases := lawfulCases.push (← alternative #[pattern] proof)
+  let lawfulCases ← fields.mapM fun (f, _) => do
+    let proof ← emitFieldLawful ns rawName f.name
+    alternative #[global (ns ++ `Field ++ f.name)] proof
   let lawfulBody ← if fields.isEmpty then `(nomatch $selected) else matchOn #[selected] lawfulCases
   emit (← `(command| instance $lawful:ident {α : Type} ($selected:ident : $field α) : LeanLens.LawfulLens ($lens $selected) :=
     $lawfulBody))
