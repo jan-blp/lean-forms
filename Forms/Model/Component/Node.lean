@@ -21,7 +21,7 @@ inductive Availability where
   deriving DecidableEq, Repr
 
 mutual
-inductive ComponentNode : Context → Type → Type → Type → Type 1 where
+inductive ComponentNode : (Γ : Context) → (model state output : Type) → Type 1 where
   | field {Γ : Context}
       {α β : Type}
       (path : Path α β)
@@ -126,7 +126,11 @@ inductive ComponentNode : Context → Type → Type → Type → Type 1 where
       : ComponentNode Γ α state β
 
 /-- Components owned in order; `slots` counts the presentations in scope. -/
-inductive PresentationNode : Nat → Context → Type → Type → Type → Type 1 where
+inductive PresentationNode
+  : (slots : Nat)
+  → (Γ : Context)
+  → (model state output : Type)
+  → Type 1 where
   | layout {slots : Nat}
       {Γ : Context}
       {α β : Type}
@@ -148,7 +152,11 @@ inductive PresentationNode : Nat → Context → Type → Type → Type → Type
       : PresentationNode slots Γ α (Binding β state) γ
 
 /-- Named cells and their explicitly chosen row output. -/
-inductive ColumnsNode : List String → Context → Type → Type → Type → Type 1 where
+inductive ColumnsNode
+  : (headers : List String)
+  → (Γ : Context)
+  → (row state output : Type)
+  → Type 1 where
   | output {Γ : Context}
       {α β : Type}
       (value : Computation Γ α β)
@@ -180,7 +188,7 @@ inductive ColumnsNode : List String → Context → Type → Type → Type → T
       (body : ColumnsNode headers Γ β state γ)
       : ColumnsNode headers Γ α state (Option γ)
 
-inductive ComponentsNode : Context → Type → Type → Type 1 where
+inductive ComponentsNode : (Γ : Context) → (model state : Type) → Type 1 where
   | nil {Γ : Context} {α : Type} : ComponentsNode Γ α Unit
   | cons {Γ : Context}
       {α headState tailState : Type}
@@ -193,7 +201,7 @@ inductive ComponentsNode : Context → Type → Type → Type 1 where
       (columns : ColumnsNode headers Γ α state Unit)
       : ComponentsNode Γ α state
 
-inductive BranchNode : Context → Type → Type → Type 1 where
+inductive BranchNode : (Γ : Context) → (model state : Type) → Type 1 where
   | mk {Γ : Context}
       {α β state : Type}
       (key label : String)
@@ -203,7 +211,7 @@ inductive BranchNode : Context → Type → Type → Type 1 where
       (body : ComponentNode Γ β state Unit)
       : BranchNode Γ α state
 
-inductive BranchesNode : Context → Type → Type → Type 1 where
+inductive BranchesNode : (Γ : Context) → (model state : Type) → Type 1 where
   | nil {Γ : Context} {α : Type} : BranchesNode Γ α Unit
   | cons {Γ : Context}
       {α headState tailState : Type}
