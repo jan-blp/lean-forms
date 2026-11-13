@@ -190,6 +190,18 @@ def Decision.errors
   | .valid _ => []
   | .invalid _ message targets => [{ message, targets }]
 
+/-- The proof, or the errors moved to `raw`. -/
+def Decision.toExcept
+  {property : Prop}
+  {α : Type}
+  {value raw : α}
+  (decision : Decision property value)
+  (equality : value = raw)
+  : Except (List (Error raw)) (PLift property) :=
+  match decision with
+  | .valid proof => .ok ⟨proof⟩
+  | .invalid .. => .error (equality ▸ decision.errors)
+
 class Constraints (constraint : Type) where
   Parts : constraint → Type
   Raw : constraint → Type
@@ -221,6 +233,17 @@ class Validation (model : Type) [FormModel model] where
 def errors {α β : Type _} : Except (List α) β → List α
   | .ok _ => []
   | .error errors => errors
+
+/-- Applies `f` to `x` if both succeed, else collects the errors of both. -/
+def accumulate
+  {ε : Type _}
+  {α β : Type _}
+  (f : Except (List ε) (α → β))
+  (x : Except (List ε) α)
+  : Except (List ε) β :=
+  match f, x with
+  | .ok f, .ok x => .ok (f x)
+  | f, x => .error (errors f ++ errors x)
 
 @[reducible] instance : FormModel String := ⟨String, id⟩
 @[reducible] instance : FormModel Bool := ⟨Bool, id⟩
