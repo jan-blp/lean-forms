@@ -97,8 +97,6 @@ structure Snapshot (α : Type) where
   value : α
   ui : Interaction.State
   errors : List Feedback.Error
-  summary : String
-  submissionBlocked : Bool
   effects : List Effect
 
 def snapshot {Γ : Model.Context}
@@ -115,8 +113,6 @@ def snapshot {Γ : Model.Context}
   let rendered := ModelView.render form state.value state.cache visible state.env state.locals
   { view := rendered.view, controls := rendered.controls, value := state.value,
     ui := state.ui, errors,
-    summary := state.serverFeedback.map (·.message) |>.getD (Feedback.summary visible),
-    submissionBlocked := !visible.isEmpty
     effects := state.outbox }
 
 inductive StaleError where

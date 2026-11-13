@@ -68,8 +68,6 @@ structure Snapshot where
   /-- Names of the fields whose drafts React keeps. -/
   draftFields : List String
   effects : List Effect
-  summary : String
-  submissionBlocked : Bool
   controls : List Json
   submission : Json
   errors : List Json

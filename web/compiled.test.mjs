@@ -175,17 +175,13 @@ test('Lean shows validation before submission and handles server feedback and re
     model.send({ apply: { key: quantity.key, argument: '150' } });
     assert.ok(model.snapshot().errors.length);
     assert.deepEqual(messages(model.snapshot().view), ['Age must be at most 120.']);
-    assert.equal(model.snapshot().summary, 'Age must be at most 120.');
-    assert.equal(model.snapshot().submissionBlocked, true);
     assert.deepEqual(model.snapshot().effects, []);
     model.send('submit');
     assert.deepEqual(model.snapshot().effects, []);
-    assert.equal(model.snapshot().submissionBlocked, true);
     assert.ok(messages(model.snapshot().view).length);
-    assert.ok(model.snapshot().summary);
+    assert.equal(status(model), 'Age must be at most 120.');
     model.send({ apply: { key: quantity.key, argument: '2' } });
     assert.deepEqual(messages(model.snapshot().view), []);
-    assert.equal(model.snapshot().submissionBlocked, false);
     const location = quantity.location.map(step => ({ ...step, ignored: true }));
     const error = { message: '<b>Literal 🌍</b>', targets: { kind: 'locations', locations: [location] } };
     const reject = (status, body) => {
@@ -195,25 +191,22 @@ test('Lean shows validation before submission and handles server feedback and re
     reject(422, JSON.stringify({ error: { kind: 'validation', message: 'Server rejected',
       errors: [error, error, { message: 'Global', targets: { kind: 'global' } }] } }));
     assert.deepEqual(messages(model.snapshot().view), ['<b>Literal 🌍</b>']);
-    assert.equal(model.snapshot().summary, 'Server rejected');
-    assert.equal(model.snapshot().submissionBlocked, true);
+    assert.equal(status(model), 'Server rejected');
     assert.ok(model.send({ apply: { key: JSON.stringify(['edit', 'missing']), argument: null } }).rejection);
     assert.deepEqual(messages(model.snapshot().view), ['<b>Literal 🌍</b>']);
-    assert.equal(model.snapshot().summary, 'Server rejected');
     model.send({ apply: { key: quantity.key, argument: '3' } });
     assert.deepEqual(messages(model.snapshot().view), []);
-    assert.equal(model.snapshot().summary, '');
+    assert.equal(status(model), '');
     for (const body of ['not json', '{}', JSON.stringify({ error: { kind: 'validation', message: 'Bad',
       errors: [error, { message: 'Broken', targets: { kind: 'locations', locations: [[{kind: 'item', index: '-1'}]] } }] } })]) {
       reject(503, body);
-      assert.equal(model.snapshot().summary, 'Submission failed (HTTP 503).');
+      assert.equal(status(model), 'Submission failed (HTTP 503).');
       assert.deepEqual(messages(model.snapshot().view), []);
     }
     model.send('reset');
-    assert.equal(model.snapshot().summary, '');
+    assert.equal(status(model), 'Started over.');
     model.send({ apply: { key: quantity.key, argument: '150' } });
     assert.deepEqual(messages(model.snapshot().view), ['Age must be at most 120.']);
-    assert.equal(model.snapshot().submissionBlocked, true);
     assert.deepEqual(model.snapshot().effects, []);
   } finally { model.dispose(); }
 });
