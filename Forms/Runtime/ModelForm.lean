@@ -69,12 +69,17 @@ def restart
       | .loading => true
       | .loaded _ => true }
 
+inductive SubmitOutcome where
+  | accepted
+  | rejected (feedback : Feedback.ServerError)
+  | unreachable (message : String)
+
+-- Message from Ts to Lean (see `Wire.Event` for the serialized type)
 inductive Event where
   | apply (key : ControlKey) (argument : Option Input)
   | submit
   | reset
-  /-- The submission's outcome: an error without a response, else the feedback of a rejection. -/
-  | submitted (outcome : Except String (Option Feedback.ServerError))
+  | submitted (outcome : SubmitOutcome)
   | loaded (request : Model.HttpRequest) (response : Except String Lean.Json)
 
 def validationErrors
@@ -222,12 +227,12 @@ def event {Γ : Model.Context}
   | .submitted outcome =>
     if !state.ui.pending then return state
     match outcome with
-    | .ok none => pure { state with ui := { state.ui with
+    | .accepted => pure { state with ui := { state.ui with
         pending := false, resultVisible := true, notice := .info "Submitted successfully." } }
-    | .ok (some feedback) => pure { state with
+    | .rejected feedback => pure { state with
         serverFeedback := some feedback
         ui := { (state.ui.announce feedback.message true) with pending := false } }
-    | .error message =>
+    | .unreachable message =>
       pure { state with ui := { (state.ui.announce message true) with pending := false } }
   | .loaded request response =>
     match state.cache[request]? with

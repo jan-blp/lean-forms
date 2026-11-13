@@ -61,10 +61,9 @@ def ModelForm.Event.fromWire : Wire.Event → Except String ModelForm.Event
   | .submit => .ok .submit
   | .reset => .ok .reset
   | .submitted (.response status body) =>
-    let rejection := if 200 ≤ status && status < 300 then none
-      else some (FeedbackProtocol.serverError status body)
-    .ok (.submitted (.ok rejection))
-  | .submitted (.unreachable message) => .ok (.submitted (.error message))
+    .ok (.submitted (if 200 ≤ status && status < 300 then .accepted
+      else .rejected (FeedbackProtocol.serverError status body)))
+  | .submitted (.unreachable message) => .ok (.submitted (.unreachable message))
   | .fetched id outcome => do
     let response := match outcome with
       | .response status body => if 200 ≤ status && status < 300 then Json.parse body
