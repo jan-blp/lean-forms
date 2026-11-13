@@ -41,8 +41,6 @@ def ModelForm.Snapshot.toWire
     view
     draftFields := view.draftFields
     rejection := snapshot.ui.rejection
-    summary := snapshot.summary
-    submissionBlocked := snapshot.submissionBlocked
     controls := snapshot.controls.map DisplayProtocol.controlToJson
     submission
     errors := snapshot.errors.map FeedbackProtocol.errorToJson
