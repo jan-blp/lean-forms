@@ -8,7 +8,7 @@ namespace Forms.Model
 /-- A component editing `α`, with private state and public output `β`. -/
 structure Component (Γ : Context) (α : Type) (β : Type := Unit) where
   LocalState : Type
-  node : ComponentNode .block () Γ α LocalState β
+  node : ComponentNode Γ α LocalState β
 
 structure Components (Γ : Context) (α : Type) where
   LocalState : Type
@@ -17,7 +17,7 @@ structure Components (Γ : Context) (α : Type) where
 structure Columns (Γ : Context) (α : Type) (β : Type := Unit) where
   headers : List String
   LocalState : Type
-  node : ComponentNode .cells headers Γ α LocalState β
+  node : ColumnsNode headers Γ α LocalState β
 
 structure Branch (Γ : Context) (α : Type) where
   pack ::
@@ -119,7 +119,7 @@ def RowSelection.itemPath
   (initial : β)
   (body : Component Γ β γ)
   : Component Γ α (List γ) :=
-  ⟨List body.LocalState, .collection path label itemLabel initial body.node none⟩
+  ⟨List body.LocalState, .list path label itemLabel initial body.node⟩
 
 @[reducible] def Component.table
   {Γ : Context}
@@ -130,7 +130,7 @@ def RowSelection.itemPath
   (columns : Columns Γ β γ)
   (selection : Option (Var Γ RowSelection) := none)
   : Component Γ α (List γ) :=
-  ⟨List columns.LocalState, .collection path label itemLabel initial columns.node selection⟩
+  ⟨List columns.LocalState, .table path label itemLabel initial columns.node selection⟩
 
 @[reducible] def Component.focus
   {Γ : Context}
@@ -198,7 +198,7 @@ The first entry in `body`'s context is the producer's current output, available 
   (rest : Columns Γ α β)
   : Columns Γ α β :=
   ⟨header :: rest.headers, Binding cell.LocalState rest.LocalState,
-    .sequence (.cell header cell.node) rest.node⟩
+    .cons header cell.node rest.node⟩
 
 /-- Makes a cell's output available read-only to the remaining columns and row output. -/
 @[reducible] def Columns.observe
@@ -209,7 +209,7 @@ The first entry in `body`'s context is the producer's current output, available 
   (body : Columns (⟨.readOnly, β⟩ :: Γ) α γ)
   : Columns Γ α γ :=
   ⟨header :: body.headers, ObservationState cell.LocalState body.LocalState,
-    .observe (.cell header cell.node) body.node⟩
+    .observe header cell.node body.node⟩
 
 @[reducible] def Columns.bind
   {Γ : Context}
@@ -218,6 +218,15 @@ The first entry in `body`'s context is the producer's current output, available 
   (body : Columns (⟨.writable, β⟩ :: Γ) α γ)
   : Columns Γ α γ :=
   ⟨body.headers, Binding β body.LocalState, .bind initial body.node⟩
+
+/-- Focuses every cell on the same optional value, retaining the column headers. -/
+@[reducible] def Columns.focus
+  {Γ : Context}
+  {α β γ : Type}
+  (target : Computation Γ α (PartialPath α β))
+  (body : Columns Γ β γ)
+  : Columns Γ α (Option γ) :=
+  ⟨body.headers, body.LocalState, .focus target body.node⟩
 
 @[reducible] def Branches.nil {Γ : Context} {α : Type} : Branches Γ α :=
   ⟨Unit, .nil⟩
@@ -373,21 +382,13 @@ def Component.loadOr
     | .loading => fallback
     | .failed _ => fallback
 
-@[reducible] def Component.mapOutput
-  {Γ : Context}
-  {α β γ : Type}
-  (f : β → γ)
-  (body : Component Γ α β)
-  : Component Γ α γ :=
-  ⟨body.LocalState, .mapOutput f body.node⟩
-
 /-- Keeps the component's UI and discards its public output. -/
 @[reducible] def Component.void
   {Γ : Context}
   {α β : Type}
   (body : Component Γ α β)
   : Component Γ α :=
-  body.mapOutput (fun _ => ())
+  ⟨body.LocalState, .void body.node⟩
 
 /-- Adds a group label without changing the body's output. -/
 @[reducible] def Component.labeled

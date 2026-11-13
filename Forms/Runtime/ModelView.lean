@@ -72,15 +72,6 @@ inductive CellViews : List String → Type where
       (tail : CellViews rest)
       : CellViews (header :: rest)
 
-def CellViews.append
-  {first second : List String}
-  (left : CellViews first)
-  (right : CellViews second)
-  : CellViews (first ++ second) :=
-  match left with
-  | .nil => right
-  | .cons view tail => .cons view (tail.append right)
-
 def CellViews.toList {headers : List String} : CellViews headers → List Display.View
   | .nil => []
   | .cons view tail => view :: tail.toList
@@ -93,32 +84,24 @@ structure RowSelector where
   current : RowSelection
   scope : List Nat
 
-@[reducible] def ViewFor : (layout : Layout) → layout.Headers → Type
-  | .block, _ => Display.View
-  | .cells, headers => CellViews headers
+def listView
+  (views : List Display.View)
+  (label itemLabel : String)
+  (target : Display.Target)
+  (location : Feedback.Location)
+  (errors : List Feedback.Error)
+  (disabled : Bool)
+  : Display.View :=
+  let add := ModelView.button (.add location) target location s!"Add {itemLabel.toLower}" disabled
+  let views := views.mapIdx fun index view =>
+    let remove := ModelView.button (.remove (location ++ [.index index])) ((target.child index).child 1)
+      (location ++ [.index index]) "Remove" disabled
+    Display.View.stack (some s!"{itemLabel} {index + 1}") [view, .control remove]
+  .list label (views ++ [.control add]) (Feedback.messages errors location)
 
-def combineViews
-  {layout : Layout}
-  {first second : layout.Headers}
-  (left : ViewFor layout first)
-  (right : ViewFor layout second)
-  : ViewFor layout (layout.appendHeaders first second) :=
-  match layout with
-  | .block => .stack none [left, right]
-  | .cells => left.append right
-
-def hiddenView
-  (layout : Layout)
-  (headers : layout.Headers)
-  : ViewFor layout headers :=
-  match layout with
-  | .block => .hidden
-  | .cells => CellViews.hidden headers
-
-def collectionView
-  (layout : Layout)
-  (headers : layout.Headers)
-  (views : List (ViewFor layout headers))
+def tableView
+  (headers : List String)
+  (views : List (CellViews headers))
   (label itemLabel : String)
   (target : Display.Target)
   (location : Feedback.Location)
@@ -127,28 +110,20 @@ def collectionView
   (disabled : Bool)
   : Display.View :=
   let add := ModelView.button (.add location) target location s!"Add {itemLabel.toLower}" disabled
-  match layout, headers, views with
-  | .block, _, views =>
-    let views := views.mapIdx fun index view =>
-      let remove := ModelView.button (.remove (location ++ [.index index])) ((target.child index).child 1)
-        (location ++ [.index index]) "Remove" disabled
-      Display.View.stack (some s!"{itemLabel} {index + 1}") [view, .control remove]
-    .list label (views ++ [.control add]) (Feedback.messages errors location)
-  | .cells, headers, views =>
-    let views := views.mapIdx fun index view =>
-      let remove := ModelView.button (.remove (location ++ [.index index])) ((target.child index).child 1)
-        (location ++ [.index index]) "Remove" disabled
-      let selected := selection.map fun selection => selection.current == .row index
-      let actions := match selection with
-        | none => Display.View.control remove
-        | some selection =>
-          let select := button (.selectRow selection.scope index) ((target.child index).child 2)
-            (location ++ [.index index]) (if selected.getD false then "Selected" else "Select") disabled
-          .stack none [.control select, .control remove]
-      ({ label := s!"{itemLabel} {index + 1}"
-         selected
-         cells := view.toList ++ [actions] } : Display.TableRow)
-    .table label (headers ++ ["Actions"]) views (.control add) (Feedback.messages errors location)
+  let views := views.mapIdx fun index view =>
+    let remove := ModelView.button (.remove (location ++ [.index index])) ((target.child index).child 1)
+      (location ++ [.index index]) "Remove" disabled
+    let selected := selection.map fun selection => selection.current == .row index
+    let actions := match selection with
+      | none => Display.View.control remove
+      | some selection =>
+        let select := button (.selectRow selection.scope index) ((target.child index).child 2)
+          (location ++ [.index index]) (if selected.getD false then "Selected" else "Select") disabled
+        .stack none [.control select, .control remove]
+    ({ label := s!"{itemLabel} {index + 1}"
+       selected
+       cells := view.toList ++ [actions] } : Display.TableRow)
+  .table label (headers ++ ["Actions"]) views (.control add) (Feedback.messages errors location)
 
 inductive ActionError where
   | decode (error : DecodeError)
@@ -166,13 +141,12 @@ def checkedIndex (index length : Nat) : Except ActionError (Fin length) :=
 structure NodeEvaluation
   (Γ : Context)
   (α state β : Type)
-  (layout : Layout := .block)
-  (headers : layout.Headers := layout.emptyHeaders) where
+  (viewType : Type := Display.View) where
   output : β
   locals : state
-  view : ViewFor layout headers
+  view : viewType
   /-- Adds validation messages to the prepared view without reevaluating components. -/
-  feedback : List Feedback.Error → ViewFor layout headers := fun _ => view
+  feedback : List Feedback.Error → viewType := fun _ => view
   requests : List HttpRequest
   apply : List Nat → Option Input → Except ModelView.ActionError (ComponentUpdate Γ α state)
 
@@ -201,14 +175,57 @@ structure EvaluatedBranches (Γ : Context) (α state : Type) where
 def absent {α : Type} : Except ActionError α :=
   .error (.invalid .absent)
 
+/-- Shares list and table updates after their rows have been evaluated. -/
+def evaluateCollection
+  {Γ : Context}
+  {α β γ state viewType : Type}
+  (path : Path α (List β))
+  (initial : β)
+  (rowInitial : state)
+  (rows : List (NodeEvaluation Γ β state γ viewType))
+  (value : α)
+  (env : Env Γ)
+  (selection : Option (Var Γ RowSelection))
+  (disabled : Bool)
+  (render : List viewType → List Feedback.Error → Display.View)
+  : NodeEvaluation Γ α (List state) (List γ) :=
+  let items := path.get value
+  let states := rows.map (·.locals)
+  { output := rows.map (·.output)
+    locals := states
+    view := render (rows.map (·.view)) []
+    feedback := fun errors => render (rows.map fun row => row.feedback errors) errors
+    requests := rows.flatMap (·.requests)
+    apply := fun route argument => do
+      if disabled then throw (.invalid .disabled)
+      match route with
+      | [] => do
+        noArgument argument ()
+        return ⟨path.set (items ++ [initial]) value, env, states ++ [rowInitial]⟩
+      | [index, 1] => do
+        let index ← checkedIndex index items.length
+        noArgument argument ()
+        let env := match selection with
+          | none => env
+          | some selected => selected.set ((selected.get env).remove index.val) env
+        return ⟨path.set (items.eraseIdx index) value, env, states.eraseIdx index⟩
+      | [index, 2] => do
+        let index ← checkedIndex index items.length
+        noArgument argument ()
+        let some selected := selection | absent
+        return ⟨value, selected.set (.row index.val) env, states⟩
+      | index :: 0 :: rest => do
+        let some row := rows[index]? | absent
+        let updated ← row.apply rest argument
+        return ⟨path.set (items.set index updated.value) value, updated.state, states.set index updated.locals⟩
+      | _ => absent }
+
 mutual
 /-- Evaluates outputs while building the view, requests, and action routes. -/
 def evaluateNode
-  {layout : Layout}
-  {headers : layout.Headers}
   {Γ : Context}
   {α state β : Type}
-  (component : ComponentNode layout headers Γ α state β)
+  (component : ComponentNode Γ α state β)
   (value : α)
   (env : Env Γ)
   (cache : HttpRequest.Cache)
@@ -217,7 +234,7 @@ def evaluateNode
   (target : Display.Target)
   (location : Feedback.Location)
   (disabled : Bool := false)
-  : NodeEvaluation Γ α state β layout headers :=
+  : NodeEvaluation Γ α state β :=
   match component with
   | .field path label widget =>
     let location := location ++ pathLocation path
@@ -266,9 +283,9 @@ def evaluateNode
     { body with
       view := .stack (some label) [body.view]
       feedback := fun errors => .stack (some label) [body.feedback errors] }
-  | .mapOutput f body =>
+  | .void body =>
     let body := evaluateNode body value env cache locals scopes target location disabled
-    { output := f body.output
+    { output := ()
       locals := body.locals
       view := body.view
       feedback := body.feedback
@@ -279,8 +296,8 @@ def evaluateNode
     let body := evaluateNode body value env cache locals scopes target location (disabled || availability != .enabled)
     { output := body.output
       locals := body.locals
-      view := if availability == .hidden then hiddenView layout headers else body.view
-      feedback := fun errors => if availability == .hidden then hiddenView layout headers else body.feedback errors
+      view := if availability == .hidden then .hidden else body.view
+      feedback := fun errors => if availability == .hidden then .hidden else body.feedback errors
       requests := if availability == .hidden then [] else body.requests
       apply := fun route argument => match availability with
         | .hidden => .error (.invalid .hidden)
@@ -317,7 +334,7 @@ def evaluateNode
   | .output computation =>
     { output := computation.eval value env
       locals := ()
-      view := hiddenView layout layout.emptyHeaders
+      view := .hidden
       requests := []
       apply := fun _ _ => absent }
   | .sequence first second =>
@@ -325,8 +342,8 @@ def evaluateNode
     let second := evaluateNode second value env cache locals.tail scopes (target.child 1) location disabled
     { output := second.output
       locals := ⟨first.locals, second.locals⟩
-      view := combineViews first.view second.view
-      feedback := fun errors => combineViews (first.feedback errors) (second.feedback errors)
+      view := .stack none [first.view, second.view]
+      feedback := fun errors => .stack none [first.feedback errors, second.feedback errors]
       requests := first.requests ++ second.requests
       apply := fun route argument => match route with
         | 0 :: rest => do
@@ -342,7 +359,7 @@ def evaluateNode
     | none =>
       { output := none
         locals
-        view := hiddenView layout headers
+        view := .hidden
         requests := []
         apply := fun _ _ => absent }
     | some focused =>
@@ -390,8 +407,8 @@ def evaluateNode
     let body := evaluateNode body value (Env.cons producer.output env) cache locals.consumers scopes (target.child 1) location disabled
     { output := body.output
       locals := ⟨producer.locals, body.locals⟩
-      view := combineViews producer.view body.view
-      feedback := fun errors => combineViews (producer.feedback errors) (body.feedback errors)
+      view := .stack none [producer.view, body.view]
+      feedback := fun errors => .stack none [producer.feedback errors, body.feedback errors]
       requests := producer.requests ++ body.requests
       apply := fun route argument => match route with
         | 0 :: rest => do
@@ -401,52 +418,114 @@ def evaluateNode
           let updated ← body.apply rest argument
           return ⟨updated.value, updated.state.tail, ⟨producer.locals, updated.locals⟩⟩
         | _ => absent }
-  | .cell _ body =>
-    let body := evaluateNode body value env cache locals scopes target location disabled
-    { output := body.output
-      locals := body.locals
-      view := .cons body.view .nil
-      feedback := fun errors => .cons (body.feedback errors) .nil
-      requests := body.requests
-      apply := body.apply }
-  | .collection (layout := rowLayout) (headers := rowHeaders) path label itemLabel initial body selection =>
+  | .list path label itemLabel initial body =>
     let items := path.get value
     let location := location ++ pathLocation path
     let rows := items.mapIdx fun index item =>
       evaluateNode body item env cache (locals[index]?.getD body.initialState) scopes
         ((target.child index).child 0) (location ++ [.index index]) disabled
-    let states := rows.map (·.locals)
+    evaluateCollection path initial body.initialState rows value env none disabled
+      (fun views errors => listView views label itemLabel target location errors disabled)
+  | .table (headers := headers) path label itemLabel initial columns selection =>
+    let items := path.get value
+    let location := location ++ pathLocation path
+    let rows := items.mapIdx fun index item =>
+      evaluateColumns columns item env cache (locals[index]?.getD columns.initialState) scopes
+        ((target.child index).child 0) (location ++ [.index index]) disabled
     let selector := selection.map fun selected => ({ current := selected.get env, scope := scopes selected.index } : RowSelector)
-    let view := collectionView rowLayout rowHeaders (rows.map (·.view)) label itemLabel target location selector [] disabled
-    { output := rows.map (·.output)
-      locals := states
-      view
-      feedback := fun errors => collectionView rowLayout rowHeaders (rows.map fun row => row.feedback errors)
-        label itemLabel target location selector errors disabled
-      requests := rows.flatMap (·.requests)
-      apply := fun route argument => do
-        if disabled then throw (.invalid .disabled)
-        match route with
-        | [] => do
-          noArgument argument ()
-          return ⟨path.set (items ++ [initial]) value, env, states ++ [body.initialState]⟩
-        | [index, 1] => do
-          let index ← checkedIndex index items.length
-          noArgument argument ()
-          let env := match selection with
-            | none => env
-            | some selected => selected.set ((selected.get env).remove index.val) env
-          return ⟨path.set (items.eraseIdx index) value, env, states.eraseIdx index⟩
-        | [index, 2] => do
-          let index ← checkedIndex index items.length
-          noArgument argument ()
-          let some selected := selection | absent
-          return ⟨value, selected.set (.row index.val) env, states⟩
-        | index :: 0 :: rest => do
-          let some row := rows[index]? | absent
-          let updated ← row.apply rest argument
-          return ⟨path.set (items.set index updated.value) value, updated.state, states.set index updated.locals⟩
+    evaluateCollection path initial columns.initialState rows value env selection disabled
+      (fun views errors => tableView headers views label itemLabel target location selector errors disabled)
+
+def evaluateColumns
+  {headers : List String}
+  {Γ : Context}
+  {α state β : Type}
+  (columns : ColumnsNode headers Γ α state β)
+  (value : α)
+  (env : Env Γ)
+  (cache : HttpRequest.Cache)
+  (locals : state)
+  (scopes : WireScopes)
+  (target : Display.Target)
+  (location : Feedback.Location)
+  (disabled : Bool := false)
+  : NodeEvaluation Γ α state β (CellViews headers) :=
+  match columns with
+  | .output computation =>
+    { output := computation.eval value env
+      locals := ()
+      view := .nil
+      requests := []
+      apply := fun _ _ => absent }
+  | .cons _ cell rest =>
+    let cell := evaluateNode cell value env cache locals.value scopes (target.child 0) location disabled
+    let rest := evaluateColumns rest value env cache locals.tail scopes (target.child 1) location disabled
+    { output := rest.output
+      locals := ⟨cell.locals, rest.locals⟩
+      view := .cons cell.view rest.view
+      feedback := fun errors => .cons (cell.feedback errors) (rest.feedback errors)
+      requests := cell.requests ++ rest.requests
+      apply := fun route argument => match route with
+        | 0 :: route => do
+          let updated ← cell.apply route argument
+          return updated.mapLocals (⟨·, rest.locals⟩)
+        | 1 :: route => do
+          let updated ← rest.apply route argument
+          return updated.mapLocals (⟨cell.locals, ·⟩)
         | _ => absent }
+  | .observe _ cell rest =>
+    let cell := evaluateNode cell value env cache locals.producer scopes (target.child 0) location disabled
+    let scopes := fun index => match index with
+      | 0 => 2 :: target.indices
+      | index + 1 => scopes index
+    let rest := evaluateColumns rest value (Env.cons cell.output env) cache locals.consumers scopes (target.child 1) location disabled
+    { output := rest.output
+      locals := ⟨cell.locals, rest.locals⟩
+      view := .cons cell.view rest.view
+      feedback := fun errors => .cons (cell.feedback errors) (rest.feedback errors)
+      requests := cell.requests ++ rest.requests
+      apply := fun route argument => match route with
+        | 0 :: route => do
+          let updated ← cell.apply route argument
+          return updated.mapLocals (⟨·, rest.locals⟩)
+        | 1 :: route => do
+          let updated ← rest.apply route argument
+          return ⟨updated.value, updated.state.tail, ⟨cell.locals, updated.locals⟩⟩
+        | _ => absent }
+  | .bind _ body =>
+    let scopes := fun index => match index with
+      | 0 => 1 :: target.indices
+      | index + 1 => scopes index
+    let body := evaluateColumns body value (Env.cons locals.value env) cache locals.tail scopes (target.child 0) location disabled
+    { output := body.output
+      locals := ⟨locals.value, body.locals⟩
+      view := body.view
+      feedback := body.feedback
+      requests := body.requests
+      apply := fun route argument => match route with
+        | 0 :: route => do
+          let updated ← body.apply route argument
+          return ⟨updated.value, updated.state.tail, ⟨updated.state.value, updated.locals⟩⟩
+        | _ => absent }
+  | .focus computation body =>
+    let path := computation.eval value env
+    match path.get? value with
+    | none =>
+      { output := none
+        locals
+        view := CellViews.hidden headers
+        requests := []
+        apply := fun _ _ => absent }
+    | some focused =>
+      let body := evaluateColumns body focused env cache locals scopes target (location ++ partialPathLocation path) disabled
+      { output := some body.output
+        locals := body.locals
+        view := body.view
+        feedback := body.feedback
+        requests := body.requests
+        apply := fun route argument => do
+          let updated ← body.apply route argument
+          return updated.mapValue (fun focused => path.set focused value) }
 
 def evaluateChildren
   {Γ : Context}
@@ -464,7 +543,7 @@ def evaluateChildren
   : EvaluatedChildren Γ α state :=
   match children with
   | .columns columns =>
-    let columns := evaluateNode columns value env cache locals scopes (target.child index) location disabled
+    let columns := evaluateColumns columns value env cache locals scopes (target.child index) location disabled
     { locals := columns.locals
       views := columns.view.toList
       feedback := fun errors => (columns.feedback errors).toList

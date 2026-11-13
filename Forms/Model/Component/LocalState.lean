@@ -7,11 +7,9 @@ namespace Forms.Model
 
 mutual
 def ComponentNode.initialState
-  {layout : Layout}
-  {headers : layout.Headers}
   {Γ : Context}
   {α state β : Type}
-  (component : ComponentNode layout headers Γ α state β)
+  (component : ComponentNode Γ α state β)
   : state :=
   match component with
   | .field .. => ()
@@ -21,15 +19,28 @@ def ComponentNode.initialState
   | .groupOf _ children => children.initialState
   | .labeled _ body => body.initialState
   | .withAvailability _ body => body.initialState
-  | .mapOutput _ body => body.initialState
+  | .void body => body.initialState
   | .choiceOf _ _ branches => branches.initialState
   | .sequence first second => ⟨first.initialState, second.initialState⟩
   | .bind initial body => ⟨initial, body.initialState⟩
   | .observe producer body => ⟨producer.initialState, body.initialState⟩
-  | .collection .. => []
-  | .cell _ body => body.initialState
+  | .list .. => []
+  | .table .. => []
   | .focus _ body => body.initialState
   | .load (inst := _inst) (body := body) .. => ⟨.loading, (body .loading).initialState⟩
+
+def ColumnsNode.initialState
+  {headers : List String}
+  {Γ : Context}
+  {α state β : Type}
+  (columns : ColumnsNode headers Γ α state β)
+  : state :=
+  match columns with
+  | .output .. => ()
+  | .cons _ cell rest => ⟨cell.initialState, rest.initialState⟩
+  | .observe _ cell rest => ⟨cell.initialState, rest.initialState⟩
+  | .bind initial body => ⟨initial, body.initialState⟩
+  | .focus _ body => body.initialState
 
 def ComponentsNode.initialState
   {Γ : Context}

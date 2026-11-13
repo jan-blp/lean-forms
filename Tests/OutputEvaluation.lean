@@ -44,6 +44,8 @@ end
 
 example : True := by
   fail_if_success have bad : CellViews ["Description", "Selected"] := .cons .hidden .nil
+  fail_if_success have bad : Columns [] String Unit :=
+    ⟨["Description", "Selected"], Unit, .output (.const ())⟩
   trivial
 
 @[expose] def functions : Component [] Nat (Nat → Nat) :=
@@ -243,9 +245,17 @@ def run : IO Unit := do
   check "EvaluationColumnsCanOwnRowLocalVariables" (rowBoundUpdated.output == [true, false])
 
   let focusedColumns : Columns [] (List String) (Option RowOutput) :=
-    ⟨selectionColumns.headers, selectionColumns.LocalState,
-      .focus (.const (.index 0 .self)) selectionColumns.node⟩
+    .focus (.const (.index 0 .self)) selectionColumns
   let focusedTable := Component.table .self "Rows" "Row" [] focusedColumns
+  let focused := focusedTable.evaluate [["same"]] Env.nil
+  let toggle ← press focused "Toggle selection"
+  let focused := focusedTable.evaluate toggle.value toggle.state {} toggle.locals
+  check "EvaluationFocusedColumnsKeepRowLocalState"
+    (focused.output == [some ⟨"same", true⟩])
+  let edit ← press focused "Description" (argument := some (.text "Revised"))
+  let focused := focusedTable.evaluate edit.value edit.state {} edit.locals
+  check "EvaluationFocusedColumnsEditNestedRows"
+    (edit.value == [["Revised"]] && focused.output == [some ⟨"Revised", true⟩])
   let unfocused := focusedTable.evaluate [[]] Env.nil
   check "EvaluationMissingFocusKeepsTableColumns" (unfocused.output == [none] && match unfocused.view with
     | .table _ headers rows _ _ => headers == ["Description", "Selected", "Actions"] &&
