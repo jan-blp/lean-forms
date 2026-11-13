@@ -8,6 +8,17 @@ open LeanLens
 @[expose] public section
 namespace Forms.Model
 
+/-- A lens built from `get` and `put` is lawful when they satisfy the laws. -/
+theorem lawfulMkLens
+  {s a : Type}
+  {get : s → a}
+  {put : a → s → s}
+  (view_set : ∀ v src, get (put v src) = v)
+  (set_view : ∀ src, put (get src) src = src)
+  (set_set : ∀ v v' src, put v' (put v src) = put v' src)
+  : LawfulLens (mkLens get put) :=
+  ⟨view_set, set_view, set_set⟩
+
 /-- Describes a record's typed fields. -/
 class Fields (α : Type) where
   Field : Type → Type
@@ -15,7 +26,6 @@ class Fields (α : Type) where
   lawful : ∀ {β} (field : Field β), LawfulLens (lens field)
   /-- The field name used in serialization . -/
   key : {β : Type} → Field β → String
-  key_injective : ∀ {β γ : Type} (a : Field β) (b : Field γ), key a = key b → a ≍ b
 
 attribute [reducible] Fields.Field
 
@@ -180,6 +190,18 @@ def Decision.errors
   | .valid _ => []
   | .invalid _ message targets => [{ message, targets }]
 
+/-- The proof, or the errors moved to `raw`. -/
+def Decision.toExcept
+  {property : Prop}
+  {α : Type}
+  {value raw : α}
+  (decision : Decision property value)
+  (equality : value = raw)
+  : Except (List (Error raw)) (PLift property) :=
+  match decision with
+  | .valid proof => .ok ⟨proof⟩
+  | .invalid .. => .error (equality ▸ decision.errors)
+
 class Constraints (constraint : Type) where
   Parts : constraint → Type
   Raw : constraint → Type
@@ -211,6 +233,17 @@ class Validation (model : Type) [FormModel model] where
 def errors {α β : Type _} : Except (List α) β → List α
   | .ok _ => []
   | .error errors => errors
+
+/-- Applies `f` to `x` if both succeed, else collects the errors of both. -/
+def accumulate
+  {ε : Type _}
+  {α β : Type _}
+  (f : Except (List ε) (α → β))
+  (x : Except (List ε) α)
+  : Except (List ε) β :=
+  match f, x with
+  | .ok f, .ok x => .ok (f x)
+  | f, x => .error (errors f ++ errors x)
 
 @[reducible] instance : FormModel String := ⟨String, id⟩
 @[reducible] instance : FormModel Bool := ⟨Bool, id⟩

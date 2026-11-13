@@ -107,11 +107,6 @@ private def alternative
   : CommandElabM Alternative :=
   `(Parser.Term.matchAltExpr| | $[$patterns],* => $body)
 
-private def appendLists (values : Array TermSyntax) : CommandElabM TermSyntax := do
-  let mut result ← `([])
-  for value in values.reverse do result ← `($value ++ $result)
-  return result
-
 private def emitRecord
   (name : Name)
   (fields : Array (Name × TermSyntax))
@@ -127,10 +122,38 @@ private def emitRecord
     emit (← `(command| structure $(global name):ident where
       $fields:structExplicitBinder*))
 
+private def emitFieldLawful
+  (ns raw field : Name)
+  : CommandElabM TermSyntax := do
+  let name := ns ++ `Field.lawful ++ field
+  let (type, value) ← liftTermElabM do
+    let raw := mkConst raw
+    let selected := mkConst (ns ++ `Field ++ field)
+    let type := (← inferType selected).appArg!
+    let get := mkConst (ns ++ `Raw ++ field)
+    let put := mkConst (ns ++ `Field ++ `set ++ field)
+    -- Record eta reduces all three laws to reflexivity.
+    let viewSet ← withLocalDeclD `value type fun value =>
+      withLocalDeclD `source raw fun source => do
+        mkLambdaFVars #[value, source] (← mkEqRefl value)
+    let setView ← withLocalDeclD `source raw fun source => do
+      mkLambdaFVars #[source] (← mkEqRefl source)
+    let setSet ← withLocalDeclD `first type fun first =>
+      withLocalDeclD `last type fun last =>
+        withLocalDeclD `source raw fun source => do
+          mkLambdaFVars #[first, last, source] (← mkEqRefl (mkApp2 put last source))
+    let value := mkAppN (mkConst ``Forms.Model.lawfulMkLens)
+      #[raw, type, get, put, viewSet, setView, setSet]
+    let lens := mkApp2 (mkConst (ns ++ `Field.lens)) type selected
+    return (mkAppN (mkConst ``LeanLens.LawfulLens) #[raw, type, lens], value)
+  liftCoreM <| addDecl (.thmDecl { name, levelParams := [], type, value })
+  return global name
+
 private def emitFields
   (ns raw : Name)
   (fields : Array (FieldInfo × TermSyntax))
   : CommandElabM Unit := do
+  let rawName := raw
   let field := global (ns ++ `Field)
   let raw := global raw
   let ctors ← fields.mapM fun (f, type) =>
@@ -142,14 +165,19 @@ private def emitFields
   let mut getters := #[]
   let mut setters := #[]
   let mut keys := #[]
-  for (f, _) in fields do
+  for (f, type) in fields do
     let pattern : TermSyntax := global (ns ++ `Field ++ f.name)
     let projection := global (ns ++ `Raw ++ f.name)
     getters := getters.push (← alternative #[pattern] (← `($projection $old)))
-    let values ← fields.mapM fun (g, _) =>
-      if f.name == g.name then pure (new : TermSyntax)
-      else `($(global (ns ++ `Raw ++ g.name)) $old)
-    setters := setters.push (← alternative #[pattern] (← app (global (ns ++ `Raw ++ `mk)) values))
+    let binders ← fields.mapM fun _ => fresh `value
+    let values := (fields.zip binders).map fun ((g, _), binder) =>
+      if f.name == g.name then (new : TermSyntax) else binder
+    let fieldSetter := global (ns ++ `Field ++ `set ++ f.name)
+    let rawMk := global (ns ++ `Raw ++ `mk)
+    -- `casesOn` instead of `match` avoids compiling an n-field matcher per setter.
+    emit (← `(command| @[expose] def $fieldSetter:ident ($new:ident : FormModel.Raw $type) ($old:ident : $raw) : $raw :=
+      $(global (ns ++ `Raw ++ `casesOn)) (motive := fun _ => $raw) $old fun $binders* => $(← app rawMk values)))
+    setters := setters.push (← alternative #[pattern] (← `($fieldSetter $new $old)))
     keys := keys.push (← alternative #[pattern] (Syntax.mkStrLit f.name.getString!))
   let getter ← if fields.isEmpty then `(nomatch $selected) else matchOn #[selected] getters
   let setter ← if fields.isEmpty then `(nomatch $selected) else matchOn #[selected] setters
@@ -164,16 +192,17 @@ private def emitFields
   emit (← `(command| @[expose] def $keyName:ident {α : Type} ($selected:ident : $field α) : String := $key))
   emit (← `(command| @[expose] def $lens:ident {α : Type} ($selected:ident : $field α) : LeanLens.Lens' $raw α :=
     LeanLens.mkLens ($get $selected) ($set $selected)))
-  emit (← `(command| instance $lawful:ident {α : Type} ($selected:ident : $field α) : LeanLens.LawfulLens ($lens $selected) := by
-    cases $selected:term <;> constructor <;> intros <;> rfl))
+  let lawfulCases ← fields.mapM fun (f, _) => do
+    let proof ← emitFieldLawful ns rawName f.name
+    alternative #[global (ns ++ `Field ++ f.name)] proof
+  let lawfulBody ← if fields.isEmpty then `(nomatch $selected) else matchOn #[selected] lawfulCases
+  emit (← `(command| instance $lawful:ident {α : Type} ($selected:ident : $field α) : LeanLens.LawfulLens ($lens $selected) :=
+    $lawfulBody))
   emit (← `(command| @[expose, reducible] instance $(global (ns ++ `rawFields)):ident : Forms.Model.Fields $raw where
     Field := $field
     lens := $lens
     lawful := $lawful
-    key := $keyName
-    key_injective := by
-      intro α β a b h
-      cases a <;> cases b <;> simp_all [$keyName:term]))
+    key := $keyName))
 
 private structure ModelInfo where
   name : Name
@@ -190,12 +219,6 @@ private def ModelInfo.constraint (model : ModelInfo) (ctor : Constructor) (field
     Name.mkSimple (ctor.name.getString! ++ "_" ++ field.name.getString!)
 private def ModelInfo.rules (model : ModelInfo) :=
   model.constructors.flatMap fun ctor => ctor.proofs.map (ctor, ·)
-
-private def ModelInfo.payloadValue
-  (model : ModelInfo)
-  (ctor : Constructor)
-  : CommandElabM TermSyntax :=
-  app (global (model.payload ctor ++ `mk)) (ctor.data.map fun f => ident f.binder)
 
 private def ModelInfo.wrap
   (model : ModelInfo)
@@ -347,62 +370,71 @@ private def emitConstraints (model : ModelInfo) : CommandElabM Unit := do
     holds := $holds
     toRaw := $toRaw))
 
-private structure CheckedField where
-  field : FieldInfo
-  result : Ident
-  value : Ident
-  equality : Ident
+/-- Folds `results` into `fn` with `accumulate`, so each result adds no binder around the rest. -/
+private def accumulateAll
+  (fn : TermSyntax)
+  (results : Array TermSyntax)
+  : CommandElabM TermSyntax := do
+  results.foldlM (init := ← `(Except.ok $fn)) fun acc result =>
+    `(Forms.Model.accumulate $acc $result)
 
+/-- Validates the fields of `payload` collecting all errors, then checks the constraints. -/
 private def validationBranch
   (model : ModelInfo)
   (ctor : Constructor)
-  : CommandElabM Alternative := do
-  let fields ← ctor.fields.mapM fun field => do
-    let result ← fresh `result
-    let value ← fresh `value
-    let equality ← fresh `equality
-    return { field, result, value, equality : CheckedField }
-  let data := fields.filter (! ·.field.proof)
-  let proofs := fields.filter (·.field.proof)
+  (payload : TermSyntax)
+  : CommandElabM TermSyntax := do
+  let raw ← model.wrap ctor payload
+  let errors ← `(List (Forms.Model.Error $raw))
+  let partsType := global (model.parts ctor)
+  let toRaw := global (model.parts ctor ++ `toRaw)
   let parts ← fresh `parts
   let preserved ← fresh `preserved
-  let payload ← model.payloadValue ctor
-  let original ← app (global ctor.name) (fields.map fun f => f.value)
+  let values ← ctor.data.mapM fun _ => fresh `value
+  let mut preservation ← `(rfl)
+  for value in values, i in [:values.size] do
+    preservation ← if i == 0
+      then `(congrArg $(global (model.payload ctor ++ `mk)) (Subtype.property $value))
+      else `(congr $preservation (Subtype.property $value))
+  let partValue ← app (global (model.parts ctor ++ `mk)) (← values.mapM fun v => `(Subtype.val $v))
+  let mut fn ← `((⟨$partValue, ($preservation :)⟩ : { $parts : $partsType // $toRaw $parts = $payload }))
+  for (field, value) in (ctor.data.zip values).reverse do
+    let projection ← `($(global (model.payload ctor ++ field.name)) $payload)
+    fn ← `(fun ($value : Forms.Model.Validated $(← fieldType ctor field) $projection) => $fn)
+  let fieldResults ← ctor.data.mapM fun field => do
+    let error ← fresh `error
+    let lifted ← model.liftError ctor
+      (← `(Forms.Model.Error.lift (value := $payload) $(global (model.localNS ctor ++ `Field ++ field.name)) $error))
+    `((Forms.Model.Validation.validate (model := $(← fieldType ctor field))
+        ($(global (model.payload ctor ++ field.name)) $payload)).mapError (List.map fun $error:ident => $lifted))
+  let validatedParts ← accumulateAll fn fieldResults
+  let proofs ← ctor.proofs.mapM fun _ => fresh `proof
+  let mut arguments := #[]
+  let mut proofIndex := 0
+  for field in ctor.fields do
+    if field.proof then
+      arguments := arguments.push (← `(PLift.down $(proofs[proofIndex]!)))
+      proofIndex := proofIndex + 1
+    else
+      arguments := arguments.push (← `($(global (model.parts ctor ++ field.name)) $parts))
+  let original ← app (global ctor.name) arguments
   let equality ← if model.record then pure (preserved : TermSyntax) else do
     let value ← fresh `value
     `(congrArg (fun ($value:ident : $(global (model.payload ctor))) => $(← model.wrap ctor value)) $preserved)
-  let mut body ← `(.ok ⟨$original, $equality⟩)
-  unless proofs.isEmpty do
-    let checks ← proofs.mapM fun f =>
-      `(Forms.Model.ConstraintRule.check (c := $(global (model.constraint ctor f.field))) $parts)
-    let patterns ← proofs.mapM fun f => `(.valid $(f.value))
-    let errors ← appendLists (← proofs.mapM fun f => `(Forms.Model.Decision.errors $(f.result)))
-    let mut errors ← `(show List (Forms.Model.Error $payload) from $preserved ▸ $errors)
-    unless model.record do
-      let error ← fresh `error
-      errors ← `(List.map (fun $error:ident => $(← model.liftError ctor error)) $errors)
-    body ← matchOn checks #[← alternative patterns body,
-      ← alternative (proofs.map fun f => f.result) (← `(.error $errors))]
-  let toRaw := global (model.parts ctor ++ `toRaw)
-  let simpTerms : Array TermSyntax := #[parts, toRaw] ++ data.map (fun f => f.equality)
-  let simpArgs ← simpTerms.mapM fun term => `(Parser.Tactic.simpLemma| $term:term)
-  let preservation ← `(by simp only [$[$simpArgs],*])
-  body ← `(have $preserved:ident : $toRaw $parts = $payload := $preservation; $body)
-  let partValue ← app (global (model.parts ctor ++ `mk)) (data.map fun f => f.value)
-  body ← `(let $parts:ident : $(global (model.parts ctor)) := $partValue; $body)
-  unless data.isEmpty do
-    let checks ← data.mapM fun f => do
-      let error ← fresh `error
-      let field := global (model.localNS ctor ++ `Field ++ f.field.name)
-      let lifted ← `(Forms.Model.Error.lift (value := $payload) $field $error)
-      let lifted ← model.liftError ctor lifted
-      `((Forms.Model.Validation.validate (model := $(← fieldType ctor f.field)) $(ident f.field.binder)).mapError
-        (List.map (fun $error:ident => $lifted)))
-    let patterns ← data.mapM fun f => `(.ok ⟨$(f.value), $(f.equality)⟩)
-    let errors ← appendLists (← data.mapM fun f => `(Forms.Model.errors $(f.result)))
-    body ← matchOn checks #[← alternative patterns body,
-      ← alternative (data.map fun f => f.result) (← `(.error $errors))]
-  alternative #[← model.wrap ctor payload] body
+  fn ← `((⟨$original, $equality⟩ : Forms.Model.Validated $(global model.name) $raw))
+  for (field, proof) in (ctor.proofs.zip proofs).reverse do
+    let constraint := global (model.constraint ctor field)
+    fn ← `(fun ($proof : PLift (Forms.Model.Constraints.holds $constraint $parts)) => $fn)
+  let checks ← ctor.proofs.mapM fun field => do
+    let check ← `(Forms.Model.Decision.toExcept
+      (Forms.Model.ConstraintRule.check (c := $(global (model.constraint ctor field))) $parts) $preserved)
+    if model.record then return check
+    let error ← fresh `error
+    `(($check).mapError (List.map fun $error:ident => $(← model.liftError ctor error)))
+  let checked ← accumulateAll fn checks
+  `(match ($validatedParts : Except $errors { $parts : $partsType // $toRaw $parts = $payload }) with
+    | .error errors => .error errors
+    | .ok ⟨$parts, $preserved⟩ => $checked)
 
 private def emitValidation (model : ModelInfo) : CommandElabM Unit := do
   let mut params : Array (TSyntax ``Parser.Term.instBinder) := #[]
@@ -417,11 +449,22 @@ private def emitValidation (model : ModelInfo) : CommandElabM Unit := do
     params := params.push (← `(Parser.Term.instBinder|
       [Forms.Model.ConstraintRule $(global (model.constraint ctor field))]))
   let value ← fresh `raw
-  let body ← matchOn #[value] (← model.constructors.mapM (validationBranch model))
+  let body ← match model.record, model.constructors with
+    | true, #[ctor] => validationBranch model ctor value
+    | _, constructors => do
+      let alternatives ← constructors.mapM fun ctor => do
+        let payload : TermSyntax ← if ctor.data.isEmpty
+          then pure (global (model.payload ctor ++ `mk))
+          else fresh `payload
+        alternative #[← model.wrap ctor payload] (← validationBranch model ctor payload)
+      matchOn #[value] alternatives
   let validate := global (model.name ++ `validate)
   let raw := global model.raw
   let name := global model.name
-  emit (← `(command| @[expose] def $validate:ident $params:instBinder*
+  let fields := model.constructors.foldl (fun size ctor => max size ctor.fields.size) 0
+  let depth := Syntax.mkNumLit (toString (512 + 8 * fields))
+  emit (← `(command| set_option maxRecDepth $depth in
+    @[expose] def $validate:ident $params:instBinder*
     ($value:ident : $raw) : Except (List (Forms.Model.Error $value)) (Forms.Model.Validated $name $value) := $body))
   emit (← `(command| @[expose] instance $(global (model.name ++ `validation)):ident $params:instBinder* :
     Forms.Model.Validation $name := ⟨$validate⟩))
