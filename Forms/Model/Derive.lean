@@ -117,9 +117,11 @@ private def allOrError
   (body : TermSyntax)
   : CommandElabM TermSyntax := do
   let collected ← fresh `errors
-  let wildcards ← results.mapM fun _ => `(_)
-  let mut term ← matchOn (results.map (·)) #[← alternative patterns body,
-    ← alternative wildcards (← `(.error $collected))]
+  let mut term := body
+  for (result, pattern) in (results.zip patterns).reverse do
+    term ← `(match $result:ident with
+      | $pattern:term => $term
+      | _ => .error $collected)
   term ← `(let $collected:ident := $errors; $term)
   for (result, check) in (results.zip checks).reverse do
     term ← `(let $result:ident := $check; $term)
@@ -160,50 +162,48 @@ private def emitFields
   let mut getters := #[]
   let mut setters := #[]
   let mut keys := #[]
-  let mut decoders := #[]
-  for (f, _) in fields do
+  for (f, type) in fields do
     let pattern : TermSyntax := global (ns ++ `Field ++ f.name)
     let projection := global (ns ++ `Raw ++ f.name)
     getters := getters.push (← alternative #[pattern] (← `($projection $old)))
-    let values ← fields.mapM fun (g, _) =>
-      if f.name == g.name then pure (new : TermSyntax)
-      else `($(global (ns ++ `Raw ++ g.name)) $old)
-    setters := setters.push (← alternative #[pattern] (← app (global (ns ++ `Raw ++ `mk)) values))
+    let binders ← fields.mapM fun _ => fresh `value
+    let values := (fields.zip binders).map fun ((g, _), binder) =>
+      if f.name == g.name then (new : TermSyntax) else binder
+    let fieldSetter := global (ns ++ `Field ++ `set ++ f.name)
+    let rawMk := global (ns ++ `Raw ++ `mk)
+    emit (← `(command| @[expose] def $fieldSetter:ident ($new:ident : FormModel.Raw $type) : $raw → $raw
+      | $(← app rawMk (binders.map (·))) => $(← app rawMk values)))
+    setters := setters.push (← alternative #[pattern] (← `($fieldSetter $new $old)))
     keys := keys.push (← alternative #[pattern] (Syntax.mkStrLit f.name.getString!))
-    decoders := decoders.push (← alternative #[Syntax.mkStrLit f.name.getString!] (← `(some ⟨_, $pattern⟩)))
   let getter ← if fields.isEmpty then `(nomatch $selected) else matchOn #[selected] getters
   let setter ← if fields.isEmpty then `(nomatch $selected) else matchOn #[selected] setters
   let key ← if fields.isEmpty then `(nomatch $selected) else matchOn #[selected] keys
-  let name ← fresh `name
-  let decoder ← matchOn #[name] (decoders.push (← alternative #[← `(_)] (← `(none))))
   let get := global (ns ++ `Field.get)
   let set := global (ns ++ `Field.set)
   let keyName := global (ns ++ `Field.key)
   let lens := global (ns ++ `Field.lens)
   let lawful := global (ns ++ `Field.lawful)
-  let ofKey := global (ns ++ `Field.ofKey)
-  let ofKeyKey := global (ns ++ `Field.ofKey_key)
   emit (← `(command| @[expose] def $get:ident {α : Type} ($selected:ident : $field α) ($old:ident : $raw) : α := $getter))
   emit (← `(command| @[expose] def $set:ident {α : Type} ($selected:ident : $field α) ($new:ident : α) ($old:ident : $raw) : $raw := $setter))
   emit (← `(command| @[expose] def $keyName:ident {α : Type} ($selected:ident : $field α) : String := $key))
-  emit (← `(command| @[expose] def $ofKey:ident ($name:ident : String) : Option ((β : Type) × $field β) := $decoder))
-  emit (← `(command| theorem $ofKeyKey:ident {α : Type} ($selected:ident : $field α) :
-      $ofKey ($keyName $selected) = some ⟨α, $selected⟩ := by
-    cases $selected:term <;> rfl))
   emit (← `(command| @[expose] def $lens:ident {α : Type} ($selected:ident : $field α) : LeanLens.Lens' $raw α :=
     LeanLens.mkLens ($get $selected) ($set $selected)))
-  emit (← `(command| instance $lawful:ident {α : Type} ($selected:ident : $field α) : LeanLens.LawfulLens ($lens $selected) := by
-    cases $selected:term <;> constructor <;> intros <;> rfl))
+  let mut lawfulCases := #[]
+  for (f, _) in fields do
+    let pattern : TermSyntax := global (ns ++ `Field ++ f.name)
+    let proof := global (ns ++ `Field ++ (f.name.appendAfter "_lawful"))
+    emit (← `(command| theorem $proof:ident : LeanLens.LawfulLens ($lens $pattern) :=
+      Forms.Model.lawfulMkLens (get := $get $pattern) (put := $set $pattern)
+        (fun _ src => by cases src; rfl) (fun src => by cases src; rfl) (fun _ _ src => by cases src; rfl)))
+    lawfulCases := lawfulCases.push (← alternative #[pattern] proof)
+  let lawfulBody ← if fields.isEmpty then `(nomatch $selected) else matchOn #[selected] lawfulCases
+  emit (← `(command| instance $lawful:ident {α : Type} ($selected:ident : $field α) : LeanLens.LawfulLens ($lens $selected) :=
+    $lawfulBody))
   emit (← `(command| @[expose, reducible] instance $(global (ns ++ `rawFields)):ident : Forms.Model.Fields $raw where
     Field := $field
     lens := $lens
     lawful := $lawful
-    key := $keyName
-    key_injective := by
-      intro α β a b h
-      have decoded := ($ofKeyKey a).symm.trans ((congrArg $ofKey h).trans ($ofKeyKey b))
-      cases decoded
-      rfl))
+    key := $keyName))
 
 private structure ModelInfo where
   name : Name

@@ -8,6 +8,17 @@ open LeanLens
 @[expose] public section
 namespace Forms.Model
 
+/-- A lens built from `get` and `put` is lawful when they satisfy the laws. -/
+theorem lawfulMkLens
+  {s a : Type}
+  {get : s → a}
+  {put : a → s → s}
+  (view_set : ∀ v src, get (put v src) = v)
+  (set_view : ∀ src, put (get src) src = src)
+  (set_set : ∀ v v' src, put v' (put v src) = put v' src)
+  : LawfulLens (mkLens get put) :=
+  ⟨view_set, set_view, set_set⟩
+
 /-- Describes a record's typed fields. -/
 class Fields (α : Type) where
   Field : Type → Type
@@ -15,7 +26,6 @@ class Fields (α : Type) where
   lawful : ∀ {β} (field : Field β), LawfulLens (lens field)
   /-- The field name used in serialization . -/
   key : {β : Type} → Field β → String
-  key_injective : ∀ {β γ : Type} (a : Field β) (b : Field γ), key a = key b → a ≍ b
 
 attribute [reducible] Fields.Field
 
