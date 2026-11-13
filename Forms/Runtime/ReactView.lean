@@ -2,6 +2,7 @@ module
 
 public import FormsReact.Component
 public import Forms.Runtime.Display
+public import Forms.Runtime.ControlKeyProtocol
 public import Forms.Runtime.Interaction
 
 @[expose] public section
@@ -13,7 +14,7 @@ def Interaction.Notice.toReact : Interaction.Notice → FormsReact.Notice
   | .error message => .error message
 
 def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Component :=
-  let name := c.key.value
+  let name := ControlKeyProtocol.toString c.key
   let disabled := pending || c.disabled
   match c.input with
   | .text value => .textField

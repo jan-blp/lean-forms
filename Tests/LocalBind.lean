@@ -58,7 +58,7 @@ def run : IO Unit := do
   let selected ← apply (model := List (List Nat)) rows opened "Select" none 3
   check "LocalListRowsHaveIndependentBindings"
     (rowSelection selected 0 == .none && rowSelection selected 1 == .row 1 && selected.value == opened.value)
-  let remove := DisplayProtocol.controlKey .remove [.index 0]
+  let remove := ControlKey.remove [.index 0]
   let removed ← IO.ofExcept (ModelForm.execute (model := List (List Nat)) rows selected (.apply remove none))
   check "LocalListBindingFollowsRowRemoval"
     (removed.value == [[30, 40]] && rowSelection removed 0 == .row 1)

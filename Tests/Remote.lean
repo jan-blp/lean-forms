@@ -173,7 +173,7 @@ def run : IO Unit := do
   let opened : State := opened
   check "RemoteOpenFetches" (fetches opened == [supplier "acme"])
   check "RemoteDetailsLoading" (control? opened "Purchase order").isNone
-  let purchaseOrder := DisplayProtocol.controlKey .edit [.field "purchaseOrder"]
+  let purchaseOrder := ControlKey.edit [.field "purchaseOrder"]
   let early ← execute opened (.apply purchaseOrder (some (.text "PO-1")))
   check "RemoteEditBeforeLoadRejects"
     ((snapshot early).ui.rejection == some (toString InvocationError.absent))

@@ -78,7 +78,7 @@ def run : IO Unit := do
     (phoneControl.location == [.constructor "express", .field "phone"])
   let changed ← IO.ofExcept ((perform phone express phoneControl.key (some (.text "079")) Env.nil).mapError toString)
   check "FocusWritesConstructorPayload" (toJson changed == toJson (Shipping.Raw.express ⟨⟨"Main", "Bern"⟩, "079"⟩))
-  let invalid := { ModelForm.openState phone express Env.nil with validationStarted := true }
+  let invalid := ModelForm.openState phone express Env.nil
   let snapshot := ModelForm.snapshot (model := Shipping) phone invalid
   check "FocusMatchesValidationMessages"
     (snapshot.controls.head?.bind (·.messages) == some "Enter a phone number for the courier.")
@@ -96,8 +96,7 @@ def run : IO Unit := do
       edited.employee == selected.employee)
   let invalidValue : ExpenseReport.Raw := { selected with
     expenses := [⟨"Train to Bern", 58, false⟩, ⟨"", 180, true⟩] }
-  let invalidState := { ModelForm.openState details invalidValue selectedUi with
-    validationStarted := true }
+  let invalidState := ModelForm.openState details invalidValue selectedUi
   let invalidDetails := ModelForm.snapshot (model := ExpenseReport) details invalidState
   check "FocusListValidationLocation"
     (invalidDetails.controls.head?.bind (·.messages) == some "Describe the expense." &&

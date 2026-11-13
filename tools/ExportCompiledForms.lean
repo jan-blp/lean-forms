@@ -19,9 +19,10 @@ private def fixture (name : String) (form : RegisteredForm) : Except String Json
   let (opened, initial) ← form.open name formFingerprint form.definition.initial
   let cases ← typed.controls.mapM fun control => do
     let argument := actionArgument control.input
-    let (_, expected) ← opened.execute (.apply control.key.value argument)
+    let key := ControlKeyProtocol.toString control.key
+    let (_, expected) ← opened.execute (.apply key argument)
     pure (Json.mkObj [
-      ("action", Json.mkObj [("key", toJson control.key.value), ("argument", argument)]),
+      ("action", Json.mkObj [("key", toJson key), ("argument", argument)]),
       ("expected", toJson expected)])
   pure (Json.mkObj [
     ("start", toJson (form.start name formFingerprint)),

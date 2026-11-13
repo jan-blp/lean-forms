@@ -2,6 +2,7 @@ module
 
 public import Forms.Runtime.ModelForm
 public import Forms.Runtime.InputProtocol
+public import Forms.Runtime.DisplayProtocol
 public import Forms.Runtime.ReactView
 public import Forms.Runtime.Wire
 
@@ -56,7 +57,7 @@ def ModelForm.Snapshot.toWire
 def ModelForm.Event.fromWire : Wire.Event → Except String ModelForm.Event
   | .apply key argument => do
     let argument ← InputProtocol.argumentFromJson (if argument == .null then none else some argument)
-    pure (.apply ⟨key⟩ argument)
+    pure (.apply (← ControlKeyProtocol.fromString key) argument)
   | .submit => .ok .submit
   | .reset => .ok .reset
   | .submitted (.response status body) =>

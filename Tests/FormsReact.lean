@@ -12,18 +12,19 @@ private def check (message : String) (ok : Bool) : IO Unit := do
   unless ok do throw (IO.userError message)
 
 private def control
-  (key label : String)
+  (key : ControlKey)
+  (label : String)
   (input : Display.Editor)
   (messages : Option String := none)
   : Display.Control :=
-  { key := ⟨key⟩, target := {}, label, disabled := false, location := [], input, messages }
+  { key, target := {}, label, disabled := false, location := [], input, messages }
 
 def view : Display.View :=
   .stack (some "Person") [
-    .control (control "name" "Name" (.text "Ada") (messages := some "Enter your name.")),
-    .control (control "age" "Age" (.natural 36)),
+    .control (control (.edit [.field "name"]) "Name" (.text "Ada") (messages := some "Enter your name.")),
+    .control (control (.edit [.field "age"]) "Age" (.natural 36)),
     .hidden,
-    .stack (some "") [.control (control "delivery" "Delivery" (.checkbox true))],
+    .stack (some "") [.control (control (.edit [.field "delivery"]) "Delivery" (.checkbox true))],
     .computed "Summary" "Ada, 36"]
 
 def expected : FormsReact.Component :=
@@ -31,40 +32,40 @@ def expected : FormsReact.Component :=
     label := some "Person"
     children := [
       .textField {
-        name := "name"
+        name := "[\"edit\",\"name\"]"
         label := "Name"
         value := "Ada"
         disabled := false
         error := some "Enter your name."
-        onCommit := .apply "name" },
+        onCommit := .apply "[\"edit\",\"name\"]" },
       .naturalField {
-        name := "age"
+        name := "[\"edit\",\"age\"]"
         label := "Age"
         value := "36"
         disabled := false
         error := none
-        onCommit := .apply "age" },
+        onCommit := .apply "[\"edit\",\"age\"]" },
       .group {
         label := none
         children := [
           .checkbox {
-            name := "delivery"
+            name := "[\"edit\",\"delivery\"]"
             label := "Delivery"
             checked := true
             disabled := false
             error := none
-            onChange := .apply "delivery" }]
+            onChange := .apply "[\"edit\",\"delivery\"]" }]
         error := none },
       .output { label := "Summary", value := "Ada, 36" }]
     error := none }
 
 def run : IO Unit := do
   check "Lowering changed" (view.toReact false == some expected)
-  check "Draft fields changed" (expected.draftFields == ["name", "age"])
+  check "Draft fields changed" (expected.draftFields == ["[\"edit\",\"name\"]", "[\"edit\",\"age\"]"])
   check "Hidden view must lower to nothing" (Display.View.hidden.toReact false == none)
   check "Buttons must lower to press"
-    ((control "add" "Add" .action).toReact false ==
-      .button { label := "Add", variant := .secondary, disabled := false, onClick := .press "add" })
+    ((control (.add []) "Add" .action).toReact false ==
+      .button { label := "Add", variant := .secondary, disabled := false, onClick := .press "[\"add\"]" })
   let pendingPage := view.toReactPage { Interaction.State.initial with pending := true } "{}"
   check "Pending page must have no draft fields" pendingPage.draftFields.isEmpty
   let pending := match pendingPage with

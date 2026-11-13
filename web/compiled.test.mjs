@@ -108,7 +108,7 @@ test('disposed handles stay invalid and rejected requests leave state unchanged'
   // An outcome nobody waits for changes nothing.
   const unchanged = call({ operation: 'submitted', handle, outcome: { unreachable: { message: 'late' } } });
   assert.deepEqual(unchanged.value.updated.snapshot, initial);
-  const stale = call({ operation: 'apply', handle, key: 'missing', argument: null }).value.updated.snapshot;
+  const stale = call({ operation: 'apply', handle, key: JSON.stringify(['edit', 'missing']), argument: null }).value.updated.snapshot;
   assert.ok(stale.rejection);
   assert.deepEqual(stale.submission, initial.submission);
   assert.equal(call({ operation: 'dispose', handle }).ok, true);
@@ -142,7 +142,12 @@ test('editor normalization preserves whitespace, types, and natural precision', 
     assert.equal(model.snapshot().submission.value.name, ' 🌍\0 ');
     assert.throws(() => edit('Name', 1));
     for (const raw of ['true', 1, 0, null]) assert.throws(() => edit('Request delivery', raw));
-    assert.ok(model.send({ apply: { key: 'missing', argument: null } }).rejection);
+    assert.ok(model.send({ apply: { key: JSON.stringify(['edit', 'missing']), argument: null } }).rejection);
+    const beforeMalformed = model.snapshot();
+    for (const key of ['missing', '["unknown"]', '["edit",-1]', '["selectRow"]']) {
+      assert.throws(() => model.send({ apply: { key, argument: null } }), /Invalid control key/);
+      assert.deepEqual(model.snapshot(), beforeMalformed);
+    }
   } finally { model.dispose(); }
 });
 
@@ -163,14 +168,16 @@ test('Wasm exposes only the compiled-form API and recovers using a fresh instanc
 });
 
 
-test('Lean owns validation visibility, server feedback, and recovery', async () => {
+test('Lean shows validation before submission and handles server feedback and recovery', async () => {
   const model = await open(fixture('person').start);
   try {
     const quantity = model.snapshot().controls.find(c => c.label === 'Age');
     model.send({ apply: { key: quantity.key, argument: '150' } });
     assert.ok(model.snapshot().errors.length);
-    assert.deepEqual(messages(model.snapshot().view), []);
-    assert.equal(model.snapshot().summary, '');
+    assert.deepEqual(messages(model.snapshot().view), ['Age must be at most 120.']);
+    assert.equal(model.snapshot().summary, 'Age must be at most 120.');
+    assert.equal(model.snapshot().submissionBlocked, true);
+    assert.deepEqual(model.snapshot().effects, []);
     model.send('submit');
     assert.deepEqual(model.snapshot().effects, []);
     assert.equal(model.snapshot().submissionBlocked, true);
@@ -190,7 +197,7 @@ test('Lean owns validation visibility, server feedback, and recovery', async () 
     assert.deepEqual(messages(model.snapshot().view), ['<b>Literal 🌍</b>']);
     assert.equal(model.snapshot().summary, 'Server rejected');
     assert.equal(model.snapshot().submissionBlocked, true);
-    assert.ok(model.send({ apply: { key: 'missing', argument: null } }).rejection);
+    assert.ok(model.send({ apply: { key: JSON.stringify(['edit', 'missing']), argument: null } }).rejection);
     assert.deepEqual(messages(model.snapshot().view), ['<b>Literal 🌍</b>']);
     assert.equal(model.snapshot().summary, 'Server rejected');
     model.send({ apply: { key: quantity.key, argument: '3' } });
@@ -205,9 +212,9 @@ test('Lean owns validation visibility, server feedback, and recovery', async () 
     model.send('reset');
     assert.equal(model.snapshot().summary, '');
     model.send({ apply: { key: quantity.key, argument: '150' } });
-    assert.deepEqual(messages(model.snapshot().view), []);
-    model.send('submit');
+    assert.deepEqual(messages(model.snapshot().view), ['Age must be at most 120.']);
     assert.equal(model.snapshot().submissionBlocked, true);
+    assert.deepEqual(model.snapshot().effects, []);
   } finally { model.dispose(); }
 });
 

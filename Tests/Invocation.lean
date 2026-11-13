@@ -25,7 +25,7 @@ private def keyOf
   (nth : Nat := 0)
   : ControlKey :=
   let controls := (ModelView.render form value {} [] Env.nil).controls.filter (·.label == label)
-  (controls[nth]?.map (·.key)).getD ⟨"missing"⟩
+  (controls[nth]?.map (·.key)).getD (.edit [.field "missing"])
 
 private def perform
   {α : Type}
@@ -81,12 +81,29 @@ def run : IO Unit := do
     (rejected Person.form Person.initial (keyOf Person.form Person.initial "Age") (some (.text "abc"))
       == some (.input "Enter a non-negative whole number."))
   check "InvocationUnknownKey"
-    (rejected Person.form Person.initial ⟨"missing"⟩ none == stale .absent)
+    (rejected Person.form Person.initial (.edit [.field "missing"]) none == stale .absent)
   check "InvocationWrongArgument"
     (rejected Person.form Person.initial (keyOf Person.form Person.initial "Age") (some (.boolean true))
       == clientBug (.wrongArgument "text"))
   let opened := ModelForm.openState Person.form Person.initial Env.nil
   let age := keyOf Person.form Person.initial "Age"
+  let initiallyInvalid := ModelForm.openState Person.form { Person.initial with age := 150 } Env.nil
+  let initialSnapshot := ModelForm.snapshot (model := Person) Person.form initiallyInvalid
+  check "ValidationVisibleOnOpen"
+    ((initialSnapshot.controls.find? (·.label == "Age")).bind (·.messages) == some "Age must be at most 120." &&
+      initialSnapshot.submissionBlocked && initiallyInvalid.outbox.isEmpty)
+  let edited ← IO.ofExcept (ModelForm.execute (model := Person) Person.form opened (.apply age (some (.text "150"))))
+  let editedSnapshot := ModelForm.snapshot (model := Person) Person.form edited
+  check "ValidationVisibleBeforeSubmit"
+    ((editedSnapshot.controls.find? (·.label == "Age")).bind (·.messages) == some "Age must be at most 120." &&
+      editedSnapshot.summary == "Age must be at most 120." && edited.outbox.isEmpty && !edited.ui.pending)
+  let corrected ← IO.ofExcept (ModelForm.execute (model := Person) Person.form initiallyInvalid (.apply age (some (.text "21"))))
+  let correctedSnapshot := ModelForm.snapshot (model := Person) Person.form corrected
+  check "ValidationClearsBeforeSubmit"
+    (correctedSnapshot.errors.isEmpty && correctedSnapshot.summary.isEmpty && !correctedSnapshot.submissionBlocked)
+  let reset ← IO.ofExcept (ModelForm.execute (model := Person) Person.form corrected .reset)
+  check "ResetKeepsInitialValidationVisible"
+    ((ModelForm.snapshot (model := Person) Person.form reset).summary == "Age must be at most 120.")
   check "EventInputRejects"
     ((ModelForm.event (model := Person) Person.form opened (.apply age (some (.text "abc")))).toOption.bind
       (·.ui.rejection) == some "Enter a non-negative whole number.")

@@ -20,10 +20,9 @@ structure State {Γ : Model.Context} {α : Type} (form : Model.Component Γ α) 
   env : Model.Env Γ
   value : α
   ui : Interaction.State
-  validationStarted : Bool
   serverFeedback : Option Feedback.ServerError
   cache : Model.HttpRequest.Cache
-  /-- Effects of the last command, sent with its snapshot. -/
+  /-- Effects of the last event, sent with its snapshot. -/
   outbox : List Effect
 
 def openState
@@ -39,7 +38,6 @@ def openState
   env
   value
   ui := .initial
-  validationStarted := false
   serverFeedback := none
   cache := {}
   outbox := []
@@ -107,7 +105,7 @@ def snapshot {Γ : Model.Context}
   let errors := validationErrors (model := model) state.value
   let visible := match state.serverFeedback with
     | some feedback => feedback.errors
-    | none => if state.validationStarted then errors else []
+    | none => errors
   let rendered := ModelView.render form state.value state.cache visible state.env state.locals
   { view := rendered.view, controls := rendered.controls, value := state.value,
     ui := state.ui, errors,
@@ -193,7 +191,7 @@ def submit
   : State form :=
   if state.ui.pending then state else
   let errors := validationErrors (model := model) state.value
-  let state := { state with validationStarted := true, serverFeedback := none }
+  let state := { state with serverFeedback := none }
   if errors.isEmpty then
     { state with
       ui := { state.ui with pending := true, notice := .info "Submitting…" }

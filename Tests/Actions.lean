@@ -123,7 +123,7 @@ def run : IO Unit := do
   check "ActionsUseDraftFlushingButtons" (match
       ((ModelView.render counter opened.value {} [] opened.env opened.locals).view.toReact false) with
     | some (.group group) => group.children.any fun
-        | .button button => button.onClick == .press increment.value
+        | .button button => button.onClick == .press (ControlKeyProtocol.toString increment)
         | _ => false
     | _ => false)
 
