@@ -26,7 +26,7 @@ private def apply {model : Type} [FormModel model] [Validation model]
     (form : Component [] (FormModel.Raw model)) (state : ModelForm.State form)
     (label : String) (argument : Option Input := none) (nth : Nat := 0) : IO (ModelForm.State form) := do
   IO.ofExcept (ModelForm.execute (model := model) form state
-    (.event (.apply (← control state label nth) argument)))
+    (.apply (← control state label nth) argument))
 
 @[expose] def row : Component [] (List Nat) := .bind RowSelection.none
   (.table .self "Choices" "Choice" 0
@@ -59,13 +59,13 @@ def run : IO Unit := do
   check "LocalListRowsHaveIndependentBindings"
     (rowSelection selected 0 == .none && rowSelection selected 1 == .row 1 && selected.value == opened.value)
   let remove := DisplayProtocol.controlKey .remove [.index 0]
-  let removed ← IO.ofExcept (ModelForm.execute (model := List (List Nat)) rows selected (.event (.apply remove none)))
+  let removed ← IO.ofExcept (ModelForm.execute (model := List (List Nat)) rows selected (.apply remove none))
   check "LocalListBindingFollowsRowRemoval"
     (removed.value == [[30, 40]] && rowSelection removed 0 == .row 1)
   let added ← apply (model := List (List Nat)) rows removed "Add row"
   check "LocalListNewRowStartsFresh"
     (rowSelection added 0 == .row 1 && rowSelection added 1 == .none)
-  let reset ← IO.ofExcept (ModelForm.execute (model := List (List Nat)) rows added (.event .reset))
+  let reset ← IO.ofExcept (ModelForm.execute (model := List (List Nat)) rows added .reset)
   check "LocalListResetRestoresInitialBindings"
     (reset.value == opened.value && rowSelection reset 0 == .none && rowSelection reset 1 == .none)
   let nested : Component [] (List Nat) := .bind RowSelection.none (.bind RowSelection.none

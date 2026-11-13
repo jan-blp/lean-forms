@@ -71,14 +71,4 @@ def ModelForm.Event.fromWire : Wire.Event → Except String ModelForm.Event
       | .unreachable message => .error message
     pure (.loaded (← fetchedRequest id) response)
 
-def ModelForm.Command.fromWire : Wire.Command → Except String ModelForm.Command
-  | .event message => ModelForm.Command.event <$> ModelForm.Event.fromWire message
-  | .apply key argument => do
-    let argument ← InputProtocol.argumentFromJson (if argument == .null then none else some argument)
-    pure (.apply ⟨key⟩ argument)
-  | .reset => .ok .reset
-  | .validate => .ok .validate
-  | .inspect => .ok .inspect
-  | .serverError status body => .ok (.serverError (FeedbackProtocol.serverError status body))
-
 end Forms.Runtime

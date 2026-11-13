@@ -12,8 +12,8 @@ private def check (message : String) (ok : Bool) : IO Unit := do
 
 private abbrev State := ModelForm.State (ExpenseReport.form (Γ := []))
 
-private def execute (state : State) (command : ModelForm.Command) : IO State :=
-  IO.ofExcept (ModelForm.execute (model := ExpenseReport) ExpenseReport.form state command)
+private def execute (state : State) (input : ModelForm.Event) : IO State :=
+  IO.ofExcept (ModelForm.execute (model := ExpenseReport) ExpenseReport.form state input)
 
 private def rendered (state : State) : ModelView.Rendered :=
   ModelView.render ExpenseReport.form state.value state.cache [] Env.nil state.locals
@@ -25,7 +25,7 @@ private def key (state : State) (label : String) (nth : Nat := 0) : IO ControlKe
 
 private def apply (state : State) (label : String) (argument : Option Input) (nth : Nat := 0)
     : IO State := do
-  execute state (.event (.apply (← key state label nth) argument))
+  execute state (.apply (← key state label nth) argument)
 
 def run : IO Unit := do
   let opened := ModelForm.openState ExpenseReport.form ExpenseReport.initial Env.nil
@@ -55,7 +55,7 @@ def run : IO Unit := do
   check "TableCellVisibility" (((rendered visible).controls.filter (·.label == "Receipt attached")).length == 2)
   let disabled := Component.disabledWhen (.const true) ExpenseReport.form
   let disabledState ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) disabled (ModelForm.openState disabled ExpenseReport.initial Env.nil)
-    (.event (.apply (← key opened "Remove") none)))
+    (.apply (← key opened "Remove") none))
   check "TableDisabledRemoveRejects"
     (disabledState.ui.rejection == some (toString InvocationError.disabled) &&
       toJson disabledState.value == toJson opened.value)
@@ -63,7 +63,7 @@ def run : IO Unit := do
   let removed ← apply edited "Remove" none 1
   check "TableRemovesOnlyTargetRow"
     (removed.value.expenses.map (·.description) == ["Train to Bern"])
-  let stale ← execute removed (.event (.apply last (some (.text "Stale"))))
+  let stale ← execute removed (.apply last (some (.text "Stale")))
   check "TableRemovedRowRejectsStaleEdit"
     (stale.ui.rejection == some (toString InvocationError.absent) &&
       toJson stale.value == toJson removed.value)
@@ -74,7 +74,7 @@ def run : IO Unit := do
   let added ← apply empty "Add expense" none
   check "TableAddsInitialRow"
     (toJson added.value.expenses == toJson ([⟨"", 0, false⟩] : List Expense.Raw))
-  let validated ← execute added (.event .submit)
+  let validated ← execute added .submit
   check "TableValidatesCells"
     ((ModelForm.snapshot (model := ExpenseReport) ExpenseReport.form validated).errors.map (·.message) ==
       ["Describe the expense.", "Enter an amount of at least CHF 1."])

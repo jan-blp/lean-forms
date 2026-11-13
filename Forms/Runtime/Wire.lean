@@ -22,15 +22,6 @@ inductive Event where
   | fetched (id : String) (outcome : HttpOutcome)
   deriving ToJson, FromJson
 
-inductive Command where
-  | event (message : Event)
-  | apply (key : String) (argument : Json)
-  | reset
-  | validate
-  | inspect
-  | serverError (status : Nat) (body : String)
-  deriving ToJson, FromJson
-
 /-- What opening a form needs: its registered name, its code version, and its starting value. -/
 structure FormStart where
   form : String
@@ -40,7 +31,7 @@ structure FormStart where
 
 inductive Request where
   | open (start : FormStart)
-  | send (handle : String) (request : Command)
+  | send (handle : String) (event : Event)
   | dispose (handle : String)
   deriving ToJson, FromJson
 

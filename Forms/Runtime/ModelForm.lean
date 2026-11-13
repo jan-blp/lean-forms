@@ -79,14 +79,6 @@ inductive Event where
   | submitted (outcome : Except String (Option Feedback.ServerError))
   | loaded (request : Model.HttpRequest) (response : Except String Lean.Json)
 
-inductive Command where
-  | event (event : Event)
-  | apply (key : ControlKey) (argument : Option Input)
-  | validate
-  | reset
-  | inspect
-  | serverError (error : Feedback.ServerError)
-
 def validationErrors
   {model : Type}
   [FormModel model]
@@ -248,29 +240,15 @@ def event {Γ : Model.Context}
       pure { state with cache := state.cache.insert request cached }
     | _ => pure state
 
-def step {Γ : Model.Context}
-  {model : Type}
-  [FormModel model]
-  [Model.Validation model]
-  (form : Model.Component Γ (FormModel.Raw model))
-  (state : State form)
-  : Command → Except String (State form)
-  | .event input => event (model := model) form state input
-  | .apply key argument => (apply form state key argument).mapError toString
-  | .validate => .ok { state with validationStarted := true, serverFeedback := none }
-  | .reset => if state.ui.pending then .error "Submission is in progress." else .ok (restart state)
-  | .serverError error => .ok { state with serverFeedback := some error }
-  | .inspect => .ok state
-
-/-- Runs `command`, then queues the requests the new state reads. -/
+/-- Handles `input`, then queues the requests the new state reads. -/
 def execute {Γ : Model.Context}
   {model : Type}
   [FormModel model]
   [Model.Validation model]
   (form : Model.Component Γ (FormModel.Raw model))
   (state : State form)
-  (command : Command)
+  (input : Event)
   : Except String (State form) :=
-  load form <$> step (model := model) form { state with outbox := [] } command
+  load form <$> event (model := model) form { state with outbox := [] } input
 
 end Forms.Runtime.ModelForm
