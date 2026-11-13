@@ -13,61 +13,64 @@ inductive Effect where
   | fetch (request : Model.HttpRequest)
   deriving BEq
 
-structure State {Γ : Model.Context} {α : Type} (form : Model.Component Γ α) where
-  locals : form.LocalState
+structure State {Γ : Model.Context} {α β : Type} (form : Model.Component Γ α β) where
+  /-- Reused until the model, context, cache, or private state changes. -/
+  evaluation : ModelView.Evaluated Γ α form.LocalState β
   initial : α
   initialEnv : Model.Env Γ
-  env : Model.Env Γ
-  value : α
   ui : Interaction.State
   serverFeedback : Option Feedback.ServerError
-  cache : Model.HttpRequest.Cache
   /-- Effects of the last event, sent with its snapshot. -/
   outbox : List Effect
 
+variable {Γ : Model.Context} {α β : Type} {form : Model.Component Γ α β}
+
+@[reducible] def State.value (state : State form) : α := state.evaluation.value
+@[reducible] def State.env (state : State form) : Model.Env Γ := state.evaluation.env
+@[reducible] def State.cache (state : State form) : Model.HttpRequest.Cache := state.evaluation.cache
+@[reducible] def State.locals (state : State form) : form.LocalState := state.evaluation.locals
+
 def openState
   {Γ : Model.Context}
-  {α : Type}
-  (form : Model.Component Γ α)
+  {α β : Type}
+  (form : Model.Component Γ α β)
   (value : α)
   (env : Model.Env Γ)
+  (cache : Model.HttpRequest.Cache := {})
   : State form where
-  locals := form.initialState
+  evaluation := ModelView.evaluate form value cache env form.initialState
   initial := value
   initialEnv := env
-  env
-  value
   ui := .initial
   serverFeedback := none
-  cache := {}
   outbox := []
 
 /-- Marks the requests `form` reads but has not loaded as loading, and queues them. -/
 def load
   {Γ : Model.Context}
-  {α : Type}
-  (form : Model.Component Γ α)
+  {α β : Type}
+  (form : Model.Component Γ α β)
   (state : State form)
   : State form :=
-  let locals := form.normalize state.cache state.value state.env state.locals
-  let missing := ((form.requests state.cache state.value state.env locals).filter (!state.cache.contains ·)).eraseDups
-  { state with
-    locals
-    cache := missing.foldl (fun cache request => cache.insert request .loading) state.cache
-    outbox := state.outbox ++ missing.map .fetch }
+  let missing := (state.evaluation.requests.filter (!state.cache.contains ·)).eraseDups
+  if missing.isEmpty then state else
+    let cache := missing.foldl (fun cache request => cache.insert request .loading) state.cache
+    { state with
+      evaluation := ModelView.evaluate form state.value cache state.env state.locals
+      outbox := state.outbox ++ missing.map .fetch }
 
 /-- Starts over from `initial`, keeping loaded responses; failed requests are retried. -/
 def restart
   {Γ : Model.Context}
-  {α : Type}
-  {form : Model.Component Γ α}
+  {α β : Type}
+  {form : Model.Component Γ α β}
   (state : State form)
   : State form :=
-  { openState form state.initial state.initialEnv with
-    cache := state.cache.filter fun _ response => match response with
-      | .failed _ => false
-      | .loading => true
-      | .loaded _ => true }
+  let cache := state.cache.filter fun _ response => match response with
+    | .failed _ => false
+    | .loading => true
+    | .loaded _ => true
+  openState form state.initial state.initialEnv cache
 
 inductive SubmitOutcome where
   | accepted
@@ -100,18 +103,18 @@ structure Snapshot (α : Type) where
   effects : List Effect
 
 def snapshot {Γ : Model.Context}
-  {model : Type}
+  {model β : Type}
   [FormModel model]
   [Model.Validation model]
-  (form : Model.Component Γ (FormModel.Raw model))
+  (form : Model.Component Γ (FormModel.Raw model) β)
   (state : State form)
   : Snapshot (FormModel.Raw model) :=
   let errors := validationErrors (model := model) state.value
   let visible := match state.serverFeedback with
     | some feedback => feedback.errors
     | none => errors
-  let rendered := ModelView.render form state.value state.cache visible state.env state.locals
-  { view := rendered.view, controls := rendered.controls, value := state.value,
+  let view := if visible.isEmpty then state.evaluation.view else state.evaluation.feedback visible
+  { view, controls := view.controls, value := state.value,
     ui := state.ui, errors,
     effects := state.outbox }
 
@@ -146,49 +149,46 @@ def Rejection.ofAction : ModelView.ActionError → Rejection
   | .decode error => .ofDecode error
   | .invalid error => .stale (.invocation error)
 
-/-- The checked invocation that `key` and `argument` name. -/
+/-- Checks a control and computes its update. -/
 def validateAction
   {Γ : Model.Context}
-  {α : Type}
-  (form : Model.Component Γ α)
+  {α β : Type}
+  (form : Model.Component Γ α β)
   (state : State form)
   (key : ControlKey)
   (argument : Option Input)
-  : Except Rejection (form.ValidInvocation state.cache state.value state.env state.locals) := do
+  : Except Rejection (Model.ComponentUpdate Γ α form.LocalState) := do
   if state.ui.pending then throw (.stale .pending)
-  (ModelView.decodeKey form state.cache state.value key argument state.env state.locals).mapError .ofAction
+  (state.evaluation.applyKey key argument).mapError .ofAction
 
-def applyValid
+def applyUpdate
   {Γ : Model.Context}
-  {α : Type}
-  (form : Model.Component Γ α)
+  {α β : Type}
+  (form : Model.Component Γ α β)
   (state : State form)
-  (invocation : form.ValidInvocation state.cache state.value state.env state.locals)
+  (updated : Model.ComponentUpdate Γ α form.LocalState)
   : State form :=
-  let updated := form.applyValid state.cache state.value state.env state.locals invocation
   { state with
-    value := updated.value
-    locals := updated.locals
-    env := updated.state
+    evaluation := ModelView.evaluate form updated.value state.cache updated.state updated.locals
     serverFeedback := none
     ui := { state.ui with notice := .info "", resultVisible := false } }
 
 def apply
   {Γ : Model.Context}
-  {α : Type}
-  (form : Model.Component Γ α)
+  {α β : Type}
+  (form : Model.Component Γ α β)
   (state : State form)
   (key : ControlKey)
   (argument : Option Input)
   : Except Rejection (State form) := do
-  return applyValid form state (← validateAction form state key argument)
+  return applyUpdate form state (← validateAction form state key argument)
 
 def submit
   {Γ : Model.Context}
-  {model : Type}
+  {model β : Type}
   [FormModel model]
   [Model.Validation model]
-  {form : Model.Component Γ (FormModel.Raw model)}
+  {form : Model.Component Γ (FormModel.Raw model) β}
   (state : State form)
   : State form :=
   if state.ui.pending then state else
@@ -202,10 +202,10 @@ def submit
     { state with ui := state.ui.announce (Feedback.summary errors) true }
 
 def event {Γ : Model.Context}
-  {model : Type}
+  {model β : Type}
   [FormModel model]
   [Model.Validation model]
-  (form : Model.Component Γ (FormModel.Raw model))
+  (form : Model.Component Γ (FormModel.Raw model) β)
   (state : State form)
   : Event → Except String (State form) := fun event => do
   let state := { state with ui := { state.ui with rejection := none } }
@@ -237,15 +237,15 @@ def event {Γ : Model.Context}
       let cached := match response with
         | .ok json => .loaded json
         | .error message => .failed message
-      pure { state with cache := state.cache.insert request cached }
+      pure { state with evaluation := ModelView.evaluate form state.value (state.cache.insert request cached) state.env state.locals }
     | _ => pure state
 
 /-- Handles `input`, then queues the requests the new state reads. -/
 def execute {Γ : Model.Context}
-  {model : Type}
+  {model β : Type}
   [FormModel model]
   [Model.Validation model]
-  (form : Model.Component Γ (FormModel.Raw model))
+  (form : Model.Component Γ (FormModel.Raw model) β)
   (state : State form)
   (input : Event)
   : Except String (State form) :=

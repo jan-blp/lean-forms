@@ -29,19 +29,19 @@ private def apply {model : Type} [FormModel model] [Validation model]
     (.apply (← control state label nth) argument))
 
 @[expose] def row : Component [] (List Nat) := .bind RowSelection.none
-  (.table .self "Choices" "Choice" 0
+  (Component.void <| .table .self "Choices" "Choice" 0
     columns["Number" => .computed "Number" { inputs := inputs[path[]], run := toString }]
     (some .here))
 
 @[expose] def rows : Component [] (List (List Nat)) :=
-  .list .self "Rows" "Row" [0] row
+  Component.void <| .list .self "Rows" "Row" [0] row
 
 private def rowSelection (state : ModelForm.State rows) (index : Nat) : RowSelection :=
   let locals : List row.LocalState := state.locals
   ((locals[index]?).getD row.initialState).value
 
 private def loadedBody : Status Bool → Component [] ExpenseReport.Raw
-  | .ready true => .bind RowSelection.none (.table path[ExpenseReport.Field.expenses]
+  | .ready true => .bind RowSelection.none (Component.void <| .table path[ExpenseReport.Field.expenses]
       "Expenses" "Expense" ⟨"", 0, false⟩ columns[] (some .here))
   | .ready false => .bind (fun n : Nat => n + 1) (.computed "Function" {
       inputs := inputs[.ui (Ref.here : Var [⟨.writable, Nat → Nat⟩] (Nat → Nat))]
@@ -69,7 +69,7 @@ def run : IO Unit := do
   check "LocalListResetRestoresInitialBindings"
     (reset.value == opened.value && rowSelection reset 0 == .none && rowSelection reset 1 == .none)
   let nested : Component [] (List Nat) := .bind RowSelection.none (.bind RowSelection.none
-    (.table .self "Nested" "Number" 0 columns[] (some (.there .here))))
+    (Component.void <| .table .self "Nested" "Number" 0 columns[] (some (.there .here))))
   let nestedOpened := ModelForm.openState nested [10, 20] Env.nil
   let nestedSelected ← apply (model := List Nat) nested nestedOpened "Select"
   check "LocalNestedBindingCanReferenceOuterVariable"

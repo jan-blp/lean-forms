@@ -98,7 +98,7 @@ def run : IO Unit := do
   let siblingUpdated ← press (model := Nat) (ModelForm.openState siblings 10 Env.nil) "Increment" 1
   check "ActionSiblingBindingsAreIndependent"
     (siblingUpdated.locals.value.value == 0 && siblingUpdated.locals.tail.value.value == 1)
-  let rows : Component [] (List Nat) := Component.list .self "Counters" "Counter" 0 next
+  let rows : Component [] (List Nat) := Component.void <| Component.list .self "Counters" "Counter" 0 next
   let rowUpdated ← press (model := List Nat) (ModelForm.openState rows [10, 20] Env.nil) "Increment" 1
   let removed ← press (model := List Nat) rowUpdated "Remove"
   let remaining : List (Binding Nat Unit) := removed.locals
@@ -108,7 +108,7 @@ def run : IO Unit := do
     (.button "Use successor" (.set .here (.const (fun n : Nat => n + 1))))
   let functionUpdated ← press (model := Nat) (ModelForm.openState functions 10 Env.nil) "Use successor"
   check "ActionsSupportValuesWithoutCodecs" (functionUpdated.locals.value 41 == 42)
-  let focused : Component [] (List Nat) := .bind (0 : Nat) (.focus
+  let focused : Component [] (List Nat) := .bind (0 : Nat) (Component.void <| .focus
     { inputs := inputs[.ui (Ref.here)], run := fun index => .index index .self }
     (.button "Next item" (.set .here {
       inputs := inputs[.ui (Ref.here)], run := fun index => index + 1 })))
