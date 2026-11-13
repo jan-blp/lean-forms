@@ -15,6 +15,7 @@ def ComponentNode.initialState
   | .field .. => ()
   | .computed .. => ()
   | .button .. => ()
+  | .tabBar .. => ()
   | .output .. => ()
   | .groupOf _ children => children.initialState
   | .labeled _ body => body.initialState
@@ -28,6 +29,18 @@ def ComponentNode.initialState
   | .table .. => []
   | .focus _ body => body.initialState
   | .load (inst := _inst) (body := body) .. => ⟨.loading, (body .loading).initialState⟩
+  | .present body => body.initialState
+
+def PresentationNode.initialState
+  {slots : Nat}
+  {Γ : Context}
+  {α state β : Type}
+  (presentation : PresentationNode slots Γ α state β)
+  : state :=
+  match presentation with
+  | .layout .. => ()
+  | .own component body => ⟨component.initialState, body.initialState⟩
+  | .bind initial body => ⟨initial, body.initialState⟩
 
 def ColumnsNode.initialState
   {headers : List String}

@@ -19,6 +19,10 @@ structure Columns (Γ : Context) (α : Type) (β : Type := Unit) where
   LocalState : Type
   node : ColumnsNode headers Γ α LocalState β
 
+structure Presentation (slots : Nat) (Γ : Context) (α : Type) (β : Type := Unit) where
+  LocalState : Type
+  node : PresentationNode slots Γ α LocalState β
+
 structure Branch (Γ : Context) (α : Type) where
   pack ::
   LocalState : Type
@@ -93,6 +97,15 @@ def RowSelection.itemPath
   (action : Action Γ α)
   : Component Γ α :=
   ⟨Unit, .button label action⟩
+
+@[reducible] def Component.tabBar
+  {Γ : Context}
+  {α : Type}
+  (label : String)
+  (active : Var Γ Nat)
+  (tabs : List String)
+  : Component Γ α :=
+  ⟨Unit, .tabBar label active tabs⟩
 
 @[reducible] def Component.withAvailability
   {Γ : Context}
@@ -398,5 +411,51 @@ def Component.loadOr
   (body : Component Γ α β)
   : Component Γ α β :=
   ⟨body.LocalState, .labeled label body.node⟩
+
+/-- Places the owned presentations with `arrangement` and returns `output`. -/
+@[reducible] def Presentation.layout
+  {slots : Nat}
+  {Γ : Context}
+  {α β : Type}
+  (output : Computation Γ α β)
+  (arrangement : Computation Γ α (Layout slots))
+  : Presentation slots Γ α β :=
+  ⟨Unit, .layout output arrangement⟩
+
+/-- Places the owned presentations with `arrangement`. -/
+@[reducible] def Presentation.arrange
+  {slots : Nat}
+  {Γ : Context}
+  {α : Type}
+  (arrangement : Computation Γ α (Layout slots))
+  : Presentation slots Γ α :=
+  .layout (.const ()) arrangement
+
+/-- Owns `component`: `body` reads its output as `Ref.here` and places its view as `Slot.here`. -/
+@[reducible] def Presentation.own
+  {slots : Nat}
+  {Γ : Context}
+  {α β γ : Type}
+  (component : Component Γ α β)
+  (body : Presentation (slots + 1) (⟨.readOnly, β⟩ :: Γ) α γ)
+  : Presentation slots Γ α γ :=
+  ⟨ObservationState component.LocalState body.LocalState, .own component.node body.node⟩
+
+@[reducible] def Presentation.bind
+  {slots : Nat}
+  {Γ : Context}
+  {α β γ : Type}
+  (initial : β)
+  (body : Presentation slots (⟨.writable, β⟩ :: Γ) α γ)
+  : Presentation slots Γ α γ :=
+  ⟨Binding β body.LocalState, .bind initial body.node⟩
+
+/-- A component whose view is a layout of the components it owns. -/
+@[reducible] def Component.present
+  {Γ : Context}
+  {α β : Type}
+  (body : Presentation 0 Γ α β)
+  : Component Γ α β :=
+  ⟨body.LocalState, .present body.node⟩
 
 end Forms.Model

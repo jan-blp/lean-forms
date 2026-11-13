@@ -6,6 +6,7 @@ public import Forms.ExampleForms.Expenses
 public import Forms.ExampleForms.Projects
 public import Forms.ExampleForms.SharedState
 public import Forms.ExampleForms.Outputs
+public import Forms.ExampleForms.Presentation
 public import Forms.Runtime.FormDefinition
 public import Std.Data.HashMap
 
@@ -37,6 +38,16 @@ def forms : List (String × RegisteredForm) := [
     submitUrl := "/api/submit" }),
   ("table-outputs", {
     definition := .ofModel (List String) Outputs.selectedDescriptions ["Same description", "Same description", "Another item"]
+    submitUrl := "/api/submit" }),
+  ("present-table", {
+    definition := .ofModel (List String) Presentation.tableSummary
+      ["Same description", "Same description", "Another item"]
+    submitUrl := "/api/submit" }),
+  ("present-tabs", {
+    definition := .ofModel Nat Presentation.sharedTabs 0
+    submitUrl := "/api/submit" }),
+  ("present-notes", {
+    definition := .ofModel (List String) Presentation.notes ["First note", "Second note"]
     submitUrl := "/api/submit" })]
 
 /-- Responses of the example application's data endpoints; it has none. -/

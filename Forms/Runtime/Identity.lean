@@ -13,6 +13,7 @@ inductive ControlKey where
   | remove (location : Feedback.Location)
   | selectRow (scope : List Nat) (row : Nat)
   | press (route : List Nat) (location : Feedback.Location)
+  | tab (route : List Nat) (location : Feedback.Location)
   deriving DecidableEq
 
 structure DomId where

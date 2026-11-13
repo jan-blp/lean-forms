@@ -1,5 +1,5 @@
 // Generated from Lean. Run npm --prefix web run generate.
-export type Component = { "textField": TextField } | { "naturalField": NaturalField } | { "checkbox": Checkbox } | { "choice": Choice } | { "output": Output } | { "button": Button } | { "group": Group } | { "table": Table } | { "page": Page };
+export type Component = { "textField": TextField } | { "naturalField": NaturalField } | { "checkbox": Checkbox } | { "choice": Choice } | { "output": Output } | { "button": Button } | { "tabBar": TabBar } | { "group": Group } | { "table": Table } | { "page": Page };
 export type TextField = { "name": string; "label": string; "value": string; "disabled": boolean; "error": string | null; "onCommit": Action };
 export type Action = { "apply": { "name": string } } | { "press": { "name": string } } | "submit" | "reset";
 export type NaturalField = { "name": string; "label": string; "value": string; "disabled": boolean; "error": string | null; "onCommit": Action };
@@ -9,6 +9,7 @@ export type ChoiceOption = { "value": string; "label": string };
 export type Output = { "label": string; "value": string };
 export type Button = { "label": string; "variant": ButtonVariant; "disabled": boolean; "onClick": Action };
 export type ButtonVariant = "primary" | "secondary";
+export type TabBar = { "name": string; "label": string; "active": number; "labels": string[]; "disabled": boolean; "onChange": Action };
 export type Group = { "label": string | null; "children": Component[]; "error": string | null };
 export type Table = { "label": string; "headers": string[]; "rows": TableRow[]; "footer": Component; "error": string | null };
 export type TableRow = { "label": string; "cells": Component[]; "selected": boolean | null };

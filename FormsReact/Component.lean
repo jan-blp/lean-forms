@@ -85,6 +85,16 @@ structure Button where
   onClick : Action
   deriving ToJson, FromJson, BEq, Repr
 
+/-- Shows which tab is `active`; `onChange` receives the chosen tab's index as decimal text. -/
+structure TabBar where
+  name : String
+  label : String
+  active : Nat
+  labels : List String
+  disabled : Bool
+  onChange : Action
+  deriving ToJson, FromJson, BEq, Repr
+
 mutual
 /-- Children grouped under an optional legend; `error` is about the group as a whole. -/
 structure Group where
@@ -121,6 +131,7 @@ inductive Component where
   | choice : Choice → Component
   | output : Output → Component
   | button : Button → Component
+  | tabBar : TabBar → Component
   | group : Group → Component
   | table : Table → Component
   | page : Page → Component
@@ -137,6 +148,7 @@ def Component.draftFields : Component → List String
   | .choice _ => []
   | .output _ => []
   | .button _ => []
+  | .tabBar _ => []
   | .group { children, .. } => draftFieldsOf children
   | .table { rows, footer, .. } => draftFieldsOfRows rows ++ footer.draftFields
   | .page { body, toolbar, .. } => draftFieldsOf body ++ draftFieldsOf toolbar

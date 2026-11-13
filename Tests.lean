@@ -17,6 +17,7 @@ import Tests.TableSelection
 import Tests.SharedState
 import Tests.Outputs
 import Tests.OutputEvaluation
+import Tests.Presentation
 
 meta import Forms.Model.Computation.Theorems
 meta import Forms.Runtime.ModelView.Theorems
@@ -39,3 +40,4 @@ public def main : IO Unit := do
   Tests.SharedState.run
   Tests.Outputs.run
   Tests.OutputEvaluation.run
+  Tests.Presentation.run

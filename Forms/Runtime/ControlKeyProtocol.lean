@@ -27,6 +27,8 @@ def toString (key : ControlKey) : String :=
     | .selectRow scope row => Json.arr (#[toJson ("selectRow" : String)] ++ (scope ++ [row]).toArray.map toJson)
     | .press route location => Json.arr #[toJson ("press" : String), toJson route,
         Json.arr (location.map stepToJson).toArray]
+    | .tab route location => Json.arr #[toJson ("tab" : String), toJson route,
+        Json.arr (location.map stepToJson).toArray]
   json.compress
 
 def fromJson (json : Json) : Except String ControlKey := do
@@ -41,6 +43,8 @@ def fromJson (json : Json) : Except String ControlKey := do
     | [] => throw "Expected a row index."
   | [.str "press", route, location] =>
     pure (.press (← fromJson? route) (← (← location.getArr?).toList.mapM stepFromJson))
+  | [.str "tab", route, location] =>
+    pure (.tab (← fromJson? route) (← (← location.getArr?).toList.mapM stepFromJson))
   | _ => throw "Unknown action or invalid key shape."
 
 def fromString (key : String) : Except String ControlKey :=

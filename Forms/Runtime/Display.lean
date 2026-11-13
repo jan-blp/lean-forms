@@ -29,6 +29,8 @@ inductive Editor where
   | choice (selected : String) (options : List ChoiceOption)
   /-- A button; its argument is ignored. -/
   | action
+  /-- Tab labels with `active` selected; its argument is the chosen tab's index. -/
+  | tabs (active : Nat) (labels : List String)
   deriving BEq
 
 /-- An interactive leaf of the view: an editor or button bound to one form value. -/

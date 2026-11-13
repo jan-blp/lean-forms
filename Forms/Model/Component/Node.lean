@@ -4,6 +4,7 @@ public import Forms.Model.Action
 public import Forms.Model.PartialPath
 public import Forms.Model.RowSelection
 public import Forms.Model.Component.State
+public import Forms.Model.Component.Layout
 
 @[expose] public section
 namespace Forms.Model
@@ -36,6 +37,13 @@ inductive ComponentNode : Context → Type → Type → Type → Type 1 where
       {α : Type}
       (label : String)
       (action : Action Γ α)
+      : ComponentNode Γ α Unit Unit
+  /-- Tabs that set `active` to the chosen tab's index. -/
+  | tabBar {Γ : Context}
+      {α : Type}
+      (label : String)
+      (active : Var Γ Nat)
+      (tabs : List String)
       : ComponentNode Γ α Unit Unit
   | groupOf {Γ : Context}
       {α state : Type}
@@ -111,6 +119,33 @@ inductive ComponentNode : Context → Type → Type → Type → Type 1 where
       (source : Computation Γ α (Source data))
       (body : (status : Status data) → ComponentNode Γ α (states status) β)
       : ComponentNode Γ α (LoadedState data states) β
+  /-- Owns components and places their views with a layout. -/
+  | present {Γ : Context}
+      {α β state : Type}
+      (body : PresentationNode 0 Γ α state β)
+      : ComponentNode Γ α state β
+
+/-- Components owned in order; `slots` counts the presentations in scope. -/
+inductive PresentationNode : Nat → Context → Type → Type → Type → Type 1 where
+  | layout {slots : Nat}
+      {Γ : Context}
+      {α β : Type}
+      (output : Computation Γ α β)
+      (arrangement : Computation Γ α (Layout slots))
+      : PresentationNode slots Γ α Unit β
+  /-- Evaluates `component`, exposing its output to `body` and its view as `Slot.here`. -/
+  | own {slots : Nat}
+      {Γ : Context}
+      {α β γ ownedState bodyState : Type}
+      (component : ComponentNode Γ α ownedState β)
+      (body : PresentationNode (slots + 1) (⟨.readOnly, β⟩ :: Γ) α bodyState γ)
+      : PresentationNode slots Γ α (ObservationState ownedState bodyState) γ
+  | bind {slots : Nat}
+      {Γ : Context}
+      {α β γ state : Type}
+      (initial : β)
+      (body : PresentationNode slots (⟨.writable, β⟩ :: Γ) α state γ)
+      : PresentationNode slots Γ α (Binding β state) γ
 
 /-- Named cells and their explicitly chosen row output. -/
 inductive ColumnsNode : List String → Context → Type → Type → Type → Type 1 where

@@ -175,6 +175,84 @@ structure EvaluatedBranches (Γ : Context) (α state : Type) where
 def absent {α : Type} : Except ActionError α :=
   .error (.invalid .absent)
 
+/-- `scopes` under a binder at `target` whose body is its child `child`. -/
+def WireScopes.bind (scopes : WireScopes) (target : Display.Target) (child : Nat) : WireScopes
+  | 0 => child :: target.indices
+  | index + 1 => scopes index
+
+/-- A `bind` around an evaluated `body`, which stores the bound value at its head. -/
+def bound
+  {Γ : Context}
+  {α β γ state viewType : Type}
+  (stored : β)
+  (body : NodeEvaluation (⟨.writable, β⟩ :: Γ) α state γ viewType)
+  : NodeEvaluation Γ α (Binding β state) γ viewType where
+  output := body.output
+  locals := ⟨stored, body.locals⟩
+  view := body.view
+  feedback := body.feedback
+  requests := body.requests
+  apply := fun route argument => match route with
+    | 0 :: rest => do
+      let updated ← body.apply rest argument
+      return ⟨updated.value, updated.state.tail, ⟨updated.state.value, updated.locals⟩⟩
+    | _ => absent
+
+/-- An evaluated `body` that reads `producer`'s output; routes `0` and `1` reach each. -/
+def observed
+  {Γ : Context}
+  {α β γ producerState consumerState producerView bodyView viewType : Type}
+  (producer : NodeEvaluation Γ α producerState β producerView)
+  (body : NodeEvaluation (⟨.readOnly, β⟩ :: Γ) α consumerState γ bodyView)
+  (view : viewType)
+  (feedback : List Feedback.Error → viewType)
+  : NodeEvaluation Γ α (ObservationState producerState consumerState) γ viewType where
+  output := body.output
+  locals := ⟨producer.locals, body.locals⟩
+  view := view
+  feedback := feedback
+  requests := producer.requests ++ body.requests
+  apply := fun route argument => match route with
+    | 0 :: rest => do
+      let updated ← producer.apply rest argument
+      return updated.mapLocals (⟨·, body.locals⟩)
+    | 1 :: rest => do
+      let updated ← body.apply rest argument
+      return ⟨updated.value, updated.state.tail, ⟨producer.locals, updated.locals⟩⟩
+    | _ => absent
+
+/-- An owned component's view, kept until a layout places it. -/
+structure Prepared where
+  view : Display.View
+  feedback : List Feedback.Error → Display.View
+
+abbrev Presentations (slots : Nat) := Slot slots → Prepared
+
+mutual
+def renderLayout
+  {slots : Nat}
+  (views : Slot slots → Display.View)
+  : Layout slots → Display.View
+  | .place slot => views slot
+  | .group label children => .stack label (renderAll views children)
+  | .tabs active panes => renderPane views panes active
+
+def renderAll
+  {slots : Nat}
+  (views : Slot slots → Display.View)
+  : List (Layout slots) → List Display.View
+  | [] => []
+  | child :: rest => renderLayout views child :: renderAll views rest
+
+def renderPane
+  {slots : Nat}
+  (views : Slot slots → Display.View)
+  : List (Layout slots) → Nat → Display.View
+  | [], _ => .hidden
+  | pane :: _, 0 => renderLayout views pane
+  | _ :: rest, index + 1 => renderPane views rest index
+end
+
 /-- Shares list and table updates after their rows have been evaluated. -/
 def evaluateCollection
   {Γ : Context}
@@ -267,6 +345,22 @@ def evaluateNode
           if disabled then throw (.invalid .disabled)
           noArgument argument ()
           return ⟨value, action.run value env, ()⟩
+        | _ => absent }
+  | .tabBar label active tabs =>
+    { output := ()
+      locals := ()
+      view := .control {
+        key := .tab target.indices location
+        target, location, label, disabled
+        input := .tabs (active.get env) tabs }
+      requests := []
+      apply := fun route argument => match route with
+        | [] => do
+          if disabled then throw (.invalid .disabled)
+          let some (.text chosen) := argument | throw (.decode (.clientBug (.wrongArgument "text")))
+          let some index := chosen.toNat? | throw (.decode (.clientBug .unknownOption))
+          unless index < tabs.length do throw (.decode (.clientBug .unknownOption))
+          return ⟨value, active.set index env, ()⟩
         | _ => absent }
   | .groupOf label children =>
     let children := evaluateChildren children value env cache locals scopes target location disabled 0
@@ -384,40 +478,17 @@ def evaluateNode
       apply := fun route argument => do
         let updated ← body.apply route argument
         return updated.mapLocals (fun state => ⟨status, state⟩) }
+  | .present body =>
+    evaluatePresentation body value env cache locals scopes target location disabled nofun
   | .bind _ body =>
-    let scopes := fun index => match index with
-      | 0 => 1 :: target.indices
-      | index + 1 => scopes index
-    let body := evaluateNode body value (Env.cons locals.value env) cache locals.tail scopes (target.child 0) location disabled
-    { output := body.output
-      locals := ⟨locals.value, body.locals⟩
-      view := body.view
-      feedback := body.feedback
-      requests := body.requests
-      apply := fun route argument => match route with
-        | 0 :: rest => do
-          let updated ← body.apply rest argument
-          return ⟨updated.value, updated.state.tail, ⟨updated.state.value, updated.locals⟩⟩
-        | _ => absent }
+    bound locals.value <| evaluateNode body value (Env.cons locals.value env) cache locals.tail
+      (scopes.bind target 1) (target.child 0) location disabled
   | .observe producer body =>
     let producer := evaluateNode producer value env cache locals.producer scopes (target.child 0) location disabled
-    let scopes := fun index => match index with
-      | 0 => 2 :: target.indices
-      | index + 1 => scopes index
-    let body := evaluateNode body value (Env.cons producer.output env) cache locals.consumers scopes (target.child 1) location disabled
-    { output := body.output
-      locals := ⟨producer.locals, body.locals⟩
-      view := .stack none [producer.view, body.view]
-      feedback := fun errors => .stack none [producer.feedback errors, body.feedback errors]
-      requests := producer.requests ++ body.requests
-      apply := fun route argument => match route with
-        | 0 :: rest => do
-          let updated ← producer.apply rest argument
-          return updated.mapLocals (⟨·, body.locals⟩)
-        | 1 :: rest => do
-          let updated ← body.apply rest argument
-          return ⟨updated.value, updated.state.tail, ⟨producer.locals, updated.locals⟩⟩
-        | _ => absent }
+    let body := evaluateNode body value (Env.cons producer.output env) cache locals.consumers
+      (scopes.bind target 2) (target.child 1) location disabled
+    observed producer body (.stack none [producer.view, body.view])
+      fun errors => .stack none [producer.feedback errors, body.feedback errors]
   | .list path label itemLabel initial body =>
     let items := path.get value
     let location := location ++ pathLocation path
@@ -475,38 +546,13 @@ def evaluateColumns
         | _ => absent }
   | .observe _ cell rest =>
     let cell := evaluateNode cell value env cache locals.producer scopes (target.child 0) location disabled
-    let scopes := fun index => match index with
-      | 0 => 2 :: target.indices
-      | index + 1 => scopes index
-    let rest := evaluateColumns rest value (Env.cons cell.output env) cache locals.consumers scopes (target.child 1) location disabled
-    { output := rest.output
-      locals := ⟨cell.locals, rest.locals⟩
-      view := .cons cell.view rest.view
-      feedback := fun errors => .cons (cell.feedback errors) (rest.feedback errors)
-      requests := cell.requests ++ rest.requests
-      apply := fun route argument => match route with
-        | 0 :: route => do
-          let updated ← cell.apply route argument
-          return updated.mapLocals (⟨·, rest.locals⟩)
-        | 1 :: route => do
-          let updated ← rest.apply route argument
-          return ⟨updated.value, updated.state.tail, ⟨cell.locals, updated.locals⟩⟩
-        | _ => absent }
+    let rest := evaluateColumns rest value (Env.cons cell.output env) cache locals.consumers
+      (scopes.bind target 2) (target.child 1) location disabled
+    observed cell rest (.cons cell.view rest.view)
+      fun errors => .cons (cell.feedback errors) (rest.feedback errors)
   | .bind _ body =>
-    let scopes := fun index => match index with
-      | 0 => 1 :: target.indices
-      | index + 1 => scopes index
-    let body := evaluateColumns body value (Env.cons locals.value env) cache locals.tail scopes (target.child 0) location disabled
-    { output := body.output
-      locals := ⟨locals.value, body.locals⟩
-      view := body.view
-      feedback := body.feedback
-      requests := body.requests
-      apply := fun route argument => match route with
-        | 0 :: route => do
-          let updated ← body.apply route argument
-          return ⟨updated.value, updated.state.tail, ⟨updated.state.value, updated.locals⟩⟩
-        | _ => absent }
+    bound locals.value <| evaluateColumns body value (Env.cons locals.value env) cache locals.tail
+      (scopes.bind target 1) (target.child 0) location disabled
   | .focus computation body =>
     let path := computation.eval value env
     match path.get? value with
@@ -526,6 +572,43 @@ def evaluateColumns
         apply := fun route argument => do
           let updated ← body.apply route argument
           return updated.mapValue (fun focused => path.set focused value) }
+
+def evaluatePresentation
+  {slots : Nat}
+  {Γ : Context}
+  {α state β : Type}
+  (presentation : PresentationNode slots Γ α state β)
+  (value : α)
+  (env : Env Γ)
+  (cache : HttpRequest.Cache)
+  (locals : state)
+  (scopes : WireScopes)
+  (target : Display.Target)
+  (location : Feedback.Location)
+  (disabled : Bool)
+  (presentations : Presentations slots)
+  : NodeEvaluation Γ α state β :=
+  match presentation with
+  | .layout output arrangement =>
+    let layout := arrangement.eval value env
+    { output := output.eval value env
+      locals := ()
+      view := renderLayout (fun slot => (presentations slot).view) layout
+      feedback := fun errors => renderLayout (fun slot => (presentations slot).feedback errors) layout
+      requests := []
+      apply := fun _ _ => absent }
+  | .own component body =>
+    let owned := evaluateNode component value env cache locals.producer scopes (target.child 0) location
+      disabled
+    let presentations : Presentations (slots + 1) := fun
+      | .here => ⟨owned.view, owned.feedback⟩
+      | .there slot => presentations slot
+    let body := evaluatePresentation body value (Env.cons owned.output env) cache locals.consumers
+      (scopes.bind target 2) (target.child 1) location disabled presentations
+    observed owned body body.view body.feedback
+  | .bind _ body =>
+    bound locals.value <| evaluatePresentation body value (Env.cons locals.value env) cache locals.tail
+      (scopes.bind target 1) (target.child 0) location disabled presentations
 
 def evaluateChildren
   {Γ : Context}

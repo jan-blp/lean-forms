@@ -67,6 +67,9 @@ button:disabled, input:disabled, select:disabled { color: var(--disabled-text); 
 button:disabled { border-color: var(--disabled-text); }
 button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, .table-scroll:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .action { margin: 0 var(--space-xs) var(--space-xs) 0; }
+.tab-bar { display: flex; flex-wrap: wrap; gap: var(--space-xs); border-bottom: 1px solid var(--border); margin: var(--space-m) 0; }
+.tab-bar > button { border-radius: var(--radius-s) var(--radius-s) 0 0; background: transparent; color: var(--text-secondary); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab-bar > button[aria-selected="true"] { color: var(--primary-hover); border-bottom-color: var(--primary-hover); font-weight: 500; }
 .editor { display: flex; flex-wrap: wrap; gap: var(--space-xs); align-items: end; margin: var(--space-m) 0; }
 label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .editor > label { flex-basis: 12rem; }
