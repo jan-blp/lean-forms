@@ -432,12 +432,6 @@ def evaluateNode
   | .bind _ body =>
     bound locals.value <| evaluateNode body value (Env.cons locals.value env) cache locals.tail
       (scopes.bind target 1) (target.child 0) location disabled
-  | .observe producer body =>
-    let producer := evaluateNode producer value env cache locals.producer scopes (target.child 0) location disabled
-    let body := evaluateNode body value (Env.cons producer.output env) cache locals.consumers
-      (scopes.bind target 2) (target.child 1) location disabled
-    observed producer body (.stack none [producer.view, body.view])
-      fun errors => .stack none [producer.feedback errors, body.feedback errors]
   | .list path label itemLabel initial body =>
     let items := path.get value
     let location := location ++ pathLocation path

@@ -20,7 +20,6 @@ def ComponentNode.initialState
   | .withAvailability _ body => body.initialState
   | .choiceOf _ _ branches => branches.initialState
   | .bind initial body => ⟨initial, body.initialState⟩
-  | .observe producer body => ⟨producer.initialState, body.initialState⟩
   | .list .. => []
   | .table .. => []
   | .focus _ body => body.initialState

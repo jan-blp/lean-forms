@@ -66,13 +66,6 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
       (initial : β)
       (body : ComponentNode (⟨.writable, β⟩ :: Γ) α state γ)
       : ComponentNode Γ α (Binding β state) γ
-  /-- Evaluates `producer` and exposes its output read-only to `body`. -/
-  | observe {Γ : Context}
-      {α β γ producerState consumerState : Type}
-      (producer : ComponentNode Γ α producerState β)
-      (body : ComponentNode (⟨.readOnly, β⟩ :: Γ) α consumerState γ)
-      : ComponentNode Γ α
-          (ObservationState producerState consumerState) γ
   | list {Γ : Context}
       {α β γ state : Type}
       (path : Path α (List β))

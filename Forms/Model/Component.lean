@@ -144,16 +144,6 @@ def RowSelection.itemPath
   : Component Γ α β :=
   ⟨LoadedState data (fun status => (body status).LocalState), .load source (fun status => (body status).node)⟩
 
-/-- Renders `producer` followed by `body`.
-The first entry in `body`'s context is the producer's current output, available read-only. -/
-@[reducible] def Component.observe
-  {Γ : Context}
-  {α β γ : Type}
-  (producer : Component Γ α β)
-  (body : Component (⟨.readOnly, β⟩ :: Γ) α γ)
-  : Component Γ α γ :=
-  ⟨ObservationState producer.LocalState body.LocalState, .observe producer.node body.node⟩
-
 @[reducible] def Columns.nil {Γ : Context} {α : Type} : Columns Γ α Unit :=
   ⟨[], Unit, .output (.const ())⟩
 
@@ -467,6 +457,20 @@ def ColumnsNode.presentation
       .layout { inputs := inputs[.ui .here], run := id }
         (Layout.grouped (label.rename Renaming.shift) (placed.map Slot.there ++ [.here]))
 
+/-- Renders `producer` followed by `body`.
+The first entry in `body`'s context is the producer's current output, available read-only. -/
+@[reducible] def Component.observe
+  {Γ : Context}
+  {α β γ : Type}
+  (producer : Component Γ α β)
+  (body : Component (⟨.readOnly, β⟩ :: Γ) α γ)
+  : Component Γ α γ :=
+  .present <|
+    .own producer <|
+      .own body <|
+        .layout { inputs := inputs[.ui .here], run := id }
+          (.const (.group none [.place (.there .here), .place .here]))
+
 /-- Shows `first` above `second` and returns `second`'s output. -/
 @[reducible] def Component.sequence
   {Γ : Context}
@@ -474,11 +478,7 @@ def ColumnsNode.presentation
   (first : Component Γ α Unit)
   (second : Component Γ α β)
   : Component Γ α β :=
-  .present <|
-    .own first <|
-      .own second.weaken <|
-        .layout { inputs := inputs[.ui .here], run := id }
-          (.const (.group none [.place (.there .here), .place .here]))
+  .observe first second.weaken
 
 /-- Displays `view` and returns `output`. -/
 @[reducible] def Component.withOutput

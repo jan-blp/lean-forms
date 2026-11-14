@@ -23,7 +23,6 @@ def ComponentNode.rename
   | .choiceOf path label branches => .choiceOf path label (branches.rename rename)
   | .output value => .output (value.rename rename)
   | .bind initial body => .bind initial (body.rename rename.lift)
-  | .observe producer body => .observe (producer.rename rename) (body.rename rename.lift)
   | .list path label itemLabel initial body =>
     .list path label itemLabel initial (body.rename rename)
   | .table path label itemLabel initial columns selection =>
