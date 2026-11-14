@@ -93,10 +93,10 @@ def RowSelection.itemPath
 @[reducible] def Component.button
   {Γ : Context}
   {α : Type}
-  (label : String)
+  (caption : Computation Γ α String)
   (action : Action Γ α)
   : Component Γ α :=
-  ⟨Unit, .button label action⟩
+  ⟨Unit, .button caption action⟩
 
 @[reducible] def Component.tabBar
   {Γ : Context}

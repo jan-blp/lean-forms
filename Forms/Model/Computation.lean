@@ -105,6 +105,10 @@ def Computation.const
   inputs := .nil
   run := value
 
+/-- Constant text; limited to `String` so other values never silently become constants. -/
+instance {Γ : Context} {α : Type} : Coe String (Computation Γ α String) where
+  coe := .const
+
 def Computation.eval
   {Γ : Context}
   {α : Type}

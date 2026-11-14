@@ -55,6 +55,10 @@ private def next : Component [] Nat := .bind (0 : Nat) (.button "Increment" (.se
   inputs := inputs[.ui (Ref.here)]
   run := fun count => count + 1 }))
 
+private def clicks : Component [] Nat := .bind (0 : Nat) (.button
+  { inputs := inputs[.ui (Ref.here)], run := fun count => s!"Clicked {count}" }
+  (.set .here { inputs := inputs[.ui (Ref.here)], run := fun count => count + 1 }))
+
 def run : IO Unit := do
   let opened := ModelForm.openState counter 10 env[2]
   let increment ← key opened "Increment"
@@ -126,5 +130,9 @@ def run : IO Unit := do
         | .button button => button.onClick == .press (ControlKeyProtocol.toString increment)
         | _ => false
     | _ => false)
+  let clicked := ModelForm.openState clicks 0 Env.nil
+  let first ← key clicked "Clicked 0"
+  let clicked ← press (model := Nat) clicked "Clicked 0"
+  check "ActionCaptionsAreComputedWithStableKeys" ((← key clicked "Clicked 1") == first)
 
 end Tests.Actions

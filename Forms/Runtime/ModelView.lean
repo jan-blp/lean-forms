@@ -326,10 +326,14 @@ def evaluateNode
       view := .computed label (computation.eval value env)
       requests := []
       apply := fun _ _ => absent }
-  | .button label action =>
+  | .button caption action =>
     { output := ()
       locals := ()
-      view := .control { key := .press target.indices location, target, location, label, disabled, input := .action }
+      view := .control {
+        key := .press target.indices location
+        target, location, disabled
+        label := caption.eval value env
+        input := .action }
       requests := []
       apply := fun route argument => match route with
         | [] => do

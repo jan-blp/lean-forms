@@ -35,7 +35,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
       : ComponentNode Γ α Unit Unit
   | button {Γ : Context}
       {α : Type}
-      (label : String)
+      (caption : Computation Γ α String)
       (action : Action Γ α)
       : ComponentNode Γ α Unit Unit
   /-- Tabs that set `active` to the chosen tab's index. -/
