@@ -22,9 +22,6 @@ def toString (key : ControlKey) : String :=
   let json := match key with
     | .edit location => Json.arr (#[toJson ("edit" : String)] ++ (location.map stepToJson).toArray)
     | .select location => Json.arr (#[toJson ("select" : String)] ++ (location.map stepToJson).toArray)
-    | .add location => Json.arr (#[toJson ("add" : String)] ++ (location.map stepToJson).toArray)
-    | .remove location => Json.arr (#[toJson ("remove" : String)] ++ (location.map stepToJson).toArray)
-    | .selectRow scope row => Json.arr (#[toJson ("selectRow" : String)] ++ (scope ++ [row]).toArray.map toJson)
     | .press route location => Json.arr #[toJson ("press" : String), toJson route,
         Json.arr (location.map stepToJson).toArray]
     | .tab route location => Json.arr #[toJson ("tab" : String), toJson route,
@@ -35,12 +32,6 @@ def fromJson (json : Json) : Except String ControlKey := do
   match (← json.getArr?).toList with
   | .str "edit" :: steps => .edit <$> steps.mapM stepFromJson
   | .str "select" :: steps => .select <$> steps.mapM stepFromJson
-  | .str "add" :: steps => .add <$> steps.mapM stepFromJson
-  | .str "remove" :: steps => .remove <$> steps.mapM stepFromJson
-  | .str "selectRow" :: positions =>
-    match (← positions.mapM (fromJson? (α := Nat))).reverse with
-    | row :: scope => pure (.selectRow scope.reverse row)
-    | [] => throw "Expected a row index."
   | [.str "press", route, location] =>
     pure (.press (← fromJson? route) (← (← location.getArr?).toList.mapM stepFromJson))
   | [.str "tab", route, location] =>

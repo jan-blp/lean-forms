@@ -37,7 +37,7 @@ private def apply {model : Type} [FormModel model] [Validation model]
   Component.void <| .list .self "Rows" "Row" [0] row
 
 private def rowSelection (state : ModelForm.State rows) (index : Nat) : RowSelection :=
-  let locals : List row.LocalState := state.locals.producer
+  let locals := state.locals.producer.value.map (·.producer)
   ((locals[index]?).getD row.initialState).value
 
 private def loadedBody : Status Bool → Component [] ExpenseReport.Raw
@@ -58,8 +58,7 @@ def run : IO Unit := do
   let selected ← apply (model := List (List Nat)) rows opened "Select" none 3
   check "LocalListRowsHaveIndependentBindings"
     (rowSelection selected 0 == .none && rowSelection selected 1 == .row 1 && selected.value == opened.value)
-  let remove := ControlKey.remove [.index 0]
-  let removed ← IO.ofExcept (ModelForm.execute (model := List (List Nat)) rows selected (.apply remove none))
+  let removed ← apply (model := List (List Nat)) rows selected "Remove" none 2
   check "LocalListBindingFollowsRowRemoval"
     (removed.value == [[30, 40]] && rowSelection removed 0 == .row 1)
   let added ← apply (model := List (List Nat)) rows removed "Add row"

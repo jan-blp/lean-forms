@@ -18,9 +18,9 @@ def ComponentNode.initialState
   | .tabBar .. => ()
   | .output .. => ()
   | .withAvailability _ body => body.initialState
-  | .choiceOf _ _ branches => branches.initialState
-  | .list .. => []
-  | .table .. => []
+  | .choiceOf (branches := branches) .. => branches.initialState
+  | .list (footer := footer) .. => ⟨[], footer.initialState⟩
+  | .table (footer := footer) .. => ⟨[], footer.initialState⟩
   | .focus _ body => body.initialState
   | .load (inst := _inst) (body := body) .. => ⟨.loading, (body .loading).initialState⟩
   | .present body => body.initialState

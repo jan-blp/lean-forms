@@ -96,26 +96,31 @@ def RowSelection.itemPath
   : Component Γ α :=
   ⟨branches.LocalState, .choiceOf path label branches.node⟩
 
-@[reducible] def Component.list
+/-- Shows `row` for each item at `path`, then `footer`, which edits the whole list.
+Each row reads `Ref.row` and sets `Ref.rowRemoved` to remove itself. -/
+@[reducible] def Component.listOf
   {Γ : Context}
   {α β γ : Type}
   (path : Path α (List β))
-  (label itemLabel : Computation Γ α String)
-  (initial : β)
-  (body : Component Γ β γ)
+  (label : Computation Γ α String)
+  (row : Component (Context.row β Γ) β γ)
+  (footer : Component Γ (List β))
   : Component Γ α (List γ) :=
-  ⟨List body.LocalState, .list path label itemLabel initial body.node⟩
+  ⟨Binding (List row.LocalState) footer.LocalState, .list path label row.node footer.node⟩
 
-@[reducible] def Component.table
+/-- Like `listOf`, with one cell per column; `selection` marks its row and follows removals. -/
+@[reducible] def Component.tableOf
   {Γ : Context}
   {α β γ : Type}
   (path : Path α (List β))
-  (label itemLabel : Computation Γ α String)
-  (initial : β)
-  (columns : Columns Γ β γ)
+  (label : Computation Γ α String)
+  (rowLabel : Computation (Context.row β Γ) β String)
+  (columns : Columns (Context.row β Γ) β γ)
+  (footer : Component Γ (List β))
   (selection : Option (Var Γ RowSelection) := none)
   : Component Γ α (List γ) :=
-  ⟨List columns.LocalState, .table path label itemLabel initial columns.node selection⟩
+  ⟨Binding (List columns.LocalState) footer.LocalState,
+    .table path label rowLabel columns.node footer.node selection⟩
 
 @[reducible] def Component.focus
   {Γ : Context}
@@ -499,6 +504,90 @@ The first entry in `body`'s context is the producer's current output, available 
   (body : Component Γ α β)
   : Component Γ α :=
   .present (.own body (.arrange (.const (.place .here))))
+
+@[reducible] def Columns.rename
+  {Γ Δ : Context}
+  {α β : Type}
+  (rename : Renaming Γ Δ)
+  (columns : Columns Γ α β)
+  : Columns Δ α β :=
+  ⟨columns.headers, columns.LocalState, columns.node.rename rename⟩
+
+/-- Appends a column; `cell` reads no model, so it also works under `focus`. -/
+def ColumnsNode.snoc
+  {headers : List String}
+  {Γ : Context}
+  {α state β : Type}
+  (columns : ColumnsNode headers Γ α state β)
+  (header : String)
+  (cell : (model : Type) → Component Γ model)
+  : Columns Γ α β :=
+  match columns with
+  | .output value => .cons header (cell α) (.output value)
+  | .cons first firstCell rest => .cons first ⟨_, firstCell⟩ (rest.snoc header cell)
+  | .observe first firstCell rest =>
+    .observe first ⟨_, firstCell⟩ (rest.snoc header fun model => (cell model).weaken)
+  | .bind initial body => .bind initial (body.snoc header fun model => (cell model).weaken)
+  | .focus target body => .focus target (body.snoc header cell)
+
+/-- An Add button that appends `initial`. -/
+@[reducible] def Component.addButton
+  {Γ : Context}
+  {α : Type}
+  (itemLabel : String)
+  (initial : α)
+  : Component Γ (List α) :=
+  .button s!"Add {itemLabel.toLower}" (.append .self (.const initial))
+
+/-- Lists the items at `path`, each in a group "`itemLabel` n" with a Remove button,
+then an Add button that appends `initial`. -/
+@[reducible] def Component.list
+  {Γ : Context}
+  {α β γ : Type}
+  (path : Path α (List β))
+  (label : Computation Γ α String)
+  (itemLabel : String)
+  (initial : β)
+  (body : Component Γ β γ)
+  : Component Γ α (List γ) :=
+  .listOf path label
+    (.present <|
+      .own (body.rename Renaming.row) <|
+        .own (.button "Remove" (.set (.there .rowRemoved) (.const true))) <|
+          .layout { inputs := inputs[.ui (Ref.there Ref.here)], run := id } {
+            inputs := inputs[.ui (Ref.there (Ref.there Ref.row))]
+            run := fun row =>
+              .group (some s!"{itemLabel} {row.index.val + 1}") [.place (.there .here), .place .here] })
+    (.addButton itemLabel initial)
+
+/-- Tabulates the items at `path` with an Actions column holding Remove (and Select, given
+`selection`) buttons, then an Add button that appends `initial`. -/
+@[reducible] def Component.table
+  {Γ : Context}
+  {α β γ : Type}
+  (path : Path α (List β))
+  (label : Computation Γ α String)
+  (itemLabel : String)
+  (initial : β)
+  (columns : Columns Γ β γ)
+  (selection : Option (Var Γ RowSelection) := none)
+  : Component Γ α (List γ) :=
+  let remove (model : Type) : Component (Context.row β Γ) model :=
+    .button "Remove" (.set .rowRemoved (.const true))
+  let actions (model : Type) : Component (Context.row β Γ) model := match selection with
+    | none => remove model
+    | some selected =>
+      .sequence
+        (.button
+          { inputs := inputs[.ui (Renaming.row selected), .ui Ref.row]
+            run := fun current row => if current == .row row.index then "Selected" else "Select" }
+          (.set (Renaming.row selected) { inputs := inputs[.ui Ref.row], run := fun row => .row row.index }))
+        (remove model)
+  .tableOf path label
+    { inputs := inputs[.ui Ref.row], run := fun row => s!"{itemLabel} {row.index.val + 1}" }
+    ((columns.rename Renaming.row).node.snoc "Actions" actions)
+    (.addButton itemLabel initial)
+    selection
 
 /-- Shows `body` in a group labeled `label`, keeping its output. -/
 @[reducible] def Component.labeled

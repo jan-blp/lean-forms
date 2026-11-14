@@ -10,7 +10,6 @@ inductive InvocationError where
   | hidden
   | disabled
   | inactiveBranch
-  | indexOutOfBounds (index length : Nat)
   /-- No control with the key is shown. -/
   | absent
   /-- The choice has no branch with the requested key. -/
@@ -22,8 +21,6 @@ instance : ToString InvocationError where
     | .hidden => "This action is unavailable: the control is hidden."
     | .disabled => "This action is unavailable: the control is disabled."
     | .inactiveBranch => "This action is unavailable: the option is not selected."
-    | .indexOutOfBounds index length =>
-      s!"This action is unavailable: item {index + 1} of {length}."
     | .absent => "This action is unavailable: the control is no longer shown."
     | .unavailableBranch key => s!"This action is unavailable: branch '{key}' is no longer available."
 

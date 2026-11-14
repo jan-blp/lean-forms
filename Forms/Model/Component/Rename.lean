@@ -22,11 +22,11 @@ def ComponentNode.rename
     .withAvailability (availability.rename rename) (body.rename rename)
   | .choiceOf path label branches => .choiceOf path (label.rename rename) (branches.rename rename)
   | .output value => .output (value.rename rename)
-  | .list path label itemLabel initial body =>
-    .list path (label.rename rename) (itemLabel.rename rename) initial (body.rename rename)
-  | .table path label itemLabel initial columns selection =>
-    .table path (label.rename rename) (itemLabel.rename rename) initial (columns.rename rename)
-      (selection.map rename)
+  | .list path label row footer =>
+    .list path (label.rename rename) (row.rename rename.liftRow) (footer.rename rename)
+  | .table path label rowLabel columns footer selection =>
+    .table path (label.rename rename) (rowLabel.rename rename.liftRow) (columns.rename rename.liftRow)
+      (footer.rename rename) (selection.map rename)
   | .focus target body => .focus (target.rename rename) (body.rename rename)
   | .load (inst := inst) source body =>
     .load (inst := inst) (source.rename rename) fun status => (body status).rename rename

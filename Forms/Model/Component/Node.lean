@@ -61,22 +61,26 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
       {α β : Type}
       (value : Computation Γ α β)
       : ComponentNode Γ α Unit β
+  /-- Shows `row` for each item at `path`, then `footer`, which edits the whole list.
+  Each row reads `Ref.row` and sets `Ref.rowRemoved` to remove itself. -/
   | list {Γ : Context}
-      {α β γ state : Type}
+      {α β γ rowState footerState : Type}
       (path : Path α (List β))
-      (label itemLabel : Computation Γ α String)
-      (initial : β)
-      (body : ComponentNode Γ β state γ)
-      : ComponentNode Γ α (List state) (List γ)
+      (label : Computation Γ α String)
+      (row : ComponentNode (Context.row β Γ) β rowState γ)
+      (footer : ComponentNode Γ (List β) footerState Unit)
+      : ComponentNode Γ α (Binding (List rowState) footerState) (List γ)
+  /-- Like `list`, with one cell per column; `selection` marks its row and follows removals. -/
   | table {Γ : Context}
-      {α β γ state : Type}
+      {α β γ rowState footerState : Type}
       {headers : List String}
       (path : Path α (List β))
-      (label itemLabel : Computation Γ α String)
-      (initial : β)
-      (columns : ColumnsNode headers Γ β state γ)
-      (selection : Option (Var Γ RowSelection) := none)
-      : ComponentNode Γ α (List state) (List γ)
+      (label : Computation Γ α String)
+      (rowLabel : Computation (Context.row β Γ) β String)
+      (columns : ColumnsNode headers (Context.row β Γ) β rowState γ)
+      (footer : ComponentNode Γ (List β) footerState Unit)
+      (selection : Option (Var Γ RowSelection))
+      : ComponentNode Γ α (Binding (List rowState) footerState) (List γ)
   | focus {Γ : Context}
       {α β γ state : Type}
       (target : Computation Γ α (PartialPath α β))

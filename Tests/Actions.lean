@@ -106,9 +106,11 @@ def run : IO Unit := do
   let rows : Component [] (List Nat) := Component.void <| Component.list .self "Counters" "Counter" 0 next
   let rowUpdated ← press (model := List Nat) (ModelForm.openState rows [10, 20] Env.nil) "Increment" 1
   let removed ← press (model := List Nat) rowUpdated "Remove"
-  let remaining : List (Binding Nat (ObservationState Unit Unit)) := removed.locals.producer
-  check "ActionRowStateFollowsRemoval"
-    (removed.value == [20] && remaining[0]?.map (·.value) == some 1)
+  let states : List (ObservationState (Binding Nat (ObservationState Unit Unit))
+      (ObservationState Unit Unit)) :=
+    removed.locals.producer.value
+  let remaining := states.map (·.producer.value)
+  check "ActionRowStateFollowsRemoval" (removed.value == [20] && remaining[0]? == some 1)
   let functions : Component [] Nat := .bind (fun n : Nat => n)
     (.button "Use successor" (.set .here (.const (fun n : Nat => n + 1))))
   let functionUpdated ← press (model := Nat) (ModelForm.openState functions 10 Env.nil) "Use successor"
