@@ -307,7 +307,7 @@ def evaluateNode
   match component with
   | .field path label widget =>
     let location := location ++ pathLocation path
-    let control := editor widget (path.get value) target location label disabled []
+    let control := editor widget (path.get value) target location (label.eval value env) disabled []
     { output := ()
       locals := ()
       view := .control control

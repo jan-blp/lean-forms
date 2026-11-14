@@ -25,7 +25,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
   | field {Γ : Context}
       {α β : Type}
       (path : Path α β)
-      (label : String)
+      (label : Computation Γ α String)
       (editor : Editor β)
       : ComponentNode Γ α Unit Unit
   | computed {Γ : Context}

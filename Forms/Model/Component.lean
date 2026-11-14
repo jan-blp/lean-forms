@@ -69,7 +69,7 @@ def RowSelection.itemPath
   {Γ : Context}
   {α β : Type}
   (path : Path α β)
-  (label : String)
+  (label : Computation Γ α String)
   (editor : Editor β)
   : Component Γ α :=
   ⟨Unit, .field path label editor⟩
