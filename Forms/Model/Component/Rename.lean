@@ -18,7 +18,6 @@ def ComponentNode.rename
   | .computed label value => .computed label (value.rename rename)
   | .button caption action => .button (caption.rename rename) (action.rename rename)
   | .tabBar label active tabs => .tabBar label (rename active) (tabs.rename rename)
-  | .labeled label body => .labeled label (body.rename rename)
   | .withAvailability availability body =>
     .withAvailability (availability.rename rename) (body.rename rename)
   | .choiceOf path label branches => .choiceOf path label (branches.rename rename)

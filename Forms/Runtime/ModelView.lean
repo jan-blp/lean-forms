@@ -350,11 +350,6 @@ def evaluateNode
           if h : index < n then return ⟨value, active.set ⟨index, h⟩ env, ()⟩
           throw (.decode (.clientBug .unknownOption))
         | _ => absent }
-  | .labeled label body =>
-    let body := evaluateNode body value env cache locals scopes target location disabled
-    { body with
-      view := .stack (some label) [body.view]
-      feedback := fun errors => .stack (some label) [body.feedback errors] }
   | .void body =>
     let body := evaluateNode body value env cache locals scopes target location disabled
     { output := ()

@@ -362,15 +362,6 @@ def Component.loadOr
   : Component Γ α :=
   ⟨body.LocalState, .void body.node⟩
 
-/-- Adds a group label without changing the body's output. -/
-@[reducible] def Component.labeled
-  {Γ : Context}
-  {α β : Type}
-  (label : String)
-  (body : Component Γ α β)
-  : Component Γ α β :=
-  ⟨body.LocalState, .labeled label body.node⟩
-
 /-- Places the owned presentations with `arrangement` and returns `output`. -/
 @[reducible] def Presentation.layout
   {slots : Nat}
@@ -500,6 +491,18 @@ def ColumnsNode.presentation
     .own (focused.rename rename) <|
       .layout { inputs := inputs[.ui .here], run := id }
         (Layout.grouped (label.rename Renaming.shift) (placed.map Slot.there ++ [.here]))
+
+/-- Shows `body` in a group labeled `label`, keeping its output. -/
+@[reducible] def Component.labeled
+  {Γ : Context}
+  {α β : Type}
+  (label : Computation Γ α String)
+  (body : Component Γ α β)
+  : Component Γ α β :=
+  .present <|
+    .own body <|
+      .layout { inputs := inputs[.ui .here], run := id }
+        (Layout.grouped (label.rename Renaming.shift) [.here])
 
 /-- A group labeled `label` that owns `children` in order. -/
 def Component.group

@@ -17,7 +17,6 @@ def ComponentNode.initialState
   | .button .. => ()
   | .tabBar .. => ()
   | .output .. => ()
-  | .labeled _ body => body.initialState
   | .withAvailability _ body => body.initialState
   | .void body => body.initialState
   | .choiceOf _ _ branches => branches.initialState

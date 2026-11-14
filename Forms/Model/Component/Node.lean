@@ -46,11 +46,6 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
       (active : Var Γ (Fin n))
       (tabs : Computation Γ α (Vector String n))
       : ComponentNode Γ α Unit Unit
-  | labeled {Γ : Context}
-      {α β state : Type}
-      (label : String)
-      (body : ComponentNode Γ α state β)
-      : ComponentNode Γ α state β
   | withAvailability {Γ : Context}
       {α β state : Type}
       (availability : Computation Γ α Availability)

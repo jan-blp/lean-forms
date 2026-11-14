@@ -119,7 +119,8 @@ def run : IO Unit := do
   let removeLast ← press last "Remove"
   let empty := rows.evaluate removeLast.value removeLast.state {} removeLast.locals
   check "EvaluationCollectsEmptyRows" (empty.output == [])
-  let totals := nested.evaluate [10, 10] Env.nil {} ⟨both.locals, nested.initialState.consumers⟩
+  let totals := nested.evaluate [10, 10] Env.nil {}
+    ⟨⟨both.locals, nested.initialState.producer.consumers⟩, ()⟩
   check "EvaluationObservesCollectedOutputs" (totals.output == 3 && texts "Overall sum" totals.view == ["3"])
 
   let functional := functions.evaluate 0 Env.nil
@@ -205,7 +206,8 @@ def run : IO Unit := do
   check "EvaluationColumnOutputsFeedLaterCells"
     (edited.output == [⟨"Revised", true⟩, ⟨"same", true⟩] &&
       texts "Cell description" edited.view == ["Revised", "same"])
-  let summary := selectedDescriptions.evaluate edit.value edit.state {} ⟨edited.locals, selectedDescriptions.initialState.consumers⟩
+  let summary := selectedDescriptions.evaluate edit.value edit.state {}
+    ⟨⟨edited.locals, selectedDescriptions.initialState.producer.consumers⟩, ()⟩
   check "EvaluationTableOutputsFeedIndependentSummary"
     (summary.output == "Revised, same" && texts "Selected descriptions" summary.view == ["Revised, same"])
   let remove ← press edited "Remove"
