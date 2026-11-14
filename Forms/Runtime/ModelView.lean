@@ -396,22 +396,6 @@ def evaluateNode
       view := .hidden
       requests := []
       apply := fun _ _ => absent }
-  | .sequence first second =>
-    let first := evaluateNode first value env cache locals.value scopes (target.child 0) location disabled
-    let second := evaluateNode second value env cache locals.tail scopes (target.child 1) location disabled
-    { output := second.output
-      locals := ⟨first.locals, second.locals⟩
-      view := .stack none [first.view, second.view]
-      feedback := fun errors => .stack none [first.feedback errors, second.feedback errors]
-      requests := first.requests ++ second.requests
-      apply := fun route argument => match route with
-        | 0 :: rest => do
-          let updated ← first.apply rest argument
-          return updated.mapLocals (⟨·, second.locals⟩)
-        | 1 :: rest => do
-          let updated ← second.apply rest argument
-          return updated.mapLocals (⟨first.locals, ·⟩)
-        | _ => absent }
   | .focus computation body =>
     let path := computation.eval value env
     match path.get? value with

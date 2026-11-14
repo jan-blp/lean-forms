@@ -44,23 +44,6 @@ def RowSelection.itemPath
   : Component Γ α β :=
   ⟨Unit, .output value⟩
 
-@[reducible] def Component.sequence
-  {Γ : Context}
-  {α β : Type}
-  (first : Component Γ α Unit)
-  (second : Component Γ α β)
-  : Component Γ α β :=
-  ⟨Binding first.LocalState second.LocalState, .sequence first.node second.node⟩
-
-/-- Displays `view` and returns `output`. -/
-@[reducible] def Component.withOutput
-  {Γ : Context}
-  {α β : Type}
-  (view : Component Γ α)
-  (output : Computation Γ α β)
-  : Component Γ α β :=
-  .sequence view (.output output)
-
 @[reducible] def Component.field
   {Γ : Context}
   {α β : Type}
@@ -483,6 +466,28 @@ def ColumnsNode.presentation
     .own (focused.rename rename) <|
       .layout { inputs := inputs[.ui .here], run := id }
         (Layout.grouped (label.rename Renaming.shift) (placed.map Slot.there ++ [.here]))
+
+/-- Shows `first` above `second` and returns `second`'s output. -/
+@[reducible] def Component.sequence
+  {Γ : Context}
+  {α β : Type}
+  (first : Component Γ α Unit)
+  (second : Component Γ α β)
+  : Component Γ α β :=
+  .present <|
+    .own first <|
+      .own second.weaken <|
+        .layout { inputs := inputs[.ui .here], run := id }
+          (.const (.group none [.place (.there .here), .place .here]))
+
+/-- Displays `view` and returns `output`. -/
+@[reducible] def Component.withOutput
+  {Γ : Context}
+  {α β : Type}
+  (view : Component Γ α)
+  (output : Computation Γ α β)
+  : Component Γ α β :=
+  .sequence view (.output output)
 
 /-- Keeps the component's UI and discards its public output. -/
 @[reducible] def Component.void

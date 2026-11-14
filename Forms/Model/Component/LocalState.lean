@@ -19,7 +19,6 @@ def ComponentNode.initialState
   | .output .. => ()
   | .withAvailability _ body => body.initialState
   | .choiceOf _ _ branches => branches.initialState
-  | .sequence first second => ⟨first.initialState, second.initialState⟩
   | .bind initial body => ⟨initial, body.initialState⟩
   | .observe producer body => ⟨producer.initialState, body.initialState⟩
   | .list .. => []

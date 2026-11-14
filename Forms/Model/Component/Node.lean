@@ -61,11 +61,6 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
       {α β : Type}
       (value : Computation Γ α β)
       : ComponentNode Γ α Unit β
-  | sequence {Γ : Context}
-      {α β firstState secondState : Type}
-      (first : ComponentNode Γ α firstState Unit)
-      (second : ComponentNode Γ α secondState β)
-      : ComponentNode Γ α (Binding firstState secondState) β
   | bind {Γ : Context}
       {α β γ state : Type}
       (initial : β)
