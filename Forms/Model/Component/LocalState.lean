@@ -19,7 +19,6 @@ def ComponentNode.initialState
   | .output .. => ()
   | .withAvailability _ body => body.initialState
   | .choiceOf _ _ branches => branches.initialState
-  | .bind initial body => ⟨initial, body.initialState⟩
   | .list .. => []
   | .table .. => []
   | .focus _ body => body.initialState

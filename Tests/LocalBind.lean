@@ -73,7 +73,7 @@ def run : IO Unit := do
   let nestedOpened := ModelForm.openState nested [10, 20] Env.nil
   let nestedSelected ← apply (model := List Nat) nested nestedOpened "Select"
   check "LocalNestedBindingCanReferenceOuterVariable"
-    (nestedSelected.locals.value == .row 0 && nestedSelected.locals.tail.value == .none)
+    (nestedSelected.locals.value == .row 0 && nestedSelected.locals.tail.producer.value == .none)
   let initial := { ExpenseReport.initial with employee := "table" }
   let loaded := ModelForm.load mode (ModelForm.openState mode initial Env.nil)
   let picked ← apply (model := ExpenseReport) mode loaded "Select" none 1

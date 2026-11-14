@@ -61,11 +61,6 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
       {α β : Type}
       (value : Computation Γ α β)
       : ComponentNode Γ α Unit β
-  | bind {Γ : Context}
-      {α β γ state : Type}
-      (initial : β)
-      (body : ComponentNode (⟨.writable, β⟩ :: Γ) α state γ)
-      : ComponentNode Γ α (Binding β state) γ
   | list {Γ : Context}
       {α β γ state : Type}
       (path : Path α (List β))

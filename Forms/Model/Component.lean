@@ -125,15 +125,6 @@ def RowSelection.itemPath
   : Component Γ α (Option γ) :=
   ⟨body.LocalState, .focus target body.node⟩
 
-/-- Introduces writable local UI state for `body`. -/
-@[reducible] def Component.bind
-  {Γ : Context}
-  {α β γ : Type}
-  (initial : β)
-  (body : Component (⟨.writable, β⟩ :: Γ) α γ)
-  : Component Γ α γ :=
-  ⟨Binding β body.LocalState, .bind initial body.node⟩
-
 /-- Loaded subtree state persists while its resolved status is equal. -/
 @[reducible] def Component.load
   {Γ : Context}
@@ -384,6 +375,18 @@ strip as `Slot.here`. -/
   (body : Presentation 0 Γ α β)
   : Component Γ α β :=
   ⟨body.LocalState, .present body.node⟩
+
+/-- Introduces writable local UI state for `body`. -/
+@[reducible] def Component.bind
+  {Γ : Context}
+  {α β γ : Type}
+  (initial : β)
+  (body : Component (⟨.writable, β⟩ :: Γ) α γ)
+  : Component Γ α γ :=
+  .present <|
+    .bind initial <|
+      .own body <|
+        .layout { inputs := inputs[.ui .here], run := id } (.const (.place .here))
 
 @[reducible] def Component.rename
   {Γ Δ : Context}

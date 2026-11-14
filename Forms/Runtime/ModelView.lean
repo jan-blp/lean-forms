@@ -429,9 +429,6 @@ def evaluateNode
         return updated.mapLocals (fun state => ⟨status, state⟩) }
   | .present body =>
     evaluatePresentation body value env cache locals scopes target location disabled nofun
-  | .bind _ body =>
-    bound locals.value <| evaluateNode body value (Env.cons locals.value env) cache locals.tail
-      (scopes.bind target 1) (target.child 0) location disabled
   | .list path label itemLabel initial body =>
     let items := path.get value
     let location := location ++ pathLocation path

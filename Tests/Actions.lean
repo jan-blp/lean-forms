@@ -97,7 +97,7 @@ def run : IO Unit := do
     (.button "Set outer" (.set (.there .here) (.const 7))))
   let nestedUpdated ← press (model := Nat) (ModelForm.openState nested 10 Env.nil) "Set outer"
   check "ActionCanUpdateOuterBinding"
-    (nestedUpdated.locals.value == 7 && nestedUpdated.locals.tail.value == false && nestedUpdated.value == 10)
+    (nestedUpdated.locals.value == 7 && nestedUpdated.locals.tail.producer.value == false && nestedUpdated.value == 10)
   let siblings := Component.group "Counters" [next, next]
   let siblingUpdated ← press (model := Nat) (ModelForm.openState siblings 10 Env.nil) "Increment" 1
   check "ActionSiblingBindingsAreIndependent"
@@ -106,7 +106,7 @@ def run : IO Unit := do
   let rows : Component [] (List Nat) := Component.void <| Component.list .self "Counters" "Counter" 0 next
   let rowUpdated ← press (model := List Nat) (ModelForm.openState rows [10, 20] Env.nil) "Increment" 1
   let removed ← press (model := List Nat) rowUpdated "Remove"
-  let remaining : List (Binding Nat Unit) := removed.locals.producer
+  let remaining : List (Binding Nat (ObservationState Unit Unit)) := removed.locals.producer
   check "ActionRowStateFollowsRemoval"
     (removed.value == [20] && remaining[0]?.map (·.value) == some 1)
   let functions : Component [] Nat := .bind (fun n : Nat => n)
