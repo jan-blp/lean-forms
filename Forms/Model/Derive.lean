@@ -437,14 +437,15 @@ private def validationBranch
     | .ok ⟨$parts, $preserved⟩ => $checked)
 
 private def emitValidation (model : ModelInfo) : CommandElabM Unit := do
-  let mut params : Array (TSyntax ``Parser.Term.instBinder) := #[]
-  let mut childTypes : Array Expr := #[]
+  -- Children are resolved now, so an instance's term holds only its own rules, not its subtree.
   for ctor in model.constructors do
     for field in ctor.data do
-      unless childTypes.contains field.type do
-        childTypes := childTypes.push field.type
-        params := params.push (← `(Parser.Term.instBinder|
-          [Forms.Model.Validation $(← fieldType ctor field)]))
+      let missing ← liftTermElabM do
+        return (← synthInstance? (← mkAppOptM ``Forms.Model.Validation #[some field.type, none])).isNone
+      if missing then
+        throwError "Validation {field.type} is missing: declare its constraint rules before deriving \
+          {model.name}"
+  let mut params : Array (TSyntax ``Parser.Term.instBinder) := #[]
   for (ctor, field) in model.rules do
     params := params.push (← `(Parser.Term.instBinder|
       [Forms.Model.ConstraintRule $(global (model.constraint ctor field))]))

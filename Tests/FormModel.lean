@@ -140,6 +140,144 @@ inductive EscapedConstructor where
   | «pick up»
   deriving FormModel
 
+/-! Types with rules sharing children: an instance whose arguments include its children's
+instances would grow with every path to the leaves. -/
+
+structure Shared6A where
+  note : String
+  ok : True
+  deriving FormModel
+
+instance : ConstraintRule Shared6A.Constraint.ok := ⟨fun _ => .valid trivial⟩
+
+structure Shared6B where
+  note : String
+  ok : True
+  deriving FormModel
+
+instance : ConstraintRule Shared6B.Constraint.ok := ⟨fun _ => .valid trivial⟩
+
+structure Shared5A where
+  note : String
+  left : Shared6A
+  right : Shared6B
+  ok : True
+  deriving FormModel
+
+instance : ConstraintRule Shared5A.Constraint.ok := ⟨fun _ => .valid trivial⟩
+
+structure Shared5B where
+  note : String
+  left : Shared6A
+  right : Shared6B
+  ok : True
+  deriving FormModel
+
+instance : ConstraintRule Shared5B.Constraint.ok := ⟨fun _ => .valid trivial⟩
+
+structure Shared4A where
+  note : String
+  left : Shared5A
+  right : Shared5B
+  ok : True
+  deriving FormModel
+
+instance : ConstraintRule Shared4A.Constraint.ok := ⟨fun _ => .valid trivial⟩
+
+structure Shared4B where
+  note : String
+  left : Shared5A
+  right : Shared5B
+  ok : True
+  deriving FormModel
+
+instance : ConstraintRule Shared4B.Constraint.ok := ⟨fun _ => .valid trivial⟩
+
+structure Shared3A where
+  note : String
+  left : Shared4A
+  right : Shared4B
+  ok : True
+  deriving FormModel
+
+instance : ConstraintRule Shared3A.Constraint.ok := ⟨fun _ => .valid trivial⟩
+
+structure Shared3B where
+  note : String
+  left : Shared4A
+  right : Shared4B
+  ok : True
+  deriving FormModel
+
+instance : ConstraintRule Shared3B.Constraint.ok := ⟨fun _ => .valid trivial⟩
+
+structure Shared2A where
+  note : String
+  left : Shared3A
+  right : Shared3B
+  ok : True
+  deriving FormModel
+
+instance : ConstraintRule Shared2A.Constraint.ok := ⟨fun _ => .valid trivial⟩
+
+structure Shared2B where
+  note : String
+  left : Shared3A
+  right : Shared3B
+  ok : True
+  deriving FormModel
+
+instance : ConstraintRule Shared2B.Constraint.ok := ⟨fun _ => .valid trivial⟩
+
+structure Shared1A where
+  note : String
+  left : Shared2A
+  right : Shared2B
+  ok : True
+  deriving FormModel
+
+instance : ConstraintRule Shared1A.Constraint.ok := ⟨fun _ => .valid trivial⟩
+
+structure Shared1B where
+  note : String
+  left : Shared2A
+  right : Shared2B
+  ok : True
+  deriving FormModel
+
+instance : ConstraintRule Shared1B.Constraint.ok := ⟨fun _ => .valid trivial⟩
+
+structure Shared0A where
+  note : String
+  left : Shared1A
+  right : Shared1B
+  ok : True
+  deriving FormModel
+
+instance : ConstraintRule Shared0A.Constraint.ok := ⟨fun _ => .valid trivial⟩
+
+structure Shared0B where
+  note : String
+  left : Shared1A
+  right : Shared1B
+  ok : True
+  deriving FormModel
+
+instance : ConstraintRule Shared0B.Constraint.ok := ⟨fun _ => .valid trivial⟩
+
+example : Validation Shared0A := inferInstance
+
+structure Unchecked where
+  note : String
+  ok : True
+  deriving FormModel
+
+/-- error: Validation Unchecked is missing: declare its constraint rules before deriving Tests.FormModel.UsesUnchecked -/
+#guard_msgs in
+structure UsesUnchecked where
+  unchecked : Unchecked
+  deriving FormModel
+
 def check (name : String) (passed : Bool) : IO Unit := do
   unless passed do throw (IO.userError ("FAIL " ++ name))
   IO.println ("PASS " ++ name)
