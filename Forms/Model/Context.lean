@@ -1,5 +1,7 @@
 module
 
+public import Forms.Model.PointedList
+
 @[expose] public section
 namespace Forms.Model
 
@@ -30,6 +32,18 @@ abbrev Var (Γ : Context) (α : Type) := Ref Γ .writable α
 /-- A reference to a read-only input in a typed context. -/
 abbrev InputRef (Γ : Context) (α : Type) := Ref Γ .readOnly α
 
+/-- A list row's context. -/
+abbrev Context.row (α : Type) (Γ : Context) : Context :=
+  ⟨.readOnly, PointedList α⟩ -- its list and the row's index
+  :: ⟨.writable, Bool⟩ -- whether to remove the row
+  :: Γ
+
+/-- The row's list, pointed at the row. -/
+abbrev Ref.row {α : Type} {Γ : Context} : InputRef (Context.row α Γ) (PointedList α) := .here
+
+/-- Setting it removes the row. -/
+abbrev Ref.rowRemoved {α : Type} {Γ : Context} : Var (Context.row α Γ) Bool := .there .here
+
 structure Binding (α β : Type) where
   value : α
   tail : β
@@ -44,6 +58,15 @@ variable {Γ : Context} {α : Type} {access : Access}
 abbrev Env.nil : Env [] := ()
 abbrev Env.cons (value : α) (tail : Env Γ) : Env (⟨access, α⟩ :: Γ) :=
   ⟨value, tail⟩
+
+/-- A row's environment, pointed at `index` and not yet removed. -/
+abbrev Env.row
+  {β : Type}
+  (items : List β)
+  (index : Fin items.length)
+  (env : Env Γ)
+  : Env (Context.row β Γ) :=
+  Env.cons ⟨items, index⟩ (Env.cons false env)
 
 macro "env[" values:term,* "]" : term => do
   let mut result ← `(Env.nil)
@@ -71,6 +94,34 @@ def Ref.set
   match ref with
   | .here => ⟨value, env.tail⟩
   | .there ref => ⟨env.value, ref.set value env.tail⟩
+
+/-- Maps every reference into another context, keeping its access and type. -/
+abbrev Renaming (Γ Δ : Context) := ∀ {access : Access} {α : Type}, Ref Γ access α → Ref Δ access α
+
+/-- Leaves the innermost entry in place and renames the rest. -/
+def Renaming.lift
+  {Γ Δ : Context}
+  {entry : Entry}
+  (rename : Renaming Γ Δ)
+  : Renaming (entry :: Γ) (entry :: Δ) := fun
+  | .here => .here
+  | .there ref => .there (rename ref)
+
+/-- Leaves a row's entries in place and renames the rest. -/
+def Renaming.liftRow
+  {α : Type}
+  {Γ Δ : Context}
+  (rename : Renaming Γ Δ)
+  : Renaming (Context.row α Γ) (Context.row α Δ) :=
+  Renaming.lift (Renaming.lift rename)
+
+/-- Makes room for a new innermost entry. -/
+def Renaming.shift {Γ : Context} {entry : Entry} : Renaming Γ (entry :: Γ) :=
+  .there
+
+/-- Makes room for a row's entries. -/
+def Renaming.row {α : Type} {Γ : Context} : Renaming Γ (Context.row α Γ) :=
+  fun ref => .there (.there ref)
 
 /-- Identifies the context entry in control keys sent to the frontend. -/
 def Ref.index {Γ : Context} (ref : Ref Γ access α) : Nat :=

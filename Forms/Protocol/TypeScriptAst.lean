@@ -82,7 +82,7 @@ private def typePaths : TS.Type → List (List String)
   | _ => []
 
 private def propertyPaths : Property → List (List String)
-  | .mk _ type _ => typePaths type
+  | .mk (type := type) .. => typePaths type
 end
 
 /-- Renders `type` as seen from the module for namespace `current`. -/

@@ -73,4 +73,50 @@ theorem Computation.eval_map
   : (f <$> computation).eval value state = f (computation.eval value state) :=
   Inputs.apply_map f computation.run (computation.inputs.read value state)
 
+/-- Renaming preserves the values read, if every renamed reference reads the same value. -/
+theorem Inputs.read_rename
+  {Γ Δ : Context}
+  {α : Type}
+  {types : List Type}
+  (rename : Renaming Γ Δ)
+  (inputs : Inputs Γ α types)
+  (value : α)
+  (state : Env Γ)
+  (renamed : Env Δ)
+  (same :
+    ∀ {access : Access} {β : Type} (ref : Ref Γ access β), (rename ref).get renamed = ref.get state)
+  : (inputs.rename rename).read value renamed = inputs.read value state := by
+  induction inputs with
+  | nil => rfl
+  | cons _ _ ih => exact congrArg (Prod.mk _) ih
+  | ui key _ ih => exact Prod.ext (same key) ih
+
+theorem Computation.eval_rename
+  {Γ Δ : Context}
+  {α : Type}
+  {β : Type u}
+  (rename : Renaming Γ Δ)
+  (computation : Computation Γ α β)
+  (value : α)
+  (state : Env Γ)
+  (renamed : Env Δ)
+  (same :
+    ∀ {access : Access} {β : Type} (ref : Ref Γ access β), (rename ref).get renamed = ref.get state)
+  : (computation.rename rename).eval value renamed = computation.eval value state := by
+  simp [Computation.rename, Computation.eval, Inputs.read_rename rename _ value state renamed same]
+
+/-- A weakened computation ignores the new innermost entry. -/
+theorem Computation.eval_shift
+  {Γ : Context}
+  {α : Type}
+  {β : Type u}
+  {entry : Entry}
+  (computation : Computation Γ α β)
+  (value : α)
+  (state : Env Γ)
+  (new : entry.type)
+  : (computation.rename (Renaming.shift (entry := entry))).eval value ⟨new, state⟩ =
+      computation.eval value state :=
+  computation.eval_rename Renaming.shift value state ⟨new, state⟩ fun _ => rfl
+
 end Forms.Model

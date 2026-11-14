@@ -71,6 +71,17 @@ export function Button({ label, variant, disabled, onClick }: FormsReact.Button)
   );
 }
 
+export function TabBar({ label, active, labels, disabled, onChange }: FormsReact.TabBar) {
+  const form = useLeanForm();
+  return (
+    <div className="tab-bar" role="tablist" aria-label={label}>
+      {labels.map((tab, index) =>
+        <button key={index} type="button" role="tab" aria-selected={index === active} disabled={disabled}
+          onClick={() => { if (index !== active) form.run(onChange, String(index)); }}>{tab}</button>)}
+    </div>
+  );
+}
+
 export function Group({ label, children, error }: FormsReact.Group) {
   const feedback = useId();
   const message = error !== null && <p className="validation-error" id={feedback}>{error}</p>;
@@ -128,6 +139,7 @@ export const defaultComponents: Components = {
   choice: Choice,
   output: Output,
   button: Button,
+  tabBar: TabBar,
   group: Group,
   table: Table,
   page: Page,

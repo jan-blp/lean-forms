@@ -32,7 +32,7 @@ example : True := by
   let input : InputRef [⟨.readOnly, RowSelection⟩] RowSelection := .here
   fail_if_success
     have bad : Component [⟨.readOnly, RowSelection⟩] (List Nat) :=
-      .table .self "Numbers" "Number" 0 columns[] (some input)
+      Component.void <| .table .self "Numbers" "Number" 0 columns[] (some input)
   trivial
 
 def run : IO Unit := do

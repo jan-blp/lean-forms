@@ -55,6 +55,10 @@ private def next : Component [] Nat := .bind (0 : Nat) (.button "Increment" (.se
   inputs := inputs[.ui (Ref.here)]
   run := fun count => count + 1 }))
 
+private def clicks : Component [] Nat := .bind (0 : Nat) (.button
+  { inputs := inputs[.ui (Ref.here)], run := fun count => s!"Clicked {count}" }
+  (.set .here { inputs := inputs[.ui (Ref.here)], run := fun count => count + 1 }))
+
 def run : IO Unit := do
   let opened := ModelForm.openState counter 10 env[2]
   let increment ← key opened "Increment"
@@ -93,22 +97,25 @@ def run : IO Unit := do
     (.button "Set outer" (.set (.there .here) (.const 7))))
   let nestedUpdated ← press (model := Nat) (ModelForm.openState nested 10 Env.nil) "Set outer"
   check "ActionCanUpdateOuterBinding"
-    (nestedUpdated.locals.value == 7 && nestedUpdated.locals.tail.value == false && nestedUpdated.value == 10)
+    (nestedUpdated.locals.value == 7 && nestedUpdated.locals.tail.producer.value == false && nestedUpdated.value == 10)
   let siblings := Component.group "Counters" [next, next]
   let siblingUpdated ← press (model := Nat) (ModelForm.openState siblings 10 Env.nil) "Increment" 1
   check "ActionSiblingBindingsAreIndependent"
-    (siblingUpdated.locals.value.value == 0 && siblingUpdated.locals.tail.value.value == 1)
-  let rows : Component [] (List Nat) := Component.list .self "Counters" "Counter" 0 next
+    (siblingUpdated.locals.producer.value == 0 &&
+      siblingUpdated.locals.consumers.producer.value == 1)
+  let rows : Component [] (List Nat) := Component.void <| Component.list .self "Counters" "Counter" 0 next
   let rowUpdated ← press (model := List Nat) (ModelForm.openState rows [10, 20] Env.nil) "Increment" 1
   let removed ← press (model := List Nat) rowUpdated "Remove"
-  let remaining : List (Binding Nat Unit) := removed.locals
-  check "ActionRowStateFollowsRemoval"
-    (removed.value == [20] && remaining[0]?.map (·.value) == some 1)
+  let states : List (ObservationState (Binding Nat (ObservationState Unit Unit))
+      (ObservationState Unit Unit)) :=
+    removed.locals.producer.value
+  let remaining := states.map (·.producer.value)
+  check "ActionRowStateFollowsRemoval" (removed.value == [20] && remaining[0]? == some 1)
   let functions : Component [] Nat := .bind (fun n : Nat => n)
     (.button "Use successor" (.set .here (.const (fun n : Nat => n + 1))))
   let functionUpdated ← press (model := Nat) (ModelForm.openState functions 10 Env.nil) "Use successor"
   check "ActionsSupportValuesWithoutCodecs" (functionUpdated.locals.value 41 == 42)
-  let focused : Component [] (List Nat) := .bind (0 : Nat) (.focus
+  let focused : Component [] (List Nat) := .bind (0 : Nat) (Component.void <| .focus
     { inputs := inputs[.ui (Ref.here)], run := fun index => .index index .self }
     (.button "Next item" (.set .here {
       inputs := inputs[.ui (Ref.here)], run := fun index => index + 1 })))
@@ -126,5 +133,9 @@ def run : IO Unit := do
         | .button button => button.onClick == .press (ControlKeyProtocol.toString increment)
         | _ => false
     | _ => false)
+  let clicked := ModelForm.openState clicks 0 Env.nil
+  let first ← key clicked "Clicked 0"
+  let clicked ← press (model := Nat) clicked "Clicked 0"
+  check "ActionCaptionsAreComputedWithStableKeys" ((← key clicked "Clicked 1") == first)
 
 end Tests.Actions

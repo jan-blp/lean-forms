@@ -65,4 +65,22 @@ theorem Ref.get_set_readOnly
   | cons entry Γ ih =>
     cases input <;> cases target <;> grind [Ref.get, Ref.set]
 
+/-- Lifting a renaming under a binder keeps every reference reading the same value. -/
+theorem Renaming.get_lift
+  {Γ Δ : Context}
+  {entry : Entry}
+  {access : Access}
+  {α : Type}
+  (rename : Renaming Γ Δ)
+  (state : Env Γ)
+  (renamed : Env Δ)
+  (value : entry.type)
+  (same : ∀ {access : Access} {α : Type} (ref : Ref Γ access α), (rename ref).get renamed = ref.get state)
+  (ref : Ref (entry :: Γ) access α)
+  : (rename.lift ref).get ⟨value, renamed⟩ =
+      ref.get ⟨value, state⟩ := by
+  cases ref with
+  | here => rfl
+  | there ref => exact same ref
+
 end Forms.Model

@@ -11,14 +11,14 @@ inductive PartialPath : Type → Type → Type 1 where
   | empty {α β : Type} : PartialPath α β
   | field
       {α β γ : Type}
-      [Fields α]
+      [fields : Fields α]
       (f : Fields.Field α β)
       (rest : PartialPath β γ)
       : PartialPath α γ
   | constructor
       {α β γ : Type}
-      [Constructors α]
-      [LawfulConstructors α]
+      [constructors : Constructors α]
+      [lawful : LawfulConstructors α]
       (ctor : Constructors.Constructor α β)
       (rest : PartialPath β γ)
       : PartialPath α γ
@@ -30,7 +30,7 @@ inductive PartialPath : Type → Type → Type 1 where
 
 def PartialPath.ofPath {α β : Type} : Path α β → PartialPath α β
   | .self => .self
-  | @Path.stepField _ _ _ _inst f rest => .field f (.ofPath rest)
+  | .stepField (fields := _) f rest => .field f (.ofPath rest)
 
 def PartialPath.trans
   {α β γ : Type}
@@ -40,8 +40,9 @@ def PartialPath.trans
   match first with
   | .self => second
   | .empty => .empty
-  | @PartialPath.field _ _ _ _inst f rest => .field f (rest.trans second)
-  | @PartialPath.constructor _ _ _ _inst _lawful ctor rest => .constructor ctor (rest.trans second)
+  | .field (fields := _) f rest => .field f (rest.trans second)
+  | .constructor (constructors := _) (lawful := _) ctor rest =>
+    .constructor ctor (rest.trans second)
   | .index position rest => .index position (rest.trans second)
 
 def PartialPath.get?
@@ -52,8 +53,9 @@ def PartialPath.get?
   match path with
   | .self => some value
   | .empty => none
-  | @PartialPath.field _ _ _ _inst f rest => rest.get? (Fields.get f value)
-  | @PartialPath.constructor _ _ _ _inst _lawful ctor rest => (Constructors.project ctor value).bind rest.get?
+  | .field (fields := _) f rest => rest.get? (Fields.get f value)
+  | .constructor (constructors := _) (lawful := _) ctor rest =>
+    (Constructors.project ctor value).bind rest.get?
   | .index position rest => (value[position]?).bind rest.get?
 
 def PartialPath.set
@@ -65,8 +67,8 @@ def PartialPath.set
   match path with
   | .self => new
   | .empty => value
-  | @PartialPath.field _ _ _ _inst f rest => Fields.set f (rest.set new (Fields.get f value)) value
-  | @PartialPath.constructor _ _ _ _inst _lawful ctor rest =>
+  | .field (fields := _) f rest => Fields.set f (rest.set new (Fields.get f value)) value
+  | .constructor (constructors := _) (lawful := _) ctor rest =>
     match Constructors.project ctor value with
     | none => value
     | some child => Constructors.inject ctor (rest.set new child)

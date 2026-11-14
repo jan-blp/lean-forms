@@ -78,7 +78,7 @@ def PlannerProject.form {Γ : Context} : Component Γ PlannerProject.Raw :=
         inputs := inputs[path[PlannerProject.Field.tasks]]
         run := fun tasks =>
           s!"{(tasks.filter (·.completed)).length} / {tasks.length} tasks complete · {(tasks.map (·.hours)).sum} h planned" },
-      .table path[PlannerProject.Field.tasks] "Tasks" "Task" PlannerTask.initial PlannerTask.columns
+      Component.void <| .table path[PlannerProject.Field.tasks] "Tasks" "Task" PlannerTask.initial PlannerTask.columns
         (some selectedTask),
       .visibleWhen
         { inputs := inputs[.ui selectedTask], run := fun selected => selected == .none }
@@ -86,7 +86,7 @@ def PlannerProject.form {Γ : Context} : Component Γ PlannerProject.Raw :=
       .visibleWhen
         { inputs := inputs[.ui selectedTask], run := fun selected => selected != .none }
         (.button "Close task" (.set selectedTask (.const .none))),
-      .focus
+      Component.void <| .focus
         { inputs := inputs[.ui selectedTask]
           run := RowSelection.itemPath path[PlannerProject.Field.tasks] }
         PlannerTask.details]
@@ -123,6 +123,6 @@ def ProjectPlanner.form : Component [] ProjectPlanner.Raw := .group "Project pla
     run := fun projects =>
       let tasks := projects.flatMap (·.tasks)
       s!"{ProjectPlanner.counted projects.length "project"} · {ProjectPlanner.counted tasks.length "task"} · {(tasks.filter (·.completed)).length} complete · {(tasks.map (·.hours)).sum} h planned" },
-  .list path[ProjectPlanner.Field.projects] "Projects" "Project" PlannerProject.initial PlannerProject.form]
+  Component.void <| .list path[ProjectPlanner.Field.projects] "Projects" "Project" PlannerProject.initial PlannerProject.form]
 
 end Forms.ExampleForms

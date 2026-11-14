@@ -16,6 +16,7 @@ private def argument : Display.Editor → Option Input
   | .checkbox value => some (.boolean !value)
   | .choice selected _ => some (.text selected)
   | .action => none
+  | .tabs active labels => some (.text (toString ((active + 1) % labels.length.max 1)))
 
 private def keyOf
   {α : Type}
@@ -35,7 +36,7 @@ private def perform
   (argument : Option Input)
   : Except ModelForm.Rejection α := do
   let invocation ← (ModelView.decodeKey form {} value key argument Env.nil).mapError .ofAction
-  return (form.applyValid {} value Env.nil form.initialState invocation).value
+  return invocation.value
 
 private def rejected
   {α : Type}
@@ -121,12 +122,13 @@ def run : IO Unit := do
   | .error rejection => throw (IO.userError s!"FAIL InvocationSelect: {rejection}")
   | .ok express =>
     let phone := keyOf Order.form express "Phone"
-    check "InvocationSelectedBranchEdits" (perform Order.form express phone (some (.text "1"))).toBool
+    let edited := perform Order.form express phone (some (.text "079"))
+    check "InvocationSelectedBranchEdits" edited.toBool
     check "InvocationInactiveBranch"
       (rejected Order.form Order.initial phone (some (.text "1")) == stale .absent)
     check "InvocationReselectKeeps"
-      ((perform Order.form express shipping (some (.text "express"))).toOption.map Lean.toJson
-        == some (Lean.toJson express))
+      ((edited >>= fun edited => perform Order.form edited shipping (some (.text "express"))).toOption.map Lean.toJson
+        == edited.toOption.map Lean.toJson)
   let add := keyOf ExpenseReport.listForm ExpenseReport.initial "Add expense"
   check "InvocationUnexpectedArgument"
     (rejected ExpenseReport.listForm ExpenseReport.initial add (some (.text "x"))

@@ -37,7 +37,8 @@ def run : IO Unit := do
       toJson selected.value == toJson opened.value &&
       selection opened == .none)
   check "TableSelectedRowMarked" (match (ModelView.render form selected.value {} [] selected.env selected.locals).view with
-    | .stack _ (_ :: .table _ _ rows _ _ :: _) => rows.map (·.selected) == [some false, some true]
+    | .stack (children := _ :: .table (rows := rows) .. :: _) .. =>
+      rows.map (·.selected) == [some false, some true]
     | _ => false)
   let description ← browserKey selected "Description"
   let edited ← browse selected (.apply description (some (.text "Updated hotel")))
@@ -75,7 +76,7 @@ def run : IO Unit := do
     (rejectedPending.ui.rejection == some "Submission is in progress." &&
       toJson rejectedPending.value == toJson opened.value)
   let request : HttpRequest := { method := .post, url := "/api/details", body := none }
-  let loading : Component [] ExpenseReport.Raw := .bind RowSelection.none (.focus
+  let loading : Component [] ExpenseReport.Raw := .bind RowSelection.none (Component.void <| .focus
     (target := {
       inputs := inputs[.ui (Ref.here : Var [⟨.writable, RowSelection⟩] RowSelection)]
       run := RowSelection.itemPath path[ExpenseReport.Field.expenses]
@@ -86,7 +87,7 @@ def run : IO Unit := do
   check "FocusLoadsOnlySelectedDetails"
     ((loading.requests {} opened.value Env.nil).isEmpty &&
       loading.requests {} selected.value Env.nil selectedLocals == [request])
-  let table : Component [] ExpenseReport.Raw := .bind RowSelection.none (.table
+  let table : Component [] ExpenseReport.Raw := .bind RowSelection.none (Component.void <| .table
     path[ExpenseReport.Field.expenses] "Expenses" "Expense" ⟨"", 0, false⟩ columns[] (some .here))
   let twoTables := Component.group "Two selections" [table, table]
   let multiple := ModelForm.openState twoTables ExpenseReport.initial Env.nil
@@ -96,20 +97,20 @@ def run : IO Unit := do
   let independent ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) twoTables multiple
     (.apply secondTableRow.key none))
   check "SelectionChangesOnlyItsBinding"
-    (independent.locals.value.value == .none && independent.locals.tail.value.value == .row 1 &&
+    (independent.locals.producer.value == .none && independent.locals.consumers.producer.value == .row 1 &&
       toJson independent.value == toJson multiple.value)
-  let nested : Component [] ExpenseReport.Raw := .focus
+  let nested : Component [] ExpenseReport.Raw := Component.void <| .focus
     (.const (.ofPath path[ExpenseReport.Field.expenses]))
-    (.bind RowSelection.none (.table .self "Nested" "Expense" ⟨"", 0, false⟩ columns[] (some .here)))
+    (.bind RowSelection.none (Component.void <| .table .self "Nested" "Expense" ⟨"", 0, false⟩ columns[] (some .here)))
   let nestedOpened := ModelForm.openState nested ExpenseReport.initial Env.nil
   let some nestedSelect := (ModelView.render nested nestedOpened.value {} [] Env.nil).controls.find? (·.label == "Select")
     | throw (IO.userError "FAIL missing nested selection")
   let nestedSelected ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) nested nestedOpened
     (.apply nestedSelect.key none))
   check "FocusPreservesNestedUiUpdates"
-    (nestedSelected.locals.value == .row 0 && toJson nestedSelected.value == toJson nestedOpened.value)
+    (nestedSelected.locals.producer.value == .row 0 && toJson nestedSelected.value == toJson nestedOpened.value)
   let mixed : Component [⟨.readOnly, RowSelection⟩, ⟨.writable, RowSelection⟩] ExpenseReport.Raw :=
-    .bind false (.table path[ExpenseReport.Field.expenses] "Expenses" "Expense" ⟨"", 0, false⟩
+    .bind false (Component.void <| .table path[ExpenseReport.Field.expenses] "Expenses" "Expense" ⟨"", 0, false⟩
       columns[] (some (.there (.there .here))))
   let mixedOpened := ModelForm.openState mixed ExpenseReport.initial env[.row 1, .none]
   let some mixedSelect := (ModelView.render mixed mixedOpened.value {} [] mixedOpened.env).controls.find?
