@@ -81,7 +81,7 @@ def run : IO Unit := do
     ((ModelView.render mode same.value same.cache [] Env.nil same.locals).controls.any (·.label == "Selected"))
   let changed ← apply (model := ExpenseReport) mode same "Mode" (some (.text "function"))
   check "LocalLoadCanChangeBindingTypes" (match (ModelView.render mode changed.value changed.cache [] Env.nil changed.locals).view with
-    | .stack _ [_, .computed "Function" "42"] => true
+    | .stack (children := [_, .computed "Function" "42"]) .. => true
     | _ => false)
   let back ← apply (model := ExpenseReport) mode changed "Mode" (some (.text "table"))
   check "LocalLoadResetsBindingsWhenStatusChanges"

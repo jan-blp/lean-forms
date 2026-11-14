@@ -28,8 +28,8 @@ def editor
 
 def location {α : Type} {value : α} : Model.Location value → Feedback.Location
   | .self => []
-  | @Model.Location.field _ _ inst _ f rest => .field (@Fields.key _ inst _ f) :: location rest
-  | @Model.Location.constructor _ _ inst _ c rest => .constructor (@Constructors.key _ inst _ c) :: location rest
+  | .field (fields := _) f rest => .field (Fields.key f) :: location rest
+  | .constructor (constructors := _) c rest => .constructor (Constructors.key c) :: location rest
   | .index position rest => .index position.val :: location rest
 
 def error {α : Type} {value : α} (error : Model.Error value) : Feedback.Error where
@@ -40,15 +40,14 @@ def error {α : Type} {value : α} (error : Model.Error value) : Feedback.Error 
 
 def pathLocation {α β : Type} : Model.Path α β → Feedback.Location
   | .self => []
-  | @Model.Path.stepField _ _ _ inst f rest => .field (@Fields.key _ inst _ f) :: pathLocation rest
+  | .stepField (fields := _) f rest => .field (Fields.key f) :: pathLocation rest
 
 def partialPathLocation {α β : Type} : Model.PartialPath α β → Feedback.Location
   | .self => []
   | .empty => []
-  | @Model.PartialPath.field _ _ _ inst f rest =>
-    .field (@Fields.key _ inst _ f) :: partialPathLocation rest
-  | @Model.PartialPath.constructor _ _ _ inst _ ctor rest =>
-    .constructor (@Constructors.key _ inst _ ctor) :: partialPathLocation rest
+  | .field (fields := _) f rest => .field (Fields.key f) :: partialPathLocation rest
+  | .constructor (constructors := _) (lawful := _) ctor rest =>
+    .constructor (Constructors.key ctor) :: partialPathLocation rest
   | .index position rest => .index position :: partialPathLocation rest
 
 def button

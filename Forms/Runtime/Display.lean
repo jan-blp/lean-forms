@@ -68,8 +68,8 @@ mutual
 def View.controls : View → List Control
   | .control c => [c]
   | .stack _ children => View.controlsAll children
-  | .list _ children _ => View.controlsAll children
-  | .table _ _ rows footer _ => View.controlsRows rows ++ footer.controls
+  | .list (children := children) .. => View.controlsAll children
+  | .table (rows := rows) (footer := footer) .. => View.controlsRows rows ++ footer.controls
   | .hidden => []
   | .computed .. => []
 
@@ -79,7 +79,7 @@ def View.controlsAll : List View → List Control
 
 def View.controlsRows : List TableRow → List Control
   | [] => []
-  | ⟨_, cells, _⟩ :: rest => View.controlsAll cells ++ View.controlsRows rest
+  | { cells, .. } :: rest => View.controlsAll cells ++ View.controlsRows rest
 end
 
 def duplicateNote : String := "Duplicate control: this value is edited elsewhere in the form."

@@ -30,7 +30,7 @@ private def apply (state : State) (label : String) (argument : Option Input) (nt
 def run : IO Unit := do
   let opened := ModelForm.openState ExpenseReport.form ExpenseReport.initial Env.nil
   check "TableHeadersAndRows" (match (rendered opened).view with
-    | .stack _ [_, .table "Expenses" headers rows _ _, _] =>
+    | .stack (children := [_, .table "Expenses" headers rows .., _]) .. =>
       headers == ["Description", "Amount (CHF)", "Receipt", "Actions"] &&
       rows.map (·.cells.length) == [4, 4] && rows.map (·.label) == ["Expense 1", "Expense 2"]
     | _ => false)
@@ -69,7 +69,8 @@ def run : IO Unit := do
       toJson stale.value == toJson removed.value)
   let empty ← apply removed "Remove" none
   check "TableEmptyKeepsHeaders" (match (rendered empty).view with
-    | .stack _ [_, .table _ headers [] _ _, _] => headers.length == 4
+    | .stack (children := [_, .table (headers := headers) (rows := []) .., _]) .. =>
+      headers.length == 4
     | _ => false)
   let added ← apply empty "Add expense" none
   check "TableAddsInitialRow"

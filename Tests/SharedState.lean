@@ -35,8 +35,8 @@ mutual
 private def outputs (label : String) : Display.View → List String
   | .computed name value => if name == label then [value] else []
   | .stack _ children => outputsAll label children
-  | .list _ children _ => outputsAll label children
-  | .table _ _ rows footer _ => outputsRows label rows ++ outputs label footer
+  | .list (children := children) .. => outputsAll label children
+  | .table (rows := rows) (footer := footer) .. => outputsRows label rows ++ outputs label footer
   | _ => []
 
 private def outputsAll (label : String) : List Display.View → List String
@@ -45,7 +45,7 @@ private def outputsAll (label : String) : List Display.View → List String
 
 private def outputsRows (label : String) : List Display.TableRow → List String
   | [] => []
-  | ⟨_, cells, _⟩ :: rest => outputsAll label cells ++ outputsRows label rest
+  | { cells, .. } :: rest => outputsAll label cells ++ outputsRows label rest
 end
 
 private def values (state : ModelForm.State form) (label : String) : List String :=
@@ -103,7 +103,7 @@ def run : IO Unit := do
     (.apply (← key tablesOpened "Select" 1) none))
   check "ExistingTablesShareSelectionBinding" (match
       (ModelView.render tables selected.value {} [] Env.nil selected.locals).view with
-    | .stack _ [.table _ _ first _ _, .table _ _ second _ _, _] =>
+    | .stack (children := [.table (rows := first) .., .table (rows := second) .., _]) .. =>
       first.map (·.selected) == [some false, some true] &&
       second.map (·.selected) == [some false, some true]
     | _ => false)

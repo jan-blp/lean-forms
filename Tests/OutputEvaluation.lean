@@ -29,8 +29,8 @@ mutual
 private def texts (label : String) : Display.View → List String
   | .computed name value => if name == label then [value] else []
   | .stack _ children => textsAll label children
-  | .list _ children _ => textsAll label children
-  | .table _ _ rows footer _ => textsRows label rows ++ texts label footer
+  | .list (children := children) .. => textsAll label children
+  | .table (rows := rows) (footer := footer) .. => textsRows label rows ++ texts label footer
   | _ => []
 
 private def textsAll (label : String) : List Display.View → List String
@@ -39,7 +39,7 @@ private def textsAll (label : String) : List Display.View → List String
 
 private def textsRows (label : String) : List Display.TableRow → List String
   | [] => []
-  | ⟨_, cells, _⟩ :: rest => textsAll label cells ++ textsRows label rest
+  | { cells, .. } :: rest => textsAll label cells ++ textsRows label rest
 end
 
 example : True := by
@@ -220,13 +220,15 @@ def run : IO Unit := do
 
   let noRows := selectionTable.evaluate [] Env.nil
   check "EvaluationEmptyTableRetainsHeaders" (noRows.output.isEmpty && match noRows.view with
-    | .table _ headers rows _ _ => headers == ["Description", "Selected", "Actions"] && rows.isEmpty
+    | .table (headers := headers) (rows := rows) .. =>
+      headers == ["Description", "Selected", "Actions"] && rows.isEmpty
     | _ => false)
   check "EvaluationTableCellCountMatchesHeaders" (match withNew.view with
-    | .table _ headers rows _ _ => rows.all fun row => row.cells.length == headers.length
+    | .table (headers := headers) (rows := rows) .. =>
+      rows.all fun row => row.cells.length == headers.length
     | _ => false)
   check "EvaluationTableSelectionButtonsAreUserDefined" (match withNew.view with
-    | .table _ _ rows _ _ => rows.all (·.selected.isNone)
+    | .table (rows := rows) .. => rows.all (·.selected.isNone)
     | _ => false)
 
   let ordinaryColumns : Columns [] String Unit :=
@@ -260,7 +262,8 @@ def run : IO Unit := do
     (edit.value == [["Revised"]] && focused.output == [some ⟨"Revised", true⟩])
   let unfocused := focusedTable.evaluate [[]] Env.nil
   check "EvaluationMissingFocusKeepsTableColumns" (unfocused.output == [none] && match unfocused.view with
-    | .table _ headers rows _ _ => headers == ["Description", "Selected", "Actions"] &&
+    | .table (headers := headers) (rows := rows) .. =>
+      headers == ["Description", "Selected", "Actions"] &&
         rows.all fun row => row.cells.length == headers.length
     | _ => false)
 

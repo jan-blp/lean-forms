@@ -187,7 +187,7 @@ def run : IO Unit := do
   check "RemoteRevisitIsCached" (fetches back).isEmpty
   let failed ← execute opened (.loaded (supplier "acme") (.error "offline"))
   check "RemoteFailureShown" (match (snapshot failed).view with
-    | .stack _ [_, failure] => failure == .computed "" "Could not load: offline"
+    | .stack (children := [_, failure]) .. => failure == .computed "" "Could not load: offline"
     | _ => false)
   let retried ← execute failed .reset
   check "RemoteResetRetries" (fetches retried == [supplier "acme"])
@@ -236,7 +236,7 @@ def run : IO Unit := do
   let rendered := ModelView.render twice person {} [] Env.nil
   check "RemoteDuplicateShownOnce"
     (rendered.controls.map (·.label) == ["Name"] && match rendered.view with
-      | .stack _ [.control _, .computed "Name" note] => note == Display.duplicateNote
+      | .stack (children := [.control _, .computed "Name" note]) .. => note == Display.duplicateNote
       | _ => false)
   let late ← execute loaded (.loaded (supplier "initech") (.ok Json.null))
   check "RemoteUnrequestedResponseIgnored" !(late.cache.contains (supplier "initech"))

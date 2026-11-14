@@ -37,7 +37,8 @@ def run : IO Unit := do
       toJson selected.value == toJson opened.value &&
       selection opened == .none)
   check "TableSelectedRowMarked" (match (ModelView.render form selected.value {} [] selected.env selected.locals).view with
-    | .stack _ (_ :: .table _ _ rows _ _ :: _) => rows.map (·.selected) == [some false, some true]
+    | .stack (children := _ :: .table (rows := rows) .. :: _) .. =>
+      rows.map (·.selected) == [some false, some true]
     | _ => false)
   let description ← browserKey selected "Description"
   let edited ← browse selected (.apply description (some (.text "Updated hotel")))

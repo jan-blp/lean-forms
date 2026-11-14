@@ -250,12 +250,12 @@ def Branch.label {Γ : Context} {α : Type} (branch : Branch Γ α) : String :=
 /-- Whether `value` was built by this branch's constructor. -/
 def Branch.matches {Γ : Context} {α : Type} (branch : Branch Γ α) (value : α) : Bool :=
   match branch.node with
-  | .mk _ _ _ project .. => (project value).isSome
+  | .mk (project := project) .. => (project value).isSome
 
 /-- The value a newly chosen branch starts from. -/
 def Branch.start {Γ : Context} {α : Type} (branch : Branch Γ α) : α :=
   match branch.node with
-  | .mk _ _ inject _ initial _ => inject initial
+  | .mk (inject := inject) (initial := initial) .. => inject initial
 
 def Branches.ofList {Γ : Context} {α : Type} : List (Branch Γ α) → Branches Γ α
   | [] => .nil

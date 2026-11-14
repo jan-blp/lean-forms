@@ -67,8 +67,8 @@ mutual
 private def texts (label : String) : Display.View → List String
   | .computed name value => if name == label then [value] else []
   | .stack _ children => textsAll label children
-  | .list _ children _ => textsAll label children
-  | .table _ _ rows footer _ => textsRows label rows ++ texts label footer
+  | .list (children := children) .. => textsAll label children
+  | .table (rows := rows) (footer := footer) .. => textsRows label rows ++ texts label footer
   | _ => []
 
 private def textsAll (label : String) : List Display.View → List String
@@ -77,7 +77,7 @@ private def textsAll (label : String) : List Display.View → List String
 
 private def textsRows (label : String) : List Display.TableRow → List String
   | [] => []
-  | ⟨_, cells, _⟩ :: rest => textsAll label cells ++ textsRows label rest
+  | { cells, .. } :: rest => textsAll label cells ++ textsRows label rest
 end
 
 /-- Computed labels and tables in display order. -/
@@ -85,7 +85,7 @@ private partial def order : Display.View → List String
   | .computed name _ => [name]
   | .table label .. => [label]
   | .stack _ children => children.flatMap order
-  | .list _ children _ => children.flatMap order
+  | .list (children := children) .. => children.flatMap order
   | _ => []
 
 def request : HttpRequest := { method := .get, url := "/hidden-value", body := none }

@@ -103,9 +103,9 @@ def Renaming.lift
   {Γ Δ : Context}
   {entry : Entry}
   (rename : Renaming Γ Δ)
-  : Renaming (entry :: Γ) (entry :: Δ)
-  | _, _, .here => .here
-  | _, _, .there ref => .there (rename ref)
+  : Renaming (entry :: Γ) (entry :: Δ) := fun
+  | .here => .here
+  | .there ref => .there (rename ref)
 
 /-- Leaves a row's entries in place and renames the rest. -/
 def Renaming.liftRow
