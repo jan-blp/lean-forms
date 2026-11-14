@@ -536,50 +536,60 @@ def ColumnsNode.snoc
   | .bind initial body => .bind initial (body.snoc header fun model => (cell model).weaken)
   | .focus target body => .focus target (body.snoc header cell)
 
-/-- Fills the hole of `collection` with an Add button that appends `initial` to the list at
-`path`. -/
+/-- Fills the hole of `collection` with a button captioned `caption` that appends `initial` to the
+list at `path`. -/
 @[reducible] def Component.withAddButton
   {Γ : Context}
   {α β γ : Type}
   (path : Path α (List β))
-  (itemLabel : String)
+  (caption : Computation Γ α String)
   (initial : β)
   (collection : Component Γ α γ (holes := 1))
   : Component Γ α γ :=
   .present <|
     .own collection <|
-      .own (.button s!"Add {itemLabel.toLower}" (.append path (.const initial))) <|
+      .own (.button (caption.rename Renaming.shift) (.append path (.const initial))) <|
         .layout { inputs := inputs[.ui (Ref.there Ref.here)], run := id }
           (.const (.fill (.there .here) (.cons [.place .here] .nil)))
 
-/-- Lists the items at `path`, each in a group "`itemLabel` n" with a Remove button,
-then an Add button that appends `initial`. -/
+/-- Labels each row "`itemLabel` n", counting from 1. -/
+@[reducible] def Computation.numbered
+  {Γ : Context}
+  {β : Type}
+  (itemLabel : String)
+  : Computation (Context.row β Γ) β String :=
+  { inputs := inputs[.ui Ref.row], run := fun row => s!"{itemLabel} {row.index.val + 1}" }
+
+/-- Lists the items at `path`, each in a group labeled `rowLabel` with a Remove button,
+then an Add button captioned `addCaption` that appends `initial`. -/
 @[reducible] def Component.list
   {Γ : Context}
   {α β γ : Type}
   (path : Path α (List β))
   (label : Computation Γ α String)
-  (itemLabel : String)
+  (rowLabel : Computation (Context.row β Γ) β String)
+  (addCaption : Computation Γ α String)
   (initial : β)
   (body : Component Γ β γ)
   : Component Γ α (List γ) :=
-  .withAddButton path itemLabel initial <| .listOf path label
+  let rowLabel := rowLabel.rename fun ref => .there (.there ref)
+  .withAddButton path addCaption initial <| .listOf path label
     (.present <|
       .own (body.rename Renaming.row) <|
         .own (.button "Remove" (.set (.there Ref.rowRemoved) (.const true))) <|
-          .layout { inputs := inputs[.ui (Ref.there Ref.here)], run := id } {
-            inputs := inputs[.ui (Ref.there (Ref.there Ref.row))]
-            run := fun row =>
-              .group (some s!"{itemLabel} {row.index.val + 1}") [.place (.there .here), .place .here] })
+          .layout { inputs := inputs[.ui (Ref.there Ref.here)], run := id }
+            ((fun label => .group (some label) [.place (.there .here), .place .here]) <$> rowLabel))
 
-/-- Tabulates the items at `path` with an Actions column holding Remove (and Select, given
-`selection`) buttons, then an Add button that appends `initial`. -/
+/-- Tabulates the items at `path`, each row labeled `rowLabel`, with an Actions column holding
+Remove (and Select, given `selection`) buttons, then an Add button captioned `addCaption` that
+appends `initial`. -/
 @[reducible] def Component.table
   {Γ : Context}
   {α β γ : Type}
   (path : Path α (List β))
   (label : Computation Γ α String)
-  (itemLabel : String)
+  (rowLabel : Computation (Context.row β Γ) β String)
+  (addCaption : Computation Γ α String)
   (initial : β)
   (columns : Columns Γ β γ)
   (selection : Option (Var Γ RowSelection) := none)
@@ -595,8 +605,7 @@ then an Add button that appends `initial`. -/
             run := fun current row => if current == .row row.index then "Selected" else "Select" }
           (.set (Renaming.row selected) { inputs := inputs[.ui Ref.row], run := fun row => .row row.index }))
         (remove model)
-  .withAddButton path itemLabel initial <| .tableOf path label
-    { inputs := inputs[.ui Ref.row], run := fun row => s!"{itemLabel} {row.index.val + 1}" }
+  .withAddButton path addCaption initial <| .tableOf path label rowLabel
     ((columns.rename Renaming.row).node.snoc "Actions" actions)
     selection
 

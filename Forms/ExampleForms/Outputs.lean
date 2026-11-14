@@ -44,7 +44,7 @@ def pair {Γ : Context} : Component Γ Nat Nat :=
       .withOutput (.computed "Pair sum" (toString <$> total)) total
 
 def rows : Component [] (List Nat) (List Nat) :=
-  .list .self "Pairs" "Pair" 0 pair
+  .list .self "Pairs" (.numbered "Pair") "Add pair" 0 pair
 
 def nested : Component [] (List Nat) Nat :=
   .labeled "Nested outputs" <|
@@ -59,7 +59,7 @@ def nested : Component [] (List Nat) Nat :=
 
 def repeated : Component [] (List Nat) :=
   .group "Outputs of owned counters" [
-    .observe (Component.list .self "Counters" "Counter" 0 counter) <|
+    .observe (Component.list .self "Counters" (.numbered "Counter") "Add counter" 0 counter) <|
       let counts : InputRef [⟨.readOnly, List Nat⟩] (List Nat) := .here
       .group "Observers outside the list" [
         .computed "Counts" {
@@ -98,7 +98,7 @@ def selectionColumns {Γ : Context} : Columns Γ String RowOutput :=
         run := fun description selected => { description, selected } }
 
 def selectionTable : Component [] (List String) (List RowOutput) :=
-  .table .self "Items" "Item" "New item" selectionColumns
+  .table .self "Items" (.numbered "Item") "Add item" "New item" selectionColumns
 
 def selectedDescriptions : Component [] (List String) String :=
   .labeled "Row-local selection" <|

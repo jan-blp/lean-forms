@@ -91,8 +91,9 @@ def run : IO Unit := do
   -- Both tables use the same binding; removal also adjusts that binding.
   let tables : Component [] (List Nat) := .bind RowSelection.none <|
     .group "Two views" [
-      Component.void <| .table .self "First" "Item" 0 columns[] (some .here),
-      Component.void <| .table .self "Second" "Item" 0 columns[] (some .here),
+      Component.void <| .table .self "First" (.numbered "Item") "Add item" 0 columns[] (some .here),
+      Component.void <| .table .self "Second" (.numbered "Item") "Add item"
+          0 columns[] (some .here),
       .computed "Selection" {
         inputs := inputs[.ui (Ref.here : Var _ RowSelection)]
         run := fun selection => match selection with

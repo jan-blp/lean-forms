@@ -77,7 +77,7 @@ def noteTabs {Γ : Context} : Component Γ String :=
 /-- An outer presentation that owns rows with their own presentations. -/
 def notes : Component [] (List String) Nat :=
   .present <|
-    .own (Component.void (.list .self "Notes" "Note" "" noteTabs)) <|
+    .own (Component.void (.list .self "Notes" (.numbered "Note") "Add note" "" noteTabs)) <|
       .own (.computed "Note count" { inputs := inputs[path[]], run := fun notes => toString notes.length }) <|
         .layout { inputs := inputs[path[]], run := List.length }
           (.const (.group none [.place .here, .place (.there .here)]))

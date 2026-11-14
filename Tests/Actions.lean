@@ -103,7 +103,8 @@ def run : IO Unit := do
   check "ActionSiblingBindingsAreIndependent"
     (siblingUpdated.locals.producer.value == 0 &&
       siblingUpdated.locals.consumers.producer.value == 1)
-  let rows : Component [] (List Nat) := Component.void <| Component.list .self "Counters" "Counter" 0 next
+  let rows : Component [] (List Nat) := Component.void <| Component.list .self "Counters"
+      (.numbered "Counter") "Add counter" 0 next
   let rowUpdated ← press (model := List Nat) (ModelForm.openState rows [10, 20] Env.nil) "Increment" 1
   let removed ← press (model := List Nat) rowUpdated "Remove"
   let states : List (ObservationState (Binding Nat (ObservationState Unit Unit))

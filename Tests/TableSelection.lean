@@ -88,7 +88,8 @@ def run : IO Unit := do
     ((loading.requests {} opened.value Env.nil).isEmpty &&
       loading.requests {} selected.value Env.nil selectedLocals == [request])
   let table : Component [] ExpenseReport.Raw := .bind RowSelection.none (Component.void <| .table
-    path[ExpenseReport.Field.expenses] "Expenses" "Expense" ⟨"", 0, false⟩ columns[] (some .here))
+    path[ExpenseReport.Field.expenses] "Expenses" (.numbered "Expense") "Add expense"
+        ⟨"", 0, false⟩ columns[] (some .here))
   let twoTables := Component.group "Two selections" [table, table]
   let multiple := ModelForm.openState twoTables ExpenseReport.initial Env.nil
   let selectors := (ModelView.render twoTables multiple.value {} [] Env.nil multiple.locals).controls.filter (·.label == "Select")
@@ -101,7 +102,8 @@ def run : IO Unit := do
       toJson independent.value == toJson multiple.value)
   let nested : Component [] ExpenseReport.Raw := Component.void <| .focus
     (.const (.ofPath path[ExpenseReport.Field.expenses]))
-    (.bind RowSelection.none (Component.void <| .table .self "Nested" "Expense" ⟨"", 0, false⟩ columns[] (some .here)))
+    (.bind RowSelection.none (Component.void <| .table .self "Nested"
+        (.numbered "Expense") "Add expense" ⟨"", 0, false⟩ columns[] (some .here)))
   let nestedOpened := ModelForm.openState nested ExpenseReport.initial Env.nil
   let some nestedSelect := (ModelView.render nested nestedOpened.value {} [] Env.nil).controls.find? (·.label == "Select")
     | throw (IO.userError "FAIL missing nested selection")
@@ -110,7 +112,8 @@ def run : IO Unit := do
   check "FocusPreservesNestedUiUpdates"
     (nestedSelected.locals.producer.value == .row 0 && toJson nestedSelected.value == toJson nestedOpened.value)
   let mixed : Component [⟨.readOnly, RowSelection⟩, ⟨.writable, RowSelection⟩] ExpenseReport.Raw :=
-    .bind false (Component.void <| .table path[ExpenseReport.Field.expenses] "Expenses" "Expense" ⟨"", 0, false⟩
+    .bind false (Component.void <| .table path[ExpenseReport.Field.expenses] "Expenses"
+        (.numbered "Expense") "Add expense" ⟨"", 0, false⟩
       columns[] (some (.there (.there .here))))
   let mixedOpened := ModelForm.openState mixed ExpenseReport.initial env[.row 1, .none]
   let some mixedSelect := (ModelView.render mixed mixedOpened.value {} [] mixedOpened.env).controls.find?

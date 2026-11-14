@@ -26,7 +26,8 @@ def form : Component [] (List Nat) :=
   .bind (0 : Nat) <|
     let shared : Var [⟨.writable, Nat⟩] Nat := .here
     .group "Shared local state" [
-      Component.void <| .list .self "Consumers" "Consumer" 0 (consumer shared),
+      Component.void <| .list .self "Consumers" (.numbered "Consumer") "Add consumer"
+          0 (consumer shared),
       .computed "Shared count outside the list" { inputs := inputs[.ui shared], run := toString },
       .button "Clear shared" (.set shared (.const 0))]
 

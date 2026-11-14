@@ -163,7 +163,8 @@ def run : IO Unit := do
   check "ObservationUsesNormalAvailabilityChecks"
     (disabledResult.ui.rejection == some (toString InvocationError.disabled) && texts disabledResult "Observer one" == ["0"])
 
-  let table : Component [] (List Nat) := Component.void <| .table .self "Rows" "Row" 0 columns[
+  let table : Component [] (List Nat) := Component.void <| .table .self "Rows"
+      (.numbered "Row") "Add row" 0 columns[
     "Counters" => .observe pair
       (.computed "Cell total" { inputs := inputs[.ui (Ref.here : InputRef _ Nat)], run := toString })]
   let tableChanged ← press (model := List Nat) (start table initial) "Increment" 1

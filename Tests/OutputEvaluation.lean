@@ -233,7 +233,7 @@ def run : IO Unit := do
 
   let ordinaryColumns : Columns [] String Unit :=
     .cons "Description" ((.field .self "Description" .text)) .nil
-  let ordinary := Component.table .self "Ordinary" "Item" "" ordinaryColumns
+  let ordinary := Component.table .self "Ordinary" (.numbered "Item") "Add item" "" ordinaryColumns
   let ordinaryResult := ordinary.evaluate ["one", "two"] Env.nil
   check "EvaluationOrdinaryColumnsReturnUnit" (ordinaryResult.output == [(), ()])
 
@@ -242,7 +242,7 @@ def run : IO Unit := do
     .cons "Selection" ((.button "Row toggle" (.set selected {
       inputs := inputs[.ui selected], run := Bool.not })))
       (.output { inputs := inputs[.ui selected], run := id })
-  let rowBoundTable := Component.table .self "Rows" "Row" "" rowBound
+  let rowBoundTable := Component.table .self "Rows" (.numbered "Row") "Add row" "" rowBound
   let rowBoundOpened := rowBoundTable.evaluate ["same", "same"] Env.nil
   let rowBoundEdit ← press rowBoundOpened "Row toggle"
   let rowBoundUpdated := rowBoundTable.evaluate rowBoundEdit.value rowBoundEdit.state {} rowBoundEdit.locals
@@ -250,7 +250,7 @@ def run : IO Unit := do
 
   let focusedColumns : Columns [] (List String) (Option RowOutput) :=
     .focus (.const (.index 0 .self)) selectionColumns
-  let focusedTable := Component.table .self "Rows" "Row" [] focusedColumns
+  let focusedTable := Component.table .self "Rows" (.numbered "Row") "Add row" [] focusedColumns
   let focused := focusedTable.evaluate [["same"]] Env.nil
   let toggle ← press focused "Toggle selection"
   let focused := focusedTable.evaluate toggle.value toggle.state {} toggle.locals
@@ -277,7 +277,7 @@ def run : IO Unit := do
           | .ready value => value
           | _ => 0))))
       (.output { inputs := inputs[.ui (Ref.here : InputRef _ Nat)], run := id })
-  let remoteTable := Component.table .self "Rows" "Row" "" remoteColumns
+  let remoteTable := Component.table .self "Rows" (.numbered "Row") "Add row" "" remoteColumns
   let remoteRows := remoteTable.evaluate ["one", "two"] Env.nil
   check "EvaluationColumnRequestsUseEarlierCellOutputs"
     (remoteRows.requests.map (·.url) == ["/row/one", "/row/two"] && remoteRows.output == [0, 0])

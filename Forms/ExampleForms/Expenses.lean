@@ -99,7 +99,8 @@ def ExpenseReport.listForm {Γ : Context} : Component Γ ExpenseReport.Raw :=
   ExpenseReport.withItems (Component.void <| .list
     (path := path[ExpenseReport.Field.expenses])
     (label := "Expenses")
-    (itemLabel := "Expense")
+    (rowLabel := .numbered "Expense")
+    (addCaption := "Add expense")
     (initial := ⟨"", 0, false⟩)
     (body := Expense.columns.group ""))
 
@@ -107,7 +108,8 @@ def ExpenseReport.form {Γ : Context} : Component Γ ExpenseReport.Raw :=
   ExpenseReport.withItems (Component.void <| .table
     (path := path[ExpenseReport.Field.expenses])
     (label := "Expenses")
-    (itemLabel := "Expense")
+    (rowLabel := .numbered "Expense")
+    (addCaption := "Add expense")
     (initial := ⟨"", 0, false⟩)
     (columns := Expense.columns))
 
@@ -119,7 +121,8 @@ def ExpenseReport.focusForm : Component [] ExpenseReport.Raw :=
     Component.void <| .table
       (path := path[ExpenseReport.Field.expenses])
       (label := "Expenses")
-      (itemLabel := "Expense")
+      (rowLabel := .numbered "Expense")
+      (addCaption := "Add expense")
       (initial := ⟨"", 0, false⟩)
       (columns := columns[
         "Description" => .computed "Description" {
