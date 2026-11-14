@@ -101,9 +101,10 @@ def RowSelection.itemPath
 @[reducible] def Component.tabBar
   {Γ : Context}
   {α : Type}
+  {n : Nat}
   (label : String)
-  (active : Var Γ Nat)
-  (tabs : List String)
+  (active : Var Γ (Fin n))
+  (tabs : Vector String n)
   : Component Γ α :=
   ⟨Unit, .tabBar label active tabs⟩
 
@@ -453,12 +454,12 @@ def Component.loadOr
 /-- Binds the active tab and owns its strip; `body` reads the tab as `.there .here` and places the
 strip as `Slot.here`. -/
 @[reducible] def Presentation.tabs
-  {slots : Nat}
+  {slots n : Nat}
   {Γ : Context}
   {α β : Type}
   (label : String)
-  (labels : List String)
-  (body : Presentation (slots + 1) (⟨.readOnly, Unit⟩ :: ⟨.writable, Nat⟩ :: Γ) α β)
+  (labels : Vector String (n + 1))
+  (body : Presentation (slots + 1) (⟨.readOnly, Unit⟩ :: ⟨.writable, Fin (n + 1)⟩ :: Γ) α β)
   : Presentation slots Γ α β :=
   .bind 0 (.own (.tabBar label .here labels) body)
 

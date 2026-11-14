@@ -341,21 +341,21 @@ def evaluateNode
           noArgument argument ()
           return ⟨value, action.run value env, ()⟩
         | _ => absent }
-  | .tabBar label active tabs =>
+  | .tabBar (n := n) label active tabs =>
     { output := ()
       locals := ()
       view := .control {
         key := .tab target.indices location
         target, location, label, disabled
-        input := .tabs (active.get env) tabs }
+        input := .tabs (active.get env).val tabs.toList }
       requests := []
       apply := fun route argument => match route with
         | [] => do
           if disabled then throw (.invalid .disabled)
           let some (.text chosen) := argument | throw (.decode (.clientBug (.wrongArgument "text")))
           let some index := chosen.toNat? | throw (.decode (.clientBug .unknownOption))
-          unless index < tabs.length do throw (.decode (.clientBug .unknownOption))
-          return ⟨value, active.set index env, ()⟩
+          if h : index < n then return ⟨value, active.set ⟨index, h⟩ env, ()⟩
+          throw (.decode (.clientBug .unknownOption))
         | _ => absent }
   | .groupOf label children =>
     let children := evaluateChildren children value env cache locals scopes target location disabled 0

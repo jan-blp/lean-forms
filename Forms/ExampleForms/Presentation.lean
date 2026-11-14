@@ -45,34 +45,30 @@ def pane
 def sharedTabs : Component [] Nat Nat :=
   .present <|
     .bind (0 : Nat) <|
-      .tabs "Panes" ["First pane", "Second pane"] <|
-        let shared : Var [⟨.readOnly, Unit⟩, ⟨.writable, Nat⟩, ⟨.writable, Nat⟩] Nat :=
+      .tabs "Panes" #v["First pane", "Second pane"] <|
+        let shared : Var [⟨.readOnly, Unit⟩, ⟨.writable, Fin 2⟩, ⟨.writable, Nat⟩] Nat :=
           .there (.there .here)
-        let active : Var [⟨.readOnly, Unit⟩, ⟨.writable, Nat⟩, ⟨.writable, Nat⟩] Nat := .there .here
+        let active : Var [⟨.readOnly, Unit⟩, ⟨.writable, Fin 2⟩, ⟨.writable, Nat⟩] (Fin 2) := .there .here
         .own (pane shared "First pane") <|
           .own (pane shared.there "Second pane") <|
             .layout { inputs := inputs[.ui shared.there.there], run := id } {
               inputs := inputs[.ui active.there.there]
               run := fun active => .group (some "Shared state across tabs") [
                 .place (.there (.there .here)),
-                match active with
-                | 0 => .place (.there .here)
-                | _ => .place .here] }
+                #v[.place (.there .here), .place .here][active]] }
 
 /-- A presentation inside each list row, with row-local tab state. -/
 def noteTabs {Γ : Context} : Component Γ String :=
   .present <|
-    .tabs "Note view" ["Edit", "Preview"] <|
-      let active : Var (⟨.readOnly, Unit⟩ :: ⟨.writable, Nat⟩ :: Γ) Nat := .there .here
+    .tabs "Note view" #v["Edit", "Preview"] <|
+      let active : Var (⟨.readOnly, Unit⟩ :: ⟨.writable, Fin 2⟩ :: Γ) (Fin 2) := .there .here
       .own (.field .self "Text" .text) <|
         .own (.computed "Preview" { inputs := inputs[path[]], run := fun text => s!"«{text}»" }) <|
           .arrange {
             inputs := inputs[.ui active.there.there]
             run := fun active => .group none [
               .place (.there (.there .here)),
-              match active with
-              | 0 => .place (.there .here)
-              | _ => .place .here] }
+              #v[.place (.there .here), .place .here][active]] }
 
 /-- An outer presentation that owns rows with their own presentations. -/
 def notes : Component [] (List String) Nat :=

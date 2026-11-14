@@ -38,12 +38,13 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
       (caption : Computation Γ α String)
       (action : Action Γ α)
       : ComponentNode Γ α Unit Unit
-  /-- Tabs that set `active` to the chosen tab's index. -/
+  /-- Tabs that set `active` to the chosen tab. -/
   | tabBar {Γ : Context}
       {α : Type}
+      {n : Nat}
       (label : String)
-      (active : Var Γ Nat)
-      (tabs : List String)
+      (active : Var Γ (Fin n))
+      (tabs : Vector String n)
       : ComponentNode Γ α Unit Unit
   | groupOf {Γ : Context}
       {α state : Type}
