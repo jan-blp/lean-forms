@@ -1,7 +1,6 @@
 module
 
 public import Forms.Model.Component
-public import Forms.Model.Component.Rename
 public meta import Forms.Model.Context.Theorems
 public meta import Forms.Model.Path.Theorems
 public meta import Forms.Model.PartialPath.Theorems

@@ -1,6 +1,6 @@
 module
 
-public import Forms.Model.Component.Node
+public import Forms.Model.Component.Rename
 
 @[expose] public section
 namespace Forms.Model
@@ -9,10 +9,6 @@ namespace Forms.Model
 structure Component (Γ : Context) (α : Type) (β : Type := Unit) where
   LocalState : Type
   node : ComponentNode Γ α LocalState β
-
-structure Components (Γ : Context) (α : Type) where
-  LocalState : Type
-  node : ComponentsNode Γ α LocalState
 
 structure Columns (Γ : Context) (α : Type) (β : Type := Unit) where
   headers : List String
@@ -73,14 +69,6 @@ def RowSelection.itemPath
   (editor : Editor β)
   : Component Γ α :=
   ⟨Unit, .field path label editor⟩
-
-@[reducible] def Component.groupOf
-  {Γ : Context}
-  {α : Type}
-  (label : Computation Γ α String)
-  (children : Components Γ α)
-  : Component Γ α :=
-  ⟨children.LocalState, .groupOf label children.node⟩
 
 @[reducible] def Component.computed
   {Γ : Context}
@@ -183,17 +171,6 @@ The first entry in `body`'s context is the producer's current output, available 
   : Component Γ α γ :=
   ⟨ObservationState producer.LocalState body.LocalState, .observe producer.node body.node⟩
 
-@[reducible] def Components.nil {Γ : Context} {α : Type} : Components Γ α :=
-  ⟨Unit, .nil⟩
-
-@[reducible] def Components.cons
-  {Γ : Context}
-  {α : Type}
-  (head : Component Γ α)
-  (tail : Components Γ α)
-  : Components Γ α :=
-  ⟨Binding head.LocalState tail.LocalState, .cons head.node tail.node⟩
-
 @[reducible] def Columns.nil {Γ : Context} {α : Type} : Columns Γ α Unit :=
   ⟨[], Unit, .output (.const ())⟩
 
@@ -264,17 +241,6 @@ The first entry in `body`'s context is the producer's current output, available 
   : Branch Γ α :=
   ⟨body.LocalState, .mk key label inject project initial body.node⟩
 
-def Components.ofList {Γ : Context} {α : Type} : List (Component Γ α) → Components Γ α
-  | [] => .nil
-  | head :: tail => .cons head (ofList tail)
-
-def Columns.components
-  {Γ : Context}
-  {α : Type}
-  (columns : Columns Γ α)
-  : Components Γ α :=
-  ⟨columns.LocalState, .columns columns.node⟩
-
 def Columns.ofList {Γ : Context} {α : Type} : List (String × Component Γ α) → Columns Γ α
   | [] => .nil
   | (header, cell) :: rest => .cons header cell (ofList rest)
@@ -291,14 +257,6 @@ macro "columns[" columns:tableColumn,* "]" : term => do
       result ← `(Columns.cons $header $cell $result)
     | _ => Lean.Macro.throwUnsupported
   return result
-
-def Component.group
-  {Γ : Context}
-  {α : Type}
-  (label : Computation Γ α String)
-  (children : List (Component Γ α))
-  : Component Γ α :=
-  .groupOf label (.ofList children)
 
 def Branch.of
   {Γ : Context}
@@ -470,5 +428,95 @@ strip as `Slot.here`. -/
   (body : Presentation 0 Γ α β)
   : Component Γ α β :=
   ⟨body.LocalState, .present body.node⟩
+
+@[reducible] def Component.rename
+  {Γ Δ : Context}
+  {α β : Type}
+  (rename : Renaming Γ Δ)
+  (component : Component Γ α β)
+  : Component Δ α β :=
+  ⟨component.LocalState, component.node.rename rename⟩
+
+/-- Uses `component` under one more, innermost context entry, which it does not read. -/
+@[reducible] def Component.weaken
+  {Γ : Context}
+  {entry : Entry}
+  {α β : Type}
+  (component : Component Γ α β)
+  : Component (entry :: Γ) α β :=
+  component.rename Renaming.shift
+
+/-- Shows the presentations in `placed`, in order, in a group labeled by `label`. -/
+@[reducible] def Layout.grouped
+  {slots : Nat}
+  {Γ : Context}
+  {α : Type}
+  (label : Computation Γ α String)
+  (placed : List (Slot slots))
+  : Computation Γ α (Layout slots) :=
+  (fun label => .group (some label) (placed.map Layout.place)) <$> label
+
+/-- Owns `children` after the presentations in `placed`, then shows all of them in a group. -/
+def Presentation.children
+  {slots : Nat}
+  {Γ Δ : Context}
+  {α : Type}
+  (rename : Renaming Γ Δ)
+  (label : Computation Δ α String)
+  (placed : List (Slot slots))
+  : List (Component Γ α) → Presentation slots Δ α
+  | [] => .arrange (Layout.grouped label placed)
+  | child :: rest =>
+    .own (child.rename rename) <|
+      Presentation.children (fun ref => .there (rename ref)) (label.rename Renaming.shift)
+        (placed.map Slot.there ++ [.here]) rest
+
+/-- Owns each cell after the presentations in `placed`, then shows all of them in a group;
+the output is the row output. -/
+def ColumnsNode.presentation
+  {headers : List String}
+  {slots : Nat}
+  {Γ Δ : Context}
+  {α state β : Type}
+  (columns : ColumnsNode headers Γ α state β)
+  (rename : Renaming Γ Δ)
+  (label : Computation Δ α String)
+  (placed : List (Slot slots))
+  : Presentation slots Δ α β :=
+  match columns with
+  | .output value => .layout (value.rename rename) (Layout.grouped label placed)
+  | .cons _ cell rest =>
+    .own ⟨_, cell.rename rename⟩ <|
+      rest.presentation (fun ref => .there (rename ref)) (label.rename Renaming.shift)
+        (placed.map Slot.there ++ [.here])
+  | .observe _ cell rest =>
+    .own ⟨_, cell.rename rename⟩ <|
+      rest.presentation rename.lift (label.rename Renaming.shift) (placed.map Slot.there ++ [.here])
+  | .bind initial body =>
+    .bind initial (body.presentation rename.lift (label.rename Renaming.shift) placed)
+  | .focus target body =>
+    let body := Component.present (body.presentation (fun ref => ref) (.const "") [])
+    let focused : Component _ _ _ := ⟨_, .focus target body.node⟩
+    .own (focused.rename rename) <|
+      .layout { inputs := inputs[.ui .here], run := id }
+        (Layout.grouped (label.rename Renaming.shift) (placed.map Slot.there ++ [.here]))
+
+/-- A group labeled `label` that owns `children` in order. -/
+def Component.group
+  {Γ : Context}
+  {α : Type}
+  (label : Computation Γ α String)
+  (children : List (Component Γ α))
+  : Component Γ α :=
+  .present (Presentation.children (fun ref => ref) label [] children)
+
+/-- The cells of `columns` as a group labeled `label`, outputting the row output. -/
+def Columns.group
+  {Γ : Context}
+  {α β : Type}
+  (label : Computation Γ α String)
+  (columns : Columns Γ α β)
+  : Component Γ α β :=
+  .present (columns.node.presentation (fun ref => ref) label [])
 
 end Forms.Model

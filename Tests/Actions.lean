@@ -101,7 +101,8 @@ def run : IO Unit := do
   let siblings := Component.group "Counters" [next, next]
   let siblingUpdated ← press (model := Nat) (ModelForm.openState siblings 10 Env.nil) "Increment" 1
   check "ActionSiblingBindingsAreIndependent"
-    (siblingUpdated.locals.value.value == 0 && siblingUpdated.locals.tail.value.value == 1)
+    (siblingUpdated.locals.producer.value == 0 &&
+      siblingUpdated.locals.consumers.producer.value == 1)
   let rows : Component [] (List Nat) := Component.void <| Component.list .self "Counters" "Counter" 0 next
   let rowUpdated ← press (model := List Nat) (ModelForm.openState rows [10, 20] Env.nil) "Increment" 1
   let removed ← press (model := List Nat) rowUpdated "Remove"

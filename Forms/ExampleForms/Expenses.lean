@@ -101,7 +101,7 @@ def ExpenseReport.listForm {Γ : Context} : Component Γ ExpenseReport.Raw :=
     (label := "Expenses")
     (itemLabel := "Expense")
     (initial := ⟨"", 0, false⟩)
-    (body := .groupOf (label := "") (children := Expense.columns.components)))
+    (body := Expense.columns.group ""))
 
 def ExpenseReport.form {Γ : Context} : Component Γ ExpenseReport.Raw :=
   ExpenseReport.withItems (Component.void <| .table
@@ -134,7 +134,7 @@ def ExpenseReport.focusForm : Component [] ExpenseReport.Raw :=
         inputs := inputs[.ui .here]
         run := RowSelection.itemPath path[ExpenseReport.Field.expenses]
       })
-      (body := .groupOf (label := "Selected expense") (children := Expense.columns.components)),
+      (body := Expense.columns.group "Selected expense"),
     .computed (label := "Total") (value := {
       inputs := inputs[path[ExpenseReport.Field.expenses]]
       run := fun expenses => s!"CHF {swiss (expenses.map (·.amount)).sum}"

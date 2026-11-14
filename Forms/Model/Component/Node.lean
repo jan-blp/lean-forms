@@ -46,11 +46,6 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
       (active : Var Γ (Fin n))
       (tabs : Computation Γ α (Vector String n))
       : ComponentNode Γ α Unit Unit
-  | groupOf {Γ : Context}
-      {α state : Type}
-      (label : Computation Γ α String)
-      (children : ComponentsNode Γ α state)
-      : ComponentNode Γ α state Unit
   | labeled {Γ : Context}
       {α β state : Type}
       (label : String)
@@ -188,19 +183,6 @@ inductive ColumnsNode
       (target : Computation Γ α (PartialPath α β))
       (body : ColumnsNode headers Γ β state γ)
       : ColumnsNode headers Γ α state (Option γ)
-
-inductive ComponentsNode : (Γ : Context) → (model state : Type) → Type 1 where
-  | nil {Γ : Context} {α : Type} : ComponentsNode Γ α Unit
-  | cons {Γ : Context}
-      {α headState tailState : Type}
-      (head : ComponentNode Γ α headState Unit)
-      (tail : ComponentsNode Γ α tailState)
-      : ComponentsNode Γ α (Binding headState tailState)
-  | columns {Γ : Context}
-      {α state : Type}
-      {headers : List String}
-      (columns : ColumnsNode headers Γ α state Unit)
-      : ComponentsNode Γ α state
 
 inductive BranchNode : (Γ : Context) → (model state : Type) → Type 1 where
   | mk {Γ : Context}

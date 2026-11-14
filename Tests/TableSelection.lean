@@ -96,7 +96,7 @@ def run : IO Unit := do
   let independent ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) twoTables multiple
     (.apply secondTableRow.key none))
   check "SelectionChangesOnlyItsBinding"
-    (independent.locals.value.value == .none && independent.locals.tail.value.value == .row 1 &&
+    (independent.locals.producer.value == .none && independent.locals.consumers.producer.value == .row 1 &&
       toJson independent.value == toJson multiple.value)
   let nested : Component [] ExpenseReport.Raw := Component.void <| .focus
     (.const (.ofPath path[ExpenseReport.Field.expenses]))

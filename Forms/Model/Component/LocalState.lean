@@ -17,7 +17,6 @@ def ComponentNode.initialState
   | .button .. => ()
   | .tabBar .. => ()
   | .output .. => ()
-  | .groupOf _ children => children.initialState
   | .labeled _ body => body.initialState
   | .withAvailability _ body => body.initialState
   | .void body => body.initialState
@@ -55,16 +54,6 @@ def ColumnsNode.initialState
   | .bind initial body => ⟨initial, body.initialState⟩
   | .focus _ body => body.initialState
 
-def ComponentsNode.initialState
-  {Γ : Context}
-  {α state : Type}
-  (children : ComponentsNode Γ α state)
-  : state :=
-  match children with
-  | .columns columns => columns.initialState
-  | .nil => ()
-  | .cons head tail => ⟨head.initialState, tail.initialState⟩
-
 def BranchNode.initialState
   {Γ : Context}
   {α state : Type}
@@ -96,12 +85,5 @@ end
   (columns : Columns Γ α β)
   : columns.LocalState :=
   columns.node.initialState
-
-@[reducible] def Components.initialState
-  {Γ : Context}
-  {α : Type}
-  (children : Components Γ α)
-  : children.LocalState :=
-  children.node.initialState
 
 end Forms.Model

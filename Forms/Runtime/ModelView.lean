@@ -155,13 +155,6 @@ structure Evaluated (Γ : Context) (α state β : Type) extends NodeEvaluation �
   env : Env Γ
   cache : HttpRequest.Cache
 
-structure EvaluatedChildren (Γ : Context) (α state : Type) where
-  locals : state
-  views : List Display.View
-  feedback : List Feedback.Error → List Display.View
-  requests : List HttpRequest
-  apply : Nat → List Nat → Option Input → Except ActionError (ComponentUpdate Γ α state)
-
 structure EvaluatedBranches (Γ : Context) (α state : Type) where
   locals : state
   view : Option Display.View
@@ -356,17 +349,6 @@ def evaluateNode
           let some index := chosen.toNat? | throw (.decode (.clientBug .unknownOption))
           if h : index < n then return ⟨value, active.set ⟨index, h⟩ env, ()⟩
           throw (.decode (.clientBug .unknownOption))
-        | _ => absent }
-  | .groupOf label children =>
-    let children := evaluateChildren children value env cache locals scopes target location disabled 0
-    let label := label.eval value env
-    { output := ()
-      locals := children.locals
-      view := .stack (some label) children.views
-      feedback := fun errors => .stack (some label) (children.feedback errors)
-      requests := children.requests
-      apply := fun route argument => match route with
-        | index :: rest => children.apply index rest argument
         | _ => absent }
   | .labeled label body =>
     let body := evaluateNode body value env cache locals scopes target location disabled
@@ -605,47 +587,6 @@ def evaluatePresentation
   | .bind _ body =>
     bound locals.value <| evaluatePresentation body value (Env.cons locals.value env) cache locals.tail
       (scopes.bind target 1) (target.child 0) location disabled presentations
-
-def evaluateChildren
-  {Γ : Context}
-  {α state : Type}
-  (children : ComponentsNode Γ α state)
-  (value : α)
-  (env : Env Γ)
-  (cache : HttpRequest.Cache)
-  (locals : state)
-  (scopes : WireScopes)
-  (target : Display.Target)
-  (location : Feedback.Location)
-  (disabled : Bool)
-  (index : Nat)
-  : EvaluatedChildren Γ α state :=
-  match children with
-  | .columns columns =>
-    let columns := evaluateColumns columns value env cache locals scopes (target.child index) location disabled
-    { locals := columns.locals
-      views := columns.view.toList
-      feedback := fun errors => (columns.feedback errors).toList
-      requests := columns.requests
-      apply := fun index route argument => match index with
-        | 0 => columns.apply route argument
-        | _ => absent }
-  | .nil =>
-    { locals := (), views := [], feedback := fun _ => [], requests := [], apply := fun _ _ _ => absent }
-  | .cons head tail =>
-    let head := evaluateNode head value env cache locals.value scopes (target.child index) location disabled
-    let tail := evaluateChildren tail value env cache locals.tail scopes target location disabled (index + 1)
-    { locals := ⟨head.locals, tail.locals⟩
-      views := head.view :: tail.views
-      feedback := fun errors => head.feedback errors :: tail.feedback errors
-      requests := head.requests ++ tail.requests
-      apply := fun index route argument => match index with
-        | 0 => do
-          let updated ← head.apply route argument
-          return updated.mapLocals (⟨·, tail.locals⟩)
-        | index + 1 => do
-          let updated ← tail.apply index route argument
-          return updated.mapLocals (⟨head.locals, ·⟩) }
 
 def evaluateBranches
   {Γ : Context}

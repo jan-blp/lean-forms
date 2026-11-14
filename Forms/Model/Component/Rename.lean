@@ -1,6 +1,6 @@
 module
 
-public import Forms.Model.Component
+public import Forms.Model.Component.Node
 
 @[expose] public section
 namespace Forms.Model
@@ -18,7 +18,6 @@ def ComponentNode.rename
   | .computed label value => .computed label (value.rename rename)
   | .button caption action => .button (caption.rename rename) (action.rename rename)
   | .tabBar label active tabs => .tabBar label (rename active) (tabs.rename rename)
-  | .groupOf label children => .groupOf (label.rename rename) (children.rename rename)
   | .labeled label body => .labeled label (body.rename rename)
   | .withAvailability availability body =>
     .withAvailability (availability.rename rename) (body.rename rename)
@@ -63,17 +62,6 @@ def ColumnsNode.rename
   | .bind initial body => .bind initial (body.rename rename.lift)
   | .focus target body => .focus (target.rename rename) (body.rename rename)
 
-def ComponentsNode.rename
-  {Γ Δ : Context}
-  {α state : Type}
-  (rename : Renaming Γ Δ)
-  (children : ComponentsNode Γ α state)
-  : ComponentsNode Δ α state :=
-  match children with
-  | .nil => .nil
-  | .cons head tail => .cons (head.rename rename) (tail.rename rename)
-  | .columns columns => .columns (columns.rename rename)
-
 def BranchNode.rename
   {Γ Δ : Context}
   {α state : Type}
@@ -94,22 +82,5 @@ def BranchesNode.rename
   | .nil => .nil
   | .cons head tail => .cons (head.rename rename) (tail.rename rename)
 end
-
-@[reducible] def Component.rename
-  {Γ Δ : Context}
-  {α β : Type}
-  (rename : Renaming Γ Δ)
-  (component : Component Γ α β)
-  : Component Δ α β :=
-  ⟨component.LocalState, component.node.rename rename⟩
-
-/-- Uses `component` under one more, innermost context entry, which it does not read. -/
-@[reducible] def Component.weaken
-  {Γ : Context}
-  {entry : Entry}
-  {α β : Type}
-  (component : Component Γ α β)
-  : Component (entry :: Γ) α β :=
-  component.rename Renaming.shift
 
 end Forms.Model
