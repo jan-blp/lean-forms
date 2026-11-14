@@ -107,7 +107,7 @@ def run : IO Unit := do
   let nestedSelected ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) nested nestedOpened
     (.apply nestedSelect.key none))
   check "FocusPreservesNestedUiUpdates"
-    (nestedSelected.locals.value == .row 0 && toJson nestedSelected.value == toJson nestedOpened.value)
+    (nestedSelected.locals.producer.value == .row 0 && toJson nestedSelected.value == toJson nestedOpened.value)
   let mixed : Component [⟨.readOnly, RowSelection⟩, ⟨.writable, RowSelection⟩] ExpenseReport.Raw :=
     .bind false (Component.void <| .table path[ExpenseReport.Field.expenses] "Expenses" "Expense" ⟨"", 0, false⟩
       columns[] (some (.there (.there .here))))

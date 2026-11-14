@@ -37,7 +37,7 @@ private def apply {model : Type} [FormModel model] [Validation model]
   Component.void <| .list .self "Rows" "Row" [0] row
 
 private def rowSelection (state : ModelForm.State rows) (index : Nat) : RowSelection :=
-  let locals : List row.LocalState := state.locals
+  let locals : List row.LocalState := state.locals.producer
   ((locals[index]?).getD row.initialState).value
 
 private def loadedBody : Status Bool → Component [] ExpenseReport.Raw

@@ -21,7 +21,6 @@ def ComponentNode.rename
   | .withAvailability availability body =>
     .withAvailability (availability.rename rename) (body.rename rename)
   | .choiceOf path label branches => .choiceOf path label (branches.rename rename)
-  | .void body => .void (body.rename rename)
   | .output value => .output (value.rename rename)
   | .sequence first second => .sequence (first.rename rename) (second.rename rename)
   | .bind initial body => .bind initial (body.rename rename.lift)

@@ -350,14 +350,6 @@ def evaluateNode
           if h : index < n then return ⟨value, active.set ⟨index, h⟩ env, ()⟩
           throw (.decode (.clientBug .unknownOption))
         | _ => absent }
-  | .void body =>
-    let body := evaluateNode body value env cache locals scopes target location disabled
-    { output := ()
-      locals := body.locals
-      view := body.view
-      feedback := body.feedback
-      requests := body.requests
-      apply := body.apply }
   | .withAvailability availability body =>
     let availability := availability.eval value env
     let body := evaluateNode body value env cache locals scopes target location (disabled || availability != .enabled)

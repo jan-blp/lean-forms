@@ -354,14 +354,6 @@ def Component.loadOr
     | .loading => fallback
     | .failed _ => fallback
 
-/-- Keeps the component's UI and discards its public output. -/
-@[reducible] def Component.void
-  {Γ : Context}
-  {α β : Type}
-  (body : Component Γ α β)
-  : Component Γ α :=
-  ⟨body.LocalState, .void body.node⟩
-
 /-- Places the owned presentations with `arrangement` and returns `output`. -/
 @[reducible] def Presentation.layout
   {slots : Nat}
@@ -491,6 +483,14 @@ def ColumnsNode.presentation
     .own (focused.rename rename) <|
       .layout { inputs := inputs[.ui .here], run := id }
         (Layout.grouped (label.rename Renaming.shift) (placed.map Slot.there ++ [.here]))
+
+/-- Keeps the component's UI and discards its public output. -/
+@[reducible] def Component.void
+  {Γ : Context}
+  {α β : Type}
+  (body : Component Γ α β)
+  : Component Γ α :=
+  .present (.own body (.arrange (.const (.place .here))))
 
 /-- Shows `body` in a group labeled `label`, keeping its output. -/
 @[reducible] def Component.labeled

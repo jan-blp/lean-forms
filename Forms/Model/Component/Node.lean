@@ -57,10 +57,6 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
       (label : String)
       (branches : BranchesNode Γ β state)
       : ComponentNode Γ α state Unit
-  | void {Γ : Context}
-      {α β state : Type}
-      (body : ComponentNode Γ α state β)
-      : ComponentNode Γ α state Unit
   | output {Γ : Context}
       {α β : Type}
       (value : Computation Γ α β)
