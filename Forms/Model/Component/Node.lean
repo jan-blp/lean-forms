@@ -42,7 +42,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
   | tabBar {Γ : Context}
       {α : Type}
       {n : Nat}
-      (label : String)
+      (label : Computation Γ α String)
       (active : Var Γ (Fin n))
       (tabs : Computation Γ α (Vector String n))
       : ComponentNode Γ α Unit Unit
@@ -54,7 +54,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
   | choiceOf {Γ : Context}
       {α β state : Type}
       (path : Path α β)
-      (label : String)
+      (label : Computation Γ α String)
       (branches : BranchesNode Γ β state)
       : ComponentNode Γ α state Unit
   | output {Γ : Context}
@@ -64,7 +64,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
   | list {Γ : Context}
       {α β γ state : Type}
       (path : Path α (List β))
-      (label itemLabel : String)
+      (label itemLabel : Computation Γ α String)
       (initial : β)
       (body : ComponentNode Γ β state γ)
       : ComponentNode Γ α (List state) (List γ)
@@ -72,7 +72,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
       {α β γ state : Type}
       {headers : List String}
       (path : Path α (List β))
-      (label itemLabel : String)
+      (label itemLabel : Computation Γ α String)
       (initial : β)
       (columns : ColumnsNode headers Γ β state γ)
       (selection : Option (Var Γ RowSelection) := none)

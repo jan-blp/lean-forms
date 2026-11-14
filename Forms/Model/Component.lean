@@ -73,7 +73,7 @@ def RowSelection.itemPath
   {Γ : Context}
   {α : Type}
   {n : Nat}
-  (label : String)
+  (label : Computation Γ α String)
   (active : Var Γ (Fin n))
   (tabs : Computation Γ α (Vector String n))
   : Component Γ α :=
@@ -91,7 +91,7 @@ def RowSelection.itemPath
   {Γ : Context}
   {α β : Type}
   (path : Path α β)
-  (label : String)
+  (label : Computation Γ α String)
   (branches : Branches Γ β)
   : Component Γ α :=
   ⟨branches.LocalState, .choiceOf path label branches.node⟩
@@ -100,7 +100,7 @@ def RowSelection.itemPath
   {Γ : Context}
   {α β γ : Type}
   (path : Path α (List β))
-  (label itemLabel : String)
+  (label itemLabel : Computation Γ α String)
   (initial : β)
   (body : Component Γ β γ)
   : Component Γ α (List γ) :=
@@ -110,7 +110,7 @@ def RowSelection.itemPath
   {Γ : Context}
   {α β γ : Type}
   (path : Path α (List β))
-  (label itemLabel : String)
+  (label itemLabel : Computation Γ α String)
   (initial : β)
   (columns : Columns Γ β γ)
   (selection : Option (Var Γ RowSelection) := none)
@@ -286,7 +286,7 @@ def Component.choice
   {Γ : Context}
   {α β : Type}
   (path : Path α β)
-  (label : String)
+  (label : Computation Γ α String)
   (branches : List (Branch Γ β))
   : Component Γ α :=
   .choiceOf path label (.ofList branches)
@@ -362,7 +362,7 @@ strip as `Slot.here`. -/
   {slots n : Nat}
   {Γ : Context}
   {α β : Type}
-  (label : String)
+  (label : Computation (⟨.writable, Fin (n + 1)⟩ :: Γ) α String)
   (labels : Computation (⟨.writable, Fin (n + 1)⟩ :: Γ) α (Vector String (n + 1)))
   (body : Presentation (slots + 1) (⟨.readOnly, Unit⟩ :: ⟨.writable, Fin (n + 1)⟩ :: Γ) α β)
   : Presentation slots Γ α β :=

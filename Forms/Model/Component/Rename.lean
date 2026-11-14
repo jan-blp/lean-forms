@@ -17,15 +17,16 @@ def ComponentNode.rename
   | .field path label editor => .field path (label.rename rename) editor
   | .computed label value => .computed label (value.rename rename)
   | .button caption action => .button (caption.rename rename) (action.rename rename)
-  | .tabBar label active tabs => .tabBar label (rename active) (tabs.rename rename)
+  | .tabBar label active tabs => .tabBar (label.rename rename) (rename active) (tabs.rename rename)
   | .withAvailability availability body =>
     .withAvailability (availability.rename rename) (body.rename rename)
-  | .choiceOf path label branches => .choiceOf path label (branches.rename rename)
+  | .choiceOf path label branches => .choiceOf path (label.rename rename) (branches.rename rename)
   | .output value => .output (value.rename rename)
   | .list path label itemLabel initial body =>
-    .list path label itemLabel initial (body.rename rename)
+    .list path (label.rename rename) (itemLabel.rename rename) initial (body.rename rename)
   | .table path label itemLabel initial columns selection =>
-    .table path label itemLabel initial (columns.rename rename) (selection.map rename)
+    .table path (label.rename rename) (itemLabel.rename rename) initial (columns.rename rename)
+      (selection.map rename)
   | .focus target body => .focus (target.rename rename) (body.rename rename)
   | .load (inst := inst) source body =>
     .load (inst := inst) (source.rename rename) fun status => (body status).rename rename

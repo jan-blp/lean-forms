@@ -339,7 +339,8 @@ def evaluateNode
       locals := ()
       view := .control {
         key := .tab target.indices location
-        target, location, label, disabled
+        target, location, disabled
+        label := label.eval value env
         input := .tabs (active.get env).val (tabs.eval value env).toList }
       requests := []
       apply := fun route argument => match route with
@@ -368,7 +369,8 @@ def evaluateNode
     let branches := evaluateBranches branches current env cache locals scopes target location disabled 0
     let control : Display.Control := {
       key := .select location
-      target, location, label, disabled
+      target, location, disabled
+      label := label.eval value env
       input := .choice branches.selected branches.options }
     { output := ()
       locals := branches.locals
@@ -436,7 +438,8 @@ def evaluateNode
       evaluateNode body item env cache (locals[index]?.getD body.initialState) scopes
         ((target.child index).child 0) (location ++ [.index index]) disabled
     evaluateCollection path initial body.initialState rows value env none disabled
-      (fun views errors => listView views label itemLabel target location errors disabled)
+      (fun views errors =>
+        listView views (label.eval value env) (itemLabel.eval value env) target location errors disabled)
   | .table (headers := headers) path label itemLabel initial columns selection =>
     let items := path.get value
     let location := location ++ pathLocation path
@@ -445,7 +448,9 @@ def evaluateNode
         ((target.child index).child 0) (location ++ [.index index]) disabled
     let selector := selection.map fun selected => ({ current := selected.get env, scope := scopes selected.index } : RowSelector)
     evaluateCollection path initial columns.initialState rows value env selection disabled
-      (fun views errors => tableView headers views label itemLabel target location selector errors disabled)
+      (fun views errors =>
+        tableView headers views (label.eval value env) (itemLabel.eval value env) target location selector
+          errors disabled)
 
 def evaluateColumns
   {headers : List String}
