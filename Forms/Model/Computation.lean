@@ -47,6 +47,18 @@ def Inputs.weaken
   | .cons input rest => .cons (path.trans input) (rest.weaken path)
   | .ui key rest => .ui key (rest.weaken path)
 
+def Inputs.rename
+  {Γ Δ : Context}
+  {α : Type}
+  {types : List Type}
+  (rename : Renaming Γ Δ)
+  (inputs : Inputs Γ α types)
+  : Inputs Δ α types :=
+  match inputs with
+  | .nil => .nil
+  | .cons path rest => .cons path (rest.rename rename)
+  | .ui key rest => .ui (rename key) (rest.rename rename)
+
 def Inputs.Values : List Type → Type
   | [] => Unit
   | α :: rest => α × Values rest
@@ -126,6 +138,15 @@ def Computation.eval
   (state : Env Γ)
   : β :=
   Inputs.apply computation.run (computation.inputs.read value state)
+
+def Computation.rename
+  {Γ Δ : Context}
+  {α : Type}
+  {β : Type u}
+  (rename : Renaming Γ Δ)
+  (computation : Computation Γ α β)
+  : Computation Δ α β :=
+  ⟨computation.inputs.rename rename, computation.run⟩
 
 instance {Γ : Context} {α : Type} : Functor (Computation Γ α) where
   map f computation := ⟨computation.inputs, Inputs.Function.map f computation.run⟩

@@ -12,6 +12,13 @@ inductive Action (Γ : Context) (α : Type) where
       (value : Computation Γ α β)
       : Action Γ α
 
+def Action.rename
+  {Γ Δ : Context}
+  {α : Type}
+  (rename : Renaming Γ Δ)
+  : Action Γ α → Action Δ α
+  | .set ref value => .set (rename ref) (value.rename rename)
+
 /-- Runs an action without changing the model. -/
 def Action.run
   {Γ : Context}

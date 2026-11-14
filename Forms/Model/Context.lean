@@ -72,6 +72,22 @@ def Ref.set
   | .here => ⟨value, env.tail⟩
   | .there ref => ⟨env.value, ref.set value env.tail⟩
 
+/-- Maps every reference into another context, keeping its access and type. -/
+abbrev Renaming (Γ Δ : Context) := ∀ {access : Access} {α : Type}, Ref Γ access α → Ref Δ access α
+
+/-- Leaves the innermost entry in place and renames the rest. -/
+def Renaming.lift
+  {Γ Δ : Context}
+  {entry : Entry}
+  (rename : Renaming Γ Δ)
+  : Renaming (entry :: Γ) (entry :: Δ)
+  | _, _, .here => .here
+  | _, _, .there ref => .there (rename ref)
+
+/-- Makes room for a new innermost entry. -/
+def Renaming.shift {Γ : Context} {entry : Entry} : Renaming Γ (entry :: Γ) :=
+  .there
+
 /-- Identifies the context entry in control keys sent to the frontend. -/
 def Ref.index {Γ : Context} (ref : Ref Γ access α) : Nat :=
   match ref with
