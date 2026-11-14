@@ -44,11 +44,11 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
       {n : Nat}
       (label : String)
       (active : Var Γ (Fin n))
-      (tabs : Vector String n)
+      (tabs : Computation Γ α (Vector String n))
       : ComponentNode Γ α Unit Unit
   | groupOf {Γ : Context}
       {α state : Type}
-      (label : String)
+      (label : Computation Γ α String)
       (children : ComponentsNode Γ α state)
       : ComponentNode Γ α state Unit
   | labeled {Γ : Context}

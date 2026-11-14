@@ -347,7 +347,7 @@ def evaluateNode
       view := .control {
         key := .tab target.indices location
         target, location, label, disabled
-        input := .tabs (active.get env).val tabs.toList }
+        input := .tabs (active.get env).val (tabs.eval value env).toList }
       requests := []
       apply := fun route argument => match route with
         | [] => do
@@ -359,6 +359,7 @@ def evaluateNode
         | _ => absent }
   | .groupOf label children =>
     let children := evaluateChildren children value env cache locals scopes target location disabled 0
+    let label := label.eval value env
     { output := ()
       locals := children.locals
       view := .stack (some label) children.views

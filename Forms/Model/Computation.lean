@@ -109,6 +109,14 @@ def Computation.const
 instance {Γ : Context} {α : Type} : Coe String (Computation Γ α String) where
   coe := .const
 
+/-- Constant tab labels. -/
+instance
+  {Γ : Context}
+  {α : Type}
+  {n : Nat}
+  : Coe (Vector String n) (Computation Γ α (Vector String n)) where
+  coe := .const
+
 def Computation.eval
   {Γ : Context}
   {α : Type}

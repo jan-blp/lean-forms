@@ -77,7 +77,7 @@ def RowSelection.itemPath
 @[reducible] def Component.groupOf
   {Γ : Context}
   {α : Type}
-  (label : String)
+  (label : Computation Γ α String)
   (children : Components Γ α)
   : Component Γ α :=
   ⟨children.LocalState, .groupOf label children.node⟩
@@ -104,7 +104,7 @@ def RowSelection.itemPath
   {n : Nat}
   (label : String)
   (active : Var Γ (Fin n))
-  (tabs : Vector String n)
+  (tabs : Computation Γ α (Vector String n))
   : Component Γ α :=
   ⟨Unit, .tabBar label active tabs⟩
 
@@ -295,7 +295,7 @@ macro "columns[" columns:tableColumn,* "]" : term => do
 def Component.group
   {Γ : Context}
   {α : Type}
-  (label : String)
+  (label : Computation Γ α String)
   (children : List (Component Γ α))
   : Component Γ α :=
   .groupOf label (.ofList children)
@@ -458,7 +458,7 @@ strip as `Slot.here`. -/
   {Γ : Context}
   {α β : Type}
   (label : String)
-  (labels : Vector String (n + 1))
+  (labels : Computation (⟨.writable, Fin (n + 1)⟩ :: Γ) α (Vector String (n + 1)))
   (body : Presentation (slots + 1) (⟨.readOnly, Unit⟩ :: ⟨.writable, Fin (n + 1)⟩ :: Γ) α β)
   : Presentation slots Γ α β :=
   .bind 0 (.own (.tabBar label .here labels) body)
