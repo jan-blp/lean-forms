@@ -15,12 +15,16 @@ def summary
     run := fun rows => String.intercalate ", " ((rows.filter (·.selected)).map (·.description)) }
   .withOutput (.computed "Selected descriptions" text) text
 
-def summaryAbove : Layout 2 := .group (some "Selected items") [.place .here, .place (.there .here)]
+def summaryAbove : Layout [0, 0] :=
+  .group (some "Selected items") [.place .here, .place (.there .here)]
 
-def tableAbove : Layout 2 := .group (some "Selected items") [.place (.there .here), .place .here]
+def tableAbove : Layout [0, 0] :=
+  .group (some "Selected items") [.place (.there .here), .place .here]
 
 /-- Owns the table and its summary; `arrangement` only decides where they appear. -/
-def tableSummary (arrangement : Layout 2 := summaryAbove) : Component [] (List String) String :=
+def tableSummary
+  (arrangement : Layout [0, 0] := summaryAbove)
+  : Component [] (List String) String :=
   .present <|
     .own selectionTable <|
       .own (summary .here) <|

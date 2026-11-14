@@ -10,9 +10,10 @@ mutual
 def ComponentNode.rename
   {Γ Δ : Context}
   {α state β : Type}
+  {holes : Nat}
   (rename : Renaming Γ Δ)
-  (component : ComponentNode Γ α state β)
-  : ComponentNode Δ α state β :=
+  (component : ComponentNode Γ α state β holes)
+  : ComponentNode Δ α state β holes :=
   match component with
   | .field path label editor => .field path (label.rename rename) editor
   | .computed label value => .computed label (value.rename rename)
@@ -22,18 +23,17 @@ def ComponentNode.rename
     .withAvailability (availability.rename rename) (body.rename rename)
   | .choiceOf path label branches => .choiceOf path (label.rename rename) (branches.rename rename)
   | .output value => .output (value.rename rename)
-  | .list path label row footer =>
-    .list path (label.rename rename) (row.rename rename.liftRow) (footer.rename rename)
-  | .table path label rowLabel columns footer selection =>
+  | .list path label row => .list path (label.rename rename) (row.rename rename.liftRow)
+  | .table path label rowLabel columns selection =>
     .table path (label.rename rename) (rowLabel.rename rename.liftRow) (columns.rename rename.liftRow)
-      (footer.rename rename) (selection.map rename)
+      (selection.map rename)
   | .focus target body => .focus (target.rename rename) (body.rename rename)
   | .load (inst := inst) source body =>
     .load (inst := inst) (source.rename rename) fun status => (body status).rename rename
   | .present body => .present (body.rename rename)
 
 def PresentationNode.rename
-  {slots : Nat}
+  {slots : List Nat}
   {Γ Δ : Context}
   {α state β : Type}
   (rename : Renaming Γ Δ)

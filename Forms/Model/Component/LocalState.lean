@@ -9,7 +9,8 @@ mutual
 def ComponentNode.initialState
   {Γ : Context}
   {α state β : Type}
-  (component : ComponentNode Γ α state β)
+  {holes : Nat}
+  (component : ComponentNode Γ α state β holes)
   : state :=
   match component with
   | .field .. => ()
@@ -19,14 +20,14 @@ def ComponentNode.initialState
   | .output .. => ()
   | .withAvailability _ body => body.initialState
   | .choiceOf (branches := branches) .. => branches.initialState
-  | .list (footer := footer) .. => ⟨[], footer.initialState⟩
-  | .table (footer := footer) .. => ⟨[], footer.initialState⟩
+  | .list .. => []
+  | .table .. => []
   | .focus _ body => body.initialState
   | .load (inst := _inst) (body := body) .. => ⟨.loading, (body .loading).initialState⟩
   | .present body => body.initialState
 
 def PresentationNode.initialState
-  {slots : Nat}
+  {slots : List Nat}
   {Γ : Context}
   {α state β : Type}
   (presentation : PresentationNode slots Γ α state β)
@@ -70,7 +71,8 @@ end
 @[reducible] def Component.initialState
   {Γ : Context}
   {α β : Type}
-  (component : Component Γ α β)
+  {holes : Nat}
+  (component : Component Γ α β holes)
   : component.LocalState :=
   component.node.initialState
 

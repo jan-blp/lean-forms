@@ -15,9 +15,9 @@ private def check (name : String) (ok : Bool) : IO Unit := do
 
 -- A layout can only place components its own presentation has already taken ownership of.
 example : True := by
-  fail_if_success have bad : Presentation 0 [] Nat := .arrange (.const (.place .here))
+  fail_if_success have bad : Presentation [] [] Nat := .arrange (.const (.place .here))
   fail_if_success
-    have bad : Presentation 1 [⟨.readOnly, Unit⟩] Nat := .arrange (.const (.place (.there .here)))
+    have bad : Presentation [0] [⟨.readOnly, Unit⟩] Nat := .arrange (.const (.place (.there .here)))
   trivial
 
 -- A nested presentation cannot place components owned by an enclosing one.
@@ -129,7 +129,8 @@ def run : IO Unit := do
   let refreshed := (tableSummary (.place .here)).evaluate ["same", "Fresh", "other"] Env.nil {} edited.locals
   check "PresentationUnplacedOwnersStillProduceFreshOutputs"
     (refreshed.output == "Fresh" && texts "Selected descriptions" refreshed.view == ["Fresh"])
-  let duplicate : Layout 2 := .group none [.place (.there .here), .place (.there .here), .place .here]
+  let duplicate : Layout [0, 0] :=
+    .group none [.place (.there .here), .place (.there .here), .place .here]
   let duplicated := (tableSummary duplicate).evaluate edited.value Env.nil {} edited.locals
   check "PresentationDuplicatePlacementKeepsOneEditableControl"
     (duplicated.view.controls.length == edited.view.controls.length)

@@ -5,17 +5,18 @@ public import Forms.Model.Component.Rename
 @[expose] public section
 namespace Forms.Model
 
-/-- A component editing `α`, with private state and public output `β`. -/
-structure Component (Γ : Context) (α : Type) (β : Type := Unit) where
+/-- A component editing `α`, with private state, public output `β`, and `holes` places for
+content that an enclosing layout fills. -/
+structure Component (Γ : Context) (α : Type) (β : Type := Unit) (holes : Nat := 0) where
   LocalState : Type
-  node : ComponentNode Γ α LocalState β
+  node : ComponentNode Γ α LocalState β holes
 
 structure Columns (Γ : Context) (α : Type) (β : Type := Unit) where
   headers : List String
   LocalState : Type
   node : ColumnsNode headers Γ α LocalState β
 
-structure Presentation (slots : Nat) (Γ : Context) (α : Type) (β : Type := Unit) where
+structure Presentation (slots : List Nat) (Γ : Context) (α : Type) (β : Type := Unit) where
   LocalState : Type
   node : PresentationNode slots Γ α LocalState β
 
@@ -82,9 +83,10 @@ def RowSelection.itemPath
 @[reducible] def Component.withAvailability
   {Γ : Context}
   {α β : Type}
+  {holes : Nat}
   (availability : Computation Γ α Availability)
-  (body : Component Γ α β)
-  : Component Γ α β :=
+  (body : Component Γ α β holes)
+  : Component Γ α β holes :=
   ⟨body.LocalState, .withAvailability availability body.node⟩
 
 @[reducible] def Component.choiceOf
@@ -96,7 +98,7 @@ def RowSelection.itemPath
   : Component Γ α :=
   ⟨branches.LocalState, .choiceOf path label branches.node⟩
 
-/-- Shows `row` for each item at `path`, then `footer`, which edits the whole list.
+/-- Shows `row` for each item at `path`, then the content of its hole.
 Each row reads `Ref.row` and sets `Ref.rowRemoved` to remove itself. -/
 @[reducible] def Component.listOf
   {Γ : Context}
@@ -104,11 +106,11 @@ Each row reads `Ref.row` and sets `Ref.rowRemoved` to remove itself. -/
   (path : Path α (List β))
   (label : Computation Γ α String)
   (row : Component (Context.row β Γ) β γ)
-  (footer : Component Γ (List β))
-  : Component Γ α (List γ) :=
-  ⟨Binding (List row.LocalState) footer.LocalState, .list path label row.node footer.node⟩
+  : Component Γ α (List γ) (holes := 1) :=
+  ⟨List row.LocalState, .list path label row.node⟩
 
-/-- Like `listOf`, with one cell per column; `selection` marks its row and follows removals. -/
+/-- Like `listOf`, with one cell per column and its hole in the footer;
+`selection` marks its row and follows removals. -/
 @[reducible] def Component.tableOf
   {Γ : Context}
   {α β γ : Type}
@@ -116,28 +118,28 @@ Each row reads `Ref.row` and sets `Ref.rowRemoved` to remove itself. -/
   (label : Computation Γ α String)
   (rowLabel : Computation (Context.row β Γ) β String)
   (columns : Columns (Context.row β Γ) β γ)
-  (footer : Component Γ (List β))
   (selection : Option (Var Γ RowSelection) := none)
-  : Component Γ α (List γ) :=
-  ⟨Binding (List columns.LocalState) footer.LocalState,
-    .table path label rowLabel columns.node footer.node selection⟩
+  : Component Γ α (List γ) (holes := 1) :=
+  ⟨List columns.LocalState, .table path label rowLabel columns.node selection⟩
 
 @[reducible] def Component.focus
   {Γ : Context}
   {α β γ : Type}
+  {holes : Nat}
   (target : Computation Γ α (PartialPath α β))
-  (body : Component Γ β γ)
-  : Component Γ α (Option γ) :=
+  (body : Component Γ β γ holes)
+  : Component Γ α (Option γ) holes :=
   ⟨body.LocalState, .focus target body.node⟩
 
 /-- Loaded subtree state persists while its resolved status is equal. -/
 @[reducible] def Component.load
   {Γ : Context}
   {α β data : Type}
+  {holes : Nat}
   [inst : DecidableEq data]
   (source : Computation Γ α (Source data))
-  (body : Status data → Component Γ α β)
-  : Component Γ α β :=
+  (body : Status data → Component Γ α β holes)
+  : Component Γ α β holes :=
   ⟨LoadedState data (fun status => (body status).LocalState), .load source (fun status => (body status).node)⟩
 
 @[reducible] def Columns.nil {Γ : Context} {α : Type} : Columns Γ α Unit :=
@@ -325,7 +327,7 @@ def Component.loadOr
 
 /-- Places the owned presentations with `arrangement` and returns `output`. -/
 @[reducible] def Presentation.layout
-  {slots : Nat}
+  {slots : List Nat}
   {Γ : Context}
   {α β : Type}
   (output : Computation Γ α β)
@@ -335,7 +337,7 @@ def Component.loadOr
 
 /-- Places the owned presentations with `arrangement`. -/
 @[reducible] def Presentation.arrange
-  {slots : Nat}
+  {slots : List Nat}
   {Γ : Context}
   {α : Type}
   (arrangement : Computation Γ α (Layout slots))
@@ -344,16 +346,17 @@ def Component.loadOr
 
 /-- Owns `component`: `body` reads its output as `Ref.here` and places its view as `Slot.here`. -/
 @[reducible] def Presentation.own
-  {slots : Nat}
+  {slots : List Nat}
   {Γ : Context}
   {α β γ : Type}
-  (component : Component Γ α β)
-  (body : Presentation (slots + 1) (⟨.readOnly, β⟩ :: Γ) α γ)
+  {holes : Nat}
+  (component : Component Γ α β holes)
+  (body : Presentation (holes :: slots) (⟨.readOnly, β⟩ :: Γ) α γ)
   : Presentation slots Γ α γ :=
   ⟨ObservationState component.LocalState body.LocalState, .own component.node body.node⟩
 
 @[reducible] def Presentation.bind
-  {slots : Nat}
+  {slots : List Nat}
   {Γ : Context}
   {α β γ : Type}
   (initial : β)
@@ -364,12 +367,13 @@ def Component.loadOr
 /-- Binds the active tab and owns its strip; `body` reads the tab as `.there .here` and places the
 strip as `Slot.here`. -/
 @[reducible] def Presentation.tabs
-  {slots n : Nat}
+  {slots : List Nat}
+  {n : Nat}
   {Γ : Context}
   {α β : Type}
   (label : Computation (⟨.writable, Fin (n + 1)⟩ :: Γ) α String)
   (labels : Computation (⟨.writable, Fin (n + 1)⟩ :: Γ) α (Vector String (n + 1)))
-  (body : Presentation (slots + 1) (⟨.readOnly, Unit⟩ :: ⟨.writable, Fin (n + 1)⟩ :: Γ) α β)
+  (body : Presentation (0 :: slots) (⟨.readOnly, Unit⟩ :: ⟨.writable, Fin (n + 1)⟩ :: Γ) α β)
   : Presentation slots Γ α β :=
   .bind 0 (.own (.tabBar label .here labels) body)
 
@@ -377,7 +381,7 @@ strip as `Slot.here`. -/
 @[reducible] def Component.present
   {Γ : Context}
   {α β : Type}
-  (body : Presentation 0 Γ α β)
+  (body : Presentation [] Γ α β)
   : Component Γ α β :=
   ⟨body.LocalState, .present body.node⟩
 
@@ -396,9 +400,10 @@ strip as `Slot.here`. -/
 @[reducible] def Component.rename
   {Γ Δ : Context}
   {α β : Type}
+  {holes : Nat}
   (rename : Renaming Γ Δ)
-  (component : Component Γ α β)
-  : Component Δ α β :=
+  (component : Component Γ α β holes)
+  : Component Δ α β holes :=
   ⟨component.LocalState, component.node.rename rename⟩
 
 /-- Uses `component` under one more, innermost context entry, which it does not read. -/
@@ -406,28 +411,29 @@ strip as `Slot.here`. -/
   {Γ : Context}
   {entry : Entry}
   {α β : Type}
-  (component : Component Γ α β)
-  : Component (entry :: Γ) α β :=
+  {holes : Nat}
+  (component : Component Γ α β holes)
+  : Component (entry :: Γ) α β holes :=
   component.rename Renaming.shift
 
 /-- Shows the presentations in `placed`, in order, in a group labeled by `label`. -/
 @[reducible] def Layout.grouped
-  {slots : Nat}
+  {slots : List Nat}
   {Γ : Context}
   {α : Type}
   (label : Computation Γ α String)
-  (placed : List (Slot slots))
+  (placed : List (Slot slots 0))
   : Computation Γ α (Layout slots) :=
   (fun label => .group (some label) (placed.map Layout.place)) <$> label
 
 /-- Owns `children` after the presentations in `placed`, then shows all of them in a group. -/
 def Presentation.children
-  {slots : Nat}
+  {slots : List Nat}
   {Γ Δ : Context}
   {α : Type}
   (rename : Renaming Γ Δ)
   (label : Computation Δ α String)
-  (placed : List (Slot slots))
+  (placed : List (Slot slots 0))
   : List (Component Γ α) → Presentation slots Δ α
   | [] => .arrange (Layout.grouped label placed)
   | child :: rest =>
@@ -439,13 +445,13 @@ def Presentation.children
 the output is the row output. -/
 def ColumnsNode.presentation
   {headers : List String}
-  {slots : Nat}
+  {slots : List Nat}
   {Γ Δ : Context}
   {α state β : Type}
   (columns : ColumnsNode headers Γ α state β)
   (rename : Renaming Γ Δ)
   (label : Computation Δ α String)
-  (placed : List (Slot slots))
+  (placed : List (Slot slots 0))
   : Presentation slots Δ α β :=
   match columns with
   | .output value => .layout (value.rename rename) (Layout.grouped label placed)
@@ -530,14 +536,21 @@ def ColumnsNode.snoc
   | .bind initial body => .bind initial (body.snoc header fun model => (cell model).weaken)
   | .focus target body => .focus target (body.snoc header cell)
 
-/-- An Add button that appends `initial`. -/
-@[reducible] def Component.addButton
+/-- Fills the hole of `collection` with an Add button that appends `initial` to the list at
+`path`. -/
+@[reducible] def Component.withAddButton
   {Γ : Context}
-  {α : Type}
+  {α β γ : Type}
+  (path : Path α (List β))
   (itemLabel : String)
-  (initial : α)
-  : Component Γ (List α) :=
-  .button s!"Add {itemLabel.toLower}" (.append .self (.const initial))
+  (initial : β)
+  (collection : Component Γ α γ (holes := 1))
+  : Component Γ α γ :=
+  .present <|
+    .own collection <|
+      .own (.button s!"Add {itemLabel.toLower}" (.append path (.const initial))) <|
+        .layout { inputs := inputs[.ui (Ref.there Ref.here)], run := id }
+          (.const (.fill (.there .here) (.cons [.place .here] .nil)))
 
 /-- Lists the items at `path`, each in a group "`itemLabel` n" with a Remove button,
 then an Add button that appends `initial`. -/
@@ -550,15 +563,14 @@ then an Add button that appends `initial`. -/
   (initial : β)
   (body : Component Γ β γ)
   : Component Γ α (List γ) :=
-  .listOf path label
+  .withAddButton path itemLabel initial <| .listOf path label
     (.present <|
       .own (body.rename Renaming.row) <|
-        .own (.button "Remove" (.set (.there .rowRemoved) (.const true))) <|
+        .own (.button "Remove" (.set (.there Ref.rowRemoved) (.const true))) <|
           .layout { inputs := inputs[.ui (Ref.there Ref.here)], run := id } {
             inputs := inputs[.ui (Ref.there (Ref.there Ref.row))]
             run := fun row =>
               .group (some s!"{itemLabel} {row.index.val + 1}") [.place (.there .here), .place .here] })
-    (.addButton itemLabel initial)
 
 /-- Tabulates the items at `path` with an Actions column holding Remove (and Select, given
 `selection`) buttons, then an Add button that appends `initial`. -/
@@ -573,7 +585,7 @@ then an Add button that appends `initial`. -/
   (selection : Option (Var Γ RowSelection) := none)
   : Component Γ α (List γ) :=
   let remove (model : Type) : Component (Context.row β Γ) model :=
-    .button "Remove" (.set .rowRemoved (.const true))
+    .button "Remove" (.set Ref.rowRemoved (.const true))
   let actions (model : Type) : Component (Context.row β Γ) model := match selection with
     | none => remove model
     | some selected =>
@@ -583,10 +595,9 @@ then an Add button that appends `initial`. -/
             run := fun current row => if current == .row row.index then "Selected" else "Select" }
           (.set (Renaming.row selected) { inputs := inputs[.ui Ref.row], run := fun row => .row row.index }))
         (remove model)
-  .tableOf path label
+  .withAddButton path itemLabel initial <| .tableOf path label
     { inputs := inputs[.ui Ref.row], run := fun row => s!"{itemLabel} {row.index.val + 1}" }
     ((columns.rename Renaming.row).node.snoc "Actions" actions)
-    (.addButton itemLabel initial)
     selection
 
 /-- Shows `body` in a group labeled `label`, keeping its output. -/

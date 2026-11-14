@@ -63,6 +63,12 @@ end
 
 deriving instance BEq for View, TableRow
 
+/-- `views` as one view. -/
+def View.ofList : List View → View
+  | [] => .hidden
+  | [view] => view
+  | views => .stack none views
+
 mutual
 /-- The controls of `view`, in display order. -/
 def View.controls : View → List Control

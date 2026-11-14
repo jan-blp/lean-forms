@@ -108,7 +108,7 @@ def run : IO Unit := do
   let removed ← press (model := List Nat) rowUpdated "Remove"
   let states : List (ObservationState (Binding Nat (ObservationState Unit Unit))
       (ObservationState Unit Unit)) :=
-    removed.locals.producer.value
+    removed.locals.producer.producer
   let remaining := states.map (·.producer.value)
   check "ActionRowStateFollowsRemoval" (removed.value == [20] && remaining[0]? == some 1)
   let functions : Component [] Nat := .bind (fun n : Nat => n)

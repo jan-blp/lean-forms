@@ -21,23 +21,23 @@ inductive Availability where
   deriving DecidableEq, Repr
 
 mutual
-inductive ComponentNode : (Γ : Context) → (model state output : Type) → Type 1 where
+inductive ComponentNode : (Γ : Context) → (model state output : Type) → (holes : Nat) → Type 1 where
   | field {Γ : Context}
       {α β : Type}
       (path : Path α β)
       (label : Computation Γ α String)
       (editor : Editor β)
-      : ComponentNode Γ α Unit Unit
+      : ComponentNode Γ α Unit Unit 0
   | computed {Γ : Context}
       {α : Type}
       (label : String)
       (value : Computation Γ α String)
-      : ComponentNode Γ α Unit Unit
+      : ComponentNode Γ α Unit Unit 0
   | button {Γ : Context}
       {α : Type}
       (caption : Computation Γ α String)
       (action : Action Γ α)
-      : ComponentNode Γ α Unit Unit
+      : ComponentNode Γ α Unit Unit 0
   /-- Tabs that set `active` to the chosen tab. -/
   | tabBar {Γ : Context}
       {α : Type}
@@ -45,80 +45,83 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → Typ
       (label : Computation Γ α String)
       (active : Var Γ (Fin n))
       (tabs : Computation Γ α (Vector String n))
-      : ComponentNode Γ α Unit Unit
+      : ComponentNode Γ α Unit Unit 0
   | withAvailability {Γ : Context}
       {α β state : Type}
+      {holes : Nat}
       (availability : Computation Γ α Availability)
-      (body : ComponentNode Γ α state β)
-      : ComponentNode Γ α state β
+      (body : ComponentNode Γ α state β holes)
+      : ComponentNode Γ α state β holes
   | choiceOf {Γ : Context}
       {α β state : Type}
       (path : Path α β)
       (label : Computation Γ α String)
       (branches : BranchesNode Γ β state)
-      : ComponentNode Γ α state Unit
+      : ComponentNode Γ α state Unit 0
   | output {Γ : Context}
       {α β : Type}
       (value : Computation Γ α β)
-      : ComponentNode Γ α Unit β
-  /-- Shows `row` for each item at `path`, then `footer`, which edits the whole list.
+      : ComponentNode Γ α Unit β 0
+  /-- Shows `row` for each item at `path`, then the content of its hole.
   Each row reads `Ref.row` and sets `Ref.rowRemoved` to remove itself. -/
   | list {Γ : Context}
-      {α β γ rowState footerState : Type}
+      {α β γ rowState : Type}
       (path : Path α (List β))
       (label : Computation Γ α String)
-      (row : ComponentNode (Context.row β Γ) β rowState γ)
-      (footer : ComponentNode Γ (List β) footerState Unit)
-      : ComponentNode Γ α (Binding (List rowState) footerState) (List γ)
-  /-- Like `list`, with one cell per column; `selection` marks its row and follows removals. -/
+      (row : ComponentNode (Context.row β Γ) β rowState γ 0)
+      : ComponentNode Γ α (List rowState) (List γ) 1
+  /-- Like `list`, with one cell per column and its hole in the footer;
+  `selection` marks its row and follows removals. -/
   | table {Γ : Context}
-      {α β γ rowState footerState : Type}
+      {α β γ rowState : Type}
       {headers : List String}
       (path : Path α (List β))
       (label : Computation Γ α String)
       (rowLabel : Computation (Context.row β Γ) β String)
       (columns : ColumnsNode headers (Context.row β Γ) β rowState γ)
-      (footer : ComponentNode Γ (List β) footerState Unit)
       (selection : Option (Var Γ RowSelection))
-      : ComponentNode Γ α (Binding (List rowState) footerState) (List γ)
+      : ComponentNode Γ α (List rowState) (List γ) 1
   | focus {Γ : Context}
       {α β γ state : Type}
+      {holes : Nat}
       (target : Computation Γ α (PartialPath α β))
-      (body : ComponentNode Γ β state γ)
-      : ComponentNode Γ α state (Option γ)
+      (body : ComponentNode Γ β state γ holes)
+      : ComponentNode Γ α state (Option γ) holes
   | load {Γ : Context}
       {α β data : Type}
       {states : Status data → Type}
+      {holes : Nat}
       [inst : DecidableEq data]
       (source : Computation Γ α (Source data))
-      (body : (status : Status data) → ComponentNode Γ α (states status) β)
-      : ComponentNode Γ α (LoadedState data states) β
+      (body : (status : Status data) → ComponentNode Γ α (states status) β holes)
+      : ComponentNode Γ α (LoadedState data states) β holes
   /-- Owns components and places their views with a layout. -/
   | present {Γ : Context}
       {α β state : Type}
-      (body : PresentationNode 0 Γ α state β)
-      : ComponentNode Γ α state β
+      (body : PresentationNode [] Γ α state β)
+      : ComponentNode Γ α state β 0
 
-/-- Components owned in order; `slots` counts the presentations in scope. -/
+/-- Components owned in order; `slots` gives the hole count of each slot in scope. -/
 inductive PresentationNode
-  : (slots : Nat)
+  : (slots : List Nat)
   → (Γ : Context)
   → (model state output : Type)
   → Type 1 where
-  | layout {slots : Nat}
+  | layout {slots : List Nat}
       {Γ : Context}
       {α β : Type}
       (output : Computation Γ α β)
       (arrangement : Computation Γ α (Layout slots))
       : PresentationNode slots Γ α Unit β
   /-- Evaluates `component`, exposing its output to `body` and its view as `Slot.here`. -/
-  | own {slots : Nat}
+  | own {slots : List Nat}
       {Γ : Context}
       {α β γ ownedState bodyState : Type}
-      (component : ComponentNode Γ α ownedState β)
-      (body : PresentationNode (slots + 1) (⟨.readOnly, β⟩ :: Γ) α bodyState γ)
+      {holes : Nat}
+      (component : ComponentNode Γ α ownedState β holes)
+      (body : PresentationNode (holes :: slots) (⟨.readOnly, β⟩ :: Γ) α bodyState γ)
       : PresentationNode slots Γ α (ObservationState ownedState bodyState) γ
-  | bind {slots : Nat}
+  | bind {slots : List Nat}
       {Γ : Context}
       {α β γ state : Type}
       (initial : β)
@@ -139,14 +142,14 @@ inductive ColumnsNode
       {α β cellState restState : Type}
       {headers : List String}
       (header : String)
-      (cell : ComponentNode Γ α cellState Unit)
+      (cell : ComponentNode Γ α cellState Unit 0)
       (rest : ColumnsNode headers Γ α restState β)
       : ColumnsNode (header :: headers) Γ α (Binding cellState restState) β
   | observe {Γ : Context}
       {α β γ cellState restState : Type}
       {headers : List String}
       (header : String)
-      (cell : ComponentNode Γ α cellState β)
+      (cell : ComponentNode Γ α cellState β 0)
       (rest : ColumnsNode headers (⟨.readOnly, β⟩ :: Γ) α restState γ)
       : ColumnsNode (header :: headers) Γ α (ObservationState cellState restState) γ
   | bind {Γ : Context}
@@ -169,7 +172,7 @@ inductive BranchNode : (Γ : Context) → (model state : Type) → Type 1 where
       (inject : β → α)
       (project : α → Option β)
       (initial : β)
-      (body : ComponentNode Γ β state Unit)
+      (body : ComponentNode Γ β state Unit 0)
       : BranchNode Γ α state
 
 inductive BranchesNode : (Γ : Context) → (model state : Type) → Type 1 where

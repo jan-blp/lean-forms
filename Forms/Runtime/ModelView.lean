@@ -157,27 +157,39 @@ def observed
       return ⟨updated.value, updated.state.tail, ⟨producer.locals, updated.locals⟩⟩
     | _ => absent
 
-/-- An owned component's view, kept until a layout places it. -/
-structure Prepared where
-  view : Display.View
-  feedback : List Feedback.Error → Display.View
+/-- A view given the content of each of its `holes`. -/
+abbrev Hollow (holes : Nat) := Vector (List Display.View) holes → Display.View
 
-abbrev Presentations (slots : Nat) := Slot slots → Prepared
+/-- An owned component's view, kept until a layout places it. -/
+structure Prepared (holes : Nat) where
+  view : Hollow holes
+  feedback : List Feedback.Error → Hollow holes
+
+abbrev Presentations (slots : List Nat) := {holes : Nat} → Slot slots holes → Prepared holes
 
 mutual
 def renderLayout
-  {slots : Nat}
-  (views : Slot slots → Display.View)
+  {slots : List Nat}
+  (views : {holes : Nat} → Slot slots holes → Hollow holes)
   : Layout slots → Display.View
-  | .place slot => views slot
+  | .place slot => views slot #v[]
+  | .fill slot contents => views slot (renderFills views contents)
   | .group label children => .stack label (renderAll views children)
 
 def renderAll
-  {slots : Nat}
-  (views : Slot slots → Display.View)
+  {slots : List Nat}
+  (views : {holes : Nat} → Slot slots holes → Hollow holes)
   : List (Layout slots) → List Display.View
   | [] => []
   | child :: rest => renderLayout views child :: renderAll views rest
+
+def renderFills
+  {slots : List Nat}
+  {holes : Nat}
+  (views : {holes : Nat} → Slot slots holes → Hollow holes)
+  : Fills slots holes → Vector (List Display.View) holes
+  | .nil => #v[]
+  | .cons content rest => (#v[renderAll views content] ++ renderFills views rest).cast (by omega)
 end
 
 /-- Changes the view of `evaluation`. -/
@@ -191,31 +203,34 @@ def NodeEvaluation.mapView
     view := f evaluation.view
     feedback := fun errors => f (evaluation.feedback errors) }
 
-/-- Shares list and table updates; route `0` reaches the footer and `1 :: index` a row.
+/-- Renders a component without holes. -/
+def NodeEvaluation.closed
+  {Γ : Context}
+  {α state β : Type}
+  (evaluation : NodeEvaluation Γ α state β (Hollow 0))
+  : NodeEvaluation Γ α state β :=
+  evaluation.mapView (· #v[])
+
+/-- Shares list and table updates; route `index` reaches a row.
 A row that removes itself is erased with its state, and `selection` follows. -/
 def evaluateCollection
   {Γ : Context}
-  {α β γ rowState footerState rowView : Type}
+  {α β γ rowState rowView viewType : Type}
   (path : Path α (List β))
   (rows : List (NodeEvaluation (Context.row β Γ) β rowState γ rowView))
-  (footer : NodeEvaluation Γ (List β) footerState Unit)
   (value : α)
   (selection : Option (Var Γ RowSelection))
-  (render : List rowView → Display.View → List Feedback.Error → Display.View)
-  : NodeEvaluation Γ α (Binding (List rowState) footerState) (List γ) :=
+  (render : List rowView → List Feedback.Error → viewType)
+  : NodeEvaluation Γ α (List rowState) (List γ) viewType :=
   let items := path.get value
   let states := rows.map (·.locals)
   { output := rows.map (·.output)
-    locals := ⟨states, footer.locals⟩
-    view := render (rows.map (·.view)) footer.view []
-    feedback := fun errors =>
-      render (rows.map fun row => row.feedback errors) (footer.feedback errors) errors
-    requests := rows.flatMap (·.requests) ++ footer.requests
+    locals := states
+    view := render (rows.map (·.view)) []
+    feedback := fun errors => render (rows.map fun row => row.feedback errors) errors
+    requests := rows.flatMap (·.requests)
     apply := fun route argument => match route with
-      | 0 :: rest => do
-        let updated ← footer.apply rest argument
-        return { updated with value := path.set updated.value value, locals := ⟨states, updated.locals⟩ }
-      | 1 :: index :: rest => do
+      | index :: rest => do
         let some row := rows[index]? | absent
         let updated ← row.apply rest argument
         let env := updated.state.tail.tail
@@ -223,9 +238,9 @@ def evaluateCollection
           let env := match selection with
             | none => env
             | some selected => selected.set ((selected.get env).remove index) env
-          return ⟨path.set (items.eraseIdx index) value, env, ⟨states.eraseIdx index, footer.locals⟩⟩
+          return ⟨path.set (items.eraseIdx index) value, env, states.eraseIdx index⟩
         return ⟨path.set (items.set index updated.value) value, env,
-          ⟨states.set index updated.locals, footer.locals⟩⟩
+          states.set index updated.locals⟩
       | _ => absent }
 
 mutual
@@ -233,7 +248,8 @@ mutual
 def evaluateNode
   {Γ : Context}
   {α state β : Type}
-  (component : ComponentNode Γ α state β)
+  {holes : Nat}
+  (component : ComponentNode Γ α state β holes)
   (value : α)
   (env : Env Γ)
   (cache : HttpRequest.Cache)
@@ -241,15 +257,16 @@ def evaluateNode
   (target : Display.Target)
   (location : Feedback.Location)
   (disabled : Bool := false)
-  : NodeEvaluation Γ α state β :=
+  : NodeEvaluation Γ α state β (Hollow holes) :=
   match component with
   | .field path label widget =>
     let location := location ++ pathLocation path
     let control := editor widget (path.get value) target location (label.eval value env) disabled []
     { output := ()
       locals := ()
-      view := .control control
-      feedback := fun errors => .control { control with messages := Feedback.messages errors location }
+      view := fun _ => .control control
+      feedback := fun errors _ =>
+        .control { control with messages := Feedback.messages errors location }
       requests := []
       apply := fun route argument => match route with
         | [] => do
@@ -261,13 +278,13 @@ def evaluateNode
   | .computed label computation =>
     { output := ()
       locals := ()
-      view := .computed label (computation.eval value env)
+      view := fun _ => .computed label (computation.eval value env)
       requests := []
       apply := fun _ _ => absent }
   | .button caption action =>
     { output := ()
       locals := ()
-      view := .control {
+      view := fun _ => .control {
         key := .press target.indices location
         target, location, disabled
         label := caption.eval value env
@@ -282,7 +299,7 @@ def evaluateNode
   | .tabBar (n := n) label active tabs =>
     { output := ()
       locals := ()
-      view := .control {
+      view := fun _ => .control {
         key := .tab target.indices location
         target, location, disabled
         label := label.eval value env
@@ -301,8 +318,9 @@ def evaluateNode
     let body := evaluateNode body value env cache locals target location (disabled || availability != .enabled)
     { output := body.output
       locals := body.locals
-      view := if availability == .hidden then .hidden else body.view
-      feedback := fun errors => if availability == .hidden then .hidden else body.feedback errors
+      view := fun content => if availability == .hidden then .hidden else body.view content
+      feedback := fun errors content =>
+        if availability == .hidden then .hidden else body.feedback errors content
       requests := if availability == .hidden then [] else body.requests
       apply := fun route argument => match availability with
         | .hidden => .error (.invalid .hidden)
@@ -319,10 +337,10 @@ def evaluateNode
       input := .choice branches.selected branches.options }
     { output := ()
       locals := branches.locals
-      view := match branches.view with
+      view := fun _ => match branches.view with
         | none => .control control
         | some body => .stack none [.control control, body]
-      feedback := fun errors =>
+      feedback := fun errors _ =>
         let control := { control with messages := Feedback.messages errors location }
         match branches.feedback errors with
         | none => .control control
@@ -340,7 +358,7 @@ def evaluateNode
   | .output computation =>
     { output := computation.eval value env
       locals := ()
-      view := .hidden
+      view := fun _ => .hidden
       requests := []
       apply := fun _ _ => absent }
   | .focus computation body =>
@@ -349,7 +367,7 @@ def evaluateNode
     | none =>
       { output := none
         locals
-        view := .hidden
+        view := fun _ => .hidden
         requests := []
         apply := fun _ _ => absent }
     | some focused =>
@@ -375,18 +393,18 @@ def evaluateNode
         let updated ← body.apply route argument
         return updated.mapLocals (fun state => ⟨status, state⟩) }
   | .present body =>
-    evaluatePresentation body value env cache locals target location disabled nofun
-  | .list path label row footer =>
+    (evaluatePresentation body value env cache locals target location disabled (nomatch ·)).mapView
+      fun view _ => view
+  | .list path label row =>
     let items := path.get value
     let location := location ++ pathLocation path
     let rows := items.mapFinIdx fun index item bound =>
-      evaluateNode row item (Env.row items ⟨index, bound⟩ env) cache
-        (locals.value[index]?.getD row.initialState)
-        ((target.child 1).child index) (location ++ [.index index]) disabled
-    let footer := evaluateNode footer items env cache locals.tail (target.child 0) location disabled
-    evaluateCollection path rows footer value none fun rows footer errors =>
-      .list (label.eval value env) (rows ++ [footer]) (Feedback.messages errors location)
-  | .table (headers := headers) path label rowLabel columns footer selection =>
+      (evaluateNode row item (Env.row items ⟨index, bound⟩ env) cache
+        (locals[index]?.getD row.initialState) (target.child index) (location ++ [.index index])
+        disabled).closed
+    evaluateCollection path rows value none fun rows errors content =>
+      .list (label.eval value env) (rows ++ content[0]) (Feedback.messages errors location)
+  | .table (headers := headers) path label rowLabel columns selection =>
     let items := path.get value
     let location := location ++ pathLocation path
     let rows := items.mapFinIdx fun index item bound =>
@@ -396,12 +414,12 @@ def evaluateNode
         selected := selection.map fun selected => selected.get env == .row index
         cells := [] }
       let cells := evaluateColumns columns item rowEnv cache
-        (locals.value[index]?.getD columns.initialState) ((target.child 1).child index)
-        (location ++ [.index index]) disabled
+        (locals[index]?.getD columns.initialState) (target.child index) (location ++ [.index index])
+        disabled
       cells.mapView fun cells => { row with cells := cells.toList }
-    let footer := evaluateNode footer items env cache locals.tail (target.child 0) location disabled
-    evaluateCollection path rows footer value selection fun rows footer errors =>
-      .table (label.eval value env) headers rows footer (Feedback.messages errors location)
+    evaluateCollection path rows value selection fun rows errors content =>
+      .table (label.eval value env) headers rows (.ofList content[0])
+        (Feedback.messages errors location)
 
 def evaluateColumns
   {headers : List String}
@@ -424,7 +442,8 @@ def evaluateColumns
       requests := []
       apply := fun _ _ => absent }
   | .cons _ cell rest =>
-    let cell := evaluateNode cell value env cache locals.value (target.child 0) location disabled
+    let cell :=
+      (evaluateNode cell value env cache locals.value (target.child 0) location disabled).closed
     let rest := evaluateColumns rest value env cache locals.tail (target.child 1) location disabled
     { output := rest.output
       locals := ⟨cell.locals, rest.locals⟩
@@ -440,7 +459,8 @@ def evaluateColumns
           return updated.mapLocals (⟨cell.locals, ·⟩)
         | _ => absent }
   | .observe _ cell rest =>
-    let cell := evaluateNode cell value env cache locals.producer (target.child 0) location disabled
+    let cell :=
+      (evaluateNode cell value env cache locals.producer (target.child 0) location disabled).closed
     let rest := evaluateColumns rest value (Env.cons cell.output env) cache locals.consumers
       (target.child 1) location disabled
     observed cell rest (.cons cell.view rest.view)
@@ -469,7 +489,7 @@ def evaluateColumns
           return updated.mapValue (fun focused => path.set focused value) }
 
 def evaluatePresentation
-  {slots : Nat}
+  {slots : List Nat}
   {Γ : Context}
   {α state β : Type}
   (presentation : PresentationNode slots Γ α state β)
@@ -491,12 +511,12 @@ def evaluatePresentation
       feedback := fun errors => renderLayout (fun slot => (presentations slot).feedback errors) layout
       requests := []
       apply := fun _ _ => absent }
-  | .own component body =>
+  | .own (holes := owns) component body =>
     let owned := evaluateNode component value env cache locals.producer (target.child 0) location
       disabled
-    let presentations : Presentations (slots + 1) := fun
-      | .here => ⟨owned.view, owned.feedback⟩
-      | .there slot => presentations slot
+    let presentations : Presentations (owns :: slots) := fun {holes} slot => match holes, slot with
+      | _, .here => ⟨owned.view, owned.feedback⟩
+      | _, .there slot => presentations slot
     let body := evaluatePresentation body value (Env.cons owned.output env) cache locals.consumers
       (target.child 1) location disabled presentations
     observed owned body body.view body.feedback
@@ -542,7 +562,8 @@ def evaluateBranches
             let updated ← tail.select chosen
             return updated.mapLocals (⟨locals.value, ·⟩) }
     | some payload =>
-      let head := evaluateNode body payload env cache locals.value (target.child index) (location ++ [.constructor key]) disabled
+      let head := (evaluateNode body payload env cache locals.value (target.child index)
+        (location ++ [.constructor key]) disabled).closed
       { locals := ⟨head.locals, tail.locals⟩
         view := some head.view
         feedback := fun errors => some (head.feedback errors)
@@ -571,7 +592,7 @@ def evaluate
   (env : Env Γ)
   (locals : component.LocalState := component.initialState)
   : Evaluated Γ α component.LocalState β :=
-  let evaluated := evaluateNode component.node value env cache locals {} []
+  let evaluated := (evaluateNode component.node value env cache locals {} []).closed
   { toNodeEvaluation := { evaluated with
       view := evaluated.view.dedupe
       feedback := fun errors => (evaluated.feedback errors).dedupe }

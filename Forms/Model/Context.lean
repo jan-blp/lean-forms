@@ -1,5 +1,6 @@
 module
 
+public import Forms.Model.Member
 public import Forms.Model.PointedList
 
 @[expose] public section
@@ -19,12 +20,21 @@ structure Entry where
 abbrev Context := List Entry
 
 /-- A reference to a context entry, tracking its access and value type. -/
-inductive Ref : (Γ : Context) → Access → Type → Type 1 where
-  | here {access : Access} {α : Type} {Γ : Context}
-      : Ref (⟨access, α⟩ :: Γ) access α
-  | there {access : Access} {α : Type} {entry : Entry} {Γ : Context}
-      (ref : Ref Γ access α)
-      : Ref (entry :: Γ) access α
+abbrev Ref (Γ : Context) (access : Access) (α : Type) := Member (⟨access, α⟩ : Entry) Γ
+
+namespace Ref
+export Member (here)
+end Ref
+
+/-- The same entry, under one more innermost entry. -/
+abbrev Ref.there
+  {Γ : Context}
+  {entry : Entry}
+  {access : Access}
+  {α : Type}
+  (ref : Ref Γ access α)
+  : Ref (entry :: Γ) access α :=
+  Member.there ref
 
 /-- A reference to writable state in a typed context. -/
 abbrev Var (Γ : Context) (α : Type) := Ref Γ .writable α
@@ -82,7 +92,7 @@ def Ref.get
   : α :=
   match ref with
   | .here => env.value
-  | .there ref => ref.get env.tail
+  | .there ref => Ref.get ref env.tail
 
 /-- Updates writable state. -/
 def Ref.set
@@ -93,7 +103,7 @@ def Ref.set
   : Env Γ :=
   match ref with
   | .here => ⟨value, env.tail⟩
-  | .there ref => ⟨env.value, ref.set value env.tail⟩
+  | .there ref => ⟨env.value, Ref.set ref value env.tail⟩
 
 /-- Maps every reference into another context, keeping its access and type. -/
 abbrev Renaming (Γ Δ : Context) := ∀ {access : Access} {α : Type}, Ref Γ access α → Ref Δ access α
@@ -122,11 +132,5 @@ def Renaming.shift {Γ : Context} {entry : Entry} : Renaming Γ (entry :: Γ) :=
 /-- Makes room for a row's entries. -/
 def Renaming.row {α : Type} {Γ : Context} : Renaming Γ (Context.row α Γ) :=
   fun ref => .there (.there ref)
-
-/-- Identifies the context entry in control keys sent to the frontend. -/
-def Ref.index {Γ : Context} (ref : Ref Γ access α) : Nat :=
-  match ref with
-  | .here => 0
-  | .there ref => ref.index + 1
 
 end Forms.Model
