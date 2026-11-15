@@ -91,27 +91,16 @@ def RowSelection.itemPath
   : Component Γ α β holes :=
   ⟨body.LocalState, .withAvailability availability body.node⟩
 
-@[reducible] def Component.listOf
+@[reducible] def Component.collection
   {Γ : Context}
   {α β γ : Type}
+  {views : Nat}
   (path : Path α (List β))
   (label : Computation Γ α String)
-  (row : Component (Context.row β Γ) β γ)
+  (row : Presentation [] (Context.row β Γ) β γ views)
+  (display : CollectionDisplay Γ α β views)
   : Component Γ α (List γ) (holes := 1) :=
-  ⟨List row.LocalState, .list path label row.node⟩
-
-@[reducible] def Component.tableOf
-  {Γ : Context}
-  {α β γ : Type}
-  {columns : Nat}
-  (path : Path α (List β))
-  (label : Computation Γ α String)
-  (headers : Computation Γ α (Vector String columns))
-  (rowLabel : Computation (Context.row β Γ) β String)
-  (row : Presentation [] (Context.row β Γ) β γ columns)
-  (selection : Option (Var Γ RowSelection) := none)
-  : Component Γ α (List γ) (holes := 1) :=
-  ⟨List row.LocalState, .table path label headers rowLabel row.node selection⟩
+  ⟨List row.LocalState, .collection path label row.node display⟩
 
 @[reducible] def Component.focus
   {Γ : Context}
@@ -464,12 +453,13 @@ The first entry in `body`'s context is the producer's current output, available 
   (body : Component Γ β γ)
   : Component Γ α (List γ) :=
   let rowLabel := rowLabel.rename fun ref => .there (.there ref)
-  .withAddButton path addCaption initial <| .listOf path label
-    (.present <|
-      .own (body.rename Renaming.row) <|
+  .withAddButton path addCaption initial <|
+    .collection path label
+      (.own (body.rename Renaming.row) <|
         .own (.button "Remove" (.set (.there Ref.rowRemoved) (.const true))) <|
           .layout { inputs := inputs[.ui (Ref.there Ref.here)], run := id }
             ((fun label => .group (some label) [.place (.there .here), .place .here]) <$> rowLabel))
+      .list
 
 @[reducible] def Component.table
   {Γ : Context}
@@ -494,7 +484,7 @@ The first entry in `body`'s context is the producer's current output, available 
         remove
   let columns := (columns.rename Renaming.row).snoc "Actions" actions
   .withAddButton path addCaption initial <|
-    .tableOf path label (.const columns.headers) rowLabel columns.cells selection
+    .collection path label columns.cells (.table (.const columns.headers) rowLabel selection)
 
 @[reducible] def Component.labeled
   {Γ : Context}

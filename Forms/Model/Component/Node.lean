@@ -30,6 +30,22 @@ structure SelectOptions (κ α : Type) where
   keys_nodup : options.map SelectOption.key |>.Nodup := by simp <;> decide
   labels_nodup : options.map SelectOption.label |>.Nodup := by simp <;> decide
 
+inductive CollectionDisplay (Γ : Context) (α β : Type) : (columns : Nat) → Type 1 where
+  | list : CollectionDisplay Γ α β 1
+  | table {columns : Nat}
+      (headers : Computation Γ α (Vector String columns))
+      (rowLabel : Computation (Context.row β Γ) β String)
+      (selection : Option (Var Γ RowSelection))
+      : CollectionDisplay Γ α β columns
+
+def CollectionDisplay.selection
+  {Γ : Context}
+  {α β : Type}
+  {views : Nat}
+  : CollectionDisplay Γ α β views → Option (Var Γ RowSelection)
+  | .list => none
+  | .table (selection := selection) .. => selection
+
 mutual
 inductive ComponentNode : (Γ : Context) → (model state output : Type) → (holes : Nat) → Type 1 where
   | field {Γ : Context}
@@ -77,25 +93,14 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       {α β : Type}
       (value : Computation Γ α β)
       : ComponentNode Γ α Unit β 0
-  /-- Shows `row` for each item at `path`, then the content of its hole.
-  Each row reads `Ref.row` and sets `Ref.rowRemoved` to remove itself. -/
-  | list {Γ : Context}
+  /-- Shows `row` for each item at `path` as `display` says, then the content of its hole. -/
+  | collection {Γ : Context}
       {α β γ rowState : Type}
+      {views : Nat}
       (path : Path α (List β))
       (label : Computation Γ α String)
-      (row : ComponentNode (Context.row β Γ) β rowState γ 0)
-      : ComponentNode Γ α (List rowState) (List γ) 1
-  /-- Like `list`, with each row's views as cells under `headers` and its hole in the footer;
-  `selection` marks its row and follows removals. -/
-  | table {Γ : Context}
-      {α β γ rowState : Type}
-      {columns : Nat}
-      (path : Path α (List β))
-      (label : Computation Γ α String)
-      (headers : Computation Γ α (Vector String columns))
-      (rowLabel : Computation (Context.row β Γ) β String)
-      (row : PresentationNode [] (Context.row β Γ) β rowState γ columns)
-      (selection : Option (Var Γ RowSelection))
+      (row : PresentationNode [] (Context.row β Γ) β rowState γ views)
+      (display : CollectionDisplay Γ α β views)
       : ComponentNode Γ α (List rowState) (List γ) 1
   | focus {Γ : Context}
       {α β γ state : Type}

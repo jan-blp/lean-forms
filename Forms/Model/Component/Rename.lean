@@ -5,6 +5,16 @@ public import Forms.Model.Component.Node
 @[expose] public section
 namespace Forms.Model
 
+def CollectionDisplay.rename
+  {Γ Δ : Context}
+  {α β : Type}
+  {views : Nat}
+  (rename : Renaming Γ Δ)
+  : CollectionDisplay Γ α β views → CollectionDisplay Δ α β views
+  | .list => .list
+  | .table headers rowLabel selection =>
+    .table (headers.rename rename) (rowLabel.rename rename.liftRow) (selection.map rename)
+
 mutual
 /-- Moves `component` into context `Δ`; binders keep their own entries in place. -/
 def ComponentNode.rename
@@ -24,10 +34,8 @@ def ComponentNode.rename
   | .select (decidableEq := _) (key := _) path label options selected =>
     .select path (label.rename rename) (options.rename rename) selected
   | .output value => .output (value.rename rename)
-  | .list path label row => .list path (label.rename rename) (row.rename rename.liftRow)
-  | .table path label headers rowLabel row selection =>
-    .table path (label.rename rename) (headers.rename rename) (rowLabel.rename rename.liftRow)
-      (row.rename rename.liftRow) (selection.map rename)
+  | .collection path label row display =>
+    .collection path (label.rename rename) (row.rename rename.liftRow) (display.rename rename)
   | .focus target body => .focus (target.rename rename) (body.rename rename)
   | .load (inst := inst) source body =>
     .load (inst := inst) (source.rename rename) fun status => (body status).rename rename
