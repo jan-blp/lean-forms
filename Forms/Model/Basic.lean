@@ -344,4 +344,58 @@ instance {α : Type} [Lean.FromJson α] [DecidableEq α]
     let items : List α ← Lean.fromJson? json
     if distinct : items.Nodup then return ⟨items, distinct⟩ else throw "Expected distinct items."⟩
 
+inductive OptionConstructor (α : Type) : Type → Type where
+  | none : OptionConstructor α Unit
+  | some : OptionConstructor α α
+
+inductive OptionTag where
+  | none
+  | some
+  deriving DecidableEq, Repr
+
+instance : Key OptionTag where
+  encode
+    | .none => "none"
+    | .some => "some"
+  decode
+    | "none" => some .none
+    | "some" => some .some
+    | _ => none
+  decode_encode tag := by cases tag <;> rfl
+  encode_ne_empty tag := by cases tag <;> decide
+
+@[reducible] instance {α : Type} : Constructors (Option α) where
+  Constructor := OptionConstructor α
+  Tag := OptionTag
+  inject
+    | .none, () => none
+    | .some, value => some value
+  project
+    | .none, none => some ()
+    | .none, some _ => none
+    | .some, value => value
+  tagOf
+    | .none => .none
+    | .some => .some
+  tag
+    | none => .none
+    | some _ => .some
+
+instance {α : Type} : LawfulConstructors (Option α) where
+  project_inject selected value := by cases selected <;> rfl
+  inject_project selected source value h := by
+    cases selected <;> cases source <;> simp_all [Constructors.project, Constructors.inject]
+  tag_inject selected value := by cases selected <;> rfl
+
+@[reducible] instance {α : Type} [FormModel α] : FormModel (Option α) :=
+  ⟨Option (Raw α), Option.map FormModel.erase⟩
+
+instance {α : Type} [FormModel α] [Validation α] : Validation (Option α) where
+  validate
+    | none => .ok ⟨none, rfl⟩
+    | some raw => match Validation.validate (model := α) raw with
+      | .ok ⟨value, erased⟩ => .ok ⟨some value, by simp [FormModel.erase, erased]⟩
+      | .error errors =>
+        .error (errors.map (Error.inConstructor (α := Option (Raw α)) OptionConstructor.some))
+
 end Forms.Model

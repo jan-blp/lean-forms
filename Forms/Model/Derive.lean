@@ -85,7 +85,7 @@ private def inspect (name : Name) : MetaM (Bool × Array Constructor) := do
           let some fn := decl.type.getAppFn.constName?
             | throwError "unsupported field type: {decl.type}"
           unless [``String, ``Bool, ``Nat].contains fn do
-            unless decl.type.getAppArgs.isEmpty || fn == ``List || fn == ``Subtype do
+            unless decl.type.getAppArgs.isEmpty || [``List, ``Subtype, ``Option].contains fn do
               throwError "unsupported field type: {decl.type}"
             unless (← synthInstance? (mkApp (mkConst ``FormModel) decl.type)).isSome do
               throwError "field type must derive FormModel first: {decl.type}"

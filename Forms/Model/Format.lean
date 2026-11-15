@@ -385,6 +385,26 @@ def uuid : Format Uuid where
       simpa using List.map_congr_left (fun c hc => (facts c hc).2)
     simp [trim_of_forall fun c hc => (facts c hc).1, lower, canonical]
 
+/-- Blank text is `none`; `blank` rules out the inner format reading it as a value. -/
+def optional
+    {α : Type}
+    (format : Format α)
+    (blank : (format.parse "").isOk = false)
+    : Format (Option α) where
+  kind := format.kind
+  print
+    | none => ""
+    | some value => format.print value
+  parse text := match format.parse text with
+    | .ok value => .ok (some value)
+    | .error error => if (trim text.toList).isEmpty then .ok none else .error error
+  parse_print
+    | none => by
+      cases h : format.parse "" with
+      | ok => simp [h, Except.isOk, Except.toBool] at blank
+      | error => simp [h]; rfl
+    | some value => by simp [format.parse_print]
+
 @[instance_reducible]
 def toJson {α : Type} (format : Format α) : ToJson α :=
   ⟨(.str <| format.print ·)⟩

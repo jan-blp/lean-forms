@@ -13,6 +13,8 @@ structure Payment where
   reference : Uuid
   adjustment : Int32
   ledgerEntry : Int64
+  paidOn : Option Std.Time.PlainDate
+  note : Option String
   deriving FormModel
 
 def Payment.form : Component [] Payment.Raw :=
@@ -21,13 +23,18 @@ def Payment.form : Component [] Payment.Raw :=
     .field path[Payment.Field.dueDate] "Due date" .date,
     .field path[Payment.Field.reference] "Reference" .uuid,
     .field path[Payment.Field.adjustment] "Adjustment" .int32,
-    .field path[Payment.Field.ledgerEntry] "Ledger entry" .int64]
+    .field path[Payment.Field.ledgerEntry] "Ledger entry" .int64,
+    .field path[Payment.Field.paidOn] "Paid on" (.optional .date),
+    .optional path[Payment.Field.note] "Note" "No note" "Add a note" ""
+      (.field .self "Text" .text)]
 
 def Payment.initial : Payment.Raw := ⟨
   ⟨1255, 1, by decide⟩,
   .ofYearMonthDayClip 2026 11 15,
   ⟨"123e4567-e89b-12d3-a456-426614174000", by decide⟩,
   -5,
-  9007199254740993⟩
+  9007199254740993,
+  none,
+  none⟩
 
 end Forms.ExampleForms

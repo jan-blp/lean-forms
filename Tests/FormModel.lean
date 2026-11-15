@@ -394,10 +394,7 @@ structure Container where
 
 structure OptionalField where
   value : Option String
-
-/-- error: deriving FormModel for `Tests.FormModel.OptionalField`: unsupported field type: Option String -/
-#guard_msgs in
-deriving instance FormModel for OptionalField
+  deriving FormModel
 
 structure FunctionField where
   value : Nat → Nat
