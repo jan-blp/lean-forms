@@ -13,8 +13,8 @@ private def check (name : String) (ok : Bool) : IO Unit := do
   IO.println s!"PASS {name}"
 
 private def argument : Display.Editor → Option Input
-  | .text _ => some (.text "x")
-  | .natural _ => some (.text "1")
+  | .text .natural _ => some (.text "1")
+  | .text _ _ => some (.text "x")
   | .checkbox value => some (.boolean !value)
   | .choice selected _ => some (.text selected)
   | .action => none

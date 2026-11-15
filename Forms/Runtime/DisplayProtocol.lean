@@ -16,8 +16,12 @@ def messageFields (messages : Option String) : List (String × Json) :=
   messages.toList.map fun message => ("messages", toJson message)
 
 def widgetName : Editor → String
-  | .text _ => "textInput"
-  | .natural _ => "naturalInput"
+  | .text .plain _ => "textInput"
+  | .text .natural _ => "naturalInput"
+  | .text .integer _ => "integerInput"
+  | .text .decimal _ => "decimalInput"
+  | .text .date _ => "dateInput"
+  | .text .uuid _ => "uuidInput"
   | .checkbox _ => "checkbox"
   | .choice .. => "choice"
   | .action => "action"

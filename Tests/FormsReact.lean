@@ -21,8 +21,8 @@ private def control
 
 def view : Display.View :=
   .stack (some "Person") [
-    .control (control (.edit [.field "name"]) "Name" (.text "Ada") (messages := some "Enter your name.")),
-    .control (control (.edit [.field "age"]) "Age" (.natural 36)),
+    .control (control (.edit [.field "name"]) "Name" (.text .plain "Ada") (messages := some "Enter your name.")),
+    .control (control (.edit [.field "age"]) "Age" (.text .natural "36")),
     .hidden,
     .stack (some "") [.control (control (.edit [.field "delivery"]) "Delivery" (.checkbox true))],
     .computed "Summary" "Ada, 36"]
@@ -34,13 +34,15 @@ def expected : FormsReact.Component :=
       .textField {
         name := "[\"edit\",\"name\"]"
         label := "Name"
+        kind := .plain
         value := "Ada"
         disabled := false
         error := some "Enter your name."
         onCommit := .apply "[\"edit\",\"name\"]" },
-      .naturalField {
+      .textField {
         name := "[\"edit\",\"age\"]"
         label := "Age"
+        kind := .natural
         value := "36"
         disabled := false
         error := none

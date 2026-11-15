@@ -24,21 +24,22 @@ inductive ButtonVariant where
   | secondary
   deriving ToJson, FromJson, BEq, Repr
 
-/-- A text input whose draft React owns; `onCommit` receives the draft text. -/
+/-- Which input edits the text; Lean parses what is committed. -/
+inductive TextKind where
+  | plain
+  | natural
+  | integer
+  | decimal
+  | date
+  | uuid
+  deriving ToJson, FromJson, BEq, Repr
+
+/-- A text input whose draft React owns; `onCommit` receives the draft text.
+Values travel as text, so numbers beyond 2^53 survive JavaScript. -/
 structure TextField where
   name : String
   label : String
-  value : String
-  disabled : Bool
-  error : Option String
-  onCommit : Action
-  deriving ToJson, FromJson, BEq, Repr
-
-/-- A non-negative whole number input; `onCommit` receives the draft text, which Lean decodes. -/
-structure NaturalField where
-  name : String
-  label : String
-  /-- Decimal digits, so values beyond 2^53 survive JavaScript. -/
+  kind : TextKind
   value : String
   disabled : Bool
   error : Option String
@@ -122,7 +123,6 @@ structure Page where
 
 inductive Component where
   | textField : TextField → Component
-  | naturalField : NaturalField → Component
   | checkbox : Checkbox → Component
   | choice : Choice → Component
   | output : Output → Component
@@ -139,7 +139,6 @@ mutual
 /-- Names of the enabled fields that commit typed text, whose drafts React keeps. -/
 def Component.draftFields : Component → List String
   | .textField field => if field.disabled then [] else [field.name]
-  | .naturalField field => if field.disabled then [] else [field.name]
   | .checkbox _ => []
   | .choice _ => []
   | .output _ => []

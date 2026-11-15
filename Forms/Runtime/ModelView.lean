@@ -20,8 +20,7 @@ def editor
   (errors : List Feedback.Error)
   : Display.Control :=
   let input : Display.Editor := match widget with
-    | .text => .text value
-    | .natural => .natural value
+    | .formatted format => .text format.kind (format.print value)
     | .checkbox => .checkbox value
   { key := .edit location, target, label, disabled, location, input
     messages := Feedback.messages errors location }
