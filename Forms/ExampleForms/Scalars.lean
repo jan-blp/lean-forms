@@ -24,7 +24,7 @@ def Payment.form : Component [] Payment.Raw :=
     .field path[Payment.Field.ledgerEntry] "Ledger entry" .int64]
 
 def Payment.initial : Payment.Raw := ⟨
-  ⟨12550, 2⟩,
+  ⟨1255, 1, by decide⟩,
   .ofYearMonthDayClip 2026 11 15,
   ⟨"123e4567-e89b-12d3-a456-426614174000", by decide⟩,
   -5,
