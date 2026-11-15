@@ -1,7 +1,7 @@
 module
 
 public import Lean.Data.Json
-public import Forms.Model.Format
+public import Forms.Model.LawfulJson
 public import LeanLens.Lawful
 public import Std.Data.HashMap
 open LeanLens
