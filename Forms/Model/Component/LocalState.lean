@@ -20,8 +20,7 @@ def ComponentNode.initialState
   | .output .. => ()
   | .withAvailability _ body => body.initialState
   | .select (decidableEq := _) (key := _) .. => ()
-  | .list .. => []
-  | .table .. => []
+  | .collection .. => []
   | .focus _ body => body.initialState
   | .load (inst := _inst) (body := body) .. => ⟨.loading, (body .loading).initialState⟩
   | .present body => body.initialState

@@ -182,37 +182,27 @@ def NodeEvaluation.closed
   : NodeEvaluation Γ α state β :=
   evaluation.mapView (· #v[])
 
-/-- Shares list and table updates; route `index` reaches a row.
-A row that removes itself is erased with its state, and `selection` follows. -/
-def evaluateCollection
+def renderCollection
   {Γ : Context}
-  {α β γ rowState rowView viewType : Type}
-  (path : Path α (List β))
-  (rows : List (NodeEvaluation (Context.row β Γ) β rowState γ rowView))
+  {α β : Type}
+  {views : Nat}
+  (display : CollectionDisplay Γ α β views)
   (value : α)
-  (selection : Option (Var Γ RowSelection))
-  (render : List rowView → List Feedback.Error → viewType)
-  : NodeEvaluation Γ α (List rowState) (List γ) viewType :=
-  let items := path.get value
-  let states := rows.map (·.locals)
-  { output := rows.map (·.output)
-    locals := states
-    view := render (rows.map (·.view)) []
-    feedback := fun errors => render (rows.map fun row => row.feedback errors) errors
-    requests := rows.flatMap (·.requests)
-    apply := fun route argument => match route with
-      | index :: rest => do
-        let some row := rows[index]? | absent
-        let updated ← row.apply rest argument
-        let env := updated.state.tail.tail
-        if updated.state.tail.value then
-          let env := match selection with
-            | none => env
-            | some selected => selected.set ((selected.get env).remove index) env
-          return ⟨path.set (items.eraseIdx index) value, env, states.eraseIdx index⟩
-        return ⟨path.set (items.set index updated.value) value, env,
-          states.set index updated.locals⟩
-      | _ => absent }
+  (env : Env Γ)
+  (items : List β)
+  (label : String)
+  (rows : List (Vector Display.View views))
+  (content : List Display.View)
+  (messages : Option String)
+  : Display.View :=
+  match display with
+  | .list => .list label (rows.map (·[0]) ++ content) messages
+  | .table headers rowLabel selected =>
+    let rows := (items.mapFinIdx fun index item bound =>
+      let rowEnv := Env.row items ⟨index, bound⟩ env
+      (rowLabel.eval item rowEnv, selected.map (·.eval item rowEnv))).zipWith
+      (fun (label, selected) cells => { label, selected, cells := cells.toList }) rows
+    .table label (headers.eval value env).toList rows (.ofList content) messages
 
 mutual
 def evaluateNode
@@ -364,30 +354,32 @@ def evaluateNode
   | .present body =>
     (evaluatePresentation body value env cache locals target location disabled (nomatch ·)).mapView
       fun views _ => views[0]
-  | .list path label row =>
+  | .collection path label row display =>
     let items := path.get value
     let location := location ++ pathLocation path
     let rows := items.mapFinIdx fun index item bound =>
-      (evaluateNode row item (Env.row items ⟨index, bound⟩ env) cache
+      evaluatePresentation row item (Env.row items ⟨index, bound⟩ env) cache
         (locals[index]?.getD row.initialState) (target.child index) (location ++ [.index index])
-        disabled).closed
-    evaluateCollection path rows value none fun rows errors content =>
-      .list (label.eval value env) (rows ++ content[0]) (Feedback.messages errors location)
-  | .table path label headers rowLabel row selection =>
-    let items := path.get value
-    let location := location ++ pathLocation path
-    let rows := items.mapFinIdx fun index item bound =>
-      let rowEnv := Env.row items ⟨index, bound⟩ env
-      let tableRow : Display.TableRow := {
-        label := rowLabel.eval item rowEnv
-        selected := selection.map fun selected => selected.get env == .row index
-        cells := [] }
-      let cells := evaluatePresentation row item rowEnv cache (locals[index]?.getD row.initialState)
-        (target.child index) (location ++ [.index index]) disabled (nomatch ·)
-      cells.mapView fun cells => { tableRow with cells := cells.toList }
-    evaluateCollection path rows value selection fun rows errors content =>
-      .table (label.eval value env) (headers.eval value env).toList rows (.ofList content[0])
+        disabled (nomatch ·)
+    let states := rows.map (·.locals)
+    let render views errors (content : Vector (List Display.View) 1) :=
+      renderCollection display value env items (label.eval value env) views content[0]
         (Feedback.messages errors location)
+    { output := rows.map (·.output)
+      locals := states
+      view := render (rows.map (·.view)) []
+      feedback := fun errors => render (rows.map fun row => row.feedback errors) errors
+      requests := rows.flatMap (·.requests)
+      apply := fun route argument => match route with
+        | index :: rest => do
+          let some row := rows[index]? | absent
+          let updated ← row.apply rest argument
+          let env := updated.state.tail.tail
+          if updated.state.tail.value then
+            return ⟨path.set (items.eraseIdx index) value, env, states.eraseIdx index⟩
+          return ⟨path.set (items.set index updated.value) value, env,
+            states.set index updated.locals⟩
+        | _ => absent }
 
 def evaluatePresentation
   {slots : List Nat}
