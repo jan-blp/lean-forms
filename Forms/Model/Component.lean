@@ -26,14 +26,14 @@ structure Columns (Γ : Context) (α : Type) (β : Type := Unit) where
   headers : Vector String count
   cells : Presentation [] Γ α β count
 
-structure Branch (Γ : Context) (α : Type) where
-  pack ::
-  LocalState : Type
-  node : BranchNode Γ α LocalState
-
-structure Branches (Γ : Context) (α : Type) where
-  LocalState : Type
-  node : BranchesNode Γ α LocalState
+/-- An option of `choice`: picking it builds `constructor` from `initial`, and `body` edits the
+payload. -/
+structure Branch (Γ : Context) (α : Type) [Constructors α] where
+  {Payload : Type}
+  constructor : Constructors.Constructor α Payload
+  label : String
+  initial : Payload
+  body : Component Γ Payload
 
 /-- Turns a row selection into a concrete path to that list item. -/
 def RowSelection.itemPath
@@ -95,15 +95,6 @@ def RowSelection.itemPath
   : Component Γ α β holes :=
   ⟨body.LocalState, .withAvailability availability body.node⟩
 
-@[reducible] def Component.choiceOf
-  {Γ : Context}
-  {α β : Type}
-  (path : Path α β)
-  (label : Computation Γ α String)
-  (branches : Branches Γ β)
-  : Component Γ α :=
-  ⟨branches.LocalState, .choiceOf path label branches.node⟩
-
 /-- Shows `row` for each item at `path`, then the content of its hole.
 Each row reads `Ref.row` and sets `Ref.rowRemoved` to remove itself. -/
 @[reducible] def Component.listOf
@@ -150,69 +141,6 @@ Each row reads `Ref.row` and sets `Ref.rowRemoved` to remove itself. -/
   : Component Γ α β holes :=
   ⟨LoadedState data (fun status => (body status).LocalState), .load source (fun status => (body status).node)⟩
 
-@[reducible] def Branches.nil {Γ : Context} {α : Type} : Branches Γ α :=
-  ⟨Unit, .nil⟩
-
-@[reducible] def Branches.cons
-  {Γ : Context}
-  {α : Type}
-  (head : Branch Γ α)
-  (tail : Branches Γ α)
-  : Branches Γ α :=
-  ⟨Binding head.LocalState tail.LocalState, .cons head.node tail.node⟩
-
-@[reducible] def Branch.mk
-  {Γ : Context}
-  {α β : Type}
-  (key label : String)
-  (inject : β → α)
-  (project : α → Option β)
-  (initial : β)
-  (body : Component Γ β)
-  : Branch Γ α :=
-  ⟨body.LocalState, .mk key label inject project initial body.node⟩
-
-def Branch.of
-  {Γ : Context}
-  {α β : Type}
-  [Constructors α]
-  (constructor : Constructors.Constructor α β)
-  (label : String)
-  (initial : β)
-  (body : Component Γ β)
-  : Branch Γ α :=
-  .mk (Constructors.key constructor) label (Constructors.inject constructor)
-    (Constructors.project constructor) initial body
-
-def Branch.key {Γ : Context} {α : Type} (branch : Branch Γ α) : String :=
-  match branch.node with
-  | .mk key .. => key
-
-def Branch.label {Γ : Context} {α : Type} (branch : Branch Γ α) : String :=
-  match branch.node with
-  | .mk _ label .. => label
-
-/-- Whether `value` was built by this branch's constructor. -/
-def Branch.matches {Γ : Context} {α : Type} (branch : Branch Γ α) (value : α) : Bool :=
-  match branch.node with
-  | .mk (project := project) .. => (project value).isSome
-
-/-- The value a newly chosen branch starts from. -/
-def Branch.start {Γ : Context} {α : Type} (branch : Branch Γ α) : α :=
-  match branch.node with
-  | .mk (inject := inject) (initial := initial) .. => inject initial
-
-def Branches.ofList {Γ : Context} {α : Type} : List (Branch Γ α) → Branches Γ α
-  | [] => .nil
-  | head :: tail => .cons head (ofList tail)
-
-def BranchesNode.toList {Γ : Context} {α state : Type} : BranchesNode Γ α state → List (Branch Γ α)
-  | .nil => []
-  | .cons head tail => ⟨_, head⟩ :: tail.toList
-
-def Branches.toList {Γ : Context} {α : Type} (branches : Branches Γ α) : List (Branch Γ α) :=
-  branches.node.toList
-
 /-- Shows `body` only while `condition` holds. -/
 def Component.visibleWhen
   {Γ : Context}
@@ -231,15 +159,17 @@ def Component.disabledWhen
   : Component Γ α β :=
   .withAvailability ((fun disabled => if disabled then .disabled else .enabled) <$> condition) body
 
-/-- Picks a constructor of the sum at `path`; the chosen branch edits its payload. -/
-def Component.choice
+@[reducible] def Component.select
   {Γ : Context}
-  {α β : Type}
+  {α β κ : Type}
+  [DecidableEq κ]
+  [Key κ]
   (path : Path α β)
   (label : Computation Γ α String)
-  (branches : List (Branch Γ β))
+  (options : Computation Γ α (SelectOptions κ β))
+  (selected : β → κ)
   : Component Γ α :=
-  .choiceOf path label (.ofList branches)
+  ⟨Unit, .select path label options selected⟩
 
 /-- Loads `source`; `body` builds the subtree from the data, with a note while loading or failed. -/
 def Component.loadWith
@@ -381,20 +311,22 @@ strip as `Slot.here`. -/
   : Computation Γ α (Layout slots) :=
   (fun label => .group (some label) (placed.map Layout.place)) <$> label
 
-/-- Owns `children` after the presentations in `placed`, then shows all of them in a group. -/
-def Presentation.children
+/-- Owns `children` after the presentations in `placed`, then lays out all of them with `render`
+applied to `arrangement`. -/
+def Presentation.ownAll
   {slots : List Nat}
   {Γ Δ : Context}
-  {α : Type}
+  {α β γ : Type}
   (rename : Renaming Γ Δ)
-  (label : Computation Δ α String)
+  (arrangement : Computation Δ α γ)
+  (render : {slots : List Nat} → γ → List (Slot slots 0) → Layout slots)
   (placed : List (Slot slots 0))
-  : List (Component Γ α) → Presentation slots Δ α
-  | [] => .arrange (Layout.grouped label placed)
+  : List (Component Γ α β) → Presentation slots Δ α
+  | [] => .arrange ((render · placed) <$> arrangement)
   | child :: rest =>
     .own (child.rename rename) <|
-      Presentation.children (fun ref => .there (rename ref)) (label.rename Renaming.shift)
-        (placed.map Slot.there ++ [.here]) rest
+      Presentation.ownAll (fun ref => .there (rename ref)) (arrangement.rename Renaming.shift)
+        render (placed.map Slot.there ++ [.here]) rest
 
 /-- Owns `cell` innermost in `cells` and places it after their views. -/
 def PresentationNode.snoc
@@ -614,6 +546,41 @@ def Component.group
   (label : Computation Γ α String)
   (children : List (Component Γ α))
   : Component Γ α :=
-  .present (Presentation.children (fun ref => ref) label [] children)
+  .present <|
+    Presentation.ownAll (fun ref => ref) label
+      (fun label placed => .group (some label) (placed.map .place)) [] children
+
+/-- Picks a constructor of the sum at `path`; the chosen branch edits its payload. -/
+def Component.choice
+  {Γ : Context}
+  {α β : Type}
+  [Constructors β]
+  [LawfulConstructors β]
+  (path : Path α β)
+  (label : Computation Γ α String)
+  (branches : List (Branch Γ β))
+  (tags_nodup : (branches.map (Constructors.tagOf ·.constructor)).Nodup := by simp <;> decide)
+  (labels_nodup : (branches.map (·.label)).Nodup := by simp <;> decide)
+  : Component Γ α :=
+  let options : SelectOptions _ β := {
+    options := branches.map fun branch => {
+      key := Constructors.tagOf branch.constructor
+      label := branch.label
+      start := Constructors.inject branch.constructor branch.initial }
+    keys_nodup := by simpa [List.map_map, Function.comp_def] using tags_nodup
+    labels_nodup := by simpa [List.map_map, Function.comp_def] using labels_nodup }
+  let bodies := branches.map fun branch =>
+    let focus := (PartialPath.ofPath path).trans (.constructor branch.constructor .self)
+    Component.focus (.const focus) branch.body
+  .present <|
+    .own (.select path label (.const options) Constructors.tag) <|
+      Presentation.ownAll Renaming.shift { inputs := inputs[path], run := Constructors.tag }
+        (fun tag placed => match placed with
+          | [] => .group none []
+          | selector :: bodies =>
+            match (bodies.zip branches).find? (Constructors.tagOf ·.2.constructor == tag) with
+            | none => .place selector
+            | some (body, _) => .group none [.place selector, .place body])
+        [.here] bodies
 
 end Forms.Model

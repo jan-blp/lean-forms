@@ -9,7 +9,6 @@ namespace Forms.Model
 inductive InvocationError where
   | hidden
   | disabled
-  | inactiveBranch
   /-- No control with the key is shown. -/
   | absent
   /-- The choice has no branch with the requested key. -/
@@ -20,7 +19,6 @@ instance : ToString InvocationError where
   toString
     | .hidden => "This action is unavailable: the control is hidden."
     | .disabled => "This action is unavailable: the control is disabled."
-    | .inactiveBranch => "This action is unavailable: the option is not selected."
     | .absent => "This action is unavailable: the control is no longer shown."
     | .unavailableBranch key => s!"This action is unavailable: branch '{key}' is no longer available."
 

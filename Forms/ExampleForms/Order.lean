@@ -182,21 +182,21 @@ def Order.form {Γ : Context} : Component Γ Order.Raw :=
       (path := path[Order.Field.shipping])
       (label := "Shipping")
       (branches := [
-        .of
+        .mk
           (constructor := Shipping.Constructor.pickup)
           (label := "Pickup")
           (initial := ⟨⟩)
           (body := .computed
             (label := "Pickup at")
             (value := { inputs := inputs[], run := "Store, Bahnhofstrasse 1, Zürich" })),
-        .of
+        .mk
           (constructor := Shipping.Constructor.standard)
           (label := "Standard")
           (initial := ⟨⟨"", ""⟩⟩)
           (body := .group
             (label := "Address")
             (children := addressFields path[Shipping.standard.Field.address])),
-        .of
+        .mk
           (constructor := Shipping.Constructor.express)
           (label := "Express")
           (initial := ⟨⟨"", ""⟩, ""⟩)

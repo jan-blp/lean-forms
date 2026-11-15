@@ -20,6 +20,18 @@ inductive Availability where
   | disabled
   deriving DecidableEq, Repr
 
+/-- An option of `select`, identified by `key`. -/
+structure SelectOption (κ α : Type) where
+  key : κ
+  label : String
+  start : α
+
+/-- Options of `select`, with distinct keys and distinct labels. -/
+structure SelectOptions (κ α : Type) where
+  options : List (SelectOption κ α)
+  keys_nodup : options.map SelectOption.key |>.Nodup := by simp <;> decide
+  labels_nodup : options.map SelectOption.label |>.Nodup := by simp <;> decide
+
 mutual
 inductive ComponentNode : (Γ : Context) → (model state output : Type) → (holes : Nat) → Type 1 where
   | field {Γ : Context}
@@ -52,12 +64,18 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (availability : Computation Γ α Availability)
       (body : ComponentNode Γ α state β holes)
       : ComponentNode Γ α state β holes
-  | choiceOf {Γ : Context}
-      {α β state : Type}
+  /-- A choice among `options` for the value at `path`.
+  The option with key `selected value` is marked selected, if there is one.
+  Choosing a different option sets the value to its `start`. -/
+  | select {Γ : Context}
+      {α β κ : Type}
+      [decidableEq : DecidableEq κ]
+      [key : Key κ]
       (path : Path α β)
       (label : Computation Γ α String)
-      (branches : BranchesNode Γ β state)
-      : ComponentNode Γ α state Unit 0
+      (options : Computation Γ α (SelectOptions κ β))
+      (selected : β → κ)
+      : ComponentNode Γ α Unit Unit 0
   | output {Γ : Context}
       {α β : Type}
       (value : Computation Γ α β)
@@ -133,23 +151,6 @@ inductive PresentationNode
       (body : PresentationNode slots (⟨.writable, β⟩ :: Γ) α state γ views)
       : PresentationNode slots Γ α (Binding β state) γ views
 
-inductive BranchNode : (Γ : Context) → (model state : Type) → Type 1 where
-  | mk {Γ : Context}
-      {α β state : Type}
-      (key label : String)
-      (inject : β → α)
-      (project : α → Option β)
-      (initial : β)
-      (body : ComponentNode Γ β state Unit 0)
-      : BranchNode Γ α state
-
-inductive BranchesNode : (Γ : Context) → (model state : Type) → Type 1 where
-  | nil {Γ : Context} {α : Type} : BranchesNode Γ α Unit
-  | cons {Γ : Context}
-      {α headState tailState : Type}
-      (head : BranchNode Γ α headState)
-      (tail : BranchesNode Γ α tailState)
-      : BranchesNode Γ α (Binding headState tailState)
 end
 
 end Forms.Model

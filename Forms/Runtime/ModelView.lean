@@ -87,16 +87,6 @@ structure Evaluated (Γ : Context) (α state β : Type) extends NodeEvaluation �
   env : Env Γ
   cache : HttpRequest.Cache
 
-structure EvaluatedBranches (Γ : Context) (α state : Type) where
-  locals : state
-  view : Option Display.View
-  feedback : List Feedback.Error → Option Display.View
-  selected : String
-  options : List Display.ChoiceOption
-  requests : List HttpRequest
-  apply : Nat → List Nat → Option Input → Except ActionError (ComponentUpdate Γ α state)
-  select : String → Except ActionError (ComponentUpdate Γ α state)
-
 def absent {α : Type} : Except ActionError α :=
   .error (.invalid .absent)
 
@@ -310,35 +300,34 @@ def evaluateNode
         | .hidden => .error (.invalid .hidden)
         | .disabled => .error (.invalid .disabled)
         | .enabled => body.apply route argument }
-  | .choiceOf path label branches =>
-    let current := path.get value
+  | .select (decidableEq := _) (key := _) path label options selected =>
+    let options := (options.eval value env).options
+    let selected := selected (path.get value)
     let location := location ++ pathLocation path
-    let branches := evaluateBranches branches current env cache locals target location disabled 0
+    let shown := if options.any (·.key == selected) then Key.encode selected else ""
     let control : Display.Control := {
       key := .select location
       target, location, disabled
       label := label.eval value env
-      input := .choice branches.selected branches.options }
+      input := .choice shown
+        (options.map fun option => { value := Key.encode option.key, label := option.label }) }
     { output := ()
-      locals := branches.locals
-      view := fun _ => match branches.view with
-        | none => .control control
-        | some body => .stack none [.control control, body]
+      locals := ()
+      view := fun _ => .control control
       feedback := fun errors _ =>
-        let control := { control with messages := Feedback.messages errors location }
-        match branches.feedback errors with
-        | none => .control control
-        | some body => .stack none [.control control, body]
-      requests := branches.requests
+        .control { control with messages := Feedback.messages errors location }
+      requests := []
       apply := fun route argument => do
         if disabled then throw (.invalid .disabled)
-        let updated ← match route with
-          | [] => match argument with
-            | some (.text key) => branches.select key
-            | some _ => .error (.decode (.clientBug (.wrongArgument "an option")))
-            | none => .error (.decode (.clientBug .missingArgument))
-          | index :: rest => branches.apply index rest argument
-        return updated.mapValue (fun updated => path.set updated value) }
+        match route, argument with
+        | [], some (.text key) =>
+          let some option := (Key.decode key).bind fun key => options.find? (·.key == key)
+            | throw (.invalid (.unavailableBranch key))
+          if option.key == selected then return ⟨value, env, ()⟩
+          return ⟨path.set option.start value, env, ()⟩
+        | [], some _ => throw (.decode (.clientBug (.wrongArgument "an option")))
+        | [], none => throw (.decode (.clientBug .missingArgument))
+        | _, _ => absent }
   | .output computation =>
     { output := computation.eval value env
       locals := ()
@@ -442,63 +431,6 @@ def evaluatePresentation
     bound locals.value <| evaluatePresentation body value (Env.cons locals.value env) cache locals.tail
       (target.child 0) location disabled presentations
 
-def evaluateBranches
-  {Γ : Context}
-  {α state : Type}
-  (branches : BranchesNode Γ α state)
-  (value : α)
-  (env : Env Γ)
-  (cache : HttpRequest.Cache)
-  (locals : state)
-  (target : Display.Target)
-  (location : Feedback.Location)
-  (disabled : Bool)
-  (index : Nat)
-  : EvaluatedBranches Γ α state :=
-  match branches with
-  | .nil =>
-    { locals := (), view := none, feedback := fun _ => none, selected := "", options := [], requests := []
-      apply := fun _ _ _ => absent
-      select := fun key => .error (.invalid (.unavailableBranch key)) }
-  | .cons (.mk key label inject project initial body) tail =>
-    let tail := evaluateBranches tail value env cache locals.tail target location disabled (index + 1)
-    match project value with
-    | none =>
-      { locals := ⟨locals.value, tail.locals⟩
-        view := tail.view
-        feedback := tail.feedback
-        selected := tail.selected
-        options := { value := key, label } :: tail.options
-        requests := tail.requests
-        apply := fun index route argument => match index with
-          | 0 => .error (.invalid .inactiveBranch)
-          | index + 1 => do
-            let updated ← tail.apply index route argument
-            return updated.mapLocals (⟨locals.value, ·⟩)
-        select := fun chosen =>
-          if chosen == key then .ok ⟨inject initial, env, ⟨locals.value, tail.locals⟩⟩ else do
-            let updated ← tail.select chosen
-            return updated.mapLocals (⟨locals.value, ·⟩) }
-    | some payload =>
-      let head := (evaluateNode body payload env cache locals.value (target.child index)
-        (location ++ [.constructor key]) disabled).closed
-      { locals := ⟨head.locals, tail.locals⟩
-        view := some head.view
-        feedback := fun errors => some (head.feedback errors)
-        selected := key
-        options := { value := key, label } :: tail.options
-        requests := head.requests ++ tail.requests
-        apply := fun index route argument => match index with
-          | 0 => do
-            let updated ← head.apply route argument
-            return { updated with value := inject updated.value, locals := ⟨updated.locals, tail.locals⟩ }
-          | index + 1 => do
-            let updated ← tail.apply index route argument
-            return updated.mapLocals (⟨head.locals, ·⟩)
-        select := fun chosen =>
-          if chosen == key then .ok ⟨value, env, ⟨head.locals, tail.locals⟩⟩ else do
-            let updated ← tail.select chosen
-            return updated.mapLocals (⟨head.locals, ·⟩) }
 end
 
 def evaluate

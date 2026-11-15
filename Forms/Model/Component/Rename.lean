@@ -21,7 +21,8 @@ def ComponentNode.rename
   | .tabBar label active tabs => .tabBar (label.rename rename) (rename active) (tabs.rename rename)
   | .withAvailability availability body =>
     .withAvailability (availability.rename rename) (body.rename rename)
-  | .choiceOf path label branches => .choiceOf path (label.rename rename) (branches.rename rename)
+  | .select (decidableEq := _) (key := _) path label options selected =>
+    .select path (label.rename rename) (options.rename rename) selected
   | .output value => .output (value.rename rename)
   | .list path label row => .list path (label.rename rename) (row.rename rename.liftRow)
   | .table path label headers rowLabel row selection =>
@@ -45,25 +46,6 @@ def PresentationNode.rename
   | .own component body => .own (component.rename rename) (body.rename rename.lift)
   | .bind initial body => .bind initial (body.rename rename.lift)
 
-def BranchNode.rename
-  {Γ Δ : Context}
-  {α state : Type}
-  (rename : Renaming Γ Δ)
-  (branch : BranchNode Γ α state)
-  : BranchNode Δ α state :=
-  match branch with
-  | .mk key label inject project initial body =>
-    .mk key label inject project initial (body.rename rename)
-
-def BranchesNode.rename
-  {Γ Δ : Context}
-  {α state : Type}
-  (rename : Renaming Γ Δ)
-  (branches : BranchesNode Γ α state)
-  : BranchesNode Δ α state :=
-  match branches with
-  | .nil => .nil
-  | .cons head tail => .cons (head.rename rename) (tail.rename rename)
 end
 
 end Forms.Model

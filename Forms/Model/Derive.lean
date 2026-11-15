@@ -266,38 +266,68 @@ private def emitConstructors (model : ModelInfo) : CommandElabM Unit := do
     `(Parser.Command.ctor| | $(ident (Name.mkSimple ctor.name.getString!)):ident :
       $(ident `Constructor) $(global (model.payload ctor)))
   emit (← `(command| inductive $constructor:ident : Type → Type where $ctors:ctor*))
+  let tagType := global (model.name ++ `Tag)
+  let tags ← model.constructors.mapM fun ctor =>
+    `(Parser.Command.ctor| | $(ident (Name.mkSimple ctor.name.getString!)):ident)
+  emit (← `(command| inductive $tagType:ident where $tags:ctor* deriving DecidableEq, Repr))
   let selected ← fresh `selected
   let value ← fresh `value
   let payload ← fresh `payload
   let mut injections := #[]
   let mut projections := #[]
   let mut keys := #[]
+  let mut decodings := #[]
+  let mut tagsOf := #[]
+  let mut valueTags := #[]
   for ctor in model.constructors do
     let pattern : TermSyntax := global (model.name ++ `Constructor ++ Name.mkSimple ctor.name.getString!)
+    let tag : TermSyntax := global (model.name ++ `Tag ++ Name.mkSimple ctor.name.getString!)
     injections := injections.push (← alternative #[pattern] (← model.wrap ctor value))
     let found ← if ctor.data.isEmpty then `(some $(global (model.payload ctor ++ `mk))) else `(some $payload)
     let mut cases := #[← alternative #[← model.wrap ctor payload] found]
     if model.constructors.size > 1 then cases := cases.push (← alternative #[← `(_)] (← `(none)))
     projections := projections.push (← alternative #[pattern] (← matchOn #[value] cases))
-    keys := keys.push (← alternative #[pattern] (Syntax.mkStrLit ctor.name.getString!))
+    keys := keys.push (← alternative #[tag] (Syntax.mkStrLit ctor.name.getString!))
+    decodings := decodings.push
+      (← alternative #[Syntax.mkStrLit ctor.name.getString!] (← `(some $tag)))
+    tagsOf := tagsOf.push (← alternative #[pattern] tag)
+    valueTags := valueTags.push (← alternative #[← model.wrap ctor (← `(_))] tag)
   let injection ← matchOn #[selected] injections
   let projection ← matchOn #[selected] projections
   let key ← matchOn #[selected] keys
-  let inject := global (model.name ++ `Constructor.inject)
-  let project := global (model.name ++ `Constructor.project)
-  let keyName := global (model.name ++ `Constructor.key)
+  let encoded ← fresh `encoded
+  let decoding ← matchOn #[encoded] (decodings.push (← alternative #[← `(_)] (← `(none))))
+  let tagOf ← matchOn #[selected] tagsOf
+  let valueTag ← matchOn #[value] valueTags
+  -- Fresh names, so constructors such as `inject` or `tag` cannot collide with the helpers.
+  let inject ← fresh `inject
+  let project ← fresh `project
+  let tagOfName ← fresh `tagOf
+  let tagName ← fresh `tag
+  emit (← `(command| instance : Forms.Model.Key $tagType where
+    encode $selected:ident := $key
+    decode $encoded:ident := $decoding
+    decode_encode := by
+      intro $selected:ident
+      cases $selected:ident <;> rfl
+    encode_ne_empty := by
+      intro $selected:ident
+      cases $selected:ident <;> decide))
   emit (← `(command| @[expose] def $inject:ident {α : Type}
     ($selected:ident : $constructor α) ($value:ident : α) : $raw := $injection))
   emit (← `(command| @[expose] def $project:ident {α : Type}
     ($selected:ident : $constructor α) ($value:ident : $raw) : Option α := $projection))
-  emit (← `(command| @[expose] def $keyName:ident {α : Type}
-    ($selected:ident : $constructor α) : String := $key))
+  emit (← `(command| @[expose] def $tagOfName:ident {α : Type}
+    ($selected:ident : $constructor α) : $tagType := $tagOf))
+  emit (← `(command| @[expose] def $tagName:ident ($value:ident : $raw) : $tagType := $valueTag))
   emit (← `(command| @[expose, reducible] instance $(global (model.name ++ `constructors)):ident :
       Forms.Model.Constructors $raw where
     Constructor := $constructor
+    Tag := $tagType
     inject := $inject
     project := $project
-    key := $keyName))
+    tagOf := $tagOfName
+    tag := $tagName))
   -- `split` stays linear in constructors; a single-constructor match reduces, so case on `source`.
   emit (← `(command| instance $(global (model.name ++ `lawfulConstructors)):ident :
       Forms.Model.LawfulConstructors $raw where
@@ -309,7 +339,10 @@ private def emitConstructors (model : ModelInfo) : CommandElabM Unit := do
       change $inject selected value = source
       change $project selected source = some value at h
       cases selected <;> simp only [$project:ident] at h <;> (first | split at h | cases source) <;>
-        simp_all [$inject:ident]))
+        simp_all [$inject:ident]
+    tag_inject := by
+      intro payload selected value
+      cases selected <;> rfl))
 
 private def emitErasure (model : ModelInfo) : CommandElabM Unit := do
   let value ← fresh `value

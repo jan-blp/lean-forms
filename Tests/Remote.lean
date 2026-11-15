@@ -131,13 +131,12 @@ private def ordered (layout : Source (List String)) : Component [] Person.Raw :=
 /-- Loading can remove options while preserving the choice's location and key. -/
 private def shippingChoices : Component [] Order.Raw :=
   let pickup : Branch [] Shipping.Raw :=
-    .of Shipping.Constructor.pickup "Pickup" ⟨⟩ (.computed "" (.const ""))
+    .mk Shipping.Constructor.pickup "Pickup" ⟨⟩ (.computed "" (.const ""))
   let standard : Branch [] Shipping.Raw :=
-    .of Shipping.Constructor.standard "Standard" ⟨⟨"", ""⟩⟩ (.computed "" (.const ""))
-  .load (.const (.fetch layoutRequest (fromJson? (α := Bool)))) fun status =>
-    .choice path[Order.Field.shipping] "Shipping" (match status with
-      | .ready _ => [standard]
-      | _ => [pickup, standard])
+    .mk Shipping.Constructor.standard "Standard" ⟨⟨"", ""⟩⟩ (.computed "" (.const ""))
+  .load (.const (.fetch layoutRequest (fromJson? (α := Bool)))) fun
+    | .ready _ => .choice path[Order.Field.shipping] "Shipping" [standard]
+    | _ => .choice path[Order.Field.shipping] "Shipping" [pickup, standard]
 
 private def labels
   {α : Type}

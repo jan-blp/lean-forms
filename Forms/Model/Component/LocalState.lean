@@ -19,7 +19,7 @@ def ComponentNode.initialState
   | .tabBar .. => ()
   | .output .. => ()
   | .withAvailability _ body => body.initialState
-  | .choiceOf (branches := branches) .. => branches.initialState
+  | .select (decidableEq := _) (key := _) .. => ()
   | .list .. => []
   | .table .. => []
   | .focus _ body => body.initialState
@@ -38,22 +38,6 @@ def PresentationNode.initialState
   | .own component body => ⟨component.initialState, body.initialState⟩
   | .bind initial body => ⟨initial, body.initialState⟩
 
-def BranchNode.initialState
-  {Γ : Context}
-  {α state : Type}
-  (branch : BranchNode Γ α state)
-  : state :=
-  match branch with
-  | .mk (body := body) .. => body.initialState
-
-def BranchesNode.initialState
-  {Γ : Context}
-  {α state : Type}
-  (branches : BranchesNode Γ α state)
-  : state :=
-  match branches with
-  | .nil => ()
-  | .cons head tail => ⟨head.initialState, tail.initialState⟩
 end
 
 @[reducible] def Component.initialState
