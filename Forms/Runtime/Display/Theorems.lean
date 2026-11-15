@@ -72,7 +72,6 @@ theorem View.dedupeRows_spec
     · simpa [View.dedupeRows] using tail_nodup
 end
 
-/-- No two controls of a deduplicated view share a key. -/
 theorem View.dedupe_keys_nodup (view : View) : (view.dedupe.controls.map (·.key)).Nodup := by
   have ⟨seen_keys, nodup⟩ := View.dedupeFrom_spec [] view List.nodup_nil
   have keys : ((view.dedupeFrom []).deduped.controls.map (·.key)).reverse.Nodup := by

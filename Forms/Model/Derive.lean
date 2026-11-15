@@ -429,7 +429,6 @@ private def accumulateAll
   results.foldlM (init := ← `(Except.ok $fn)) fun acc result =>
     `(Forms.Model.accumulate $acc $result)
 
-/-- Validates the fields of `payload` collecting all errors, then checks the constraints. -/
 private def validationBranch
   (model : ModelInfo)
   (ctor : Constructor)
@@ -552,7 +551,6 @@ initialize registerDerivingHandler ``FormModel fun names => do
   for name in names do deriveOne name
   return true
 
-/-- Lists a structure's fields as `name : type`, one per line. -/
 elab "#fields " id:ident : command => do
   let name ← liftCoreM <| realizeGlobalConstNoOverloadWithInfo id
   let env ← getEnv

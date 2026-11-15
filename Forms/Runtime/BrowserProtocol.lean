@@ -7,7 +7,6 @@ public import Std.Data.HashMap
 namespace Forms.Runtime.BrowserProtocol
 open Lean
 
-/-- Identifies a form instance within a store. -/
 structure FormHandle where
   value : Nat
   deriving BEq, Hashable, Inhabited

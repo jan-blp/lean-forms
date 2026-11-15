@@ -30,7 +30,6 @@ structure ServerError where
 def summary (errors : List Error) : String :=
   String.intercalate "\n" (errors.map (·.message))
 
-/-- Messages are matched and deduplicated before the view is serialized. -/
 def messages (errors : List Error) (path : Location) : Option String :=
   let matched := (errors.filterMap fun error =>
     match error.targets with

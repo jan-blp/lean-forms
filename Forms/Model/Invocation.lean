@@ -5,13 +5,12 @@ public import Forms.Model.Context
 @[expose] public section
 namespace Forms.Model
 
-/-- Why an invocation does not apply to the current value. -/
 inductive InvocationError where
   | hidden
   | disabled
   /-- No control with the key is shown. -/
   | absent
-  /-- The choice has no branch with the requested key. -/
+  /-- No option of the select has the requested key. -/
   | unavailableBranch (key : String)
   deriving DecidableEq, Repr
 
@@ -22,7 +21,6 @@ instance : ToString InvocationError where
     | .absent => "This action is unavailable: the control is no longer shown."
     | .unavailableBranch key => s!"This action is unavailable: branch '{key}' is no longer available."
 
-/-- The model, context, and local bindings after a checked invocation. -/
 structure ComponentUpdate (Γ : Context) (α localState : Type) where
   value : α
   state : Env Γ

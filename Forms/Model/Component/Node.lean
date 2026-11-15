@@ -20,13 +20,11 @@ inductive Availability where
   | disabled
   deriving DecidableEq, Repr
 
-/-- An option of `select`, identified by `key`. -/
 structure SelectOption (κ α : Type) where
   key : κ
   label : String
   start : α
 
-/-- Options of `select`, with distinct keys and distinct labels. -/
 structure SelectOptions (κ α : Type) where
   options : List (SelectOption κ α)
   keys_nodup : options.map SelectOption.key |>.Nodup := by simp <;> decide
@@ -50,7 +48,6 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (caption : Computation Γ α String)
       (action : Action Γ α)
       : ComponentNode Γ α Unit Unit 0
-  /-- Tabs that set `active` to the chosen tab. -/
   | tabBar {Γ : Context}
       {α : Type}
       {n : Nat}
@@ -114,7 +111,6 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (source : Computation Γ α (Source data))
       (body : (status : Status data) → ComponentNode Γ α (states status) β holes)
       : ComponentNode Γ α (LoadedState data states) β holes
-  /-- Owns components and places their views with a layout. -/
   | present {Γ : Context}
       {α β state : Type}
       (body : PresentationNode [] Γ α state β 1)
@@ -135,7 +131,7 @@ inductive PresentationNode
       (output : Computation Γ α β)
       (arrangement : Computation Γ α (Vector (Layout slots) views))
       : PresentationNode slots Γ α Unit β views
-  /-- Evaluates `component`, exposing its output to `body` and its view as `Slot.here`. -/
+  /-- Owns `component`: `body` reads its output as `Ref.here` and places its view as `Slot.here`. -/
   | own {slots : List Nat}
       {Γ : Context}
       {α β γ ownedState bodyState : Type}

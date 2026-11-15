@@ -15,7 +15,6 @@ inductive «Type» where
   | unknown
   | null
   | stringLiteral (value : String)
-  /-- A type declared in the module for Lean namespace `path`. -/
   | reference (path : List String) (name : String)
   | array (element : TS.Type)
   | tuple (elements : List TS.Type)
@@ -45,7 +44,6 @@ structure Program where
 
 private def quoted (text : String) : String := (Lean.Json.str text).compress
 
-/-- The name a module is imported under. -/
 def alias (path : List String) : String := path.getLast?.getD ""
 
 mutual
@@ -85,16 +83,13 @@ private def propertyPaths : Property → List (List String)
   | .mk (type := type) .. => typePaths type
 end
 
-/-- Renders `type` as seen from the module for namespace `current`. -/
 def Type.pretty (type : TS.Type) (current : List String := []) : String := renderType current type
 
 def Module.file (module : Module) : String := String.intercalate "/" module.path ++ ".ts"
 
-/-- The other modules this module references. -/
 def Module.imports (module : Module) : List (List String) :=
   (module.declarations.flatMap (typePaths ·.type)).eraseDups.filter (· != module.path)
 
-/-- The import specifier for module `target`, relative to module `source`. -/
 def relativeImport (source target : List String) : String :=
   let directory := source.dropLast
   let common := ((directory.zip target.dropLast).takeWhile fun (a, b) => a == b).length

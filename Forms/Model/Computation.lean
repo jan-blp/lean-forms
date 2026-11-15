@@ -18,7 +18,6 @@ inductive Inputs (Γ : Context) (α : Type) : List Type → Type 1 where
       (path : Path α β)
       (inputs : Inputs Γ α rest)
       : Inputs Γ α (β :: rest)
-  /-- Reads a context entry, whether read-only or writable. -/
   | ui {access : Access}
       {β : Type}
       {rest : List Type}
@@ -131,7 +130,6 @@ structure Computation (Γ : Context) (α : Type) (β : Type u) where
   inputs : Inputs Γ α types
   run : Inputs.Function types β
 
-/-- A computation without inputs. -/
 def Computation.const
   {Γ : Context}
   {α : Type}
@@ -145,7 +143,6 @@ def Computation.const
 instance {Γ : Context} {α : Type} : Coe String (Computation Γ α String) where
   coe := .const
 
-/-- Constant tab labels. -/
 instance
   {Γ : Context}
   {α : Type}

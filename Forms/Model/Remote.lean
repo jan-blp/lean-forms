@@ -13,7 +13,6 @@ inductive HttpMethod where
   | post
   deriving BEq, Hashable, Repr, ToJson, FromJson
 
-/-- A request whose JSON response a form can load. -/
 structure HttpRequest where
   method : HttpMethod
   url : String
@@ -70,14 +69,12 @@ attribute [instance]
   Api.Signature.outputToJson
   Api.Signature.outputFromJson
 
-/-- Typed HTTP endpoints: a call to `named` sends its signature's `Input` and returns its `Output`.
-Calls are POSTs of the JSON input to the endpoint's `path`. -/
+/-- Calls POST the signature's JSON input to the endpoint's `path` and decode its output. -/
 class Api (endpoint : Type) [FinEnum endpoint] where
   signature : endpoint → Api.Signature
   path : endpoint → String
   distinct : FinEnum.toList endpoint |>.map path |>.Nodup
 
-/-- An endpoint and its input. -/
 structure Api.Call (endpoint : Type) [FinEnum endpoint] [Api endpoint] where
   named : endpoint
   input : (Api.signature named).Input
@@ -100,7 +97,6 @@ def Api.source
   : Source (Api.signature named).Output :=
   .fetch (Api.request named input) fromJson?
 
-/-- The call `request` names. -/
 def Api.parse
   {endpoint : Type}
   [FinEnum endpoint]
@@ -112,7 +108,6 @@ def Api.parse
   let input ← (Json.parse (request.body.getD "") >>= fromJson?).toOption
   return ⟨named, input⟩
 
-/-- The encoded response `handle` gives to `request`. -/
 def Api.serve
   {endpoint : Type}
   [FinEnum endpoint]

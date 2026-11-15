@@ -107,7 +107,6 @@ instance Order.express_valid_rule : ConstraintRule Order.Constraint.express_vali
 def Order.initial : Order.Raw :=
   ⟨⟨"Grace Hopper", "grace@example.com"⟩, 2, 45, false, "", .standard ⟨⟨"Bahnhofstrasse 1", "Zürich"⟩⟩⟩
 
-/-- Street and city of the address at `path`. -/
 def addressFields
   {Γ : Context}
   {α : Type}

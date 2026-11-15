@@ -16,13 +16,10 @@ inductive Event where
   | apply (key : String) (argument : Json)
   | submit
   | reset
-  /-- The outcome of the `submit` effect. -/
   | submitted (outcome : HttpOutcome)
-  /-- The outcome of the `fetch` effect with `id`. -/
   | fetched (id : String) (outcome : HttpOutcome)
   deriving ToJson, FromJson
 
-/-- What opening a form needs: its registered name, its code version, and its starting value. -/
 structure FormStart where
   form : String
   fingerprint : String
@@ -51,7 +48,6 @@ structure HttpEffect where
   body : Option String
   deriving ToJson, FromJson
 
-/-- A request for the browser to send. -/
 inductive Effect where
   /-- Answered by `submitted`. -/
   | submit (request : HttpEffect)
@@ -59,11 +55,9 @@ inductive Effect where
   | fetch (id : String) (request : HttpEffect)
   deriving ToJson, FromJson
 
-/-- Browser-facing snapshot returned after opening or updating a form. -/
 structure Snapshot where
   title : String
   view : FormsReact.Component
-  /-- Why the last `apply` event was rejected. -/
   rejection : Option String
   /-- Names of the fields whose drafts React keeps. -/
   draftFields : List String

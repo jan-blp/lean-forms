@@ -8,7 +8,6 @@ open LeanLens
 @[expose] public section
 namespace Forms.Model
 
-/-- A lens built from `get` and `put` is lawful when they satisfy the laws. -/
 theorem lawfulMkLens
   {s a : Type}
   {get : s → a}
@@ -19,12 +18,11 @@ theorem lawfulMkLens
   : LawfulLens (mkLens get put) :=
   ⟨view_set, set_view, set_set⟩
 
-/-- Describes a record's typed fields. -/
 class Fields (α : Type) where
   Field : Type → Type
   lens : {β : Type} → Field β → Lens' α β
   lawful : ∀ {β} (field : Field β), LawfulLens (lens field)
-  /-- The field name used in serialization . -/
+  /-- The field name used in serialization. -/
   key : {β : Type} → Field β → String
 
 attribute [reducible] Fields.Field
@@ -50,7 +48,6 @@ theorem Key.encode_injective {κ : Type} [Key κ] : Function.Injective (Key.enco
   intro first second h
   simpa [Key.decode_encode] using congrArg (Key.decode (κ := κ)) h
 
-/-- Describes a sum type's constructors. -/
 class Constructors (α : Type) where
   Constructor : Type → Type
   /-- Names a constructor regardless of its payload. -/
@@ -58,10 +55,8 @@ class Constructors (α : Type) where
   [tagDecidableEq : DecidableEq Tag]
   [tagKey : Key Tag]
   inject : {β : Type} → Constructor β → β → α
-  /-- The payload of a value built by `constructor`. -/
   project : {β : Type} → Constructor β → α → Option β
   tagOf : {β : Type} → Constructor β → Tag
-  /-- The constructor `value` was built with. -/
   tag : α → Tag
 
 attribute [reducible] Constructors.Constructor Constructors.Tag
@@ -75,7 +70,6 @@ instance {α : Type} [Constructors α] : Key (Constructors.Tag α) :=
 def Constructors.key {α β : Type} [Constructors α] (constructor : Constructor α β) : String :=
   Key.encode (tagOf constructor)
 
-/-- Constructor injection and projection describe the same payload, built with the same tag. -/
 class LawfulConstructors (α : Type) [Constructors α] : Prop where
   project_inject : ∀ {β : Type} (c : Constructors.Constructor α β) (value : β),
     Constructors.project c (Constructors.inject c value) = some value
@@ -217,7 +211,6 @@ def Decision.errors
   | .valid _ => []
   | .invalid _ message targets => [{ message, targets }]
 
-/-- The proof, or the errors moved to `raw`. -/
 def Decision.toExcept
   {property : Prop}
   {α : Type}

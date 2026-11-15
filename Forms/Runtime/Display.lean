@@ -33,7 +33,6 @@ inductive Editor where
   | tabs (active : Nat) (labels : List String)
   deriving BEq
 
-/-- An interactive leaf of the view: an editor or button bound to one form value. -/
 structure Control where
   key : ControlKey
   target : Target
@@ -50,7 +49,7 @@ inductive View where
   | control (control : Control)
   | stack (label : Option String) (children : List View)
   | computed (label text : String)
-  /-- Items, then the add button; `messages` are about the list as a whole. -/
+  /-- `messages` are about the list as a whole. -/
   | list (label : String) (children : List View) (messages : Option String)
   | table (label : String) (headers : List String) (rows : List TableRow)
       (footer : View) (messages : Option String)
@@ -63,14 +62,12 @@ end
 
 deriving instance BEq for View, TableRow
 
-/-- `views` as one view. -/
 def View.ofList : List View → View
   | [] => .hidden
   | [view] => view
   | views => .stack none views
 
 mutual
-/-- The controls of `view`, in display order. -/
 def View.controls : View → List Control
   | .control c => [c]
   | .stack _ children => View.controlsAll children
@@ -90,13 +87,11 @@ end
 
 def duplicateNote : String := "Duplicate control: this value is edited elsewhere in the form."
 
-/-- A deduplicated value and the control keys seen so far, including the initial keys. -/
 structure DedupeResult (α : Type) where
   deduped : α
   seen : List ControlKey
 
 mutual
-/-- Replaces each control whose key is in `seen` with a note; returns the keys seen after. -/
 def View.dedupeFrom (seen : List ControlKey) : View → DedupeResult View
   | .control c =>
     if c.key ∈ seen then

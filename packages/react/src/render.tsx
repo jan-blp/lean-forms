@@ -2,7 +2,6 @@ import type { ComponentType, ReactNode } from 'react';
 import { useLeanForm, type Kind, type Props } from './context.js';
 import type * as FormsReact from './protocol/FormsReact.js';
 
-/** The only place where the Lean component tree becomes React elements. */
 export function Render({ component }: { component: FormsReact.Component }): ReactNode {
   const { components } = useLeanForm();
   const [kind, props] = entry(component);
@@ -10,7 +9,6 @@ export function Render({ component }: { component: FormsReact.Component }): Reac
   return <Component {...props} />;
 }
 
-/** Renders a nested component list, e.g. a group's `children`. */
 export function Children({ components }: { components: FormsReact.Component[] }) {
   return components.map((component, index) => <Render key={key(component, index)} component={component} />);
 }

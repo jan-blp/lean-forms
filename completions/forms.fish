@@ -1,4 +1,3 @@
-# Complete forms-web, directly or through Lake.
 function __forms_lake_start
     set -l words (commandline -opc)
     test (count $words) -ge 3; or return 1

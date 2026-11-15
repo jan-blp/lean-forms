@@ -69,7 +69,6 @@ def noArgument {α : Type} (argument : Option Input) (invocation : α) : Except 
   | none => .ok invocation
   | some _ => .error (.decode (.clientBug .unexpectedArgument))
 
-/-- A result for one fixed model, environment, cache, and set of private states. -/
 structure NodeEvaluation
   (Γ : Context)
   (α state β : Type)
@@ -166,7 +165,6 @@ def renderFills
   | .cons content rest => (#v[renderAll views content] ++ renderFills views rest).cast (by omega)
 end
 
-/-- Changes the view of `evaluation`. -/
 def NodeEvaluation.mapView
   {Γ : Context}
   {α state β viewType other : Type}
@@ -177,7 +175,6 @@ def NodeEvaluation.mapView
     view := f evaluation.view
     feedback := fun errors => f (evaluation.feedback errors) }
 
-/-- Renders a component without holes. -/
 def NodeEvaluation.closed
   {Γ : Context}
   {α state β : Type}
@@ -218,7 +215,6 @@ def evaluateCollection
       | _ => absent }
 
 mutual
-/-- Evaluates outputs while building the view, requests, and action routes. -/
 def evaluateNode
   {Γ : Context}
   {α state β : Type}

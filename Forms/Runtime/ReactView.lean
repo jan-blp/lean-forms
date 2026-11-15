@@ -63,7 +63,6 @@ def tableCellsToReact (pending : Bool) : List View → List FormsReact.Component
       tableCellsToReact pending rest
 end
 
-/-- The whole page: `view` plus toolbar, notice and submitted `result`. -/
 def Display.View.toReactPage
   (view : View)
   (state : Interaction.State)

@@ -10,14 +10,12 @@ export interface LeanFormProps {
   start: Wire.FormStart;
   /** URL of the app's compiled `forms.mjs`. */
   moduleUrl: string | URL;
-  /** Replaces default components. */
   components?: Partial<Components>;
   onSnapshot?(snapshot: Wire.Snapshot): void;
 }
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 
-/** Runs `start` in the compiled Lean form and renders its component tree. */
 export function LeanForm({ start, moduleUrl, components, onSnapshot }: LeanFormProps) {
   const [model, setModel] = useState<FormModel>();
   const [failure, setFailure] = useState<string>();
@@ -63,7 +61,6 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
     for (const effect of snapshot.effects) void perform(effect);
   }
 
-  /** Sends the request and reports its outcome: `submitted` for the submission, else `fetched`. */
   async function perform(effect: Wire.Effect) {
     const { url, ...request } = 'submit' in effect ? effect.submit.request : effect.fetch.request;
     let outcome: Wire.HttpOutcome;
@@ -83,7 +80,6 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
     return next;
   }
 
-  /** Applies every editable draft; false when Lean rejects one. */
   function commitDrafts(): boolean {
     let current = snapshot;
     for (const [name, text] of drafts) {

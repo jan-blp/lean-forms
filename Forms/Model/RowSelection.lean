@@ -3,7 +3,6 @@ module
 @[expose] public section
 namespace Forms.Model
 
-/-- The selected row, if any. -/
 inductive RowSelection where
   | none
   | row (index : Nat)

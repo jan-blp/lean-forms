@@ -80,7 +80,6 @@ private def textsRows (label : String) : List Display.TableRow → List String
   | { cells, .. } :: rest => textsAll label cells ++ textsRows label rest
 end
 
-/-- Computed labels and tables in display order. -/
 private partial def order : Display.View → List String
   | .computed name _ => [name]
   | .table label .. => [label]

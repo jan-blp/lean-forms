@@ -7,7 +7,6 @@ public import Forms.Model.Requests
 @[expose] public section
 namespace Forms.Runtime.ModelForm
 
-/-- A request the next snapshot asks the client to send. -/
 inductive Effect where
   | submit
   | fetch (request : Model.HttpRequest)
@@ -20,7 +19,6 @@ structure State {Γ : Model.Context} {α β : Type} (form : Model.Component Γ �
   initialEnv : Model.Env Γ
   ui : Interaction.State
   serverFeedback : Option Feedback.ServerError
-  /-- Effects of the last event, sent with its snapshot. -/
   outbox : List Effect
 
 variable {Γ : Model.Context} {α β : Type} {form : Model.Component Γ α β}
@@ -128,7 +126,6 @@ instance : ToString StaleError where
     | .pending => "Submission is in progress."
     | .invocation error => toString error
 
-/-- Why an action was not applied. -/
 inductive Rejection where
   | input (message : String)
   | stale (error : StaleError)
@@ -149,7 +146,6 @@ def Rejection.ofAction : ModelView.ActionError → Rejection
   | .decode error => .ofDecode error
   | .invalid error => .stale (.invocation error)
 
-/-- Checks a control and computes its update. -/
 def validateAction
   {Γ : Model.Context}
   {α β : Type}
@@ -240,7 +236,6 @@ def event {Γ : Model.Context}
       pure { state with evaluation := ModelView.evaluate form state.value (state.cache.insert request cached) state.env state.locals }
     | _ => pure state
 
-/-- Handles `input`, then queues the requests the new state reads. -/
 def execute {Γ : Model.Context}
   {model β : Type}
   [FormModel model]

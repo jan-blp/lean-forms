@@ -1,4 +1,3 @@
-"""Exercise compiled FormModel submissions against the Lean HTTP server."""
 import json
 import os
 import pty

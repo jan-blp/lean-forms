@@ -14,7 +14,7 @@ public import Std.Data.HashMap
 namespace Forms.ExampleForms
 open Forms.Runtime Forms.Model
 
-/-- Forms of the example application, shared by its native and Wasm builds; the first is the default. -/
+/-- The first is the default. -/
 def forms : List (String × RegisteredForm) := [
   ("person", { definition := .ofModel Person Person.form Person.initial, submitUrl := "/api/submit" }),
   ("order", { definition := .ofModel Order Order.form Order.initial, submitUrl := "/api/submit" }),
@@ -50,7 +50,6 @@ def forms : List (String × RegisteredForm) := [
     definition := .ofModel (List String) Presentation.notes ["First note", "Second note"]
     submitUrl := "/api/submit" })]
 
-/-- Responses of the example application's data endpoints; it has none. -/
 def api : Model.HttpRequest → Option Lean.Json :=
   fun _ => none
 
