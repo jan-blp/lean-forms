@@ -59,6 +59,18 @@ def Inputs.rename
   | .cons path rest => .cons path (rest.rename rename)
   | .ui key rest => .ui (rename key) (rest.rename rename)
 
+def Inputs.append
+  {Γ : Context}
+  {α : Type}
+  {types others : List Type}
+  (inputs : Inputs Γ α types)
+  (rest : Inputs Γ α others)
+  : Inputs Γ α (types ++ others) :=
+  match inputs with
+  | .nil => rest
+  | .cons path inputs => .cons path (inputs.append rest)
+  | .ui key inputs => .ui key (inputs.append rest)
+
 def Inputs.Values : List Type → Type
   | [] => Unit
   | α :: rest => α × Values rest
@@ -101,6 +113,18 @@ def Inputs.Function.map
   match types with
   | [] => f fn
   | _ :: _ => fun value => map f (fn value)
+
+/-- Reads the inputs of `fn`, then those of `arg`. -/
+def Inputs.Function.seq
+  {types others : List Type}
+  {α : Type u}
+  {β : Type v}
+  (fn : Function types (α → β))
+  (arg : Function others α)
+  : Function (types ++ others) β :=
+  match types with
+  | [] => map fn arg
+  | _ :: _ => fun value => seq (fn value) arg
 
 structure Computation (Γ : Context) (α : Type) (β : Type u) where
   {types : List Type}
@@ -150,6 +174,9 @@ def Computation.rename
 
 instance {Γ : Context} {α : Type} : Functor (Computation Γ α) where
   map f computation := ⟨computation.inputs, Inputs.Function.map f computation.run⟩
+
+instance {Γ : Context} {α : Type} : Seq (Computation Γ α) where
+  seq fn arg := ⟨fn.inputs.append (arg ()).inputs, fn.run.seq (arg ()).run⟩
 
 def Computation.weaken
   {Γ : Context}

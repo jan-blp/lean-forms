@@ -70,15 +70,16 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (label : Computation Γ α String)
       (row : ComponentNode (Context.row β Γ) β rowState γ 0)
       : ComponentNode Γ α (List rowState) (List γ) 1
-  /-- Like `list`, with one cell per column and its hole in the footer;
+  /-- Like `list`, with each row's views as cells under `headers` and its hole in the footer;
   `selection` marks its row and follows removals. -/
   | table {Γ : Context}
       {α β γ rowState : Type}
-      {headers : List String}
+      {columns : Nat}
       (path : Path α (List β))
       (label : Computation Γ α String)
+      (headers : Computation Γ α (Vector String columns))
       (rowLabel : Computation (Context.row β Γ) β String)
-      (columns : ColumnsNode headers (Context.row β Γ) β rowState γ)
+      (row : PresentationNode [] (Context.row β Γ) β rowState γ columns)
       (selection : Option (Var Γ RowSelection))
       : ComponentNode Γ α (List rowState) (List γ) 1
   | focus {Γ : Context}
@@ -98,72 +99,39 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
   /-- Owns components and places their views with a layout. -/
   | present {Γ : Context}
       {α β state : Type}
-      (body : PresentationNode [] Γ α state β)
+      (body : PresentationNode [] Γ α state β 1)
       : ComponentNode Γ α state β 0
 
-/-- Components owned in order; `slots` gives the hole count of each slot in scope. -/
+/-- Components owned in order, arranged into `views` views;
+`slots` gives the hole count of each slot in scope. -/
 inductive PresentationNode
   : (slots : List Nat)
   → (Γ : Context)
   → (model state output : Type)
+  → (views : Nat)
   → Type 1 where
   | layout {slots : List Nat}
       {Γ : Context}
       {α β : Type}
+      {views : Nat}
       (output : Computation Γ α β)
-      (arrangement : Computation Γ α (Layout slots))
-      : PresentationNode slots Γ α Unit β
+      (arrangement : Computation Γ α (Vector (Layout slots) views))
+      : PresentationNode slots Γ α Unit β views
   /-- Evaluates `component`, exposing its output to `body` and its view as `Slot.here`. -/
   | own {slots : List Nat}
       {Γ : Context}
       {α β γ ownedState bodyState : Type}
-      {holes : Nat}
+      {holes views : Nat}
       (component : ComponentNode Γ α ownedState β holes)
-      (body : PresentationNode (holes :: slots) (⟨.readOnly, β⟩ :: Γ) α bodyState γ)
-      : PresentationNode slots Γ α (ObservationState ownedState bodyState) γ
+      (body : PresentationNode (holes :: slots) (⟨.readOnly, β⟩ :: Γ) α bodyState γ views)
+      : PresentationNode slots Γ α (ObservationState ownedState bodyState) γ views
   | bind {slots : List Nat}
       {Γ : Context}
       {α β γ state : Type}
+      {views : Nat}
       (initial : β)
-      (body : PresentationNode slots (⟨.writable, β⟩ :: Γ) α state γ)
-      : PresentationNode slots Γ α (Binding β state) γ
-
-/-- Named cells and their explicitly chosen row output. -/
-inductive ColumnsNode
-  : (headers : List String)
-  → (Γ : Context)
-  → (row state output : Type)
-  → Type 1 where
-  | output {Γ : Context}
-      {α β : Type}
-      (value : Computation Γ α β)
-      : ColumnsNode [] Γ α Unit β
-  | cons {Γ : Context}
-      {α β cellState restState : Type}
-      {headers : List String}
-      (header : String)
-      (cell : ComponentNode Γ α cellState Unit 0)
-      (rest : ColumnsNode headers Γ α restState β)
-      : ColumnsNode (header :: headers) Γ α (Binding cellState restState) β
-  | observe {Γ : Context}
-      {α β γ cellState restState : Type}
-      {headers : List String}
-      (header : String)
-      (cell : ComponentNode Γ α cellState β 0)
-      (rest : ColumnsNode headers (⟨.readOnly, β⟩ :: Γ) α restState γ)
-      : ColumnsNode (header :: headers) Γ α (ObservationState cellState restState) γ
-  | bind {Γ : Context}
-      {α β γ state : Type}
-      {headers : List String}
-      (initial : β)
-      (body : ColumnsNode headers (⟨.writable, β⟩ :: Γ) α state γ)
-      : ColumnsNode headers Γ α (Binding β state) γ
-  | focus {Γ : Context}
-      {α β γ state : Type}
-      {headers : List String}
-      (target : Computation Γ α (PartialPath α β))
-      (body : ColumnsNode headers Γ β state γ)
-      : ColumnsNode headers Γ α state (Option γ)
+      (body : PresentationNode slots (⟨.writable, β⟩ :: Γ) α state γ views)
+      : PresentationNode slots Γ α (Binding β state) γ views
 
 inductive BranchNode : (Γ : Context) → (model state : Type) → Type 1 where
   | mk {Γ : Context}

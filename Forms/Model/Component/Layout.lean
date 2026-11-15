@@ -30,4 +30,30 @@ inductive Fills (slots : List Nat) : (holes : Nat) → Type where
       : Fills slots (holes + 1)
 end
 
+mutual
+/-- Moves every placed slot along `rename`. -/
+def Layout.rename
+  {slots others : List Nat}
+  (rename : {holes : Nat} → Slot slots holes → Slot others holes)
+  : Layout slots → Layout others
+  | .place slot => .place (rename slot)
+  | .fill slot contents => .fill (rename slot) (Fills.rename rename contents)
+  | .group label children => .group label (Layout.renameAll rename children)
+
+def Layout.renameAll
+  {slots others : List Nat}
+  (rename : {holes : Nat} → Slot slots holes → Slot others holes)
+  : List (Layout slots) → List (Layout others)
+  | [] => []
+  | child :: rest => Layout.rename rename child :: Layout.renameAll rename rest
+
+def Fills.rename
+  {slots others : List Nat}
+  {holes : Nat}
+  (rename : {holes : Nat} → Slot slots holes → Slot others holes)
+  : Fills slots holes → Fills others holes
+  | .nil => .nil
+  | .cons content rest => .cons (Layout.renameAll rename content) (Fills.rename rename rest)
+end
+
 end Forms.Model

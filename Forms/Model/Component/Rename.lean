@@ -24,9 +24,9 @@ def ComponentNode.rename
   | .choiceOf path label branches => .choiceOf path (label.rename rename) (branches.rename rename)
   | .output value => .output (value.rename rename)
   | .list path label row => .list path (label.rename rename) (row.rename rename.liftRow)
-  | .table path label rowLabel columns selection =>
-    .table path (label.rename rename) (rowLabel.rename rename.liftRow) (columns.rename rename.liftRow)
-      (selection.map rename)
+  | .table path label headers rowLabel row selection =>
+    .table path (label.rename rename) (headers.rename rename) (rowLabel.rename rename.liftRow)
+      (row.rename rename.liftRow) (selection.map rename)
   | .focus target body => .focus (target.rename rename) (body.rename rename)
   | .load (inst := inst) source body =>
     .load (inst := inst) (source.rename rename) fun status => (body status).rename rename
@@ -36,27 +36,14 @@ def PresentationNode.rename
   {slots : List Nat}
   {Γ Δ : Context}
   {α state β : Type}
+  {views : Nat}
   (rename : Renaming Γ Δ)
-  (presentation : PresentationNode slots Γ α state β)
-  : PresentationNode slots Δ α state β :=
+  (presentation : PresentationNode slots Γ α state β views)
+  : PresentationNode slots Δ α state β views :=
   match presentation with
   | .layout output arrangement => .layout (output.rename rename) (arrangement.rename rename)
   | .own component body => .own (component.rename rename) (body.rename rename.lift)
   | .bind initial body => .bind initial (body.rename rename.lift)
-
-def ColumnsNode.rename
-  {headers : List String}
-  {Γ Δ : Context}
-  {α state β : Type}
-  (rename : Renaming Γ Δ)
-  (columns : ColumnsNode headers Γ α state β)
-  : ColumnsNode headers Δ α state β :=
-  match columns with
-  | .output value => .output (value.rename rename)
-  | .cons header cell rest => .cons header (cell.rename rename) (rest.rename rename)
-  | .observe header cell rest => .observe header (cell.rename rename) (rest.rename rename.lift)
-  | .bind initial body => .bind initial (body.rename rename.lift)
-  | .focus target body => .focus (target.rename rename) (body.rename rename)
 
 def BranchNode.rename
   {Γ Δ : Context}

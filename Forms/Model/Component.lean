@@ -11,14 +11,20 @@ structure Component (Γ : Context) (α : Type) (β : Type := Unit) (holes : Nat 
   LocalState : Type
   node : ComponentNode Γ α LocalState β holes
 
-structure Columns (Γ : Context) (α : Type) (β : Type := Unit) where
-  headers : List String
+structure Presentation
+    (slots : List Nat)
+    (Γ : Context)
+    (α : Type)
+    (β : Type := Unit)
+    (views : Nat := 1) where
   LocalState : Type
-  node : ColumnsNode headers Γ α LocalState β
+  node : PresentationNode slots Γ α LocalState β views
 
-structure Presentation (slots : List Nat) (Γ : Context) (α : Type) (β : Type := Unit) where
-  LocalState : Type
-  node : PresentationNode slots Γ α LocalState β
+/-- Table cells: one view per header. -/
+structure Columns (Γ : Context) (α : Type) (β : Type := Unit) where
+  {count : Nat}
+  headers : Vector String count
+  cells : Presentation [] Γ α β count
 
 structure Branch (Γ : Context) (α : Type) where
   pack ::
@@ -109,18 +115,20 @@ Each row reads `Ref.row` and sets `Ref.rowRemoved` to remove itself. -/
   : Component Γ α (List γ) (holes := 1) :=
   ⟨List row.LocalState, .list path label row.node⟩
 
-/-- Like `listOf`, with one cell per column and its hole in the footer;
+/-- Like `listOf`, with each row's views as cells under `headers` and its hole in the footer;
 `selection` marks its row and follows removals. -/
 @[reducible] def Component.tableOf
   {Γ : Context}
   {α β γ : Type}
+  {columns : Nat}
   (path : Path α (List β))
   (label : Computation Γ α String)
+  (headers : Computation Γ α (Vector String columns))
   (rowLabel : Computation (Context.row β Γ) β String)
-  (columns : Columns (Context.row β Γ) β γ)
+  (row : Presentation [] (Context.row β Γ) β γ columns)
   (selection : Option (Var Γ RowSelection) := none)
   : Component Γ α (List γ) (holes := 1) :=
-  ⟨List columns.LocalState, .table path label rowLabel columns.node selection⟩
+  ⟨List row.LocalState, .table path label headers rowLabel row.node selection⟩
 
 @[reducible] def Component.focus
   {Γ : Context}
@@ -141,54 +149,6 @@ Each row reads `Ref.row` and sets `Ref.rowRemoved` to remove itself. -/
   (body : Status data → Component Γ α β holes)
   : Component Γ α β holes :=
   ⟨LoadedState data (fun status => (body status).LocalState), .load source (fun status => (body status).node)⟩
-
-@[reducible] def Columns.nil {Γ : Context} {α : Type} : Columns Γ α Unit :=
-  ⟨[], Unit, .output (.const ())⟩
-
-@[reducible] def Columns.output
-  {Γ : Context}
-  {α β : Type}
-  (value : Computation Γ α β)
-  : Columns Γ α β :=
-  ⟨[], Unit, .output value⟩
-
-@[reducible] def Columns.cons
-  {Γ : Context}
-  {α β : Type}
-  (header : String)
-  (cell : Component Γ α Unit)
-  (rest : Columns Γ α β)
-  : Columns Γ α β :=
-  ⟨header :: rest.headers, Binding cell.LocalState rest.LocalState,
-    .cons header cell.node rest.node⟩
-
-/-- Makes a cell's output available read-only to the remaining columns and row output. -/
-@[reducible] def Columns.observe
-  {Γ : Context}
-  {α β γ : Type}
-  (header : String)
-  (cell : Component Γ α β)
-  (body : Columns (⟨.readOnly, β⟩ :: Γ) α γ)
-  : Columns Γ α γ :=
-  ⟨header :: body.headers, ObservationState cell.LocalState body.LocalState,
-    .observe header cell.node body.node⟩
-
-@[reducible] def Columns.bind
-  {Γ : Context}
-  {α β γ : Type}
-  (initial : β)
-  (body : Columns (⟨.writable, β⟩ :: Γ) α γ)
-  : Columns Γ α γ :=
-  ⟨body.headers, Binding β body.LocalState, .bind initial body.node⟩
-
-/-- Focuses every cell on the same optional value, retaining the column headers. -/
-@[reducible] def Columns.focus
-  {Γ : Context}
-  {α β γ : Type}
-  (target : Computation Γ α (PartialPath α β))
-  (body : Columns Γ β γ)
-  : Columns Γ α (Option γ) :=
-  ⟨body.headers, body.LocalState, .focus target body.node⟩
 
 @[reducible] def Branches.nil {Γ : Context} {α : Type} : Branches Γ α :=
   ⟨Unit, .nil⟩
@@ -211,23 +171,6 @@ Each row reads `Ref.row` and sets `Ref.rowRemoved` to remove itself. -/
   (body : Component Γ β)
   : Branch Γ α :=
   ⟨body.LocalState, .mk key label inject project initial body.node⟩
-
-def Columns.ofList {Γ : Context} {α : Type} : List (String × Component Γ α) → Columns Γ α
-  | [] => .nil
-  | (header, cell) :: rest => .cons header cell (ofList rest)
-
-declare_syntax_cat tableColumn
-syntax term " => " term : tableColumn
-
-/-- `columns["Name" => cell, "Amount" => otherCell]` pairs headers with cell components. -/
-macro "columns[" columns:tableColumn,* "]" : term => do
-  let mut result ← `(Columns.nil)
-  for column in columns.getElems.reverse do
-    match column with
-    | `(tableColumn| $header:term => $cell:term) =>
-      result ← `(Columns.cons $header $cell $result)
-    | _ => Lean.Macro.throwUnsupported
-  return result
 
 def Branch.of
   {Γ : Context}
@@ -325,6 +268,17 @@ def Component.loadOr
     | .loading => fallback
     | .failed _ => fallback
 
+/-- Arranges the owned presentations into views with `arrangement` and returns `output`. -/
+@[reducible] def Presentation.layouts
+  {slots : List Nat}
+  {Γ : Context}
+  {α β : Type}
+  {views : Nat}
+  (output : Computation Γ α β)
+  (arrangement : Computation Γ α (Vector (Layout slots) views))
+  : Presentation slots Γ α β views :=
+  ⟨Unit, .layout output arrangement⟩
+
 /-- Places the owned presentations with `arrangement` and returns `output`. -/
 @[reducible] def Presentation.layout
   {slots : List Nat}
@@ -333,7 +287,7 @@ def Component.loadOr
   (output : Computation Γ α β)
   (arrangement : Computation Γ α (Layout slots))
   : Presentation slots Γ α β :=
-  ⟨Unit, .layout output arrangement⟩
+  .layouts output ((#v[·]) <$> arrangement)
 
 /-- Places the owned presentations with `arrangement`. -/
 @[reducible] def Presentation.arrange
@@ -349,19 +303,20 @@ def Component.loadOr
   {slots : List Nat}
   {Γ : Context}
   {α β γ : Type}
-  {holes : Nat}
+  {holes views : Nat}
   (component : Component Γ α β holes)
-  (body : Presentation (holes :: slots) (⟨.readOnly, β⟩ :: Γ) α γ)
-  : Presentation slots Γ α γ :=
+  (body : Presentation (holes :: slots) (⟨.readOnly, β⟩ :: Γ) α γ views)
+  : Presentation slots Γ α γ views :=
   ⟨ObservationState component.LocalState body.LocalState, .own component.node body.node⟩
 
 @[reducible] def Presentation.bind
   {slots : List Nat}
   {Γ : Context}
   {α β γ : Type}
+  {views : Nat}
   (initial : β)
-  (body : Presentation slots (⟨.writable, β⟩ :: Γ) α γ)
-  : Presentation slots Γ α γ :=
+  (body : Presentation slots (⟨.writable, β⟩ :: Γ) α γ views)
+  : Presentation slots Γ α γ views :=
   ⟨Binding β body.LocalState, .bind initial body.node⟩
 
 /-- Binds the active tab and owns its strip; `body` reads the tab as `.there .here` and places the
@@ -441,35 +396,92 @@ def Presentation.children
       Presentation.children (fun ref => .there (rename ref)) (label.rename Renaming.shift)
         (placed.map Slot.there ++ [.here]) rest
 
-/-- Owns each cell after the presentations in `placed`, then shows all of them in a group;
-the output is the row output. -/
-def ColumnsNode.presentation
-  {headers : List String}
+/-- Owns `cell` innermost in `cells` and places it after their views. -/
+def PresentationNode.snoc
   {slots : List Nat}
   {Γ Δ : Context}
   {α state β : Type}
-  (columns : ColumnsNode headers Γ α state β)
+  {views : Nat}
+  (cells : PresentationNode slots Δ α state β views)
   (rename : Renaming Γ Δ)
-  (label : Computation Δ α String)
-  (placed : List (Slot slots 0))
-  : Presentation slots Δ α β :=
-  match columns with
-  | .output value => .layout (value.rename rename) (Layout.grouped label placed)
-  | .cons _ cell rest =>
-    .own ⟨_, cell.rename rename⟩ <|
-      rest.presentation (fun ref => .there (rename ref)) (label.rename Renaming.shift)
-        (placed.map Slot.there ++ [.here])
-  | .observe _ cell rest =>
-    .own ⟨_, cell.rename rename⟩ <|
-      rest.presentation rename.lift (label.rename Renaming.shift) (placed.map Slot.there ++ [.here])
-  | .bind initial body =>
-    .bind initial (body.presentation rename.lift (label.rename Renaming.shift) placed)
-  | .focus target body =>
-    let body := Component.present (body.presentation (fun ref => ref) (.const "") [])
-    let focused : Component _ _ _ := ⟨_, .focus target body.node⟩
-    .own (focused.rename rename) <|
-      .layout { inputs := inputs[.ui .here], run := id }
-        (Layout.grouped (label.rename Renaming.shift) (placed.map Slot.there ++ [.here]))
+  (cell : Component Γ α)
+  : Presentation slots Δ α β (views + 1) :=
+  match cells with
+  | .layout output arrangement =>
+    .own (cell.rename rename) <|
+      .layouts (output.rename Renaming.shift)
+        ((fun layouts => (layouts.map (Layout.rename Slot.there)).push (.place .here)) <$>
+          arrangement.rename Renaming.shift)
+  | .own component body => .own ⟨_, component⟩ (body.snoc (fun ref => .there (rename ref)) cell)
+  | .bind initial body => .bind initial (body.snoc (fun ref => .there (rename ref)) cell)
+
+/-- Puts all views of `cells` in one group labeled `label`. -/
+def PresentationNode.group
+  {slots : List Nat}
+  {Γ Δ : Context}
+  {α state β : Type}
+  {views : Nat}
+  (cells : PresentationNode slots Δ α state β views)
+  (rename : Renaming Γ Δ)
+  (label : Computation Γ α String)
+  : PresentationNode slots Δ α state β 1 :=
+  match cells with
+  | .layout output arrangement =>
+    .layout output
+      ((fun label layouts => #v[.group (some label) layouts.toList]) <$> label.rename rename <*>
+        arrangement)
+  | .own component body => .own component (body.group (fun ref => .there (rename ref)) label)
+  | .bind initial body => .bind initial (body.group (fun ref => .there (rename ref)) label)
+
+@[reducible] def Columns.nil {Γ : Context} {α : Type} : Columns Γ α :=
+  ⟨#v[], .layouts (.const ()) (.const #v[])⟩
+
+/-- Appends a column headed `header` that shows `cell`. -/
+def Columns.snoc
+  {Γ : Context}
+  {α β : Type}
+  (columns : Columns Γ α β)
+  (header : String)
+  (cell : Component Γ α)
+  : Columns Γ α β :=
+  ⟨columns.headers.push header, columns.cells.node.snoc (fun ref => ref) cell⟩
+
+def Columns.ofList
+  {Γ : Context}
+  {α : Type}
+  (columns : List (String × Component Γ α))
+  : Columns Γ α :=
+  columns.foldl (fun columns (header, cell) => columns.snoc header cell) .nil
+
+declare_syntax_cat tableColumn
+syntax term " => " term : tableColumn
+
+/-- `columns["Name" => cell, "Amount" => otherCell]` pairs headers with cell components. -/
+macro "columns[" columns:tableColumn,* "]" : term => do
+  let mut result ← `(Columns.nil)
+  for column in columns.getElems do
+    match column with
+    | `(tableColumn| $header:term => $cell:term) =>
+      result ← `(Columns.snoc $result $header $cell)
+    | _ => Lean.Macro.throwUnsupported
+  return result
+
+@[reducible] def Columns.rename
+  {Γ Δ : Context}
+  {α β : Type}
+  (rename : Renaming Γ Δ)
+  (columns : Columns Γ α β)
+  : Columns Δ α β :=
+  ⟨columns.headers, ⟨_, columns.cells.node.rename rename⟩⟩
+
+/-- The cells of `columns` in a group labeled `label`, outputting the row output. -/
+def Columns.group
+  {Γ : Context}
+  {α β : Type}
+  (label : Computation Γ α String)
+  (columns : Columns Γ α β)
+  : Component Γ α β :=
+  ⟨_, .present (columns.cells.node.group (fun ref => ref) label)⟩
 
 /-- Renders `producer` followed by `body`.
 The first entry in `body`'s context is the producer's current output, available read-only. -/
@@ -510,31 +522,6 @@ The first entry in `body`'s context is the producer's current output, available 
   (body : Component Γ α β)
   : Component Γ α :=
   .present (.own body (.arrange (.const (.place .here))))
-
-@[reducible] def Columns.rename
-  {Γ Δ : Context}
-  {α β : Type}
-  (rename : Renaming Γ Δ)
-  (columns : Columns Γ α β)
-  : Columns Δ α β :=
-  ⟨columns.headers, columns.LocalState, columns.node.rename rename⟩
-
-/-- Appends a column; `cell` reads no model, so it also works under `focus`. -/
-def ColumnsNode.snoc
-  {headers : List String}
-  {Γ : Context}
-  {α state β : Type}
-  (columns : ColumnsNode headers Γ α state β)
-  (header : String)
-  (cell : (model : Type) → Component Γ model)
-  : Columns Γ α β :=
-  match columns with
-  | .output value => .cons header (cell α) (.output value)
-  | .cons first firstCell rest => .cons first ⟨_, firstCell⟩ (rest.snoc header cell)
-  | .observe first firstCell rest =>
-    .observe first ⟨_, firstCell⟩ (rest.snoc header fun model => (cell model).weaken)
-  | .bind initial body => .bind initial (body.snoc header fun model => (cell model).weaken)
-  | .focus target body => .focus target (body.snoc header cell)
 
 /-- Fills the hole of `collection` with a button captioned `caption` that appends `initial` to the
 list at `path`. -/
@@ -594,20 +581,19 @@ appends `initial`. -/
   (columns : Columns Γ β γ)
   (selection : Option (Var Γ RowSelection) := none)
   : Component Γ α (List γ) :=
-  let remove (model : Type) : Component (Context.row β Γ) model :=
-    .button "Remove" (.set Ref.rowRemoved (.const true))
-  let actions (model : Type) : Component (Context.row β Γ) model := match selection with
-    | none => remove model
+  let remove : Component (Context.row β Γ) β := .button "Remove" (.set Ref.rowRemoved (.const true))
+  let actions : Component (Context.row β Γ) β := match selection with
+    | none => remove
     | some selected =>
       .sequence
         (.button
           { inputs := inputs[.ui (Renaming.row selected), .ui Ref.row]
             run := fun current row => if current == .row row.index then "Selected" else "Select" }
           (.set (Renaming.row selected) { inputs := inputs[.ui Ref.row], run := fun row => .row row.index }))
-        (remove model)
-  .withAddButton path addCaption initial <| .tableOf path label rowLabel
-    ((columns.rename Renaming.row).node.snoc "Actions" actions)
-    selection
+        remove
+  let columns := (columns.rename Renaming.row).snoc "Actions" actions
+  .withAddButton path addCaption initial <|
+    .tableOf path label (.const columns.headers) rowLabel columns.cells selection
 
 /-- Shows `body` in a group labeled `label`, keeping its output. -/
 @[reducible] def Component.labeled
@@ -629,14 +615,5 @@ def Component.group
   (children : List (Component Γ α))
   : Component Γ α :=
   .present (Presentation.children (fun ref => ref) label [] children)
-
-/-- The cells of `columns` as a group labeled `label`, outputting the row output. -/
-def Columns.group
-  {Γ : Context}
-  {α β : Type}
-  (label : Computation Γ α String)
-  (columns : Columns Γ α β)
-  : Component Γ α β :=
-  .present (columns.node.presentation (fun ref => ref) label [])
 
 end Forms.Model

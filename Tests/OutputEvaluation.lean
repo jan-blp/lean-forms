@@ -43,9 +43,8 @@ private def textsRows (label : String) : List Display.TableRow → List String
 end
 
 example : True := by
-  fail_if_success have bad : CellViews ["Description", "Selected"] := .cons .hidden .nil
   fail_if_success have bad : Columns [] String Unit :=
-    ⟨["Description", "Selected"], Unit, .output (.const ())⟩
+    ⟨#v["Description", "Selected"], .layouts (.const ()) (.const #v[])⟩
   trivial
 
 @[expose] def functions : Component [] Nat (Nat → Nat) :=
@@ -232,51 +231,36 @@ def run : IO Unit := do
     | _ => false)
 
   let ordinaryColumns : Columns [] String Unit :=
-    .cons "Description" ((.field .self "Description" .text)) .nil
+    columns["Description" => .field .self "Description" .text]
   let ordinary := Component.table .self "Ordinary" (.numbered "Item") "Add item" "" ordinaryColumns
   let ordinaryResult := ordinary.evaluate ["one", "two"] Env.nil
   check "EvaluationOrdinaryColumnsReturnUnit" (ordinaryResult.output == [(), ()])
 
-  let rowBound : Columns [] String Bool := .bind false <|
+  let rowBound : Columns [] String Bool := ⟨#v["Selection"], .bind false <|
     let selected : Var [⟨.writable, Bool⟩] Bool := .here
-    .cons "Selection" ((.button "Row toggle" (.set selected {
-      inputs := inputs[.ui selected], run := Bool.not })))
-      (.output { inputs := inputs[.ui selected], run := id })
+    .own (.button "Row toggle"
+        (.set selected { inputs := inputs[.ui selected], run := Bool.not })) <|
+      let selected : Var [⟨.readOnly, Unit⟩, ⟨.writable, Bool⟩] Bool := .there .here
+      .layouts { inputs := inputs[.ui selected], run := id } (.const #v[.place .here])⟩
   let rowBoundTable := Component.table .self "Rows" (.numbered "Row") "Add row" "" rowBound
   let rowBoundOpened := rowBoundTable.evaluate ["same", "same"] Env.nil
   let rowBoundEdit ← press rowBoundOpened "Row toggle"
   let rowBoundUpdated := rowBoundTable.evaluate rowBoundEdit.value rowBoundEdit.state {} rowBoundEdit.locals
   check "EvaluationColumnsCanOwnRowLocalVariables" (rowBoundUpdated.output == [true, false])
 
-  let focusedColumns : Columns [] (List String) (Option RowOutput) :=
-    .focus (.const (.index 0 .self)) selectionColumns
-  let focusedTable := Component.table .self "Rows" (.numbered "Row") "Add row" [] focusedColumns
-  let focused := focusedTable.evaluate [["same"]] Env.nil
-  let toggle ← press focused "Toggle selection"
-  let focused := focusedTable.evaluate toggle.value toggle.state {} toggle.locals
-  check "EvaluationFocusedColumnsKeepRowLocalState"
-    (focused.output == [some ⟨"same", true⟩])
-  let edit ← press focused "Description" (argument := some (.text "Revised"))
-  let focused := focusedTable.evaluate edit.value edit.state {} edit.locals
-  check "EvaluationFocusedColumnsEditNestedRows"
-    (edit.value == [["Revised"]] && focused.output == [some ⟨"Revised", true⟩])
-  let unfocused := focusedTable.evaluate [[]] Env.nil
-  check "EvaluationMissingFocusKeepsTableColumns" (unfocused.output == [none] && match unfocused.view with
-    | .table (headers := headers) (rows := rows) .. =>
-      headers == ["Description", "Selected", "Actions"] &&
-        rows.all fun row => row.cells.length == headers.length
-    | _ => false)
-
-  let remoteColumns : Columns [] String Nat := Columns.observe "Description" descriptionCell <|
-    Columns.observe "Remote"
-      (.load {
-        inputs := inputs[.ui (Ref.here : InputRef _ String)]
-        run := fun description => .fetch { method := .get, url := s!"/row/{description}", body := none }
-          (Lean.fromJson? (α := Nat)) }
-        (fun status => .output (.const (match status with
-          | .ready value => value
-          | _ => 0))))
-      (.output { inputs := inputs[.ui (Ref.here : InputRef _ Nat)], run := id })
+  let remoteColumns : Columns [] String Nat := ⟨#v["Description", "Remote"],
+    .own descriptionCell <|
+      .own
+        (.load {
+          inputs := inputs[.ui (Ref.here : InputRef _ String)]
+          run := fun description =>
+            .fetch { method := .get, url := s!"/row/{description}", body := none }
+              (Lean.fromJson? (α := Nat)) }
+          (fun status => .output (.const (match status with
+            | .ready value => value
+            | _ => 0)))) <|
+        .layouts { inputs := inputs[.ui (Ref.here : InputRef _ Nat)], run := id }
+          (.const #v[.place (.there .here), .place .here])⟩
   let remoteTable := Component.table .self "Rows" (.numbered "Row") "Add row" "" remoteColumns
   let remoteRows := remoteTable.evaluate ["one", "two"] Env.nil
   check "EvaluationColumnRequestsUseEarlierCellOutputs"

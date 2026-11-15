@@ -30,25 +30,13 @@ def PresentationNode.initialState
   {slots : List Nat}
   {Γ : Context}
   {α state β : Type}
-  (presentation : PresentationNode slots Γ α state β)
+  {views : Nat}
+  (presentation : PresentationNode slots Γ α state β views)
   : state :=
   match presentation with
   | .layout .. => ()
   | .own component body => ⟨component.initialState, body.initialState⟩
   | .bind initial body => ⟨initial, body.initialState⟩
-
-def ColumnsNode.initialState
-  {headers : List String}
-  {Γ : Context}
-  {α state β : Type}
-  (columns : ColumnsNode headers Γ α state β)
-  : state :=
-  match columns with
-  | .output .. => ()
-  | .cons _ cell rest => ⟨cell.initialState, rest.initialState⟩
-  | .observe _ cell rest => ⟨cell.initialState, rest.initialState⟩
-  | .bind initial body => ⟨initial, body.initialState⟩
-  | .focus _ body => body.initialState
 
 def BranchNode.initialState
   {Γ : Context}
@@ -75,12 +63,5 @@ end
   (component : Component Γ α β holes)
   : component.LocalState :=
   component.node.initialState
-
-@[reducible] def Columns.initialState
-  {Γ : Context}
-  {α β : Type}
-  (columns : Columns Γ α β)
-  : columns.LocalState :=
-  columns.node.initialState
 
 end Forms.Model

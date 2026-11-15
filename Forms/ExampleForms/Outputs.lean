@@ -89,13 +89,16 @@ def selectionCell {Γ : Context} : Component (⟨.readOnly, String⟩ :: Γ) Str
       { inputs := inputs[.ui selected], run := id }
 
 def selectionColumns {Γ : Context} : Columns Γ String RowOutput :=
-  Columns.observe "Description" descriptionCell <|
-    Columns.observe "Selected" selectionCell <|
-      let description : InputRef (⟨.readOnly, Bool⟩ :: ⟨.readOnly, String⟩ :: Γ) String := .there .here
-      let selected : InputRef (⟨.readOnly, Bool⟩ :: ⟨.readOnly, String⟩ :: Γ) Bool := .here
-      .output {
-        inputs := inputs[.ui description, .ui selected]
-        run := fun description selected => { description, selected } }
+  ⟨#v["Description", "Selected"],
+    .own descriptionCell <|
+      .own selectionCell <|
+        let description : InputRef (⟨.readOnly, Bool⟩ :: ⟨.readOnly, String⟩ :: Γ) String :=
+          .there .here
+        let selected : InputRef (⟨.readOnly, Bool⟩ :: ⟨.readOnly, String⟩ :: Γ) Bool := .here
+        .layouts
+          { inputs := inputs[.ui description, .ui selected]
+            run := fun description selected => { description, selected } }
+          (.const #v[.place (.there .here), .place .here])⟩
 
 def selectionTable : Component [] (List String) (List RowOutput) :=
   .table .self "Items" (.numbered "Item") "Add item" "New item" selectionColumns
