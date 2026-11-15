@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.Scalar
+import all Lean.Data.Json.Basic
 
 @[expose] public section
 namespace Forms.Model
@@ -385,16 +386,63 @@ def uuid : Format Uuid where
       simpa using List.map_congr_left (fun c hc => (facts c hc).2)
     simp [trim_of_forall fun c hc => (facts c hc).1, lower, canonical]
 
+@[instance_reducible]
+def toJson {α : Type} (format : Format α) : ToJson α :=
+  ⟨(.str <| format.print ·)⟩
+
+@[instance_reducible]
+def fromJson {α : Type} (format : Format α) : FromJson α :=
+  ⟨fun
+    | .str text => format.parse text
+    | _ => .error "String expected"⟩
+
+theorem fromJson_toJson {α : Type} (format : Format α) (value : α) :
+    format.fromJson.fromJson? (format.toJson.toJson value) = .ok value :=
+  format.parse_print value
+
 end Format
 
 instance : ToString Decimal := ⟨Format.decimal.print⟩
 
-instance : ToJson Std.Time.PlainDate := ⟨(.str <| Format.date.print ·)⟩
+-- Strings, because JavaScript numbers lose digits beyond 2^53.
+instance : ToJson Decimal := Format.decimal.toJson
+instance : FromJson Decimal := Format.decimal.fromJson
+instance : ToJson Int64 := Format.int64.toJson
+instance : FromJson Int64 := Format.int64.fromJson
 
-instance : FromJson Std.Time.PlainDate := ⟨fun json => do Format.date.parse (← json.getStr?)⟩
+instance : ToJson Std.Time.PlainDate := Format.date.toJson
+instance : FromJson Std.Time.PlainDate := Format.date.fromJson
 
-instance : ToJson Uuid := ⟨(.str ·.value)⟩
+instance : ToJson Uuid := Format.uuid.toJson
+instance : FromJson Uuid := Format.uuid.fromJson
 
-instance : FromJson Uuid := ⟨fun json => do Format.uuid.parse (← json.getStr?)⟩
+theorem String.fromJson?_toJson (value : String) : fromJson? (toJson value) = .ok value := by
+  rfl
+
+theorem Bool.fromJson?_toJson (value : Bool) : fromJson? (toJson value) = .ok value := by
+  cases value <;> rfl
+
+theorem Nat.fromJson?_toJson (value : Nat) : fromJson? (toJson value) = .ok value := by
+  rfl
+
+theorem Int.fromJson?_toJson (value : Int) : fromJson? (toJson value) = .ok value := by
+  rfl
+
+theorem Int32.fromJson?_toJson (value : Int32) : fromJson? (toJson value) = .ok value := by
+  simp [fromJson?, toJson, Json.getInt?, JsonNumber.fromInt, Int32.ofInt?_toInt]
+  rfl
+
+theorem Decimal.fromJson?_toJson (value : Decimal) : fromJson? (toJson value) = .ok value :=
+  Format.decimal.fromJson_toJson value
+
+theorem Int64.fromJson?_toJson (value : Int64) : fromJson? (toJson value) = .ok value :=
+  Format.int64.fromJson_toJson value
+
+theorem Date.fromJson?_toJson (value : Std.Time.PlainDate) :
+    fromJson? (toJson value) = .ok value :=
+  Format.date.fromJson_toJson value
+
+theorem Uuid.fromJson?_toJson (value : Uuid) : fromJson? (toJson value) = .ok value :=
+  Format.uuid.fromJson_toJson value
 
 end Forms.Model

@@ -29,14 +29,6 @@ theorem Decimal.normalize_self (value : Decimal) :
     have : mantissa % 10 ≠ 0 := by omega
     simp [normalize, this]
 
-instance : ToJson Decimal where
-  toJson value := .num ⟨value.mantissa, value.exponent⟩
-
-instance : FromJson Decimal where
-  fromJson? json := do
-    let number ← json.getNum?
-    pure (Decimal.normalize number.mantissa number.exponent)
-
 def Uuid.hexDigits : List Char :=
   ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
 
@@ -81,16 +73,10 @@ theorem Int64.ofInt?_toInt (value : Int64) : Int64.ofInt? value.toInt = some val
   omega
 
 instance : ToJson Int32 := ⟨(toJson ·.toInt)⟩
-instance : ToJson Int64 := ⟨(toJson ·.toInt)⟩
 
 instance : FromJson Int32 where
   fromJson? json := do
     let value : Int ← fromJson? json
     (Int32.ofInt? value).elim (throw s!"Out of range for a 32-bit integer: {value}") pure
-
-instance : FromJson Int64 where
-  fromJson? json := do
-    let value : Int ← fromJson? json
-    (Int64.ofInt? value).elim (throw s!"Out of range for a 64-bit integer: {value}") pure
 
 end Forms.Model
