@@ -21,7 +21,7 @@ private def perform
   (state : Env Γ)
   : Except ModelForm.Rejection α := do
   let invocation ← (ModelView.decodeKey form {} current key argument state).mapError .ofAction
-  return (form.applyValid {} current state form.initialState invocation).value
+  return invocation.value
 
 private def firstControl
   {Γ : Context}
@@ -39,7 +39,7 @@ private def street : Component [] Address.Raw :=
 
 def run : IO Unit := do
   let person := Person.initial
-  let focused : Component [] Person.Raw := .focus
+  let focused : Component [] Person.Raw := Component.void <| .focus
     (.const (.ofPath path[Person.Field.address])) street
   let direct : Component [] Person.Raw :=
     .field path[Person.Field.address, Address.Field.street] "Street" .text
@@ -50,8 +50,8 @@ def run : IO Unit := do
   let updated ← IO.ofExcept ((perform focused person control.key (some (.text "Main")) Env.nil).mapError toString)
   check "FocusWritesNestedValue"
     (updated.address.street == "Main" && updated.name == person.name && updated.age == person.age)
-  let nested : Component [] Person.Raw := .focus (.const (.ofPath path[Person.Field.address]))
-    (.focus (.const (.ofPath path[Address.Field.street])) (.field .self "Street" .text))
+  let nested : Component [] Person.Raw := Component.void <| .focus (.const (.ofPath path[Person.Field.address]))
+    (Component.void <| .focus (.const (.ofPath path[Address.Field.street])) (.field .self "Street" .text))
   let nestedControl ← firstControl nested person Env.nil
   check "FocusComposes" (nestedControl.key == control.key && nestedControl.location == control.location)
   let disabled := Component.disabledWhen (.const true) focused
@@ -61,14 +61,14 @@ def run : IO Unit := do
     | _ => false)
   let outOfBounds : PartialPath ExpenseReport.Raw Expense.Raw :=
     (PartialPath.ofPath path[ExpenseReport.Field.expenses]).trans (.index 99 .self)
-  let absent : Component [] ExpenseReport.Raw := .focus (.const outOfBounds)
+  let absent : Component [] ExpenseReport.Raw := Component.void <| .focus (.const outOfBounds)
     (.field path[Expense.Field.description] "Description" .text)
   check "FocusMissingIndexIsHidden"
     ((ModelView.render absent ExpenseReport.initial {} [] Env.nil).view == .hidden &&
       toJson (outOfBounds.set ⟨"Ignored", 1, false⟩ ExpenseReport.initial) == toJson ExpenseReport.initial)
   let phonePath : PartialPath Shipping.Raw String :=
     .constructor Shipping.Constructor.express (.ofPath path[Shipping.express.Field.phone])
-  let phone : Component [] Shipping.Raw := .focus (.const phonePath) (.field .self "Phone" .text)
+  let phone : Component [] Shipping.Raw := Component.void <| .focus (.const phonePath) (.field .self "Phone" .text)
   check "FocusInactiveConstructorIsHidden"
     ((ModelView.render phone .pickup {} [] Env.nil).controls.isEmpty && phonePath.get? .pickup == none &&
       toJson (phonePath.set "Ignored" .pickup) == toJson Shipping.Raw.pickup)
@@ -83,7 +83,7 @@ def run : IO Unit := do
   check "FocusMatchesValidationMessages"
     (snapshot.controls.head?.bind (·.messages) == some "Enter a phone number for the courier.")
   -- A selected-item focus works by itself, with no table in the component tree.
-  let details : Component [⟨.writable, RowSelection⟩] ExpenseReport.Raw := .focus
+  let details : Component [⟨.writable, RowSelection⟩] ExpenseReport.Raw := Component.void <| .focus
     { inputs := inputs[.ui (Ref.here : Var [⟨.writable, RowSelection⟩] RowSelection)]
       run := RowSelection.itemPath path[ExpenseReport.Field.expenses] }
     (.field path[Expense.Field.description] "Description" .text)

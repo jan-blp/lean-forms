@@ -47,6 +47,30 @@ def Inputs.weaken
   | .cons input rest => .cons (path.trans input) (rest.weaken path)
   | .ui key rest => .ui key (rest.weaken path)
 
+def Inputs.rename
+  {Γ Δ : Context}
+  {α : Type}
+  {types : List Type}
+  (rename : Renaming Γ Δ)
+  (inputs : Inputs Γ α types)
+  : Inputs Δ α types :=
+  match inputs with
+  | .nil => .nil
+  | .cons path rest => .cons path (rest.rename rename)
+  | .ui key rest => .ui (rename key) (rest.rename rename)
+
+def Inputs.append
+  {Γ : Context}
+  {α : Type}
+  {types others : List Type}
+  (inputs : Inputs Γ α types)
+  (rest : Inputs Γ α others)
+  : Inputs Γ α (types ++ others) :=
+  match inputs with
+  | .nil => rest
+  | .cons path inputs => .cons path (inputs.append rest)
+  | .ui key inputs => .ui key (inputs.append rest)
+
 def Inputs.Values : List Type → Type
   | [] => Unit
   | α :: rest => α × Values rest
@@ -90,6 +114,18 @@ def Inputs.Function.map
   | [] => f fn
   | _ :: _ => fun value => map f (fn value)
 
+/-- Reads the inputs of `fn`, then those of `arg`. -/
+def Inputs.Function.seq
+  {types others : List Type}
+  {α : Type u}
+  {β : Type v}
+  (fn : Function types (α → β))
+  (arg : Function others α)
+  : Function (types ++ others) β :=
+  match types with
+  | [] => map fn arg
+  | _ :: _ => fun value => seq (fn value) arg
+
 structure Computation (Γ : Context) (α : Type) (β : Type u) where
   {types : List Type}
   inputs : Inputs Γ α types
@@ -105,6 +141,18 @@ def Computation.const
   inputs := .nil
   run := value
 
+/-- Constant text; limited to `String` so other values never silently become constants. -/
+instance {Γ : Context} {α : Type} : Coe String (Computation Γ α String) where
+  coe := .const
+
+/-- Constant tab labels. -/
+instance
+  {Γ : Context}
+  {α : Type}
+  {n : Nat}
+  : Coe (Vector String n) (Computation Γ α (Vector String n)) where
+  coe := .const
+
 def Computation.eval
   {Γ : Context}
   {α : Type}
@@ -115,8 +163,20 @@ def Computation.eval
   : β :=
   Inputs.apply computation.run (computation.inputs.read value state)
 
+def Computation.rename
+  {Γ Δ : Context}
+  {α : Type}
+  {β : Type u}
+  (rename : Renaming Γ Δ)
+  (computation : Computation Γ α β)
+  : Computation Δ α β :=
+  ⟨computation.inputs.rename rename, computation.run⟩
+
 instance {Γ : Context} {α : Type} : Functor (Computation Γ α) where
   map f computation := ⟨computation.inputs, Inputs.Function.map f computation.run⟩
+
+instance {Γ : Context} {α : Type} : Seq (Computation Γ α) where
+  seq fn arg := ⟨fn.inputs.append (arg ()).inputs, fn.run.seq (arg ()).run⟩
 
 def Computation.weaken
   {Γ : Context}

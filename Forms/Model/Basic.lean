@@ -39,28 +39,56 @@ def Fields.set
   : β → α → α :=
   LeanLens.set (Fields.lens field)
 
+/-- Keys sent to the client and decoded back; `""` is reserved for no selection. -/
+class Key (κ : Type) where
+  encode : κ → String
+  decode : String → Option κ
+  decode_encode : ∀ key, decode (encode key) = some key
+  encode_ne_empty : ∀ key, encode key ≠ ""
+
+theorem Key.encode_injective {κ : Type} [Key κ] : Function.Injective (Key.encode (κ := κ)) := by
+  intro first second h
+  simpa [Key.decode_encode] using congrArg (Key.decode (κ := κ)) h
+
 /-- Describes a sum type's constructors. -/
 class Constructors (α : Type) where
   Constructor : Type → Type
+  /-- Names a constructor regardless of its payload. -/
+  Tag : Type
+  [tagDecidableEq : DecidableEq Tag]
+  [tagKey : Key Tag]
   inject : {β : Type} → Constructor β → β → α
   /-- The payload of a value built by `constructor`. -/
   project : {β : Type} → Constructor β → α → Option β
-  key : {β : Type} → Constructor β → String
+  tagOf : {β : Type} → Constructor β → Tag
+  /-- The constructor `value` was built with. -/
+  tag : α → Tag
 
-attribute [reducible] Constructors.Constructor
+attribute [reducible] Constructors.Constructor Constructors.Tag
 
-/-- Constructor injection and projection describe the same payload. -/
+instance {α : Type} [Constructors α] : DecidableEq (Constructors.Tag α) :=
+  Constructors.tagDecidableEq
+
+instance {α : Type} [Constructors α] : Key (Constructors.Tag α) :=
+  Constructors.tagKey
+
+def Constructors.key {α β : Type} [Constructors α] (constructor : Constructor α β) : String :=
+  Key.encode (tagOf constructor)
+
+/-- Constructor injection and projection describe the same payload, built with the same tag. -/
 class LawfulConstructors (α : Type) [Constructors α] : Prop where
   project_inject : ∀ {β : Type} (c : Constructors.Constructor α β) (value : β),
     Constructors.project c (Constructors.inject c value) = some value
   inject_project : ∀ {β : Type} (c : Constructors.Constructor α β) (source : α) (value : β),
     Constructors.project c source = some value → Constructors.inject c value = source
+  tag_inject : ∀ {β : Type} (c : Constructors.Constructor α β) (value : β),
+    Constructors.tag (Constructors.inject c value) = Constructors.tagOf c
 
 inductive Path : Type → Type → Type 1 where
   | self {α : Type} : Path α α
   | stepField
       {α β γ : Type}
-      [Fields α]
+      [fields : Fields α]
       (field : Fields.Field α β)
       (rest : Path β γ)
       : Path α γ
@@ -74,7 +102,7 @@ macro "path[" fields:term,* "]" : term => do
 def Path.get {α β : Type} (path : Path α β) (value : α) : β :=
   match path with
   | .self => value
-  | @stepField _ _ _ inst f rest => rest.get (@Fields.get _ _ inst f value)
+  | .stepField (fields := _) f rest => rest.get (Fields.get f value)
 
 def Path.set
   {α β : Type}
@@ -84,8 +112,7 @@ def Path.set
   : α :=
   match path with
   | .self => new
-  | @stepField _ _ _ inst f rest =>
-    @Fields.set _ _ inst f (rest.set new (@Fields.get _ _ inst f value)) value
+  | .stepField (fields := _) f rest => Fields.set f (rest.set new (Fields.get f value)) value
 
 def Path.trans
   {α β γ : Type}
@@ -94,7 +121,7 @@ def Path.trans
   : Path α γ :=
   match first with
   | .self => second
-  | @stepField _ _ _ inst f rest => @Path.stepField _ _ _ inst f (rest.trans second)
+  | .stepField (fields := _) f rest => .stepField f (rest.trans second)
 
 def Path.toLens {α β : Type} (path : Path α β) : Lens' α β :=
   LeanLens.mkLens path.get path.set
@@ -103,14 +130,14 @@ inductive Location : {α : Type} → α → Type 1 where
   | self {α : Type} {value : α} : Location value
   | field
       {α β : Type}
-      [Fields α]
+      [fields : Fields α]
       {value : α}
       (field : Fields.Field α β)
       (rest : Location (Fields.get field value))
       : Location value
   | constructor
       {α β : Type}
-      [Constructors α]
+      [constructors : Constructors α]
       {value : β}
       (constructor : Constructors.Constructor α β)
       (rest : Location value)
@@ -124,8 +151,8 @@ inductive Location : {α : Type} → α → Type 1 where
 
 def Location.keys {α : Type} {value : α} : Location value → List String
   | .self => []
-  | @field _ _ inst _ f rest => @Fields.key _ inst _ f :: rest.keys
-  | @constructor _ _ inst _ c rest => @Constructors.key _ inst _ c :: rest.keys
+  | .field (fields := _) f rest => Fields.key f :: rest.keys
+  | .constructor (constructors := _) c rest => Constructors.key c :: rest.keys
   | index position rest => toString position.val :: rest.keys
 
 inductive Targets (α : Type) (value : α) where
@@ -224,11 +251,14 @@ attribute [reducible] FormModel.Raw
 
 namespace Forms.Model
 
-abbrev Validated (model : Type) [FormModel model] (raw : FormModel.Raw model) :=
+abbrev Raw (α : Type) [FormModel α] : Type :=
+  FormModel.Raw α
+
+abbrev Validated (model : Type) [FormModel model] (raw : Raw model) :=
   { value : model // FormModel.erase value = raw }
 
 class Validation (model : Type) [FormModel model] where
-  validate : (raw : FormModel.Raw model) → Except (List (Error raw)) (Validated model raw)
+  validate : (raw : Raw model) → Except (List (Error raw)) (Validated model raw)
 
 def errors {α β : Type _} : Except (List α) β → List α
   | .ok _ => []
@@ -253,7 +283,7 @@ instance : Validation Bool := ⟨fun value => .ok ⟨value, rfl⟩⟩
 instance : Validation Nat := ⟨fun value => .ok ⟨value, rfl⟩⟩
 
 @[reducible] instance {α : Type} [FormModel α] : FormModel (List α) :=
-  ⟨List (FormModel.Raw α), List.map FormModel.erase⟩
+  ⟨List (Raw α), List.map FormModel.erase⟩
 
 /-- Validates every item; errors point at their item's position. -/
 instance {α : Type} [FormModel α] [Validation α] : Validation (List α) where

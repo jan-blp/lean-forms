@@ -32,7 +32,8 @@ example : True := by
   let input : InputRef [⟨.readOnly, RowSelection⟩] RowSelection := .here
   fail_if_success
     have bad : Component [⟨.readOnly, RowSelection⟩] (List Nat) :=
-      .table .self "Numbers" "Number" 0 columns[] (some input)
+      Component.void <| .table .self "Numbers" (.numbered "Number") "Add number"
+          0 columns[] (some input)
   trivial
 
 def run : IO Unit := do
@@ -63,6 +64,16 @@ def run : IO Unit := do
     (summary.eval 10 mixed == "Tasks: 2/10" &&
       summary.eval 10 (count.set 3 mixed) == "Tasks: 3/10" &&
       input.get (count.set 3 mixed) == "Tasks")
+  let computed : Component [⟨.readOnly, String⟩, ⟨.writable, Nat⟩] Nat :=
+    .computed (label := summary) (value := "result")
+  check "ComputedLabelReadsModelAndContext"
+    ((ModelView.render computed 10 {} [] mixed).view == .computed "Tasks: 2/10" "result" &&
+      (ModelView.render computed 11 {} [] (count.set 3 mixed)).view == .computed "Tasks: 3/11" "result")
+  let renamed : Component [⟨.readOnly, String⟩, ⟨.readOnly, String⟩, ⟨.writable, Nat⟩] Nat :=
+    computed.rename Renaming.shift
+  check "ComputedLabelRenamesContextInputs"
+    ((ModelView.render renamed 12 {} [] env["Ignored", "Projects", 3]).view ==
+      .computed "Projects: 3/12" "result")
   let bound : Component [⟨.readOnly, String⟩] Nat := .bind (7 : Nat)
     (.computed "Summary" {
       inputs := inputs[.ui (Ref.there Ref.here), .ui (Ref.here)]

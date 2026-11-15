@@ -32,29 +32,39 @@ private def ident (name : Name) : Ident := mkIdent name
 private def global (name : Name) : Ident := mkIdent (`_root_ ++ name)
 private def fresh (name : Name) : CommandElabM Ident := return ident (← liftCoreM <| mkFreshUserName name)
 
-private def emit (command : TSyntax `command) : CommandElabM Unit := elabCommand command
+private def emit (command : TSyntax `command) : CommandElabM Unit := do
+  let previous := (← get).messages.reportedPlusUnreported.size
+  elabCommand command
+  let messages := (← get).messages.reportedPlusUnreported.toList.drop previous
+  if let some error := messages.find? (·.severity matches .error) then
+    throwError "{error.data}"
+
+private def emitting
+  (context : MessageData)
+  (action : CommandElabM Unit)
+  : CommandElabM Unit := do
+  try action
+  catch error => throwError "{context}: {error.toMessageData}"
 
 /-- Emits `command` in `name`'s namespace, so its auto-named instances stay unique across modules. -/
-private def emitIn (name : Name) (command : TSyntax `command) : CommandElabM Unit := do
-  let current ← getCurrNamespace
-  unless current.isPrefixOf name && name != current do return ← emit command
-  let relative := mkIdent (name.replacePrefix current .anonymous)
-  emit (← `(command| namespace $relative))
-  emit command
-  emit (← `(command| end $relative))
+private def emitIn
+  (name : Name)
+  (command : TSyntax `command)
+  : CommandElabM Unit :=
+  withScope (fun scope => { scope with currNamespace := name }) (emit command)
 
 private def inspect (name : Name) : MetaM (Bool × Array Constructor) := do
   if isPrivateName name then
-    throwError "FormModel requires public model declarations"
+    throwError "the model must be public"
   let info ← getConstInfoInduct name
   unless info.numParams == 0 && info.numIndices == 0 && info.levelParams.isEmpty do
-    throwError "FormModel requires a monomorphic type without parameters or indices"
+    throwError "the type must be monomorphic, without parameters or indices"
   unless info.all.length == 1 && !info.isRec do
-    throwError "FormModel does not support recursive or mutually recursive types"
-  if info.ctors.isEmpty then throwError "FormModel requires at least one constructor"
+    throwError "recursive or mutually recursive types are not supported"
+  if info.ctors.isEmpty then throwError "the type needs at least one constructor"
   let record := isStructure (← getEnv) name
   if record && !(getStructureParentInfo (← getEnv) name).isEmpty then
-    throwError "FormModel does not support structure inheritance yet"
+    throwError "structure inheritance is not supported yet"
   let ctors ← info.ctors.toArray.mapM fun ctorName => do
     let ctor ← getConstInfoCtor ctorName
     forallTelescopeReducing ctor.type fun args _ => do
@@ -64,32 +74,39 @@ private def inspect (name : Name) : MetaM (Bool × Array Constructor) := do
       for arg in args do
         let decl ← arg.fvarId!.getDecl
         if decl.userName.hasMacroScopes || !decl.binderInfo.isExplicit then
-          throwError "FormModel constructor arguments must be named and explicit"
+          throwError "constructor arguments must be named and explicit"
         let proof ← isProp decl.type
         if proof then
           if proofIds.any (fun id => decl.type.containsFVar id) then
-            throwError "FormModel proof fields cannot depend on earlier proofs"
+            throwError "proof fields cannot depend on earlier proofs"
           proofIds := proofIds.push arg.fvarId!
         else
-          if decl.type.hasFVar then throwError "FormModel data fields cannot be dependent"
+          if decl.type.hasFVar then throwError "data fields cannot be dependent"
           let some fn := decl.type.getAppFn.constName?
-            | throwError "Unsupported FormModel field type: {decl.type}"
+            | throwError "unsupported field type: {decl.type}"
           unless [``String, ``Bool, ``Nat].contains fn do
             unless decl.type.getAppArgs.isEmpty || fn == ``List do
-              throwError "Unsupported FormModel field type: {decl.type}"
+              throwError "unsupported field type: {decl.type}"
             unless (← synthInstance? (mkApp (mkConst ``FormModel) decl.type)).isSome do
-              throwError "Field type must derive FormModel first: {decl.type}"
+              throwError "field type must derive FormModel first: {decl.type}"
         let binder ← mkFreshUserName `field
         context := context.setUserName arg.fvarId! binder
         fields := fields.push ⟨decl.userName, binder, decl.type, proof⟩
       return ⟨ctorName, fields, context, ← getLocalInstances⟩
   return (record, ctors)
 
-private def fieldType (ctor : Constructor) (field : FieldInfo) : CommandElabM TermSyntax :=
+private def fieldType (ctor : Constructor) (field : FieldInfo) : CommandElabM TermSyntax := do
   -- Preserve names and coercion targets when re-elaborating generated code.
-  liftTermElabM <| withLCtx ctor.context ctor.instances <|
+  let type ← liftTermElabM <| withLCtx ctor.context ctor.instances <|
     withOptions (fun opts => opts.setBool `pp.fullNames true |>.setBool `pp.coercions.types true) <|
       PrettyPrinter.delab field.type
+  -- Generated code is elaborated inside the model's namespace, where these names could be shadowed.
+  let env ← getEnv
+  let rooted ← type.raw.replaceM fun node => do
+    let .ident _ _ name _ := node | return none
+    if (ctor.context.findFromUserName? name).isSome || !env.contains name then return none
+    return some (mkIdent (`_root_ ++ name)).raw
+  return ⟨rooted⟩
 
 private def app (fn : TermSyntax) (args : Array TermSyntax) : CommandElabM TermSyntax :=
   `($fn $args*)
@@ -240,7 +257,7 @@ private def ModelInfo.liftError
   `(Forms.Model.Error.inConstructor (α := $(global model.raw)) $constructor $error)
 
 private def emitShapes (model : ModelInfo) : CommandElabM Unit := do
-  for ctor in model.constructors do
+  for ctor in model.constructors do emitting m!"constructor `{ctor.name}`" do
     let fields ← ctor.data.mapM fun f => return (f, ← fieldType ctor f)
     let rawFields ← fields.mapM fun (f, type) => return (f.name, ← `(FormModel.Raw $type))
     emitRecord (model.payload ctor) rawFields true
@@ -266,38 +283,69 @@ private def emitConstructors (model : ModelInfo) : CommandElabM Unit := do
     `(Parser.Command.ctor| | $(ident (Name.mkSimple ctor.name.getString!)):ident :
       $(ident `Constructor) $(global (model.payload ctor)))
   emit (← `(command| inductive $constructor:ident : Type → Type where $ctors:ctor*))
+  let tagType := global (model.name ++ `Tag)
+  let tags ← model.constructors.mapM fun ctor =>
+    `(Parser.Command.ctor| | $(ident (Name.mkSimple ctor.name.getString!)):ident)
+  emitIn (model.name ++ `Tag)
+    (← `(command| inductive $tagType:ident where $tags:ctor* deriving DecidableEq, Repr))
   let selected ← fresh `selected
   let value ← fresh `value
   let payload ← fresh `payload
   let mut injections := #[]
   let mut projections := #[]
   let mut keys := #[]
+  let mut decodings := #[]
+  let mut tagsOf := #[]
+  let mut valueTags := #[]
   for ctor in model.constructors do
     let pattern : TermSyntax := global (model.name ++ `Constructor ++ Name.mkSimple ctor.name.getString!)
+    let tag : TermSyntax := global (model.name ++ `Tag ++ Name.mkSimple ctor.name.getString!)
     injections := injections.push (← alternative #[pattern] (← model.wrap ctor value))
     let found ← if ctor.data.isEmpty then `(some $(global (model.payload ctor ++ `mk))) else `(some $payload)
     let mut cases := #[← alternative #[← model.wrap ctor payload] found]
     if model.constructors.size > 1 then cases := cases.push (← alternative #[← `(_)] (← `(none)))
     projections := projections.push (← alternative #[pattern] (← matchOn #[value] cases))
-    keys := keys.push (← alternative #[pattern] (Syntax.mkStrLit ctor.name.getString!))
+    keys := keys.push (← alternative #[tag] (Syntax.mkStrLit ctor.name.getString!))
+    decodings := decodings.push
+      (← alternative #[Syntax.mkStrLit ctor.name.getString!] (← `(some $tag)))
+    tagsOf := tagsOf.push (← alternative #[pattern] tag)
+    valueTags := valueTags.push (← alternative #[← model.wrap ctor (← `(_))] tag)
   let injection ← matchOn #[selected] injections
   let projection ← matchOn #[selected] projections
   let key ← matchOn #[selected] keys
-  let inject := global (model.name ++ `Constructor.inject)
-  let project := global (model.name ++ `Constructor.project)
-  let keyName := global (model.name ++ `Constructor.key)
+  let encoded ← fresh `encoded
+  let decoding ← matchOn #[encoded] (decodings.push (← alternative #[← `(_)] (← `(none))))
+  let tagOf ← matchOn #[selected] tagsOf
+  let valueTag ← matchOn #[value] valueTags
+  -- Fresh names, so constructors such as `inject` or `tag` cannot collide with the helpers.
+  let inject ← fresh `inject
+  let project ← fresh `project
+  let tagOfName ← fresh `tagOf
+  let tagName ← fresh `tag
+  emitIn (model.name ++ `Tag) (← `(command| instance : Forms.Model.Key $tagType where
+    encode $selected:ident := $key
+    decode $encoded:ident := $decoding
+    decode_encode := by
+      intro $selected:ident
+      cases $selected:ident <;> rfl
+    encode_ne_empty := by
+      intro $selected:ident
+      cases $selected:ident <;> decide))
   emit (← `(command| @[expose] def $inject:ident {α : Type}
     ($selected:ident : $constructor α) ($value:ident : α) : $raw := $injection))
   emit (← `(command| @[expose] def $project:ident {α : Type}
     ($selected:ident : $constructor α) ($value:ident : $raw) : Option α := $projection))
-  emit (← `(command| @[expose] def $keyName:ident {α : Type}
-    ($selected:ident : $constructor α) : String := $key))
+  emit (← `(command| @[expose] def $tagOfName:ident {α : Type}
+    ($selected:ident : $constructor α) : $tagType := $tagOf))
+  emit (← `(command| @[expose] def $tagName:ident ($value:ident : $raw) : $tagType := $valueTag))
   emit (← `(command| @[expose, reducible] instance $(global (model.name ++ `constructors)):ident :
       Forms.Model.Constructors $raw where
     Constructor := $constructor
+    Tag := $tagType
     inject := $inject
     project := $project
-    key := $keyName))
+    tagOf := $tagOfName
+    tag := $tagName))
   -- `split` stays linear in constructors; a single-constructor match reduces, so case on `source`.
   emit (← `(command| instance $(global (model.name ++ `lawfulConstructors)):ident :
       Forms.Model.LawfulConstructors $raw where
@@ -309,7 +357,10 @@ private def emitConstructors (model : ModelInfo) : CommandElabM Unit := do
       change $inject selected value = source
       change $project selected source = some value at h
       cases selected <;> simp only [$project:ident] at h <;> (first | split at h | cases source) <;>
-        simp_all [$inject:ident]))
+        simp_all [$inject:ident]
+    tag_inject := by
+      intro payload selected value
+      cases selected <;> rfl))
 
 private def emitErasure (model : ModelInfo) : CommandElabM Unit := do
   let value ← fresh `value
@@ -471,13 +522,31 @@ private def emitValidation (model : ModelInfo) : CommandElabM Unit := do
     Forms.Model.Validation $name := ⟨$validate⟩))
 
 private def deriveOne (name : Name) : CommandElabM Unit := do
-  let (record, constructors) ← liftTermElabM <| inspect name
-  let model := { name, record, constructors : ModelInfo }
-  emitShapes model
-  emitConstructors model
-  emitErasure model
-  emitConstraints model
-  emitValidation model
+  let saved ← get
+  let generate : CommandElabM Unit :=
+    -- Keep diagnostics synchronous so failures can roll back the entire derivation.
+    withScope (fun scope => { scope with opts := Elab.async.set scope.opts false }) do
+      try
+        let (record, constructors) ← liftTermElabM <| inspect name
+        let model := { name, record, constructors : ModelInfo }
+        emitShapes model
+        emitting "constructors" (emitConstructors model)
+        emitting "erasure" (emitErasure model)
+        emitting "constraints" (emitConstraints model)
+        emitting "validation" (emitValidation model)
+      catch error =>
+        let message ← addMessageContext error.toMessageData
+        throwError "deriving FormModel for `{privateToUserName name}`: {message}"
+  let _ ← MonadFinally.tryFinally' generate fun result => do
+    unless result.isSome do
+      -- Roll back declarations but keep traces and non-error messages for debugging.
+      let failed ← get
+      let previous := saved.messages.reportedPlusUnreported.size
+      let kept := (failed.messages.reportedPlusUnreported.toList.drop previous).filter
+        (!·.severity matches .error)
+      set { saved with
+        messages := kept.foldl (·.add ·) saved.messages
+        traceState := failed.traceState }
 
 initialize registerDerivingHandler ``FormModel fun names => do
   for name in names do deriveOne name

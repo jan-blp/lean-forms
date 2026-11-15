@@ -32,6 +32,8 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       error := c.messages
       onChange := .apply name }
   | .action => .button { label := c.label, variant := .secondary, disabled, onClick := .press name }
+  | .tabs active labels =>
+    .tabBar { name, label := c.label, active, labels, disabled, onChange := .apply name }
 
 mutual
 def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component

@@ -14,10 +14,6 @@ def run : IO Unit := do
     (.edit [], "[\"edit\"]"),
     (.edit [.field "items", .index 0, .field "name"], "[\"edit\",\"items\",0,\"name\"]"),
     (.select [.field "shipping"], "[\"select\",\"shipping\"]"),
-    (.add [.field "items"], "[\"add\",\"items\"]"),
-    (.remove [.field "items", .index 1], "[\"remove\",\"items\",1]"),
-    (.selectRow [] 2, "[\"selectRow\",2]"),
-    (.selectRow [1, 0] 2, "[\"selectRow\",1,0,2]"),
     (.press [0, 1] [.field "items", .index 2], "[\"press\",[0,1],[\"items\",2]]"),
     (.edit [.constructor "express", .field "phone"], "[\"edit\",{\"constructor\":\"express\"},\"phone\"]"),
     (.edit [.field "a\"b\\c"], "[\"edit\",\"a\\\"b\\\\c\"]")]

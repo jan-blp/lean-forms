@@ -528,3 +528,92 @@ test('project planner keeps task selections local to each project', async () => 
     assert.deepEqual(Object.keys(submitted.projects[0].tasks[0]).sort(), ['completed', 'hours', 'notes', 'owner', 'title']);
   } finally { model.dispose(); }
 });
+
+
+test('owned row outputs update outside observers through repeated actions', async () => {
+  const model = await open(fixture('row-outputs').start);
+  const press = (label, index = 0) => {
+    const key = model.snapshot().controls.filter(control => control.label === label)[index].key;
+    model.send({ apply: { key, argument: null } });
+  };
+  const output = (value, label) => {
+    if (!value || typeof value !== 'object') return [];
+    if (value.output?.label === label) return [value.output.value];
+    return Object.values(value).flatMap(child => output(child, label));
+  };
+  try {
+    press('Increment');
+    press('Increment', 1);
+    press('Increment', 1);
+    assert.deepEqual(output(page(model), 'Counts'), ['1, 2']);
+    assert.deepEqual(output(page(model), 'Sum'), ['3']);
+    assert.deepEqual(model.snapshot().submission.value, [10, 20]);
+    press('Change private');
+    assert.deepEqual(output(page(model), 'Counts'), ['1, 2']);
+    press('Remove');
+    assert.deepEqual(output(page(model), 'Counts'), ['2']);
+    press('Add counter');
+    assert.deepEqual(output(page(model), 'Counts'), ['2, 0']);
+    assert.deepEqual(model.snapshot().submission.value, [20, 0]);
+    model.send('reset');
+    assert.deepEqual(output(page(model), 'Counts'), ['0, 0']);
+  } finally { model.dispose(); }
+});
+
+
+test('nested components consume child outputs and export their sum', async () => {
+  const model = await open(fixture('nested-outputs').start);
+  const press = (label, index = 0) => {
+    const key = model.snapshot().controls.filter(control => control.label === label)[index].key;
+    model.send({ apply: { key, argument: null } });
+  };
+  const output = (value, label) => {
+    if (!value || typeof value !== 'object') return [];
+    if (value.output?.label === label) return [value.output.value];
+    return Object.values(value).flatMap(child => output(child, label));
+  };
+  try {
+    press('Increment');
+    press('Increment', 1);
+    press('Increment', 3);
+    press('Increment', 3);
+    assert.deepEqual(output(page(model), 'Pair sum'), ['2', '2']);
+    assert.deepEqual(output(page(model), 'Overall sum'), ['4']);
+    press('Change private', 3);
+    assert.deepEqual(output(page(model), 'Overall sum'), ['4']);
+    press('Remove');
+    assert.deepEqual(output(page(model), 'Pair totals'), ['2']);
+    press('Add pair');
+    assert.deepEqual(output(page(model), 'Pair totals'), ['2, 0']);
+    model.send('reset');
+    assert.deepEqual(output(page(model), 'Pair totals'), ['0, 0']);
+  } finally { model.dispose(); }
+});
+
+test('table cells expose row-local selection to an independent summary', async () => {
+  const model = await open(fixture('table-outputs').start);
+  const apply = (label, index = 0, argument = null) => {
+    const key = model.snapshot().controls.filter(control => control.label === label)[index].key;
+    model.send({ apply: { key, argument } });
+  };
+  const output = value => {
+    if (!value || typeof value !== 'object') return [];
+    if (value.output?.label === 'Selected descriptions') return [value.output.value];
+    return Object.values(value).flatMap(output);
+  };
+  try {
+    apply('Toggle selection', 1);
+    assert.deepEqual(output(page(model)), ['Same description']);
+    apply('Toggle selection');
+    assert.deepEqual(output(page(model)), ['Same description, Same description']);
+    apply('Description', 0, 'Revised');
+    assert.deepEqual(output(page(model)), ['Revised, Same description']);
+    assert.deepEqual(model.snapshot().submission.value, ['Revised', 'Same description', 'Another item']);
+    apply('Remove');
+    assert.deepEqual(output(page(model)), ['Same description']);
+    apply('Add item');
+    assert.deepEqual(output(page(model)), ['Same description']);
+    model.send('reset');
+    assert.deepEqual(output(page(model)), ['']);
+  } finally { model.dispose(); }
+});

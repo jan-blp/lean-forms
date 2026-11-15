@@ -131,13 +131,12 @@ private def ordered (layout : Source (List String)) : Component [] Person.Raw :=
 /-- Loading can remove options while preserving the choice's location and key. -/
 private def shippingChoices : Component [] Order.Raw :=
   let pickup : Branch [] Shipping.Raw :=
-    .of Shipping.Constructor.pickup "Pickup" ⟨⟩ (.computed "" (.const ""))
+    .mk Shipping.Constructor.pickup "Pickup" ⟨⟩ (.computed "" (.const ""))
   let standard : Branch [] Shipping.Raw :=
-    .of Shipping.Constructor.standard "Standard" ⟨⟨"", ""⟩⟩ (.computed "" (.const ""))
-  .load (.const (.fetch layoutRequest (fromJson? (α := Bool)))) fun status =>
-    .choice path[Order.Field.shipping] "Shipping" (match status with
-      | .ready _ => [standard]
-      | _ => [pickup, standard])
+    .mk Shipping.Constructor.standard "Standard" ⟨⟨"", ""⟩⟩ (.computed "" (.const ""))
+  .load (.const (.fetch layoutRequest (fromJson? (α := Bool)))) fun
+    | .ready _ => .choice path[Order.Field.shipping] "Shipping" [standard]
+    | _ => .choice path[Order.Field.shipping] "Shipping" [pickup, standard]
 
 private def labels
   {α : Type}
@@ -156,7 +155,7 @@ private def performIn
   (argument : Option Input)
   : Except ModelForm.Rejection α := do
   let invocation ← (ModelView.decodeKey form cache value key argument Env.nil).mapError .ofAction
-  return (form.applyValid cache value Env.nil form.initialState invocation).value
+  return invocation.value
 
 def run : IO Unit := do
   check "RemoteApiRoundtrip" ([suppliers, supplier "acme"].all fun request =>
@@ -187,7 +186,7 @@ def run : IO Unit := do
   check "RemoteRevisitIsCached" (fetches back).isEmpty
   let failed ← execute opened (.loaded (supplier "acme") (.error "offline"))
   check "RemoteFailureShown" (match (snapshot failed).view with
-    | .stack _ [_, failure] => failure == .computed "" "Could not load: offline"
+    | .stack (children := [_, failure]) .. => failure == .computed "" "Could not load: offline"
     | _ => false)
   let retried ← execute failed .reset
   check "RemoteResetRetries" (fetches retried == [supplier "acme"])
@@ -236,7 +235,7 @@ def run : IO Unit := do
   let rendered := ModelView.render twice person {} [] Env.nil
   check "RemoteDuplicateShownOnce"
     (rendered.controls.map (·.label) == ["Name"] && match rendered.view with
-      | .stack _ [.control _, .computed "Name" note] => note == Display.duplicateNote
+      | .stack (children := [.control _, .computed "Name" note]) .. => note == Display.duplicateNote
       | _ => false)
   let late ← execute loaded (.loaded (supplier "initech") (.ok Json.null))
   check "RemoteUnrequestedResponseIgnored" !(late.cache.contains (supplier "initech"))

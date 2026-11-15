@@ -96,18 +96,20 @@ def ExpenseReport.withItems {Γ : Context} (items : Component Γ ExpenseReport.R
       })])
 
 def ExpenseReport.listForm {Γ : Context} : Component Γ ExpenseReport.Raw :=
-  ExpenseReport.withItems (.list
+  ExpenseReport.withItems (Component.void <| .list
     (path := path[ExpenseReport.Field.expenses])
     (label := "Expenses")
-    (itemLabel := "Expense")
+    (rowLabel := .numbered "Expense")
+    (addCaption := "Add expense")
     (initial := ⟨"", 0, false⟩)
-    (body := .groupOf (label := "") (children := Expense.columns.components)))
+    (body := Expense.columns.group ""))
 
 def ExpenseReport.form {Γ : Context} : Component Γ ExpenseReport.Raw :=
-  ExpenseReport.withItems (.table
+  ExpenseReport.withItems (Component.void <| .table
     (path := path[ExpenseReport.Field.expenses])
     (label := "Expenses")
-    (itemLabel := "Expense")
+    (rowLabel := .numbered "Expense")
+    (addCaption := "Add expense")
     (initial := ⟨"", 0, false⟩)
     (columns := Expense.columns))
 
@@ -116,10 +118,11 @@ def ExpenseReport.focusForm : Component [] ExpenseReport.Raw :=
     .field
       (path := path[ExpenseReport.Field.employee])
       (label := "Employee") (editor := .text),
-    .table
+    Component.void <| .table
       (path := path[ExpenseReport.Field.expenses])
       (label := "Expenses")
-      (itemLabel := "Expense")
+      (rowLabel := .numbered "Expense")
+      (addCaption := "Add expense")
       (initial := ⟨"", 0, false⟩)
       (columns := columns[
         "Description" => .computed "Description" {
@@ -129,12 +132,12 @@ def ExpenseReport.focusForm : Component [] ExpenseReport.Raw :=
         "Receipt" => .computed "Receipt" {
           inputs := inputs[path[Expense.Field.receipt]], run := fun receipt => if receipt then "Yes" else "No" }])
       (selection := some .here),
-    .focus
+    Component.void <| .focus
       (target := {
         inputs := inputs[.ui .here]
         run := RowSelection.itemPath path[ExpenseReport.Field.expenses]
       })
-      (body := .groupOf (label := "Selected expense") (children := Expense.columns.components)),
+      (body := Expense.columns.group "Selected expense"),
     .computed (label := "Total") (value := {
       inputs := inputs[path[ExpenseReport.Field.expenses]]
       run := fun expenses => s!"CHF {swiss (expenses.map (·.amount)).sum}"

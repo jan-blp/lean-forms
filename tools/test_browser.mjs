@@ -294,6 +294,84 @@ try {
     check(projects().length === 2 && !projectField(0, 'Task title') && !projectField(1, 'Task title'),
       'Reset did not clear project selections');
   `);
+  await example('outputs', `
+    const output = label => [...document.querySelectorAll('output')].find(element =>
+      element.parentElement.firstChild.textContent === label).textContent;
+    const press = async label => {
+      [...document.querySelectorAll('button')].find(button => button.textContent === label).click();
+      await tick();
+    };
+    await press('Increment');
+    check(output('Observer one') === '1' && output('Observer two') === 'Twice: 2', 'Observers did not read the owner output');
+    await press('Change private');
+    check(output('Private value') === '101' && output('Observer one') === '1', 'Private changes leaked into the output');
+    await press('Remember output');
+    await press('Increment');
+    check(output('Observer one') === '2' && output('Remembered') === '1', 'Output and consumer state were not independent');
+    await click('[data-action=reset]');
+    check(output('Observer one') === '0' && output('Remembered') === '0' && output('Private value') === '100',
+      'Reset did not restore both subtrees');
+  `);
+  await example('row-outputs', `
+    const output = label => [...document.querySelectorAll('output')].find(element =>
+      element.parentElement.firstChild.textContent === label).textContent;
+    const press = async (label, index = 0) => {
+      [...document.querySelectorAll('button')].filter(button => button.textContent === label)[index].click();
+      await tick();
+    };
+    await press('Increment');
+    await press('Increment', 1);
+    await press('Increment', 1);
+    check(output('Counts') === '1, 2' && output('Sum') === '3', 'Row outputs were not collected');
+    await press('Remove');
+    check(output('Counts') === '2' && output('Sum') === '2', 'Removal lost surviving row state');
+    await press('Add counter');
+    check(output('Counts') === '2, 0', 'New counter did not start with a fresh output');
+    await click('[data-action=reset]');
+    check(output('Counts') === '0, 0' && output('Sum') === '0', 'Reset did not restore row outputs');
+  `);
+  await example('nested-outputs', `
+    const output = label => [...document.querySelectorAll('output')].find(element =>
+      element.parentElement.firstChild.textContent === label).textContent;
+    const press = async (label, index = 0) => {
+      [...document.querySelectorAll('button')].filter(button => button.textContent === label)[index].click();
+      await tick();
+    };
+    await press('Increment');
+    await press('Increment', 1);
+    await press('Increment', 3);
+    await press('Increment', 3);
+    check(output('Pair totals') === '2, 2' && output('Overall sum') === '4', 'Nested outputs did not reach outer observers');
+    await press('Change private', 3);
+    check(output('Overall sum') === '4', 'Private child state leaked through the composite output');
+    await press('Remove');
+    check(output('Pair totals') === '2' && output('Overall sum') === '2', 'Removing a composite lost surviving child state');
+    await press('Add pair');
+    check(output('Pair totals') === '2, 0', 'New composite did not start with fresh child state');
+    await click('[data-action=reset]');
+    check(output('Pair totals') === '0, 0', 'Reset did not restore nested outputs');
+  `);
+  await example('table-outputs', `
+    const output = () => [...document.querySelectorAll('output')].find(element =>
+      element.parentElement.firstChild.textContent === 'Selected descriptions').textContent;
+    const press = async (label, index = 0) => {
+      [...document.querySelectorAll('button')].filter(button => button.textContent === label)[index].click();
+      await tick();
+    };
+    await press('Toggle selection', 1);
+    check(output() === 'Same description', 'Second row did not select independently');
+    await press('Toggle selection');
+    check(output() === 'Same description, Same description', 'Repeated descriptions were conflated');
+    await edit('Description', 'Revised');
+    check(output() === 'Revised, Same description', 'Summary did not observe the edited cell output');
+    await press('Remove');
+    check(output() === 'Same description', 'Removing a row lost the surviving selection');
+    await press('Add item');
+    check(output() === 'Same description', 'New row inherited a selection');
+    await click('[data-action=reset]');
+    check(output() === '', 'Reset did not clear row-local selections');
+  `);
+
 } finally {
   socket?.close();
   await stop(firefox);

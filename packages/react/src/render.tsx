@@ -27,6 +27,7 @@ const named = {
   choice: true,
   output: false,
   button: false,
+  tabBar: true,
   group: false,
   table: false,
   page: false,

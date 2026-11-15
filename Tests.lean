@@ -1,6 +1,7 @@
 module
 
 import Tests.FormModel
+import Tests.DerivingNames
 import Tests.LocalBind
 import Tests.Context
 import Tests.Actions
@@ -14,6 +15,11 @@ import Tests.Remote
 import Tests.Table
 import Tests.Focus
 import Tests.TableSelection
+import Tests.SharedState
+import Tests.Outputs
+import Tests.OutputEvaluation
+import Tests.Presentation
+import Tests.Rename
 
 meta import Forms.Model.Computation.Theorems
 meta import Forms.Runtime.ModelView.Theorems
@@ -33,3 +39,8 @@ public def main : IO Unit := do
   Tests.Table.run
   Tests.Focus.run
   Tests.TableSelection.run
+  Tests.SharedState.run
+  Tests.Outputs.run
+  Tests.OutputEvaluation.run
+  Tests.Presentation.run
+  Tests.Rename.run
