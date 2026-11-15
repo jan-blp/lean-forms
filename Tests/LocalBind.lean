@@ -22,9 +22,16 @@ private def control
     | throw (IO.userError s!"FAIL missing local control {label} {nth}")
   return found.key
 
-private def apply {model : Type} [FormModel model] [Validation model]
-    (form : Component [] (FormModel.Raw model)) (state : ModelForm.State form)
-    (label : String) (argument : Option Input := none) (nth : Nat := 0) : IO (ModelForm.State form) := do
+private def apply
+  {model : Type}
+  [FormModel model]
+  [Validation model]
+  (form : Component [] (Raw model))
+  (state : ModelForm.State form)
+  (label : String)
+  (argument : Option Input := none)
+  (nth : Nat := 0)
+  : IO (ModelForm.State form) := do
   IO.ofExcept (ModelForm.execute (model := model) form state
     (.apply (← control state label nth) argument))
 

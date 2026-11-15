@@ -272,7 +272,7 @@ structure Unchecked where
   ok : True
   deriving FormModel
 
-/-- error: Validation Unchecked is missing: declare its constraint rules before deriving Tests.FormModel.UsesUnchecked -/
+/-- error: deriving FormModel for `Tests.FormModel.UsesUnchecked`: validation: Validation Unchecked is missing: declare its constraint rules before deriving Tests.FormModel.UsesUnchecked -/
 #guard_msgs in
 structure UsesUnchecked where
   unchecked : Unchecked
@@ -369,14 +369,14 @@ example (raw : Person.Raw) (valid : Validated Person raw) : Person.erase valid.v
 structure Parameterized (α : Type) where
   value : α
 
-/-- error: FormModel requires a monomorphic type without parameters or indices -/
+/-- error: deriving FormModel for `Tests.FormModel.Parameterized`: the type must be monomorphic, without parameters or indices -/
 #guard_msgs in
 deriving instance FormModel for Parameterized
 
 inductive Indexed : Bool → Type where
   | yes : Indexed true
 
-/-- error: FormModel requires a monomorphic type without parameters or indices -/
+/-- error: deriving FormModel for `Tests.FormModel.Indexed`: the type must be monomorphic, without parameters or indices -/
 #guard_msgs in
 deriving instance FormModel for Indexed
 
@@ -384,7 +384,7 @@ inductive Recursive where
   | leaf
   | next (value : Recursive)
 
-/-- error: FormModel does not support recursive or mutually recursive types -/
+/-- error: deriving FormModel for `Tests.FormModel.Recursive`: recursive or mutually recursive types are not supported -/
 #guard_msgs in
 deriving instance FormModel for Recursive
 
@@ -395,21 +395,21 @@ structure Container where
 structure OptionalField where
   value : Option String
 
-/-- error: Unsupported FormModel field type: Option String -/
+/-- error: deriving FormModel for `Tests.FormModel.OptionalField`: unsupported field type: Option String -/
 #guard_msgs in
 deriving instance FormModel for OptionalField
 
 structure FunctionField where
   value : Nat → Nat
 
-/-- error: Unsupported FormModel field type: ℕ → ℕ -/
+/-- error: deriving FormModel for `Tests.FormModel.FunctionField`: unsupported field type: ℕ → ℕ -/
 #guard_msgs in
 deriving instance FormModel for FunctionField
 
 structure Unsupported where
   value : Int
 
-/-- error: Field type must derive FormModel first: ℤ -/
+/-- error: deriving FormModel for `Tests.FormModel.Unsupported`: field type must derive FormModel first: ℤ -/
 #guard_msgs in
 deriving instance FormModel for Unsupported
 
@@ -417,7 +417,7 @@ structure Dependent where
   size : Nat
   value : Fin size
 
-/-- error: FormModel data fields cannot be dependent -/
+/-- error: deriving FormModel for `Tests.FormModel.Dependent`: data fields cannot be dependent -/
 #guard_msgs in
 deriving instance FormModel for Dependent
 
@@ -426,7 +426,7 @@ structure ProofDependent where
   first : value = value
   second : first = first
 
-/-- error: FormModel proof fields cannot depend on earlier proofs -/
+/-- error: deriving FormModel for `Tests.FormModel.ProofDependent`: proof fields cannot depend on earlier proofs -/
 #guard_msgs in
 deriving instance FormModel for ProofDependent
 
@@ -439,7 +439,7 @@ structure BinderNames where
 private structure PrivateModel where
   value : Nat
 
-/-- error: FormModel requires public model declarations -/
+/-- error: deriving FormModel for `Tests.FormModel.PrivateModel`: the model must be public -/
 #guard_msgs in
 deriving instance FormModel for PrivateModel
 

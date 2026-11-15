@@ -251,11 +251,14 @@ attribute [reducible] FormModel.Raw
 
 namespace Forms.Model
 
-abbrev Validated (model : Type) [FormModel model] (raw : FormModel.Raw model) :=
+abbrev Raw (α : Type) [FormModel α] : Type :=
+  FormModel.Raw α
+
+abbrev Validated (model : Type) [FormModel model] (raw : Raw model) :=
   { value : model // FormModel.erase value = raw }
 
 class Validation (model : Type) [FormModel model] where
-  validate : (raw : FormModel.Raw model) → Except (List (Error raw)) (Validated model raw)
+  validate : (raw : Raw model) → Except (List (Error raw)) (Validated model raw)
 
 def errors {α β : Type _} : Except (List α) β → List α
   | .ok _ => []
@@ -280,7 +283,7 @@ instance : Validation Bool := ⟨fun value => .ok ⟨value, rfl⟩⟩
 instance : Validation Nat := ⟨fun value => .ok ⟨value, rfl⟩⟩
 
 @[reducible] instance {α : Type} [FormModel α] : FormModel (List α) :=
-  ⟨List (FormModel.Raw α), List.map FormModel.erase⟩
+  ⟨List (Raw α), List.map FormModel.erase⟩
 
 /-- Validates every item; errors point at their item's position. -/
 instance {α : Type} [FormModel α] [Validation α] : Validation (List α) where

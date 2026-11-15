@@ -89,7 +89,7 @@ def validationErrors
   {model : Type}
   [FormModel model]
   [Model.Validation model]
-  (value : FormModel.Raw model)
+  (value : Model.Raw model)
   : List Feedback.Error :=
   (Model.errors (Model.Validation.validate (model := model) value)).map ModelView.error
 
@@ -106,9 +106,9 @@ def snapshot {Γ : Model.Context}
   {model β : Type}
   [FormModel model]
   [Model.Validation model]
-  (form : Model.Component Γ (FormModel.Raw model) β)
+  (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
-  : Snapshot (FormModel.Raw model) :=
+  : Snapshot (Model.Raw model) :=
   let errors := validationErrors (model := model) state.value
   let visible := match state.serverFeedback with
     | some feedback => feedback.errors
@@ -188,7 +188,7 @@ def submit
   {model β : Type}
   [FormModel model]
   [Model.Validation model]
-  {form : Model.Component Γ (FormModel.Raw model) β}
+  {form : Model.Component Γ (Model.Raw model) β}
   (state : State form)
   : State form :=
   if state.ui.pending then state else
@@ -205,7 +205,7 @@ def event {Γ : Model.Context}
   {model β : Type}
   [FormModel model]
   [Model.Validation model]
-  (form : Model.Component Γ (FormModel.Raw model) β)
+  (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
   : Event → Except String (State form) := fun event => do
   let state := { state with ui := { state.ui with rejection := none } }
@@ -245,7 +245,7 @@ def execute {Γ : Model.Context}
   {model β : Type}
   [FormModel model]
   [Model.Validation model]
-  (form : Model.Component Γ (FormModel.Raw model) β)
+  (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
   (input : Event)
   : Except String (State form) :=

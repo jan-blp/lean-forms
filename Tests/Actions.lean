@@ -36,7 +36,7 @@ private def press
   {model : Type}
   [FormModel model]
   [Validation model]
-  {form : Component Γ (FormModel.Raw model)}
+  {form : Component Γ (Raw model)}
   (state : ModelForm.State form)
   (label : String)
   (nth : Nat := 0)

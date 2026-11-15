@@ -39,13 +39,13 @@ def FormDefinition.ofModel
   (model : Type)
   [FormModel model]
   [Model.Validation model]
-  [ToJson (FormModel.Raw model)]
-  [FromJson (FormModel.Raw model)]
-  (form : Model.Component [] (FormModel.Raw model) β)
-  (initial : FormModel.Raw model)
+  [ToJson (Model.Raw model)]
+  [FromJson (Model.Raw model)]
+  (form : Model.Component [] (Model.Raw model) β)
+  (initial : Model.Raw model)
   : FormDefinition where
   State := ModelForm.State form
-  Raw := FormModel.Raw model
+  Raw := Model.Raw model
   initial := toJson initial
   openState value := do
     let state := ModelForm.load form (ModelForm.openState form (← fromJson? value) Model.Env.nil)
@@ -54,7 +54,7 @@ def FormDefinition.ofModel
     let state ← ModelForm.execute (model := model) form state input
     pure (state, ModelForm.snapshot (model := model) form state)
   verify name fingerprint json := do
-    let value ← (decodeSubmission (FormModel.Raw model) name fingerprint json).mapError fun message =>
+    let value ← (decodeSubmission (Model.Raw model) name fingerprint json).mapError fun message =>
       Json.mkObj [("kind", toJson "request"), ("message", toJson message)]
     match Model.Validation.validate (model := model) value with
     | .ok _ => pure ()
