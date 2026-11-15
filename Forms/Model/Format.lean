@@ -60,13 +60,9 @@ def digit (d : Nat) : Char :=
 def digitValue (c : Char) : Option Nat :=
   if c.isDigit then some (c.toNat - 48) else none
 
-theorem digit_facts : ∀ d : Fin 10,
-    digitValue (digit d) = some d ∧ jsWhitespace (digit d) = false ∧
-      digit d ≠ '-' ∧ digit d ≠ '.' := by
-  decide
-
-theorem digitValue_digit {d : Nat} (h : d < 10) : digitValue (digit d) = some d :=
-  (digit_facts ⟨d, h⟩).1
+theorem digitValue_digit {d : Nat} (h : d < 10) : digitValue (digit d) = some d := by
+  have : ∀ d : Fin 10, digitValue (digit d) = some d := by decide
+  exact this ⟨d, h⟩
 
 /-- Decimal digits, most significant first. -/
 def digits (n : Nat) : List Char :=
@@ -87,13 +83,6 @@ decreasing_by omega
 theorem digits_ne_nil (n : Nat) : digits n ≠ [] := by
   rw [digits]
   split <;> simp
-
-theorem length_digits {n : Nat} (h : n < 100) : (digits n).length ≤ 2 := by
-  rw [digits]
-  split
-  · simp
-  · rw [digits]
-    simp [show n / 10 < 10 by omega]
 
 /-- The value of digits read least significant first. -/
 def valueReversed : List Char → Option Nat
@@ -120,6 +109,10 @@ decreasing_by omega
 def pad (width : Nat) (chars : List Char) : List Char :=
   List.replicate (width - chars.length) (digit 0) ++ chars
 
+theorem length_pad (width : Nat) (chars : List Char) : width ≤ (pad width chars).length := by
+  simp [pad]
+  omega
+
 theorem valueReversed_append_zeros (chars : List Char) (count : Nat) :
     valueReversed (chars ++ List.replicate count (digit 0)) = valueReversed chars := by
   induction chars with
@@ -129,24 +122,28 @@ theorem valueReversed_append_zeros (chars : List Char) (count : Nat) :
       simp_all [List.replicate_succ, valueReversed, digitValue_digit (by decide : 0 < 10)]
   | cons c rest ih => simp [valueReversed, ih]
 
+/-- Neither whitespace nor a sign or a decimal point. -/
+abbrev Numeral (c : Char) : Prop :=
+  jsWhitespace c = false ∧ c ≠ '-' ∧ c ≠ '.'
+
 /-- Characters that are all digits, with value `n`. -/
-def Digits (chars : List Char) (n : Nat) : Prop :=
-  value chars = some n ∧ chars ≠ [] ∧ ∀ c ∈ chars, ∃ d : Fin 10, c = digit d
+structure Digits (chars : List Char) (n : Nat) : Prop where
+  value_eq : value chars = some n
+  numeral : ∀ c ∈ chars, Numeral c
 
 theorem digits_valid (n : Nat) (width : Nat) : Digits (pad width (digits n)) n := by
-  refine ⟨?_, by simp [pad, digits_ne_nil], ?_⟩
+  refine ⟨?_, fun c h => ?_⟩
   · simp [value, pad, digits_ne_nil, List.reverse_append, List.reverse_replicate,
       valueReversed_append_zeros, valueReversed_digits]
-  · intro c h
+  · have : ∀ d : Fin 10, Numeral (digit d) := by decide
     rcases List.mem_append.1 h with h | h
-    · exact ⟨0, (List.eq_of_mem_replicate h)⟩
-    · exact digits_digit c h
+    · exact List.eq_of_mem_replicate h ▸ this 0
+    · obtain ⟨d, rfl⟩ := digits_digit c h
+      exact this d
 
 theorem Digits.no_whitespace {chars : List Char} {n : Nat} (h : Digits chars n) :
-    ∀ c ∈ chars, jsWhitespace c = false := by
-  intro c hc
-  obtain ⟨d, rfl⟩ := h.2.2 c hc
-  exact (digit_facts d).2.1
+    ∀ c ∈ chars, jsWhitespace c = false :=
+  fun c hc => (h.numeral c hc).1
 
 def plain : Format String where
   kind := .plain
@@ -162,7 +159,7 @@ def natural : Format Nat where
     | none => .error "Enter a non-negative whole number."
   parse_print n := by
     have h : Digits (digits n) n := by simpa [pad] using digits_valid n 0
-    simp [String.toList_ofList, trim_of_forall h.no_whitespace, h.1]
+    simp [String.toList_ofList, trim_of_forall h.no_whitespace, h.value_eq]
 
 def sign : List Char → Bool × List Char
   | c :: rest => if c = '-' then (true, rest) else (false, c :: rest)
@@ -174,16 +171,10 @@ def signed (value : Int) (chars : List Char) : List Char :=
 def unsign (negative : Bool) (n : Nat) : Int :=
   if negative then -n else n
 
-theorem sign_signed {chars : List Char} (value : Int) (h : ∀ c ∈ chars.head?, c ≠ '-') :
+theorem sign_signed {chars : List Char} (value : Int) (h : ∀ c ∈ chars, c ≠ '-') :
     sign (signed value chars) = (decide (value < 0), chars) := by
   unfold signed
   split <;> cases chars <;> simp_all [sign]
-
-theorem Digits.head {chars : List Char} {n : Nat} (h : Digits chars n) :
-    ∀ c ∈ chars.head?, c ≠ '-' := by
-  intro c hc
-  obtain ⟨d, rfl⟩ := h.2.2 c (List.mem_of_mem_head? hc)
-  exact (digit_facts d).2.2.1
 
 theorem unsign_natAbs (value : Int) : unsign (decide (value < 0)) value.natAbs = value := by
   unfold unsign
@@ -195,9 +186,7 @@ theorem signed_no_whitespace
     (h : ∀ c ∈ chars, jsWhitespace c = false)
     : ∀ c ∈ signed value chars, jsWhitespace c = false := by
   unfold signed
-  split
-  · simpa [jsWhitespace] using h
-  · exact h
+  split <;> simp_all [jsWhitespace]
 
 def integer : Format Int where
   kind := .integer
@@ -211,7 +200,7 @@ def integer : Format Int where
     have h : Digits (digits n.natAbs) n.natAbs := by
       simpa [pad] using digits_valid n.natAbs 0
     simp [String.toList_ofList, trim_of_forall (signed_no_whitespace n h.no_whitespace),
-      sign_signed n h.head, h.1, unsign_natAbs]
+      sign_signed n fun c hc => (h.numeral c hc).2.1, h.value_eq, unsign_natAbs]
 
 def refine
     {α β : Type}
@@ -238,16 +227,6 @@ def int64 : Format Int64 :=
   integer.refine Int64.toInt Int64.ofInt? Int64.ofInt?_toInt
     "Enter a whole number between -9223372036854775808 and 9223372036854775807."
 
-theorem Digits.no_point {chars : List Char} {n : Nat} (h : Digits chars n) :
-    ∀ c ∈ chars, (c != '.') = true := by
-  intro c hc
-  obtain ⟨d, rfl⟩ := h.2.2 c hc
-  simpa using (digit_facts d).2.2.2
-
-theorem length_pad (width : Nat) (chars : List Char) : width ≤ (pad width chars).length := by
-  simp [pad]
-  omega
-
 /-- The digits before and after an optional decimal point. -/
 def point (chars : List Char) : Option (List Char × List Char) :=
   match chars.dropWhile (· != '.') with
@@ -255,23 +234,33 @@ def point (chars : List Char) : Option (List Char × List Char) :=
   | _ :: fraction =>
     if fraction.contains '.' then none else some (chars.takeWhile (· != '.'), fraction)
 
+def unpoint (whole fraction : List Char) : List Char :=
+  if fraction = [] then whole else whole ++ '.' :: fraction
+
+theorem point_unpoint
+    {whole fraction : List Char}
+    (hw : ∀ c ∈ whole, Numeral c)
+    (hf : ∀ c ∈ fraction, Numeral c)
+    : point (unpoint whole fraction) = some (whole, fraction) := by
+  have hw : ∀ c ∈ whole, (c != '.') = true := fun c hc => by simpa using (hw c hc).2.2
+  have : '.' ∉ fraction := fun hm => (hf '.' hm).2.2 rfl
+  unfold unpoint
+  split
+  · simp_all [point, dropWhile_of_all hw]
+  · simp [point, List.dropWhile_append_of_pos hw, List.takeWhile_append_of_pos hw, this]
+
+theorem unpoint_no_sign
+    {whole fraction : List Char}
+    (hw : ∀ c ∈ whole, Numeral c)
+    (hf : ∀ c ∈ fraction, Numeral c)
+    : ∀ c ∈ unpoint whole fraction, jsWhitespace c = false ∧ c ≠ '-' := by
+  unfold unpoint
+  split <;> simp_all [or_imp, forall_and, show jsWhitespace '.' = false by decide]
+
 def Decimal.chars (value : Decimal) : List Char :=
   let padded := pad (value.exponent + 1) (digits value.mantissa.natAbs)
   let whole := padded.length - value.exponent
-  signed value.mantissa
-    (if value.exponent = 0 then padded else padded.take whole ++ '.' :: padded.drop whole)
-
-theorem point_digits {chars : List Char} {n : Nat} (h : Digits chars n) :
-    point chars = some (chars, []) := by
-  simp [point, dropWhile_of_all h.no_point]
-
-theorem point_split
-    {whole fraction : List Char}
-    (hw : ∀ c ∈ whole, (c != '.') = true)
-    (hf : ∀ c ∈ fraction, (c != '.') = true)
-    : point (whole ++ '.' :: fraction) = some (whole, fraction) := by
-  have : '.' ∉ fraction := fun hm => by simpa using hf '.' hm
-  simp [point, List.dropWhile_append_of_pos hw, List.takeWhile_append_of_pos hw, this]
+  signed value.mantissa (unpoint (padded.take whole) (padded.drop whole))
 
 def decimal : Format Decimal where
   kind := .decimal
@@ -284,42 +273,24 @@ def decimal : Format Decimal where
       | none => .error "Enter a decimal number, such as 12.50."
     | none => .error "Enter a decimal number, such as 12.50."
   parse_print value := by
-    obtain ⟨mantissa, exponent, normalized⟩ := value
+    have h := digits_valid value.mantissa.natAbs (value.exponent + 1)
+    have length := length_pad (value.exponent + 1) (digits value.mantissa.natAbs)
     dsimp only [Decimal.chars]
-    have h := digits_valid mantissa.natAbs (exponent + 1)
-    have hlen := length_pad (exponent + 1) (digits mantissa.natAbs)
-    generalize pad (exponent + 1) (digits mantissa.natAbs) = padded at h hlen ⊢
-    have hself : Decimal.normalize mantissa exponent = ⟨mantissa, exponent, normalized⟩ :=
-      Decimal.normalize_self ⟨mantissa, exponent, normalized⟩
-    by_cases he : exponent = 0
-    · subst he
-      simp only [ite_true, String.toList_ofList,
-        trim_of_forall (signed_no_whitespace _ h.no_whitespace), sign_signed _ h.head,
-        point_digits h, List.append_nil, h.1, List.length_nil, unsign_natAbs, hself]
-    · generalize hw : padded.length - exponent = whole
-      have chars : ∀ c ∈ padded.take whole ++ '.' :: padded.drop whole,
-          jsWhitespace c = false ∧ c ≠ '-' := by
-        intro c hc
-        simp only [List.mem_append, List.mem_cons, or_left_comm] at hc
-        rw [← List.mem_append, List.take_append_drop] at hc
-        rcases hc with rfl | hc
-        · decide
-        · obtain ⟨d, rfl⟩ := h.2.2 c hc
-          exact ⟨(digit_facts d).2.1, (digit_facts d).2.2.1⟩
-      have length : (padded.drop whole).length = exponent := by
-        simp [← hw]
-        omega
-      simp only [he, ite_false, String.toList_ofList,
-        trim_of_forall (signed_no_whitespace _ fun c hc => (chars c hc).1),
-        sign_signed _ fun c hc => (chars c (List.mem_of_mem_head? hc)).2,
-        point_split (fun c hc => h.no_point c (List.mem_of_mem_take hc))
-          (fun c hc => h.no_point c (List.mem_of_mem_drop hc)),
-        List.take_append_drop, h.1, length, unsign_natAbs, hself]
+    generalize pad (value.exponent + 1) (digits value.mantissa.natAbs) = padded at h length ⊢
+    generalize hwhole : padded.length - value.exponent = whole
+    have hw c (hc : c ∈ padded.take whole) := h.numeral c (List.mem_of_mem_take hc)
+    have hf c (hc : c ∈ padded.drop whole) := h.numeral c (List.mem_of_mem_drop hc)
+    have chars := unpoint_no_sign hw hf
+    simp [trim_of_forall (signed_no_whitespace _ fun c hc => (chars c hc).1),
+      sign_signed _ fun c hc => (chars c hc).2, point_unpoint hw hf, h.value_eq,
+      unsign_natAbs, Decimal.normalize_self, show padded.length - whole = value.exponent by omega]
 
 theorem length_pad_digits {n : Nat} (h : n < 100) : (pad 2 (digits n)).length = 2 := by
-  have := length_digits h
-  simp [pad]
-  omega
+  rw [digits]
+  split
+  · simp [pad]
+  · rw [digits]
+    simp [pad, show n / 10 < 10 by omega]
 
 open Std.Time in
 /-- ISO 8601 `YYYY-MM-DD`; other years have more digits or a minus sign. -/
@@ -365,22 +336,17 @@ theorem Date.ofChars?_chars (date : PlainDate) : Date.ofChars? (Date.chars date)
   | [m₁, m₂], [d₁, d₂], _, _ =>
   simp only [Date.chars, hM, hD]
   unfold Date.ofChars?
-  simp [List.reverse_append, sign_signed _ hy.head, hy.1, hm.1, hd.1, hyl, unsign_natAbs,
-    Int.toNat_of_nonneg (by omega : 0 ≤ month), Int.toNat_of_nonneg (by omega : 0 ≤ day), hm1, hm2,
-    hd1, hd2]
+  simp [List.reverse_append, sign_signed _ fun c hc => (hy.numeral c hc).2.1, hy.value_eq,
+    hm.value_eq, hd.value_eq, hyl, unsign_natAbs, Int.toNat_of_nonneg (by omega : 0 ≤ month),
+    Int.toNat_of_nonneg (by omega : 0 ≤ day), hm1, hm2, hd1, hd2]
   exact valid
 
 open Std.Time in
 theorem Date.chars_no_whitespace (date : PlainDate) :
     ∀ c ∈ Date.chars date, jsWhitespace c = false := by
-  intro c hc
-  simp only [Date.chars, List.mem_append, List.mem_cons] at hc
-  rcases hc with (hc | rfl | hc) | rfl | hc
-  · exact signed_no_whitespace _ (digits_valid _ 4).no_whitespace c hc
-  · decide
-  · exact (digits_valid _ 2).no_whitespace c hc
-  · decide
-  · exact (digits_valid _ 2).no_whitespace c hc
+  simp only [Date.chars, List.forall_mem_append, List.forall_mem_cons]
+  exact ⟨⟨signed_no_whitespace _ (digits_valid _ 4).no_whitespace, rfl,
+    (digits_valid _ 2).no_whitespace⟩, rfl, (digits_valid _ 2).no_whitespace⟩
 
 open Std.Time in
 /-- What `<input type="date">` produces. -/
@@ -395,28 +361,13 @@ def date : Format PlainDate where
 
 theorem Uuid.canonicalFrom_mem :
     ∀ {chars : List Char} {position : Nat}, Uuid.canonicalFrom chars position = true →
-      ∀ c ∈ chars, c = '-' ∨ Uuid.hexDigit c = true
+      ∀ c ∈ chars, c ∈ '-' :: Uuid.hexDigits
   | [], _, _, c, hc => by simp at hc
   | _ :: _, _, h, c, hc => by
     simp only [Uuid.canonicalFrom, Bool.and_eq_true] at h
     rcases List.mem_cons.1 hc with rfl | hc
     · split at h <;> simp_all
     · exact canonicalFrom_mem h.2 c hc
-
-theorem Uuid.char_facts {c : Char} (h : c = '-' ∨ Uuid.hexDigit c = true) :
-    jsWhitespace c = false ∧ c.toLower = c := by
-  rcases h with rfl | h
-  · decide
-  · simp only [Uuid.hexDigit, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
-    constructor
-    · simp [jsWhitespace]
-      omega
-    · simp only [Char.toLower, ge_iff_le, UInt32.le_iff_toNat_le,
-        show 'A'.val.toNat = 65 from rfl, show 'Z'.val.toNat = 90 from rfl]
-      split
-      · simp only [Char.toNat] at h
-        omega
-      · rfl
 
 def uuid : Format Uuid where
   kind := .uuid
@@ -427,7 +378,9 @@ def uuid : Format Uuid where
     else .error "Enter a UUID, such as 123e4567-e89b-12d3-a456-426614174000."
   parse_print uuid := by
     obtain ⟨value, canonical⟩ := uuid
-    have facts c (hc : c ∈ value.toList) := Uuid.char_facts (Uuid.canonicalFrom_mem canonical c hc)
+    have facts : ∀ c ∈ '-' :: Uuid.hexDigits, jsWhitespace c = false ∧ c.toLower = c := by
+      decide
+    have facts c (hc : c ∈ value.toList) := facts c (Uuid.canonicalFrom_mem canonical c hc)
     have lower : value.toList.map Char.toLower = value.toList := by
       simpa using List.map_congr_left (fun c hc => (facts c hc).2)
     simp [trim_of_forall fun c hc => (facts c hc).1, lower, canonical]

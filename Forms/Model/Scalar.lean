@@ -37,13 +37,13 @@ instance : FromJson Decimal where
     let number ← json.getNum?
     pure (Decimal.normalize number.mantissa number.exponent)
 
-def Uuid.hexDigit (c : Char) : Bool :=
-  (48 ≤ c.toNat && c.toNat ≤ 57) || (97 ≤ c.toNat && c.toNat ≤ 102)
+def Uuid.hexDigits : List Char :=
+  ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
 
 def Uuid.canonicalFrom : (characters : List Char) → (position : Nat) → Bool
   | [], position => position == 36
   | c :: rest, position =>
-    (if position ∈ [8, 13, 18, 23] then c == '-' else Uuid.hexDigit c) &&
+    (if position ∈ [8, 13, 18, 23] then c == '-' else c ∈ Uuid.hexDigits) &&
       canonicalFrom rest (position + 1)
 
 /-- Lowercase, in the 8-4-4-4-12 hexadecimal form; literals are checked `by decide`. -/
