@@ -6,8 +6,7 @@ public import Forms.Model.PointedList
 @[expose] public section
 namespace Forms.Model
 
-/-- Whether UI actions may update a context entry.
-NOTE: Access enforcement relies on modifying the environment only through `Ref.set`. -/
+/-- Access enforcement relies on modifying the environment only through `Ref.set`. -/
 inductive Access where
   | readOnly
   | writable
@@ -16,17 +15,14 @@ structure Entry where
   access : Access
   type : Type
 
-/-- Entries in scope. -/
 abbrev Context := List Entry
 
-/-- A reference to a context entry, tracking its access and value type. -/
 abbrev Ref (Γ : Context) (access : Access) (α : Type) := Member (⟨access, α⟩ : Entry) Γ
 
 namespace Ref
 export Member (here)
 end Ref
 
-/-- The same entry, under one more innermost entry. -/
 abbrev Ref.there
   {Γ : Context}
   {entry : Entry}
@@ -36,29 +32,23 @@ abbrev Ref.there
   : Ref (entry :: Γ) access α :=
   Member.there ref
 
-/-- A reference to writable state in a typed context. -/
 abbrev Var (Γ : Context) (α : Type) := Ref Γ .writable α
 
-/-- A reference to a read-only input in a typed context. -/
 abbrev InputRef (Γ : Context) (α : Type) := Ref Γ .readOnly α
 
-/-- A list row's context. -/
 abbrev Context.row (α : Type) (Γ : Context) : Context :=
   ⟨.readOnly, PointedList α⟩ -- its list and the row's index
   :: ⟨.writable, Bool⟩ -- whether to remove the row
   :: Γ
 
-/-- The row's list, pointed at the row. -/
 abbrev Ref.row {α : Type} {Γ : Context} : InputRef (Context.row α Γ) (PointedList α) := .here
 
-/-- Setting it removes the row. -/
 abbrev Ref.rowRemoved {α : Type} {Γ : Context} : Var (Context.row α Γ) Bool := .there .here
 
 structure Binding (α β : Type) where
   value : α
   tail : β
 
-/-- Values for every entry in a typed context. -/
 def Env : Context → Type
   | [] => Unit
   | entry :: Γ => Binding entry.type (Env Γ)
@@ -69,7 +59,6 @@ abbrev Env.nil : Env [] := ()
 abbrev Env.cons (value : α) (tail : Env Γ) : Env (⟨access, α⟩ :: Γ) :=
   ⟨value, tail⟩
 
-/-- A row's environment, pointed at `index` and not yet removed. -/
 abbrev Env.row
   {β : Type}
   (items : List β)
@@ -84,7 +73,6 @@ macro "env[" values:term,* "]" : term => do
     result ← `(Env.cons $value $result)
   return result
 
-/-- Reads a reference. -/
 def Ref.get
   {Γ : Context}
   (ref : Ref Γ access α)
@@ -94,7 +82,6 @@ def Ref.get
   | .here => env.value
   | .there ref => Ref.get ref env.tail
 
-/-- Updates writable state. -/
 def Ref.set
   {Γ : Context}
   (ref : Var Γ α)
@@ -105,10 +92,8 @@ def Ref.set
   | .here => ⟨value, env.tail⟩
   | .there ref => ⟨env.value, Ref.set ref value env.tail⟩
 
-/-- Maps every reference into another context, keeping its access and type. -/
 abbrev Renaming (Γ Δ : Context) := ∀ {access : Access} {α : Type}, Ref Γ access α → Ref Δ access α
 
-/-- Leaves the innermost entry in place and renames the rest. -/
 def Renaming.lift
   {Γ Δ : Context}
   {entry : Entry}
@@ -117,7 +102,6 @@ def Renaming.lift
   | .here => .here
   | .there ref => .there (rename ref)
 
-/-- Leaves a row's entries in place and renames the rest. -/
 def Renaming.liftRow
   {α : Type}
   {Γ Δ : Context}
@@ -125,11 +109,9 @@ def Renaming.liftRow
   : Renaming (Context.row α Γ) (Context.row α Δ) :=
   Renaming.lift (Renaming.lift rename)
 
-/-- Makes room for a new innermost entry. -/
 def Renaming.shift {Γ : Context} {entry : Entry} : Renaming Γ (entry :: Γ) :=
   .there
 
-/-- Makes room for a row's entries. -/
 def Renaming.row {α : Type} {Γ : Context} : Renaming Γ (Context.row α Γ) :=
   fun ref => .there (.there ref)
 

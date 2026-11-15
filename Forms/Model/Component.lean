@@ -26,8 +26,6 @@ structure Columns (Γ : Context) (α : Type) (β : Type := Unit) where
   headers : Vector String count
   cells : Presentation [] Γ α β count
 
-/-- An option of `choice`: picking it builds `constructor` from `initial`, and `body` edits the
-payload. -/
 structure Branch (Γ : Context) (α : Type) [Constructors α] where
   {Payload : Type}
   constructor : Constructors.Constructor α Payload
@@ -35,7 +33,6 @@ structure Branch (Γ : Context) (α : Type) [Constructors α] where
   initial : Payload
   body : Component Γ Payload
 
-/-- Turns a row selection into a concrete path to that list item. -/
 def RowSelection.itemPath
   {α β : Type}
   (items : Path α (List β))
@@ -43,7 +40,6 @@ def RowSelection.itemPath
   | .none => .empty
   | .row index => (PartialPath.ofPath items).trans (.index index .self)
 
-/-- Returns a computed output without adding any UI. -/
 @[reducible] def Component.output
   {Γ : Context}
   {α β : Type}
@@ -95,8 +91,6 @@ def RowSelection.itemPath
   : Component Γ α β holes :=
   ⟨body.LocalState, .withAvailability availability body.node⟩
 
-/-- Shows `row` for each item at `path`, then the content of its hole.
-Each row reads `Ref.row` and sets `Ref.rowRemoved` to remove itself. -/
 @[reducible] def Component.listOf
   {Γ : Context}
   {α β γ : Type}
@@ -106,8 +100,6 @@ Each row reads `Ref.row` and sets `Ref.rowRemoved` to remove itself. -/
   : Component Γ α (List γ) (holes := 1) :=
   ⟨List row.LocalState, .list path label row.node⟩
 
-/-- Like `listOf`, with each row's views as cells under `headers` and its hole in the footer;
-`selection` marks its row and follows removals. -/
 @[reducible] def Component.tableOf
   {Γ : Context}
   {α β γ : Type}
@@ -141,7 +133,6 @@ Each row reads `Ref.row` and sets `Ref.rowRemoved` to remove itself. -/
   : Component Γ α β holes :=
   ⟨LoadedState data (fun status => (body status).LocalState), .load source (fun status => (body status).node)⟩
 
-/-- Shows `body` only while `condition` holds. -/
 def Component.visibleWhen
   {Γ : Context}
   {α β : Type}
@@ -150,7 +141,6 @@ def Component.visibleWhen
   : Component Γ α β :=
   .withAvailability ((fun visible => if visible then .enabled else .hidden) <$> condition) body
 
-/-- Shows `body` read-only while `condition` holds. -/
 def Component.disabledWhen
   {Γ : Context}
   {α β : Type}
@@ -198,7 +188,6 @@ def Component.loadOr
     | .loading => fallback
     | .failed _ => fallback
 
-/-- Arranges the owned presentations into views with `arrangement` and returns `output`. -/
 @[reducible] def Presentation.layouts
   {slots : List Nat}
   {Γ : Context}
@@ -209,7 +198,6 @@ def Component.loadOr
   : Presentation slots Γ α β views :=
   ⟨Unit, .layout output arrangement⟩
 
-/-- Places the owned presentations with `arrangement` and returns `output`. -/
 @[reducible] def Presentation.layout
   {slots : List Nat}
   {Γ : Context}
@@ -219,7 +207,6 @@ def Component.loadOr
   : Presentation slots Γ α β :=
   .layouts output ((#v[·]) <$> arrangement)
 
-/-- Places the owned presentations with `arrangement`. -/
 @[reducible] def Presentation.arrange
   {slots : List Nat}
   {Γ : Context}
@@ -228,7 +215,6 @@ def Component.loadOr
   : Presentation slots Γ α :=
   .layout (.const ()) arrangement
 
-/-- Owns `component`: `body` reads its output as `Ref.here` and places its view as `Slot.here`. -/
 @[reducible] def Presentation.own
   {slots : List Nat}
   {Γ : Context}
@@ -262,7 +248,6 @@ strip as `Slot.here`. -/
   : Presentation slots Γ α β :=
   .bind 0 (.own (.tabBar label .here labels) body)
 
-/-- A component whose view is a layout of the components it owns. -/
 @[reducible] def Component.present
   {Γ : Context}
   {α β : Type}
@@ -270,7 +255,6 @@ strip as `Slot.here`. -/
   : Component Γ α β :=
   ⟨body.LocalState, .present body.node⟩
 
-/-- Introduces writable local UI state for `body`. -/
 @[reducible] def Component.bind
   {Γ : Context}
   {α β γ : Type}
@@ -291,7 +275,6 @@ strip as `Slot.here`. -/
   : Component Δ α β holes :=
   ⟨component.LocalState, component.node.rename rename⟩
 
-/-- Uses `component` under one more, innermost context entry, which it does not read. -/
 @[reducible] def Component.weaken
   {Γ : Context}
   {entry : Entry}
@@ -301,7 +284,6 @@ strip as `Slot.here`. -/
   : Component (entry :: Γ) α β holes :=
   component.rename Renaming.shift
 
-/-- Shows the presentations in `placed`, in order, in a group labeled by `label`. -/
 @[reducible] def Layout.grouped
   {slots : List Nat}
   {Γ : Context}
@@ -347,7 +329,6 @@ def PresentationNode.snoc
   | .own component body => .own ⟨_, component⟩ (body.snoc (fun ref => .there (rename ref)) cell)
   | .bind initial body => .bind initial (body.snoc (fun ref => .there (rename ref)) cell)
 
-/-- Puts all views of `cells` in one group labeled `label`. -/
 def PresentationNode.group
   {slots : List Nat}
   {Γ Δ : Context}
@@ -368,7 +349,6 @@ def PresentationNode.group
 @[reducible] def Columns.nil {Γ : Context} {α : Type} : Columns Γ α :=
   ⟨#v[], .layouts (.const ()) (.const #v[])⟩
 
-/-- Appends a column headed `header` that shows `cell`. -/
 def Columns.snoc
   {Γ : Context}
   {α β : Type}
@@ -406,7 +386,6 @@ macro "columns[" columns:tableColumn,* "]" : term => do
   : Columns Δ α β :=
   ⟨columns.headers, ⟨_, columns.cells.node.rename rename⟩⟩
 
-/-- The cells of `columns` in a group labeled `label`, outputting the row output. -/
 def Columns.group
   {Γ : Context}
   {α β : Type}
@@ -429,7 +408,6 @@ The first entry in `body`'s context is the producer's current output, available 
         .layout { inputs := inputs[.ui .here], run := id }
           (.const (.group none [.place (.there .here), .place .here]))
 
-/-- Shows `first` above `second` and returns `second`'s output. -/
 @[reducible] def Component.sequence
   {Γ : Context}
   {α β : Type}
@@ -438,7 +416,6 @@ The first entry in `body`'s context is the producer's current output, available 
   : Component Γ α β :=
   .observe first second.weaken
 
-/-- Displays `view` and returns `output`. -/
 @[reducible] def Component.withOutput
   {Γ : Context}
   {α β : Type}
@@ -447,7 +424,6 @@ The first entry in `body`'s context is the producer's current output, available 
   : Component Γ α β :=
   .sequence view (.output output)
 
-/-- Keeps the component's UI and discards its public output. -/
 @[reducible] def Component.void
   {Γ : Context}
   {α β : Type}
@@ -455,8 +431,6 @@ The first entry in `body`'s context is the producer's current output, available 
   : Component Γ α :=
   .present (.own body (.arrange (.const (.place .here))))
 
-/-- Fills the hole of `collection` with a button captioned `caption` that appends `initial` to the
-list at `path`. -/
 @[reducible] def Component.withAddButton
   {Γ : Context}
   {α β γ : Type}
@@ -479,8 +453,6 @@ list at `path`. -/
   : Computation (Context.row β Γ) β String :=
   { inputs := inputs[.ui Ref.row], run := fun row => s!"{itemLabel} {row.index.val + 1}" }
 
-/-- Lists the items at `path`, each in a group labeled `rowLabel` with a Remove button,
-then an Add button captioned `addCaption` that appends `initial`. -/
 @[reducible] def Component.list
   {Γ : Context}
   {α β γ : Type}
@@ -499,9 +471,6 @@ then an Add button captioned `addCaption` that appends `initial`. -/
           .layout { inputs := inputs[.ui (Ref.there Ref.here)], run := id }
             ((fun label => .group (some label) [.place (.there .here), .place .here]) <$> rowLabel))
 
-/-- Tabulates the items at `path`, each row labeled `rowLabel`, with an Actions column holding
-Remove (and Select, given `selection`) buttons, then an Add button captioned `addCaption` that
-appends `initial`. -/
 @[reducible] def Component.table
   {Γ : Context}
   {α β γ : Type}
@@ -527,7 +496,6 @@ appends `initial`. -/
   .withAddButton path addCaption initial <|
     .tableOf path label (.const columns.headers) rowLabel columns.cells selection
 
-/-- Shows `body` in a group labeled `label`, keeping its output. -/
 @[reducible] def Component.labeled
   {Γ : Context}
   {α β : Type}
@@ -539,7 +507,6 @@ appends `initial`. -/
       .layout { inputs := inputs[.ui .here], run := id }
         (Layout.grouped (label.rename Renaming.shift) [.here])
 
-/-- A group labeled `label` that owns `children` in order. -/
 def Component.group
   {Γ : Context}
   {α : Type}
@@ -550,7 +517,6 @@ def Component.group
     Presentation.ownAll (fun ref => ref) label
       (fun label placed => .group (some label) (placed.map .place)) [] children
 
-/-- Picks a constructor of the sum at `path`; the chosen branch edits its payload. -/
 def Component.choice
   {Γ : Context}
   {α β : Type}

@@ -12,11 +12,8 @@ structure SupplierDetails where
   requiresPurchaseOrder : Bool
   deriving ToJson, FromJson, DecidableEq
 
-/-- The tests' data endpoints. -/
 inductive SupplierEndpoint where
-  /-- All supplier ids. -/
   | suppliers
-  /-- One supplier's details, by id. -/
   | supplier
   deriving DecidableEq, FinEnum, Repr
 
@@ -45,7 +42,6 @@ private def check (message : String) (ok : Bool) : IO Unit := do
   unless ok do throw (IO.userError s!"FAIL {message}")
   IO.println s!"PASS {message}"
 
-/-- A supplier id; its loaded details decide whether a purchase order is asked for. -/
 structure Lookup where
   supplier : String
   purchaseOrder : String
@@ -118,7 +114,6 @@ private def nameField : Component [] Person.Raw :=
 private def ageField : Component [] Person.Raw :=
   .field (path := path[Person.Field.age]) (label := "Age") (editor := .natural)
 
-/-- Name and age in the loaded order; only the name while loading. -/
 private def ordered (layout : Source (List String)) : Component [] Person.Raw :=
   .loadOr
     (source := .const layout)

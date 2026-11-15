@@ -6,7 +6,6 @@ public import Lean.Data.Json
 namespace FormsReact
 open Lean
 
-/-- What a component asks the form to do. -/
 inductive Action where
   | apply (name : String)
   /-- Presses button `name`; pending drafts are applied first. -/
@@ -72,7 +71,6 @@ structure Choice where
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
-/-- A read-only computed value. -/
 structure Output where
   label : String
   value : String
@@ -107,7 +105,6 @@ structure TableRow where
   cells : List Component
   selected : Option Bool
 
-/-- A table's cells can contain any component, including editors and nested groups. -/
 structure Table where
   label : String
   headers : List String
@@ -121,7 +118,6 @@ structure Page where
   body : List Component
   toolbar : List Component
   notice : Notice
-  /-- The submitted value, once there is one to show. -/
   result : Option String
 
 inductive Component where

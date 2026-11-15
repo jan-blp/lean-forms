@@ -17,11 +17,9 @@ mutual
 /-- Arranges the presentations in scope without owning or evaluating them. -/
 inductive Layout (slots : List Nat) where
   | place (slot : Slot slots 0)
-  /-- Places `slot` with `contents` in its holes. -/
   | fill {holes : Nat} (slot : Slot slots holes) (contents : Fills slots holes)
   | group (label : Option String) (children : List (Layout slots))
 
-/-- Content for each hole of a placed presentation, in order. -/
 inductive Fills (slots : List Nat) : (holes : Nat) → Type where
   | nil : Fills slots 0
   | cons {holes : Nat}
@@ -31,7 +29,6 @@ inductive Fills (slots : List Nat) : (holes : Nat) → Type where
 end
 
 mutual
-/-- Moves every placed slot along `rename`. -/
 def Layout.rename
   {slots others : List Nat}
   (rename : {holes : Nat} → Slot slots holes → Slot others holes)

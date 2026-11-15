@@ -65,7 +65,6 @@ theorem Ref.get_set_readOnly
   | cons entry Γ ih =>
     cases input <;> cases target <;> grind [Ref.get, Ref.set]
 
-/-- Lifting a renaming under a binder keeps every reference reading the same value. -/
 theorem Renaming.get_lift
   {Γ Δ : Context}
   {entry : Entry}

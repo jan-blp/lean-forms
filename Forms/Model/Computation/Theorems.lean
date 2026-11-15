@@ -73,7 +73,6 @@ theorem Computation.eval_map
   : (f <$> computation).eval value state = f (computation.eval value state) :=
   Inputs.apply_map f computation.run (computation.inputs.read value state)
 
-/-- Renaming preserves the values read, if every renamed reference reads the same value. -/
 theorem Inputs.read_rename
   {Γ Δ : Context}
   {α : Type}
@@ -105,7 +104,6 @@ theorem Computation.eval_rename
   : (computation.rename rename).eval value renamed = computation.eval value state := by
   simp [Computation.rename, Computation.eval, Inputs.read_rename rename _ value state renamed same]
 
-/-- A weakened computation ignores the new innermost entry. -/
 theorem Computation.eval_shift
   {Γ : Context}
   {α : Type}

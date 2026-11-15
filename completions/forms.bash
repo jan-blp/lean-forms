@@ -1,4 +1,3 @@
-# Complete forms-web, directly or through Lake.
 _forms_complete() {
     local start=1 cursor=$COMP_CWORD word executable
     local -a invoke

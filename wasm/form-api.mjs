@@ -1,6 +1,5 @@
 import createModule from '../.lake/wasm/forms.mjs';
 
-// Raw transport for integration tests.
 export async function createFormRuntime() {
   const module = await createModule();
   module._forms_init();

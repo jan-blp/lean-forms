@@ -6,13 +6,11 @@ public import Forms.Model.Invocation
 @[expose] public section
 namespace Forms.Model
 
-/-- An update evaluated against the model and context when invoked. -/
 inductive Action (Γ : Context) (α : Type) where
   | set {β : Type}
       (ref : Var Γ β)
       (value : Computation Γ α β)
       : Action Γ α
-  /-- Appends `item` to the list at `path`. -/
   | append {β : Type}
       (path : Path α (List β))
       (item : Computation Γ α β)

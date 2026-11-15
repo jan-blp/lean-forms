@@ -7,17 +7,13 @@ public import Forms.Model.Component.LocalState
 namespace Forms.Runtime
 open Lean
 
-/-- A form's typed state transitions. -/
 structure FormDefinition where
   State : Type
   Raw : Type
   [encode : ToJson Raw]
-  /-- The raw value new forms start from. -/
   initial : Json
-  /-- Decode the initial value and create the state and first snapshot. -/
   openState (value : Json) : Except String (State × ModelForm.Snapshot Raw)
   execute : State → ModelForm.Event → Except String (State × ModelForm.Snapshot Raw)
-  /-- Checks a submission to the form registered as `name`, fingerprint first. -/
   verify (name fingerprint : String) (submission : Json) : Except Json Unit
 
 /-- Checked first, so a stale client gets a reload hint instead of a decode error. -/
@@ -33,7 +29,6 @@ def decodeSubmission
   unless submission.form == name do throw "Wrong form."
   pure submission.value
 
-/-- `model` rendered by `form`, starting from `initial`. -/
 def FormDefinition.ofModel
   {β : Type}
   (model : Type)
@@ -65,18 +60,15 @@ def FormDefinition.ofModel
         ("message", toJson (Feedback.summary errors)),
         ("errors", toJson (errors.map FeedbackProtocol.errorToJson))])
 
-/-- A form definition and its application-specific submission endpoint. -/
 structure RegisteredForm where
   definition : FormDefinition
   submitUrl : String
 
-/-- An open form. -/
 structure FormInstance where
   execute : Wire.Event → Except String (FormInstance × Wire.Snapshot)
 
 instance : Inhabited FormInstance := ⟨.mk fun _ => .error "Uninitialized form"⟩
 
-/-- The `FormStart` that opens a new `name` form. -/
 def RegisteredForm.start (form : RegisteredForm) (name fingerprint : String) : Wire.FormStart :=
   { form := name, fingerprint, value := form.definition.initial }
 

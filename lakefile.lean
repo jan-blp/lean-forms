@@ -27,7 +27,6 @@ lean_lib FormTests where
 lean_exe tests where
   root := `Tests
 
-/-- Generates the protocol files and bundles the web app, unless its inputs are unchanged. -/
 target webAssets pkg : FilePath := do
   let roots ← #[`Forms.Runtime.Wire, `Forms.Runtime.Web, `FormsReact.Component, `Forms.Protocol.TypeScript].mapM fun name => do
     let some mod := pkg.findModule? name | error s!"Missing protocol module {name}"

@@ -6,7 +6,6 @@ interface WasmModule {
 }
 interface Runtime { form(request: Wire.Request): Wire.Response }
 
-/** An open form in the compiled Lean runtime. */
 export interface FormModel {
   snapshot(): Wire.Snapshot;
   send(event: Wire.Event): Wire.Snapshot;
@@ -46,7 +45,6 @@ function traceRequested(): boolean {
   return typeof location !== 'undefined' && new URLSearchParams(location.search).has('trace');
 }
 
-/** Loads the app's compiled Emscripten module; `url` points to its `forms.mjs`. */
 async function load(url: string): Promise<Runtime> {
   const { default: createModule } = await import(url);
   const module: WasmModule = await createModule();

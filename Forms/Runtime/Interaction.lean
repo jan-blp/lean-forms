@@ -15,7 +15,6 @@ structure State where
   pending : Bool
   notice : Notice
   resultVisible : Bool
-  /-- Why the last event's `apply` was rejected. -/
   rejection : Option String
 
 def State.initial : State where

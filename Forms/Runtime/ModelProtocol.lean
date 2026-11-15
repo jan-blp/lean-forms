@@ -10,7 +10,6 @@ public import Forms.Runtime.Wire
 namespace Forms.Runtime
 open Lean
 
-/-- A form's registered name, the fingerprint of the code that produced it, and submitted value. -/
 structure Submission (α : Type) where
   form : String
   fingerprint : String

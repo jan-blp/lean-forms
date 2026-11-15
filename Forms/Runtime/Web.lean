@@ -101,7 +101,6 @@ structure Application where
   wasmBinary : Option ByteArray
   style : String
   formStart : Lean.Json
-  /-- Responses of the data endpoints forms load from. -/
   api : Model.HttpRequest → Option Lean.Json
 
 def Application.get
@@ -116,7 +115,6 @@ def Application.get
   | .stylesheet => some (.css app.style)
   | .formStart => some (.json app.formStart)
 
-/-- The logged request body, or the response rejecting a body over 1 MiB. -/
 def Application.readBody
   (app : Application)
   (label : String)
@@ -130,7 +128,6 @@ def Application.readBody
   app.logger.write (TrafficLog.request label (some (TrafficLog.json body)))
   return .ok body
 
-/-- Answers a POST to a data endpoint at `path`. -/
 def Application.call
   (app : Application)
   (label path : String)
@@ -193,7 +190,6 @@ def openDefaultBrowser (url : String) : IO Unit := do
   catch error =>
     IO.eprintln s!"Could not open browser: {error}. Open {url} manually."
 
-/-- Whether `needle` occurs in `haystack`. -/
 def containsBytes (haystack needle : ByteArray) : Bool := Id.run do
   if needle.size > haystack.size then return false
   for i in [0:haystack.size - needle.size + 1] do

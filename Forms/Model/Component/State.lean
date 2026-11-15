@@ -10,7 +10,6 @@ structure LoadedState (data : Type) (state : Status data → Type) where
   status : Status data
   body : state status
 
-/-- Looks up `status` in the single-entry cache, returning `initial` on a miss. -/
 def LoadedState.at
   {data : Type}
   [DecidableEq data]
