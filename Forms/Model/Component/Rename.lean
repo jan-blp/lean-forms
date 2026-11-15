@@ -12,8 +12,9 @@ def CollectionDisplay.rename
   (rename : Renaming Γ Δ)
   : CollectionDisplay Γ α β views → CollectionDisplay Δ α β views
   | .list => .list
-  | .table headers rowLabel selection =>
-    .table (headers.rename rename) (rowLabel.rename rename.liftRow) (selection.map rename)
+  | .table headers rowLabel selected =>
+    .table (headers.rename rename) (rowLabel.rename rename.liftRow)
+      (selected.map (·.rename rename.liftRow))
 
 mutual
 /-- Moves `component` into context `Δ`; binders keep their own entries in place. -/

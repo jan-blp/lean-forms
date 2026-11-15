@@ -197,10 +197,10 @@ def renderCollection
   : Display.View :=
   match display with
   | .list => .list label (rows.map (·[0]) ++ content) messages
-  | .table headers rowLabel selection =>
+  | .table headers rowLabel selected =>
     let rows := (items.mapFinIdx fun index item bound =>
-      (rowLabel.eval item (Env.row items ⟨index, bound⟩ env),
-        selection.map fun selected => selected.get env == .row index)).zipWith
+      let rowEnv := Env.row items ⟨index, bound⟩ env
+      (rowLabel.eval item rowEnv, selected.map (·.eval item rowEnv))).zipWith
       (fun (label, selected) cells => { label, selected, cells := cells.toList }) rows
     .table label (headers.eval value env).toList rows (.ofList content) messages
 
@@ -376,9 +376,6 @@ def evaluateNode
           let updated ← row.apply rest argument
           let env := updated.state.tail.tail
           if updated.state.tail.value then
-            let env := match display.selection with
-              | none => env
-              | some selected => selected.set ((selected.get env).remove index) env
             return ⟨path.set (items.eraseIdx index) value, env, states.eraseIdx index⟩
           return ⟨path.set (items.set index updated.value) value, env,
             states.set index updated.locals⟩

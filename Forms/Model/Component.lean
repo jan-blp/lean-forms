@@ -1,5 +1,6 @@
 module
 
+public import Forms.Model.RowSelection
 public import Forms.Model.Component.Rename
 
 @[expose] public section
@@ -472,19 +473,26 @@ The first entry in `body`'s context is the producer's current output, available 
   (columns : Columns Γ β γ)
   (selection : Option (Var Γ RowSelection) := none)
   : Component Γ α (List γ) :=
-  let remove : Component (Context.row β Γ) β := .button "Remove" (.set Ref.rowRemoved (.const true))
+  let removeRow : Action (Context.row β Γ) β := .set Ref.rowRemoved (.const true)
+  let isSelected (selection : Var (Context.row β Γ) RowSelection)
+      : Computation (Context.row β Γ) β Bool :=
+    { inputs := inputs[.ui selection, .ui Ref.row]
+      run := fun current row => current == .row row.index }
   let actions : Component (Context.row β Γ) β := match selection with
-    | none => remove
-    | some selected =>
+    | none => .button "Remove" removeRow
+    | some selection =>
+      let selection := Renaming.row selection
       .sequence
-        (.button
-          { inputs := inputs[.ui (Renaming.row selected), .ui Ref.row]
-            run := fun current row => if current == .row row.index then "Selected" else "Select" }
-          (.set (Renaming.row selected) { inputs := inputs[.ui Ref.row], run := fun row => .row row.index }))
-        remove
+        (.button ((if · then "Selected" else "Select") <$> isSelected selection)
+          (.set selection { inputs := inputs[.ui Ref.row], run := fun row => .row row.index }))
+        (.button "Remove" <|
+          .set selection
+            { inputs := inputs[.ui selection, .ui Ref.row]
+              run := fun current row => current.remove row.index } ++ removeRow)
+  let selected := selection.map (isSelected ∘ Renaming.row)
   let columns := (columns.rename Renaming.row).snoc "Actions" actions
   .withAddButton path addCaption initial <|
-    .collection path label columns.cells (.table (.const columns.headers) rowLabel selection)
+    .collection path label columns.cells (.table (.const columns.headers) rowLabel selected)
 
 @[reducible] def Component.labeled
   {Γ : Context}

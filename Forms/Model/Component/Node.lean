@@ -2,7 +2,6 @@ module
 
 public import Forms.Model.Action
 public import Forms.Model.PartialPath
-public import Forms.Model.RowSelection
 public import Forms.Model.Component.State
 public import Forms.Model.Component.Layout
 
@@ -35,16 +34,8 @@ inductive CollectionDisplay (Γ : Context) (α β : Type) : (columns : Nat) → 
   | table {columns : Nat}
       (headers : Computation Γ α (Vector String columns))
       (rowLabel : Computation (Context.row β Γ) β String)
-      (selection : Option (Var Γ RowSelection))
+      (selected : Option (Computation (Context.row β Γ) β Bool))
       : CollectionDisplay Γ α β columns
-
-def CollectionDisplay.selection
-  {Γ : Context}
-  {α β : Type}
-  {views : Nat}
-  : CollectionDisplay Γ α β views → Option (Var Γ RowSelection)
-  | .list => none
-  | .table (selection := selection) .. => selection
 
 mutual
 inductive ComponentNode : (Γ : Context) → (model state output : Type) → (holes : Nat) → Type 1 where
