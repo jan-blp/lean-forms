@@ -38,18 +38,14 @@ theorem dropWhile_of_forall
     {chars : List Char}
     (h : ∀ c ∈ chars, p c = false)
     : chars.dropWhile p = chars := by
-  cases chars with
-  | nil => rfl
-  | cons c rest => simp [List.dropWhile, h c (by simp)]
+  cases chars <;> simp_all [List.dropWhile]
 
 theorem dropWhile_of_all
     {p : Char → Bool}
     {chars : List Char}
     (h : ∀ c ∈ chars, p c = true)
     : chars.dropWhile p = [] := by
-  induction chars with
-  | nil => rfl
-  | cons c rest ih => simp_all [List.dropWhile]
+  induction chars <;> simp_all [List.dropWhile]
 
 theorem trim_of_forall
     {chars : List Char}
@@ -128,11 +124,9 @@ theorem valueReversed_append_zeros (chars : List Char) (count : Nat) :
     valueReversed (chars ++ List.replicate count (digit 0)) = valueReversed chars := by
   induction chars with
   | nil =>
-    induction count with
-    | zero => rfl
-    | succ count ih =>
-      simp only [List.nil_append, valueReversed] at ih
-      simp [List.replicate_succ, valueReversed, ih, digitValue_digit (show 0 < 10 by decide)]
+    simp only [List.nil_append]
+    induction count <;>
+      simp_all [List.replicate_succ, valueReversed, digitValue_digit (by decide : 0 < 10)]
   | cons c rest ih => simp [valueReversed, ih]
 
 /-- Characters that are all digits, with value `n`. -/
@@ -141,8 +135,7 @@ def Digits (chars : List Char) (n : Nat) : Prop :=
 
 theorem digits_valid (n : Nat) (width : Nat) : Digits (pad width (digits n)) n := by
   refine ⟨?_, by simp [pad, digits_ne_nil], ?_⟩
-  · have := digits_ne_nil n
-    simp [value, pad, this, List.reverse_append, List.reverse_replicate,
+  · simp [value, pad, digits_ne_nil, List.reverse_append, List.reverse_replicate,
       valueReversed_append_zeros, valueReversed_digits]
   · intro c h
     rcases List.mem_append.1 h with h | h
@@ -168,8 +161,7 @@ def natural : Format Nat where
     | some n => .ok n
     | none => .error "Enter a non-negative whole number."
   parse_print n := by
-    have h := digits_valid n 0
-    simp only [pad, Nat.zero_sub, List.replicate_zero, List.nil_append] at h
+    have h : Digits (digits n) n := by simpa [pad] using digits_valid n 0
     simp [String.toList_ofList, trim_of_forall h.no_whitespace, h.1]
 
 def sign : List Char → Bool × List Char
@@ -185,11 +177,7 @@ def unsign (negative : Bool) (n : Nat) : Int :=
 theorem sign_signed {chars : List Char} (value : Int) (h : ∀ c ∈ chars.head?, c ≠ '-') :
     sign (signed value chars) = (decide (value < 0), chars) := by
   unfold signed
-  split
-  · simp_all [sign]
-  · cases chars with
-    | nil => simp_all [sign]
-    | cons c rest => simp_all [sign]
+  split <;> cases chars <;> simp_all [sign]
 
 theorem Digits.head {chars : List Char} {n : Nat} (h : Digits chars n) :
     ∀ c ∈ chars.head?, c ≠ '-' := by
@@ -220,8 +208,8 @@ def integer : Format Int where
     | some n => .ok (unsign negative n)
     | none => .error "Enter a whole number."
   parse_print n := by
-    have h := digits_valid n.natAbs 0
-    simp only [pad, Nat.zero_sub, List.replicate_zero, List.nil_append] at h
+    have h : Digits (digits n.natAbs) n.natAbs := by
+      simpa [pad] using digits_valid n.natAbs 0
     simp [String.toList_ofList, trim_of_forall (signed_no_whitespace n h.no_whitespace),
       sign_signed n h.head, h.1, unsign_natAbs]
 
@@ -275,8 +263,7 @@ def Decimal.chars (value : Decimal) : List Char :=
 
 theorem point_digits {chars : List Char} {n : Nat} (h : Digits chars n) :
     point chars = some (chars, []) := by
-  have : chars.dropWhile (· != '.') = [] := dropWhile_of_all h.no_point
-  simp [point, this]
+  simp [point, dropWhile_of_all h.no_point]
 
 theorem point_split
     {whole fraction : List Char}
@@ -298,36 +285,31 @@ def decimal : Format Decimal where
     | none => .error "Enter a decimal number, such as 12.50."
   parse_print value := by
     obtain ⟨mantissa, exponent, normalized⟩ := value
+    dsimp only [Decimal.chars]
     have h := digits_valid mantissa.natAbs (exponent + 1)
     have hlen := length_pad (exponent + 1) (digits mantissa.natAbs)
-    generalize hp : pad (exponent + 1) (digits mantissa.natAbs) = padded at h hlen
-    have hself := Decimal.normalize_self ⟨mantissa, exponent, normalized⟩
-    simp only at hself
+    generalize pad (exponent + 1) (digits mantissa.natAbs) = padded at h hlen ⊢
+    have hself : Decimal.normalize mantissa exponent = ⟨mantissa, exponent, normalized⟩ :=
+      Decimal.normalize_self ⟨mantissa, exponent, normalized⟩
     by_cases he : exponent = 0
     · subst he
-      have body : Decimal.chars ⟨mantissa, 0, normalized⟩ = signed mantissa padded := by
-        simp [Decimal.chars, hp]
-      simp only [body, String.toList_ofList,
+      simp only [ite_true, String.toList_ofList,
         trim_of_forall (signed_no_whitespace _ h.no_whitespace), sign_signed _ h.head,
         point_digits h, List.append_nil, h.1, List.length_nil, unsign_natAbs, hself]
     · generalize hw : padded.length - exponent = whole
-      have body : Decimal.chars ⟨mantissa, exponent, normalized⟩ =
-          signed mantissa (padded.take whole ++ '.' :: padded.drop whole) := by
-        simp [Decimal.chars, hp, he, ← hw]
       have chars : ∀ c ∈ padded.take whole ++ '.' :: padded.drop whole,
           jsWhitespace c = false ∧ c ≠ '-' := by
         intro c hc
-        simp only [List.mem_append, List.mem_cons] at hc
-        rcases hc with hc | rfl | hc
-        · obtain ⟨d, rfl⟩ := h.2.2 c (List.mem_of_mem_take hc)
-          exact ⟨(digit_facts d).2.1, (digit_facts d).2.2.1⟩
+        simp only [List.mem_append, List.mem_cons, or_left_comm] at hc
+        rw [← List.mem_append, List.take_append_drop] at hc
+        rcases hc with rfl | hc
         · decide
-        · obtain ⟨d, rfl⟩ := h.2.2 c (List.mem_of_mem_drop hc)
+        · obtain ⟨d, rfl⟩ := h.2.2 c hc
           exact ⟨(digit_facts d).2.1, (digit_facts d).2.2.1⟩
       have length : (padded.drop whole).length = exponent := by
         simp [← hw]
         omega
-      simp only [body, String.toList_ofList,
+      simp only [he, ite_false, String.toList_ofList,
         trim_of_forall (signed_no_whitespace _ fun c hc => (chars c hc).1),
         sign_signed _ fun c hc => (chars c (List.mem_of_mem_head? hc)).2,
         point_split (fun c hc => h.no_point c (List.mem_of_mem_take hc))
@@ -370,21 +352,18 @@ def Date.ofChars? (chars : List Char) : Option PlainDate :=
 
 open Std.Time in
 theorem Date.ofChars?_chars (date : PlainDate) : Date.ofChars? (Date.chars date) = some date := by
-  obtain ⟨year, month, day, valid⟩ := date
-  obtain ⟨month, hm1, hm2⟩ := month
-  obtain ⟨day, hd1, hd2⟩ := day
+  obtain ⟨year, ⟨month, hm1, hm2⟩, ⟨day, hd1, hd2⟩, valid⟩ := date
   have hy := digits_valid (year : Int).natAbs 4
   have hyl := length_pad 4 (digits (year : Int).natAbs)
   have hm := digits_valid month.toNat 2
   have hd := digits_valid day.toNat 2
   have hml := length_pad_digits (n := month.toNat) (by omega)
   have hdl := length_pad_digits (n := day.toNat) (by omega)
-  generalize hY : pad 4 (digits (year : Int).natAbs) = Y at hy hyl
   generalize hM : pad 2 (digits month.toNat) = M at hm hml
   generalize hD : pad 2 (digits day.toNat) = D at hd hdl
   match M, D, hml, hdl with
   | [m₁, m₂], [d₁, d₂], _, _ =>
-  simp only [Date.chars, hY, hM, hD]
+  simp only [Date.chars, hM, hD]
   unfold Date.ofChars?
   simp [List.reverse_append, sign_signed _ hy.head, hy.1, hm.1, hd.1, hyl, unsign_natAbs,
     Int.toNat_of_nonneg (by omega : 0 ≤ month), Int.toNat_of_nonneg (by omega : 0 ≤ day), hm1, hm2,
@@ -429,18 +408,14 @@ theorem Uuid.char_facts {c : Char} (h : c = '-' ∨ Uuid.hexDigit c = true) :
   rcases h with rfl | h
   · decide
   · simp only [Uuid.hexDigit, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
-    have upper : ¬ (c.val ≥ 'A'.val ∧ c.val ≤ 'Z'.val) := by
-      have a : 'A'.val.toNat = 65 := rfl
-      have z : 'Z'.val.toNat = 90 := rfl
-      simp only [ge_iff_le, UInt32.le_iff_toNat_le, a, z]
-      simp only [Char.toNat] at h
-      omega
     constructor
     · simp [jsWhitespace]
       omega
-    · unfold Char.toLower
+    · simp only [Char.toLower, ge_iff_le, UInt32.le_iff_toNat_le,
+        show 'A'.val.toNat = 65 from rfl, show 'Z'.val.toNat = 90 from rfl]
       split
-      · contradiction
+      · simp only [Char.toNat] at h
+        omega
       · rfl
 
 def uuid : Format Uuid where
@@ -453,8 +428,8 @@ def uuid : Format Uuid where
   parse_print uuid := by
     obtain ⟨value, canonical⟩ := uuid
     have facts c (hc : c ∈ value.toList) := Uuid.char_facts (Uuid.canonicalFrom_mem canonical c hc)
-    have lower : value.toList.map Char.toLower = value.toList :=
-      (List.map_congr_left fun c hc => (facts c hc).2).trans (List.map_id _)
+    have lower : value.toList.map Char.toLower = value.toList := by
+      simpa using List.map_congr_left (fun c hc => (facts c hc).2)
     simp [trim_of_forall fun c hc => (facts c hc).1, lower, canonical]
 
 end Format
