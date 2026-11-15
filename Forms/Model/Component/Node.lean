@@ -42,7 +42,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       : ComponentNode Γ α Unit Unit 0
   | computed {Γ : Context}
       {α : Type}
-      (label : String)
+      (label : Computation Γ α String)
       (value : Computation Γ α String)
       : ComponentNode Γ α Unit Unit 0
   | button {Γ : Context}

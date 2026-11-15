@@ -252,7 +252,7 @@ def evaluateNode
   | .computed label computation =>
     { output := ()
       locals := ()
-      view := fun _ => .computed label (computation.eval value env)
+      view := fun _ => .computed (label.eval value env) (computation.eval value env)
       requests := []
       apply := fun _ _ => absent }
   | .button caption action =>

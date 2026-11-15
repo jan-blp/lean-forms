@@ -63,7 +63,7 @@ def RowSelection.itemPath
 @[reducible] def Component.computed
   {Γ : Context}
   {α : Type}
-  (label : String)
+  (label : Computation Γ α String)
   (value : Computation Γ α String)
   : Component Γ α :=
   ⟨Unit, .computed label value⟩
