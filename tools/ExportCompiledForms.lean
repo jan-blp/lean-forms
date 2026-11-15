@@ -7,8 +7,12 @@ open Lean Forms Forms.Runtime Forms.ExampleForms
 
 private def actionArgument (input : Display.Editor) : Json :=
   match input with
-  | .natural n => toJson ("00" ++ toString (n + 123456789012345678901234567890))
-  | .text text => toJson (text ++ " 🌍\x00")
+  | .text .natural text => toJson ("00" ++ toString (text.toNat! + 123456789012345678901234567890))
+  | .text .plain text => toJson (text ++ " 🌍\x00")
+  | .text .integer text => toJson (s!" {text.toInt! - 123456789012345678901234567890} ")
+  | .text .decimal text => toJson (text ++ "05")
+  | .text .date _ => toJson "2024-02-29"
+  | .text .uuid _ => toJson "123E4567-E89B-12D3-A456-426614174000"
   | .checkbox value => toJson (!value)
   | .action => Json.null
   | .tabs active labels => toJson (toString ((active + 1) % labels.length.max 1))

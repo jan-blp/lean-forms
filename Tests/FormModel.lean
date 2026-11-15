@@ -407,9 +407,9 @@ structure FunctionField where
 deriving instance FormModel for FunctionField
 
 structure Unsupported where
-  value : Int
+  value : Float
 
-/-- error: deriving FormModel for `Tests.FormModel.Unsupported`: field type must derive FormModel first: ℤ -/
+/-- error: deriving FormModel for `Tests.FormModel.Unsupported`: field type must derive FormModel first: Float -/
 #guard_msgs in
 deriving instance FormModel for Unsupported
 

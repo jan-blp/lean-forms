@@ -13,14 +13,26 @@ def Interaction.Notice.toReact : Interaction.Notice → FormsReact.Notice
   | .info message => .info message
   | .error message => .error message
 
+def _root_.Forms.Model.TextKind.toReact : Model.TextKind → FormsReact.TextKind
+  | .plain => .plain
+  | .natural => .natural
+  | .integer => .integer
+  | .decimal => .decimal
+  | .date => .date
+  | .uuid => .uuid
+
 def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Component :=
   let name := ControlKeyProtocol.toString c.key
   let disabled := pending || c.disabled
   match c.input with
-  | .text value => .textField
-      { name, label := c.label, value, disabled, error := c.messages, onCommit := .apply name }
-  | .natural value => .naturalField
-      { name, label := c.label, value := toString value, disabled, error := c.messages, onCommit := .apply name }
+  | .text kind value => .textField {
+      name
+      label := c.label
+      kind := kind.toReact
+      value
+      disabled
+      error := c.messages
+      onCommit := .apply name }
   | .checkbox checked => .checkbox
       { name, label := c.label, checked, disabled, error := c.messages, onChange := .apply name }
   | .choice value options => .choice {

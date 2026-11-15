@@ -1,33 +1,41 @@
-import { useId, useRef } from 'react';
+import { useId, useRef, type InputHTMLAttributes } from 'react';
 import { useLeanForm, type Components } from './context.js';
 import type * as FormsReact from './protocol/FormsReact.js';
 import { Children, Render } from './render.js';
 
-function DraftField({ name, label, value, disabled, error, onCommit, numeric = false }:
-    FormsReact.TextField & { numeric?: boolean }) {
+const inputs = {
+  plain: { type: 'text' },
+  natural: { type: 'text', inputMode: 'numeric' },
+  integer: { type: 'text' },
+  decimal: { type: 'text', inputMode: 'decimal' },
+  date: { type: 'date' },
+  uuid: {
+    type: 'text', className: 'uuid', spellCheck: false, autoCapitalize: 'off', autoComplete: 'off',
+  },
+} as const satisfies Record<FormsReact.TextKind, InputHTMLAttributes<HTMLInputElement>>;
+
+export function TextField(
+    { name, label, kind, value, disabled, error, onCommit }: FormsReact.TextField) {
   const form = useLeanForm();
   const input = useRef<HTMLInputElement>(null);
   const feedback = useId();
   const commit = () => form.run(onCommit, input.current!.value);
   // Enter submits the form; leaving the field applies a pending edit.
+  // A picked date applies at once; the date input reports "" while a typed date is incomplete.
   return (
     <form className="editor" noValidate onSubmit={event => { event.preventDefault(); commit(); }}>
-      <label>{label}<input ref={input} type="text" value={form.draft(name) ?? value} disabled={disabled}
-        inputMode={numeric ? 'numeric' : undefined}
+      <label>{label}<input ref={input} {...inputs[kind]} value={form.draft(name) ?? value}
+        disabled={disabled}
         aria-invalid={error === null ? undefined : true} aria-describedby={error === null ? undefined : feedback}
-        onChange={event => form.setDraft(name, event.target.value === value ? undefined : event.target.value)}
+        onChange={event => {
+          const text = event.target.value;
+          form.setDraft(name, text === value ? undefined : text);
+          if (kind === 'date' && text !== '' && text !== value) form.run(onCommit, text);
+        }}
         onBlur={() => { if (form.draft(name) !== undefined) commit(); }} /></label>
       {error !== null && <p className="validation-error" id={feedback}>{error}</p>}
     </form>
   );
-}
-
-export function TextField(props: FormsReact.TextField) {
-  return <DraftField {...props} />;
-}
-
-export function NaturalField(props: FormsReact.NaturalField) {
-  return <DraftField {...props} numeric />;
 }
 
 export function Checkbox({ label, checked, disabled, error, onChange }: FormsReact.Checkbox) {
@@ -134,7 +142,6 @@ export function Page({ title, busy, body, toolbar, notice, result }: FormsReact.
 
 export const defaultComponents: Components = {
   textField: TextField,
-  naturalField: NaturalField,
   checkbox: Checkbox,
   choice: Choice,
   output: Output,

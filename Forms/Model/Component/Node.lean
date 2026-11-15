@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.Action
+public import Forms.Model.Format
 public import Forms.Model.PartialPath
 public import Forms.Model.Component.State
 public import Forms.Model.Component.Layout
@@ -8,10 +9,25 @@ public import Forms.Model.Component.Layout
 @[expose] public section
 namespace Forms.Model
 
-inductive Editor : Type → Type where
-  | text : Editor String
-  | natural : Editor Nat
+inductive Editor : Type → Type 1 where
+  | formatted {α : Type} (format : Format α) : Editor α
   | checkbox : Editor Bool
+
+@[reducible] def Editor.text : Editor String := .formatted .plain
+
+@[reducible] def Editor.natural : Editor Nat := .formatted .natural
+
+@[reducible] def Editor.integer : Editor Int := .formatted .integer
+
+@[reducible] def Editor.int32 : Editor Int32 := .formatted .int32
+
+@[reducible] def Editor.int64 : Editor Int64 := .formatted .int64
+
+@[reducible] def Editor.decimal : Editor Decimal := .formatted .decimal
+
+@[reducible] def Editor.date : Editor Std.Time.PlainDate := .formatted .date
+
+@[reducible] def Editor.uuid : Editor Uuid := .formatted .uuid
 
 inductive Availability where
   | enabled

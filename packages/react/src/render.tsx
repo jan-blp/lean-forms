@@ -20,7 +20,6 @@ function entry(component: FormsReact.Component): [Kind, object] {
 /** Whether the `name` prop identifies a kind; checked against the generated props. */
 const named = {
   textField: true,
-  naturalField: true,
   checkbox: true,
   choice: true,
   output: false,

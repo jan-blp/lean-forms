@@ -1,6 +1,7 @@
 module
 
 public import Lean.Data.Json
+public import Forms.Model.Scalar
 public import LeanLens.Lawful
 public import Std.Data.HashMap
 open LeanLens
@@ -271,9 +272,21 @@ def accumulate
 @[reducible] instance : FormModel String := ⟨String, id⟩
 @[reducible] instance : FormModel Bool := ⟨Bool, id⟩
 @[reducible] instance : FormModel Nat := ⟨Nat, id⟩
+@[reducible] instance : FormModel Int := ⟨Int, id⟩
+@[reducible] instance : FormModel Int32 := ⟨Int32, id⟩
+@[reducible] instance : FormModel Int64 := ⟨Int64, id⟩
+@[reducible] instance : FormModel Decimal := ⟨Decimal, id⟩
+@[reducible] instance : FormModel Std.Time.PlainDate := ⟨Std.Time.PlainDate, id⟩
+@[reducible] instance : FormModel Uuid := ⟨Uuid, id⟩
 instance : Validation String := ⟨fun value => .ok ⟨value, rfl⟩⟩
 instance : Validation Bool := ⟨fun value => .ok ⟨value, rfl⟩⟩
 instance : Validation Nat := ⟨fun value => .ok ⟨value, rfl⟩⟩
+instance : Validation Int := ⟨fun value => .ok ⟨value, rfl⟩⟩
+instance : Validation Int32 := ⟨fun value => .ok ⟨value, rfl⟩⟩
+instance : Validation Int64 := ⟨fun value => .ok ⟨value, rfl⟩⟩
+instance : Validation Decimal := ⟨fun value => .ok ⟨value, rfl⟩⟩
+instance : Validation Std.Time.PlainDate := ⟨fun value => .ok ⟨value, rfl⟩⟩
+instance : Validation Uuid := ⟨fun value => .ok ⟨value, rfl⟩⟩
 
 @[reducible] instance {α : Type} [FormModel α] : FormModel (List α) :=
   ⟨List (Raw α), List.map FormModel.erase⟩

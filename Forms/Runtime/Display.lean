@@ -2,6 +2,7 @@ module
 
 public import Forms.Runtime.Identity
 public import Forms.Runtime.Feedback
+public import Forms.Model.Format
 
 @[expose] public section
 
@@ -22,8 +23,7 @@ structure ChoiceOption where
   deriving BEq
 
 inductive Editor where
-  | text (value : String)
-  | natural (value : Nat)
+  | text (kind : Model.TextKind) (value : String)
   | checkbox (value : Bool)
   /-- `selected` is the active option's `value`, or empty when no option matches. -/
   | choice (selected : String) (options : List ChoiceOption)
