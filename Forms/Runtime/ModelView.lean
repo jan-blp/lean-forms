@@ -22,6 +22,9 @@ def editor
   let input : Display.Editor := match widget with
     | .formatted format => .text format.kind (format.print value)
     | .checkbox => .checkbox value
+    | .choices (key := _) { options, .. } selected _ =>
+      .choices (value.1.map (Key.encode ∘ selected))
+        (options.map fun option => { value := Key.encode option.key, label := option.label })
   { key := .edit location, target, label, disabled, location, input
     messages := Feedback.messages errors location }
 

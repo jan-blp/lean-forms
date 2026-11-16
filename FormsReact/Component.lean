@@ -72,6 +72,17 @@ structure Choice where
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
+/-- `onChange` receives the picked options' `value`s. -/
+structure Choices where
+  name : String
+  label : String
+  values : List String
+  options : List ChoiceOption
+  disabled : Bool
+  error : Option String
+  onChange : Action
+  deriving ToJson, FromJson, BEq, Repr
+
 structure Output where
   label : String
   value : String
@@ -125,6 +136,7 @@ inductive Component where
   | textField : TextField → Component
   | checkbox : Checkbox → Component
   | choice : Choice → Component
+  | choices : Choices → Component
   | output : Output → Component
   | button : Button → Component
   | tabBar : TabBar → Component
@@ -141,6 +153,7 @@ def Component.draftFields : Component → List String
   | .textField field => if field.disabled then [] else [field.name]
   | .checkbox _ => []
   | .choice _ => []
+  | .choices _ => []
   | .output _ => []
   | .button _ => []
   | .tabBar _ => []

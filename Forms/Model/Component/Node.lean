@@ -9,9 +9,40 @@ public import Forms.Model.Component.Layout
 @[expose] public section
 namespace Forms.Model
 
+structure SelectOption (κ α : Type) where
+  key : κ
+  label : String
+  start : α
+
+structure SelectOptions (κ α : Type) where
+  options : List (SelectOption κ α)
+  keys_nodup : options.map SelectOption.key |>.Nodup := by simp <;> decide
+  labels_nodup : options.map SelectOption.label |>.Nodup := by simp <;> decide
+
 inductive Editor : Type → Type 1 where
   | formatted {α : Type} (format : Format α) : Editor α
   | checkbox : Editor Bool
+  | choices {β κ : Type}
+      [key : Key κ]
+      (options : SelectOptions κ β)
+      (selected : β → κ)
+      (keyed : ∀ option ∈ options.options, selected option.start = option.key)
+      : Editor { items : List β // items.Nodup }
+
+theorem SelectOptions.starts_nodup
+  {κ β : Type}
+  {options : SelectOptions κ β}
+  {picked : List (SelectOption κ β)}
+  (selected : β → κ)
+  (keyed : ∀ option ∈ options.options, selected option.start = option.key)
+  (sublist : picked.Sublist options.options)
+  : (picked.map (·.start)).Nodup := by
+  have keys : (picked.map (·.key)).Nodup := options.keys_nodup.sublist (sublist.map _)
+  rw [← List.map_congr_left fun option member => keyed option (sublist.subset member)] at keys
+  unfold List.Nodup at *
+  exact List.Pairwise.of_map (S := (· ≠ ·)) selected
+    (fun _ _ distinct same => distinct (congrArg selected same))
+    (by simpa [Function.comp_def] using keys)
 
 @[reducible] def Editor.text : Editor String := .formatted .plain
 
@@ -34,16 +65,6 @@ inductive Availability where
   | hidden
   | disabled
   deriving DecidableEq, Repr
-
-structure SelectOption (κ α : Type) where
-  key : κ
-  label : String
-  start : α
-
-structure SelectOptions (κ α : Type) where
-  options : List (SelectOption κ α)
-  keys_nodup : options.map SelectOption.key |>.Nodup := by simp <;> decide
-  labels_nodup : options.map SelectOption.label |>.Nodup := by simp <;> decide
 
 inductive CollectionDisplay (Γ : Context) (α β : Type) : (columns : Nat) → Type 1 where
   | list : CollectionDisplay Γ α β 1

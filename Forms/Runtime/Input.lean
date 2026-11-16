@@ -9,6 +9,7 @@ namespace Forms.Runtime
 inductive Input where
   | text (value : String)
   | boolean (value : Bool)
+  | texts (values : List String)
 
 inductive ClientBug where
   | unknownControl
@@ -44,5 +45,12 @@ def Input.decode {α : Type} (editor : Model.Editor α) (input : Input) : Except
   | .checkbox => match input with
     | .boolean value => .ok value
     | _ => .error (.clientBug (.wrongArgument "a boolean"))
+  | .choices (key := _) options selected keyed => match input with
+    | .texts keys =>
+      if keys.all fun key => options.options.any (Model.Key.encode ·.key == key) then
+        let picked := options.options.filter (keys.contains <| Model.Key.encode ·.key)
+        .ok ⟨picked.map (·.start), options.starts_nodup selected keyed List.filter_sublist⟩
+      else .error (.clientBug .unknownOption)
+    | _ => .error (.clientBug (.wrongArgument "a list of options"))
 
 end Forms.Runtime

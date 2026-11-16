@@ -306,4 +306,42 @@ instance {α : Type} [FormModel α] [Validation α] : Validation (List α) where
       .error ((List.finRange raw.length).flatMap fun position =>
         (errors (results position)).map (Error.mapLocations (.index position)))
 
+/-- A model whose raw values are all valid. -/
+class AlwaysValid (α : Type) [FormModel α] where
+  restore : Raw α → α
+  erase_restore : ∀ raw, FormModel.erase (restore raw) = raw
+  restore_erase : ∀ value, restore (FormModel.erase value) = value
+
+theorem nodup_map_of_inverse
+  {α β : Type}
+  {items : List α}
+  (f : β → α)
+  (g : α → β)
+  (inverse : ∀ value, f (g value) = value)
+  (nodup : items.Nodup)
+  : (items.map g).Nodup := by
+  unfold List.Nodup at *
+  exact List.Pairwise.map g (fun _ _ distinct same => distinct (by
+    simpa [inverse] using congrArg f same)) nodup
+
+@[reducible] instance {α : Type} [FormModel α] [AlwaysValid α]
+    : FormModel { items : List α // items.Nodup } :=
+  ⟨{ items : List (Raw α) // items.Nodup }, fun items =>
+    ⟨items.1.map FormModel.erase, nodup_map_of_inverse _ _ AlwaysValid.restore_erase items.2⟩⟩
+
+instance {α : Type} [FormModel α] [AlwaysValid α]
+    : Validation { items : List α // items.Nodup } where
+  validate raw :=
+    .ok ⟨⟨raw.1.map AlwaysValid.restore, nodup_map_of_inverse _ _ AlwaysValid.erase_restore raw.2⟩,
+      Subtype.ext (by simp [FormModel.erase, Function.comp_def, AlwaysValid.erase_restore])⟩
+
+instance {α : Type} [Lean.ToJson α] : Lean.ToJson { items : List α // items.Nodup } :=
+  ⟨(Lean.toJson ·.1)⟩
+
+instance {α : Type} [Lean.FromJson α] [DecidableEq α]
+    : Lean.FromJson { items : List α // items.Nodup } :=
+  ⟨fun json => do
+    let items : List α ← Lean.fromJson? json
+    if distinct : items.Nodup then return ⟨items, distinct⟩ else throw "Expected distinct items."⟩
+
 end Forms.Model

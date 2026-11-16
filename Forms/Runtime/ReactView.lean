@@ -43,6 +43,14 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       disabled
       error := c.messages
       onChange := .apply name }
+  | .choices values options => .choices {
+      name
+      label := c.label
+      values
+      options := options.map fun option => { value := option.value, label := option.label }
+      disabled
+      error := c.messages
+      onChange := .apply name }
   | .action => .button { label := c.label, variant := .secondary, disabled, onClick := .press name }
   | .tabs active labels =>
     .tabBar { name, label := c.label, active, labels, disabled, onChange := .apply name }

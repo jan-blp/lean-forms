@@ -85,7 +85,7 @@ private def inspect (name : Name) : MetaM (Bool × Array Constructor) := do
           let some fn := decl.type.getAppFn.constName?
             | throwError "unsupported field type: {decl.type}"
           unless [``String, ``Bool, ``Nat].contains fn do
-            unless decl.type.getAppArgs.isEmpty || fn == ``List do
+            unless decl.type.getAppArgs.isEmpty || fn == ``List || fn == ``Subtype do
               throwError "unsupported field type: {decl.type}"
             unless (← synthInstance? (mkApp (mkConst ``FormModel) decl.type)).isSome do
               throwError "field type must derive FormModel first: {decl.type}"
@@ -98,7 +98,8 @@ private def inspect (name : Name) : MetaM (Bool × Array Constructor) := do
 private def fieldType (ctor : Constructor) (field : FieldInfo) : CommandElabM TermSyntax := do
   -- Preserve names and coercion targets when re-elaborating generated code.
   let type ← liftTermElabM <| withLCtx ctor.context ctor.instances <|
-    withOptions (fun opts => opts.setBool `pp.fullNames true |>.setBool `pp.coercions.types true) <|
+    withOptions (fun opts => opts.setBool `pp.fullNames true |>.setBool `pp.coercions.types true
+        |>.setBool `pp.funBinderTypes true) <|
       PrettyPrinter.delab field.type
   -- Generated code is elaborated inside the model's namespace, where these names could be shadowed.
   let env ← getEnv
@@ -234,6 +235,8 @@ private def ModelInfo.parts (model : ModelInfo) (ctor : Constructor) := model.lo
 private def ModelInfo.constraint (model : ModelInfo) (ctor : Constructor) (field : FieldInfo) :=
   model.name ++ `Constraint ++ if model.record then field.name else
     Name.mkSimple (ctor.name.getString! ++ "_" ++ field.name.getString!)
+private def ModelInfo.enum (model : ModelInfo) :=
+  !model.record && model.constructors.all (·.fields.isEmpty)
 private def ModelInfo.rules (model : ModelInfo) :=
   model.constructors.flatMap fun ctor => ctor.proofs.map (ctor, ·)
 
@@ -277,7 +280,10 @@ private def emitConstructors (model : ModelInfo) : CommandElabM Unit := do
     let name := ident (Name.mkSimple ctor.name.getString!)
     if ctor.data.isEmpty then `(Parser.Command.ctor| | $name:ident)
     else `(Parser.Command.ctor| | $name:ident (payload : $(global (model.payload ctor))))
-  emitIn model.raw (← `(command| inductive $raw:ident where $ctors:ctor* deriving Lean.ToJson, Lean.FromJson))
+  emitIn model.raw <| ← if model.enum
+    then `(command| inductive $raw:ident where $ctors:ctor*
+      deriving DecidableEq, Lean.ToJson, Lean.FromJson)
+    else `(command| inductive $raw:ident where $ctors:ctor* deriving Lean.ToJson, Lean.FromJson)
   let constructor := global (model.name ++ `Constructor)
   let ctors ← model.constructors.mapM fun ctor =>
     `(Parser.Command.ctor| | $(ident (Name.mkSimple ctor.name.getString!)):ident :
@@ -376,6 +382,17 @@ private def emitErasure (model : ModelInfo) : CommandElabM Unit := do
   emit (← `(command| @[expose] def $erase:ident ($value:ident : $name) : $raw := $body))
   emit (← `(command| @[expose, reducible] instance $(global (model.name ++ `formModel)):ident :
     FormModel $name := ⟨$raw, $erase⟩))
+
+private def emitAlwaysValid (model : ModelInfo) : CommandElabM Unit := do
+  unless model.enum do return
+  let value ← fresh `value
+  let alts ← model.constructors.mapM fun ctor => do
+    alternative #[← model.wrap ctor (← `(_))] (global ctor.name)
+  emit (← `(command| instance $(global (model.name ++ `alwaysValid)):ident :
+      Forms.Model.AlwaysValid $(global model.name) where
+    restore $value:ident := $(← matchOn #[value] alts)
+    erase_restore $value:ident := by cases $value:ident <;> rfl
+    restore_erase $value:ident := by cases $value:ident <;> rfl))
 
 private def emitConstraints (model : ModelInfo) : CommandElabM Unit := do
   let constraint := global (model.name ++ `Constraint)
@@ -531,6 +548,7 @@ private def deriveOne (name : Name) : CommandElabM Unit := do
         emitShapes model
         emitting "constructors" (emitConstructors model)
         emitting "erasure" (emitErasure model)
+        emitting "always valid" (emitAlwaysValid model)
         emitting "constraints" (emitConstraints model)
         emitting "validation" (emitValidation model)
       catch error =>
