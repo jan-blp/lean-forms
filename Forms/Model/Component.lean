@@ -590,4 +590,28 @@ def Component.choice
             | some (body, _) => .group none [.place selector, .place body])
         [.here] bodies
 
+/-- A choice between no value, labelled `absent`, and a value edited by `body`. -/
+def Component.optional
+  {Γ : Context}
+  {α β : Type}
+  (path : Path α (Option β))
+  (label : Computation Γ α String)
+  (absent present : String)
+  (initial : β)
+  (body : Component Γ β)
+  (distinct : absent ≠ present := by decide)
+  : Component Γ α :=
+  .choice path label
+    (branches := [
+      { constructor := OptionConstructor.none
+        label := absent
+        initial := ()
+        body := .output (.const ()) },
+      { constructor := OptionConstructor.some
+        label := present
+        initial
+        body }])
+    (tags_nodup := by simp [Constructors.tagOf])
+    (labels_nodup := by simpa using distinct)
+
 end Forms.Model

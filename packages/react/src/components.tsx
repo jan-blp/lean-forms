@@ -1,4 +1,4 @@
-import { useId, useRef, type InputHTMLAttributes } from 'react';
+import { useEffect, useId, useRef, type InputHTMLAttributes } from 'react';
 import { useLeanForm, type Components } from './context.js';
 import type * as FormsReact from './protocol/FormsReact.js';
 import { Children, Render } from './render.js';
@@ -19,21 +19,40 @@ export function TextField(
   const form = useLeanForm();
   const input = useRef<HTMLInputElement>(null);
   const feedback = useId();
-  const commit = () => form.run(onCommit, input.current!.value);
+  const draft = form.draft(name);
+  const message = form.draftError(name) ?? error;
+  const commit = () => {
+    if (form.draftError(name) === undefined && !input.current!.validity.badInput) {
+      form.run(onCommit, input.current!.value);
+    }
+  };
+  const change = (input: HTMLInputElement) => {
+    const text = input.value;
+    const error = input.validity.badInput
+      ? input.validationMessage || 'Enter a complete value.' : undefined;
+    form.setDraft(name, text === value && error === undefined ? undefined : text, error);
+    if (kind === 'date' && error === undefined && text !== '' && text !== value) form.run(onCommit, text);
+  };
+  useEffect(() => {
+    // Reset must also clear incomplete date segments, whose value is already empty.
+    if (draft === undefined && input.current!.validity.badInput) input.current!.value = value;
+  }, [draft, value]);
   // Enter submits the form; leaving the field applies a pending edit.
   // A picked date applies at once; the date input reports "" while a typed date is incomplete.
   return (
     <form className="editor" noValidate onSubmit={event => { event.preventDefault(); commit(); }}>
-      <label>{label}<input ref={input} {...inputs[kind]} value={form.draft(name) ?? value}
+      <label>{label}<input ref={input} {...inputs[kind]} value={draft ?? value}
         disabled={disabled}
-        aria-invalid={error === null ? undefined : true} aria-describedby={error === null ? undefined : feedback}
-        onChange={event => {
-          const text = event.target.value;
-          form.setDraft(name, text === value ? undefined : text);
-          if (kind === 'date' && text !== '' && text !== value) form.run(onCommit, text);
-        }}
+        aria-invalid={message === null ? undefined : true} aria-describedby={message === null ? undefined : feedback}
+        onInput={kind === 'date' ? event => change(event.currentTarget) : undefined}
+        onChange={kind === 'date' ? undefined : event => change(event.currentTarget)}
+        onKeyUp={kind === 'date' ? event => {
+          if (event.currentTarget.validity.badInput || form.draftError(name) !== undefined) {
+            change(event.currentTarget);
+          }
+        } : undefined}
         onBlur={() => { if (form.draft(name) !== undefined) commit(); }} /></label>
-      {error !== null && <p className="validation-error" id={feedback}>{error}</p>}
+      {message !== null && <p className="validation-error" id={feedback}>{message}</p>}
     </form>
   );
 }

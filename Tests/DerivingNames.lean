@@ -40,6 +40,34 @@ structure Person where
   age : Nat
   deriving FormModel
 
+structure NestedOptional where
+  value : Option (Option String)
+
+#reject_model NestedOptional with "nested Option fields lose presence in JSON"
+
+abbrev OptionalText := Option String
+
+structure AliasedNestedOptional where
+  value : Option OptionalText
+
+#reject_model AliasedNestedOptional with "nested Option fields lose presence in JSON"
+
+structure ListNestedOptional where
+  values : List (Option (Option String))
+
+#reject_model ListNestedOptional with "nested Option fields lose presence in JSON"
+
+structure OptionalRecord where
+  value : Option String
+  deriving FormModel
+
+structure WrappedOptional where
+  value : Option OptionalRecord
+  deriving FormModel
+
+#guard (Lean.fromJson? (α := WrappedOptional.Raw)
+    (Lean.toJson (WrappedOptional.Raw.mk (some ⟨none⟩)))).toOption.any (·.value.isSome)
+
 example (value : Raw Person) : Person.Field.age.get (Person.Field.age.set 4 value) = 4 := rfl
 example : Fields Person.Raw := Person.rawFields
 example : FormModel Person := Person.formModel

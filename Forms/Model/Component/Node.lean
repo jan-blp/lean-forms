@@ -61,6 +61,13 @@ def Editor.subtype
     (fun value => if valid : property value then .ok ⟨value, valid⟩ else .error errorMsg)
     (fun value => by simp [value.property])
 
+@[reducible] def Editor.optional
+    {α : Type}
+    (format : Format α)
+    (blank : (format.parse "").isOk = false := by decide)
+    : Editor (Option α) :=
+  .formatted (format.optional blank)
+
 inductive Availability where
   | enabled
   | hidden

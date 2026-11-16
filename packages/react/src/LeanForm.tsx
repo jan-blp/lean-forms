@@ -42,9 +42,14 @@ interface OpenFormProps {
   onFailure(error: unknown): void;
 }
 
+interface Draft {
+  text: string;
+  error?: string;
+}
+
 function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
   const [snapshot, setSnapshot] = useState(() => model.snapshot());
-  const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(new Map());
+  const [drafts, setDrafts] = useState<ReadonlyMap<string, Draft>>(new Map());
   useEffect(() => onSnapshot?.(snapshot), [snapshot, onSnapshot]);
   // The opened snapshot may already request data; Lean ignores repeated responses.
   useEffect(() => performAll(model.snapshot()), [model]);
@@ -82,9 +87,10 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
 
   function commitDrafts(): boolean {
     let current = snapshot;
-    for (const [name, text] of drafts) {
+    for (const [name, draft] of drafts) {
       if (!current.draftFields.includes(name)) continue;
-      const next = commit(name, text);
+      if (draft.error !== undefined) return false;
+      const next = commit(name, draft.text);
       if (!next) return false;
       current = next;
     }
@@ -107,15 +113,20 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
 
   const context: LeanFormContext = {
     components,
-    draft: name => drafts.get(name),
-    setDraft: (name, text) => setDrafts(drafts => withDraft(drafts, name, text)),
+    draft: name => drafts.get(name)?.text,
+    draftError: name => drafts.get(name)?.error,
+    setDraft: (name, text, error) => setDrafts(drafts => withDraft(drafts, name, text, error)),
     run,
   };
   return <Context value={context}><Render component={snapshot.view} /></Context>;
 }
 
-function withDraft(drafts: ReadonlyMap<string, string>, name: string, text: string | undefined) {
+function withDraft(
+    drafts: ReadonlyMap<string, Draft>,
+    name: string,
+    text: string | undefined,
+    error?: string) {
   const next = new Map(drafts);
-  if (text === undefined) next.delete(name); else next.set(name, text);
+  if (text === undefined) next.delete(name); else next.set(name, { text, error });
   return next;
 }
