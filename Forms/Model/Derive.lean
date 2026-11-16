@@ -53,6 +53,16 @@ private def emitIn
   : CommandElabM Unit :=
   withScope (fun scope => { scope with currNamespace := name }) (emit command)
 
+private partial def checkOptionalJson (type : Expr) : MetaM Unit := do
+  let type ← whnf type
+  if type.isAppOf ``Option then
+    let payload ← whnf type.getAppArgs[0]!
+    if payload.isAppOf ``Option then
+      throwError "nested Option fields lose presence in JSON; wrap the inner option in a structure"
+    checkOptionalJson payload
+  else if type.isAppOf ``List then
+    checkOptionalJson type.getAppArgs[0]!
+
 private def inspect (name : Name) : MetaM (Bool × Array Constructor) := do
   if isPrivateName name then
     throwError "the model must be public"
@@ -89,6 +99,7 @@ private def inspect (name : Name) : MetaM (Bool × Array Constructor) := do
               throwError "unsupported field type: {decl.type}"
             unless (← synthInstance? (mkApp (mkConst ``FormModel) decl.type)).isSome do
               throwError "field type must derive FormModel first: {decl.type}"
+          checkOptionalJson (← mkAppOptM ``FormModel.Raw #[some decl.type, none])
         let binder ← mkFreshUserName `field
         context := context.setUserName arg.fvarId! binder
         fields := fields.push ⟨decl.userName, binder, decl.type, proof⟩
