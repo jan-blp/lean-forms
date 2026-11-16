@@ -25,11 +25,10 @@ def editor
   (location : ErasedLocation)
   (label : String)
   (disabled : Bool)
-  (errors : List Diagnostic)
+  (messages : Option String)
   : Display.Control :=
-  { key := .edit location, target, label, disabled, location
-    input := editorInput widget value
-    messages := Diagnostic.messages errors location }
+  { key := .edit location, target, label, disabled, location, messages
+    input := editorInput widget value }
 
 def error {α : Type} {value : α} (error : Model.Error value) : Diagnostic where
   message := error.message
@@ -66,12 +65,30 @@ structure NodeEvaluation
   requests : List HttpRequest
   apply : List Nat → Option Input → Except ModelView.ActionError (ComponentUpdate Γ α state)
 
-structure Evaluated (Γ : Context) (α state β : Type) extends NodeEvaluation Γ α state β where
-  value : α
-  env : Env Γ
+/-- Runtime facts shared by one evaluation; unlike `Env`, components cannot bind or set them.
+Build with `Ambient.of`, which derives `messages` from `diagnostics`. -/
+structure Ambient where
   cache : HttpRequest.Cache
   diagnostics : List Diagnostic
+  messages : Std.HashMap ErasedLocation (List String)
   revision : Nat
+
+def Ambient.of
+  (cache : HttpRequest.Cache)
+  (diagnostics : List Diagnostic)
+  (revision : Nat)
+  : Ambient :=
+  { cache, diagnostics, revision, messages := Diagnostic.messageIndex diagnostics }
+
+def Ambient.messagesAt (ambient : Ambient) (location : ErasedLocation) : Option String :=
+  match ambient.messages.getD location [] with
+  | [] => none
+  | messages => some (String.intercalate "\n" messages)
+
+structure Evaluated (Γ : Context) (α state β : Type)
+  extends NodeEvaluation Γ α state β, Ambient where
+  value : α
+  env : Env Γ
 
 def absent {α : Type} : Except ActionError α :=
   .error (.invalid .absent)
@@ -197,19 +214,17 @@ def evaluateNode
   (component : ComponentNode Γ α state β holes)
   (value : α)
   (env : Env Γ)
-  (cache : HttpRequest.Cache)
+  (ambient : Ambient)
   (locals : state)
   (target : Display.Target)
   (location : ErasedLocation)
-  (diagnostics : List Diagnostic)
-  (revision : Nat)
   (disabled : Bool := false)
   : NodeEvaluation Γ α state β (Hollow holes) :=
   match component with
   | .field path label widget =>
     let location := location ++ path.erase
     let control := editor widget (path.get value) target location
-      (label.eval value env) disabled diagnostics
+      (label.eval value env) disabled (ambient.messagesAt location)
     { output := ()
       locals := ()
       view := fun _ => .control control
@@ -265,7 +280,7 @@ def evaluateNode
         | _ => absent }
   | .withAvailability availability body =>
     let availability := availability.eval value env
-    let body := evaluateNode body value env cache locals target location diagnostics revision
+    let body := evaluateNode body value env ambient locals target location
       (disabled || availability != .enabled)
     { output := body.output
       locals := body.locals
@@ -284,7 +299,7 @@ def evaluateNode
       key := .select location
       target, location, disabled
       label := label.eval value env
-      messages := Diagnostic.messages diagnostics location
+      messages := ambient.messagesAt location
       input := .choice shown
         (options.map fun option => { value := Key.encode option.key, label := option.label }) }
     { output := ()
@@ -313,7 +328,7 @@ def evaluateNode
       requests := []
       apply := fun _ _ => absent }
   | .issues =>
-    { output := Diagnostic.issues diagnostics location revision
+    { output := Diagnostic.issues ambient.diagnostics location ambient.revision
       locals := ()
       view := fun _ => .hidden
       requests := []
@@ -329,8 +344,8 @@ def evaluateNode
         requests := []
         apply := fun _ _ => absent }
     | some path, some focused =>
-      let body := evaluateNode body focused env cache locals target
-        (location ++ path.erase) diagnostics revision disabled
+      let body := evaluateNode body focused env ambient locals target (location ++ path.erase)
+        disabled
       { output := some body.output
         locals := body.locals
         view := body.view
@@ -340,9 +355,9 @@ def evaluateNode
           return updated.mapValue (fun focused => path.set focused value) }
   | .load (inst := _inst) (source := source) (body := body) .. =>
     let source := source.eval value env
-    let status := source.resolve cache
-    let body := evaluateNode (body status) value env cache
-      (locals.at status (body status).initialState) target location diagnostics revision disabled
+    let status := source.resolve ambient.cache
+    let body := evaluateNode (body status) value env ambient
+      (locals.at status (body status).initialState) target location disabled
     { output := body.output
       locals := ⟨status, body.locals⟩
       view := body.view
@@ -351,20 +366,20 @@ def evaluateNode
         let updated ← body.apply route argument
         return updated.mapLocals (fun state => ⟨status, state⟩) }
   | .present body =>
-    (evaluatePresentation body value env cache locals target location
-      diagnostics revision disabled (nomatch ·)).mapView
+    (evaluatePresentation body value env ambient locals target location disabled
+      (nomatch ·)).mapView
       fun views _ => views[0]
   | .collection path label row display =>
     let items := path.get value
     let location := location ++ path.erase
     let rows := items.mapFinIdx fun index item bound =>
-      evaluatePresentation row item (Env.row items ⟨index, bound⟩ env) cache
+      evaluatePresentation row item (Env.row items ⟨index, bound⟩ env) ambient
         (locals[index]?.getD row.initialState) (target.child index) (location ++ [.index index])
-        diagnostics revision disabled (nomatch ·)
+        disabled (nomatch ·)
     let states := rows.map (·.locals)
     let render views (content : Vector (List Display.View) 1) :=
       renderCollection display value env items (label.eval value env) views content[0]
-        (Diagnostic.messages diagnostics location)
+        (ambient.messagesAt location)
     { output := rows.map (·.output)
       locals := states
       view := render (rows.map (·.view))
@@ -394,12 +409,10 @@ def evaluatePresentation
   (presentation : PresentationNode slots Γ α state β views)
   (value : α)
   (env : Env Γ)
-  (cache : HttpRequest.Cache)
+  (ambient : Ambient)
   (locals : state)
   (target : Display.Target)
   (location : ErasedLocation)
-  (diagnostics : List Diagnostic)
-  (revision : Nat)
   (disabled : Bool)
   (presentations : Presentations slots)
   : NodeEvaluation Γ α state β (Vector Display.View views) :=
@@ -412,17 +425,17 @@ def evaluatePresentation
       requests := []
       apply := fun _ _ => absent }
   | .own (holes := owns) component body =>
-    let owned := evaluateNode component value env cache locals.producer (target.child 0) location
-      diagnostics revision disabled
+    let owned := evaluateNode component value env ambient locals.producer (target.child 0)
+      location disabled
     let presentations : Presentations (owns :: slots) := fun {holes} slot => match holes, slot with
       | _, .here => ⟨owned.view⟩
       | _, .there slot => presentations slot
-    let body := evaluatePresentation body value (Env.cons owned.output env) cache locals.consumers
-      (target.child 1) location diagnostics revision disabled presentations
+    let body := evaluatePresentation body value (Env.cons owned.output env) ambient
+      locals.consumers (target.child 1) location disabled presentations
     observed owned body body.view
   | .bind _ body =>
-    bound locals.value <| evaluatePresentation body value (Env.cons locals.value env) cache locals.tail
-      (target.child 0) location diagnostics revision disabled presentations
+    bound locals.value <| evaluatePresentation body value (Env.cons locals.value env) ambient
+      locals.tail (target.child 0) location disabled presentations
 
 end
 
@@ -437,10 +450,11 @@ def evaluate
   (diagnostics : List Diagnostic := [])
   (revision : Nat := 0)
   : Evaluated Γ α component.LocalState β :=
-  let evaluated :=
-    (evaluateNode component.node value env cache locals {} [] diagnostics revision).closed
+  let ambient := Ambient.of cache diagnostics revision
+  let evaluated := (evaluateNode component.node value env ambient locals {} []).closed
   { toNodeEvaluation := { evaluated with view := evaluated.view.dedupe }
-    value, env, cache, diagnostics, revision }
+    toAmbient := ambient
+    value, env }
 
 def Evaluated.applyKey
   {Γ : Context}

@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.ErasedLocation
+public import Std.Data.HashMap
 
 @[expose] public section
 namespace Forms.Model
@@ -51,14 +52,16 @@ def Diagnostic.issues
 def Diagnostic.summary (diagnostics : List Diagnostic) : String :=
   String.intercalate "\n" (diagnostics.map (·.message))
 
-def Diagnostic.messages
+/-- Each location's distinct messages, in diagnostic order. -/
+def Diagnostic.messageIndex
   (diagnostics : List Diagnostic)
-  (location : ErasedLocation)
-  : Option String :=
-  let messages := (diagnostics.filterMap fun diagnostic => match diagnostic.targets with
-    | .global => none
+  : Std.HashMap ErasedLocation (List String) :=
+  diagnostics.foldl (init := {}) fun index diagnostic => match diagnostic.targets with
+    | .global => index
     | .locations first rest =>
-      if (first :: rest).contains location then some diagnostic.message else none).eraseDups
-  if messages.isEmpty then none else some (String.intercalate "\n" messages)
+      (first :: rest).foldl (init := index) fun index location =>
+        let messages := index.getD location []
+        if messages.contains diagnostic.message then index
+        else index.insert location (messages ++ [diagnostic.message])
 
 end Forms.Model

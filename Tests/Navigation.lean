@@ -143,6 +143,13 @@ def run : IO Unit := do
   let view := (fields.evaluate Person.initial Env.nil).view
   check "ResolutionSkipsDisabledTargets"
     (view.resolve [name, [.field "age"]] == some (.edit [.field "age"]))
+  let repeated : List Diagnostic := [
+    { message := "First", targets := .locations name [name] },
+    { message := "Second", targets := .locations name [] },
+    { message := "First", targets := .locations name [] }]
+  let controls := (fields.evaluate Person.initial Env.nil (diagnostics := repeated)).view.controls
+  check "InlineMessagesAreDistinctAndOrdered"
+    ((controls.find? (·.location == name)).bind (·.messages) == some "First\nSecond")
 
   let _ : Validation Person := {
     validate := fun _ => .error [{

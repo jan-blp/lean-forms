@@ -9,7 +9,7 @@ inductive Step where
   | field (name : String)
   | constructor (tag : String)
   | index (position : Nat)
-  deriving BEq, DecidableEq
+  deriving BEq, DecidableEq, Hashable
 
 end ErasedLocation
 
