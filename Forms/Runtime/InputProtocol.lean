@@ -11,7 +11,10 @@ open Lean
 def fromJson : Json → Except String Input
   | .str value => .ok (.text value)
   | .bool value => .ok (.boolean value)
-  | _ => .error "Expected a text or boolean argument."
+  | .arr values => .texts <$> values.toList.mapM fun
+    | .str value => .ok value
+    | _ => .error "Expected a list of texts."
+  | _ => .error "Expected a text, boolean or list of texts."
 
 def argumentFromJson : Option Json → Except String (Option Input)
   | none => .ok none

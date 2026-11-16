@@ -9,9 +9,30 @@ public import Forms.Model.Component.Layout
 @[expose] public section
 namespace Forms.Model
 
+structure SelectOption (κ α : Type) where
+  key : κ
+  label : String
+  start : α
+
+structure SelectOptions (κ α : Type) where
+  options : List (SelectOption κ α)
+  keys_nodup : options.map SelectOption.key |>.Nodup := by simp <;> decide
+  labels_nodup : options.map SelectOption.label |>.Nodup := by simp <;> decide
+
 inductive Editor : Type → Type 1 where
   | formatted {α : Type} (format : Format α) : Editor α
   | checkbox : Editor Bool
+  | choices {β κ : Type}
+      [key : Key κ]
+      (options : SelectOptions κ β)
+      (selected : β → κ)
+      : Editor (List β)
+  | refine {α β : Type}
+      (editor : Editor α)
+      (print : β → α)
+      (parse : α → Except String β)
+      (parse_print : ∀ value, parse (print value) = .ok value)
+      : Editor β
 
 @[reducible] def Editor.text : Editor String := .formatted .plain
 
@@ -29,21 +50,22 @@ inductive Editor : Type → Type 1 where
 
 @[reducible] def Editor.uuid : Editor Uuid := .formatted .uuid
 
+def Editor.subtype
+    {α : Type}
+    (editor : Editor α)
+    (property : α → Prop)
+    [DecidablePred property]
+    (errorMsg : String)
+    : Editor { value : α // property value } :=
+  editor.refine Subtype.val
+    (fun value => if valid : property value then .ok ⟨value, valid⟩ else .error errorMsg)
+    (fun value => by simp [value.property])
+
 inductive Availability where
   | enabled
   | hidden
   | disabled
   deriving DecidableEq, Repr
-
-structure SelectOption (κ α : Type) where
-  key : κ
-  label : String
-  start : α
-
-structure SelectOptions (κ α : Type) where
-  options : List (SelectOption κ α)
-  keys_nodup : options.map SelectOption.key |>.Nodup := by simp <;> decide
-  labels_nodup : options.map SelectOption.label |>.Nodup := by simp <;> decide
 
 inductive CollectionDisplay (Γ : Context) (α β : Type) : (columns : Nat) → Type 1 where
   | list : CollectionDisplay Γ α β 1

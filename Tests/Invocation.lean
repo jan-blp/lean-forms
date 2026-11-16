@@ -15,6 +15,7 @@ private def argument : Display.Editor → Option Input
   | .text _ _ => some (.text "x")
   | .checkbox value => some (.boolean !value)
   | .choice selected _ => some (.text selected)
+  | .choices selected _ => some (.texts selected)
   | .action => none
   | .tabs active labels => some (.text (toString ((active + 1) % labels.length.max 1)))
 

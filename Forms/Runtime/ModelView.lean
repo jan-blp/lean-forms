@@ -9,6 +9,14 @@ public import Forms.Runtime.Display
 namespace Forms.Runtime.ModelView
 open Forms.Model
 
+def editorInput {α : Type} : Model.Editor α → α → Display.Editor
+  | .formatted format, value => .text format.kind (format.print value)
+  | .checkbox, value => .checkbox value
+  | .choices (key := _) { options, .. } selected, value =>
+    .choices (value.map (Key.encode ∘ selected))
+      (options.map fun option => { value := Key.encode option.key, label := option.label })
+  | .refine editor print .., value => editorInput editor (print value)
+
 def editor
   {α : Type}
   (widget : Model.Editor α)
@@ -19,10 +27,8 @@ def editor
   (disabled : Bool)
   (errors : List Feedback.Error)
   : Display.Control :=
-  let input : Display.Editor := match widget with
-    | .formatted format => .text format.kind (format.print value)
-    | .checkbox => .checkbox value
-  { key := .edit location, target, label, disabled, location, input
+  { key := .edit location, target, label, disabled, location
+    input := editorInput widget value
     messages := Feedback.messages errors location }
 
 def location {α : Type} {value : α} : Model.Location value → Feedback.Location

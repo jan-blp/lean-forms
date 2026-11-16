@@ -8,6 +8,7 @@ public import Forms.ExampleForms.SharedState
 public import Forms.ExampleForms.Outputs
 public import Forms.ExampleForms.Presentation
 public import Forms.ExampleForms.Scalars
+public import Forms.ExampleForms.Selections
 public import Forms.Runtime.FormDefinition
 public import Std.Data.HashMap
 
@@ -52,6 +53,9 @@ def forms : List (String × RegisteredForm) := [
     submitUrl := "/api/submit" }),
   ("scalars", {
     definition := .ofModel Payment Payment.form Payment.initial
+    submitUrl := "/api/submit" }),
+  ("selections", {
+    definition := .ofModel Preferences Preferences.form Preferences.initial
     submitUrl := "/api/submit" })]
 
 def api : Model.HttpRequest → Option Lean.Json :=

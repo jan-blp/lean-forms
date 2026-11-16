@@ -22,6 +22,7 @@ const named = {
   textField: true,
   checkbox: true,
   choice: true,
+  choices: true,
   output: false,
   button: false,
   tabBar: true,

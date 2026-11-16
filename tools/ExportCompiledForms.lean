@@ -17,6 +17,10 @@ private def actionArgument (input : Display.Editor) : Json :=
   | .action => Json.null
   | .tabs active labels => toJson (toString ((active + 1) % labels.length.max 1))
   | .choice selected options => toJson ((options.find? (·.value != selected)).map (·.value) |>.getD selected)
+  | .choices selected options =>
+    let toggled := (options.head?.map (·.value)).getD ""
+    let picked (value : String) := (value == toggled) != selected.contains value
+    toJson ((options.map (·.value)).filter picked)
 
 /-- The initial snapshot, and the snapshot after applying an argument to each control. -/
 private def fixture (name : String) (form : RegisteredForm) : Except String Json := do

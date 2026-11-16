@@ -24,6 +24,7 @@ def widgetName : Editor → String
   | .text .uuid _ => "uuidInput"
   | .checkbox _ => "checkbox"
   | .choice .. => "choice"
+  | .choices .. => "choices"
   | .action => "action"
   | .tabs .. => "tabs"
 

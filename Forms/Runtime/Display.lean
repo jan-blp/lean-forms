@@ -27,6 +27,8 @@ inductive Editor where
   | checkbox (value : Bool)
   /-- `selected` is the active option's `value`, or empty when no option matches. -/
   | choice (selected : String) (options : List ChoiceOption)
+  /-- Its argument is the picked options' values. -/
+  | choices (selected : List String) (options : List ChoiceOption)
   /-- A button; its argument is ignored. -/
   | action
   /-- Tab labels with `active` selected; its argument is the chosen tab's index. -/

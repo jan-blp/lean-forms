@@ -67,6 +67,25 @@ export function Choice({ name, label, value, options, disabled, error, onChange 
   );
 }
 
+export function Choices({ label, values, options, disabled, error, onChange }: FormsReact.Choices) {
+  const form = useLeanForm();
+  const feedback = useId();
+  const toggle = (value: string, checked: boolean) => form.run(onChange,
+    options.map(option => option.value)
+      .filter(option => option === value ? checked : values.includes(option)));
+  return (
+    <fieldset className="choice" aria-invalid={error === null ? undefined : true}
+      aria-describedby={error === null ? undefined : feedback}>
+      <legend>{label}</legend>
+      {options.map(option =>
+        <label key={option.value}><input type="checkbox" value={option.value}
+          checked={values.includes(option.value)} disabled={disabled}
+          onChange={event => toggle(option.value, event.target.checked)} />{option.label}</label>)}
+      {error !== null && <p className="validation-error" id={feedback}>{error}</p>}
+    </fieldset>
+  );
+}
+
 export function Output({ label, value }: FormsReact.Output) {
   return <div className="computed"><label>{label}<output>{value}</output></label></div>;
 }
@@ -144,6 +163,7 @@ export const defaultComponents: Components = {
   textField: TextField,
   checkbox: Checkbox,
   choice: Choice,
+  choices: Choices,
   output: Output,
   button: Button,
   tabBar: TabBar,

@@ -171,7 +171,7 @@ inductive OfNatConstructor where
   | ofNat
   | other
 
-#reject_model OfNatConstructor with "OfNatConstructor.Tag.ofNat"
+#reject_model OfNatConstructor with "OfNatConstructor.Raw.ofNat"
 
 structure NeedsRule where
   value : Nat

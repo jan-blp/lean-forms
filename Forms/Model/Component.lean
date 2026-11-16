@@ -151,6 +151,49 @@ def Component.disabledWhen
   : Component Γ α :=
   ⟨Unit, .select path label options selected⟩
 
+structure Labelled (β : Type) where
+  value : β
+  label : String
+
+def SelectOptions.ofValues
+  {β : Type}
+  [Constructors β]
+  (options : List (Labelled β))
+  (tags_nodup : (options.map (Constructors.tag ·.value)).Nodup)
+  (labels_nodup : (options.map (·.label)).Nodup)
+  : SelectOptions (Constructors.Tag β) β where
+  options := options.map fun option =>
+    { key := Constructors.tag option.value, label := option.label, start := option.value }
+  keys_nodup := by simpa [List.map_map, Function.comp_def] using tags_nodup
+  labels_nodup := by simpa [List.map_map, Function.comp_def] using labels_nodup
+
+def Component.enum
+  {Γ : Context}
+  {α β : Type}
+  [Constructors β]
+  (path : Path α β)
+  (label : Computation Γ α String)
+  (options : List (Labelled β))
+  (tags_nodup : (options.map (Constructors.tag ·.value)).Nodup := by decide)
+  (labels_nodup : (options.map (·.label)).Nodup := by decide)
+  : Component Γ α :=
+  .select path label (.const (.ofValues options tags_nodup labels_nodup)) Constructors.tag
+
+def Component.enumSet
+  {Γ : Context}
+  {α β : Type}
+  [Constructors β]
+  [DecidableEq β]
+  (path : Path α { items : List β // items.Nodup })
+  (label : Computation Γ α String)
+  (options : List (Labelled β))
+  (tags_nodup : (options.map (Constructors.tag ·.value)).Nodup := by decide)
+  (labels_nodup : (options.map (·.label)).Nodup := by decide)
+  : Component Γ α :=
+  .field path label <|
+    (Editor.choices (.ofValues options tags_nodup labels_nodup) Constructors.tag).subtype
+      List.Nodup "Pick each option once."
+
 /-- Loads `source`; `body` builds the subtree from the data, with a note while loading or failed. -/
 def Component.loadWith
   {Γ : Context}
