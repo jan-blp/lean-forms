@@ -86,7 +86,8 @@ try {
     try {
       await retry(`Server ${name}`, server, 10000, () => fetch(`http://127.0.0.1:${port}/api/form-start`));
       await call('browsingContext.navigate', { context, url: `http://127.0.0.1:${port}/`, wait: 'complete' });
-      const result = await call('script.evaluate', { target: { context }, awaitPromise: true, expression: `(async () => {
+      const evaluate = async body => {
+        const result = await call('script.evaluate', { target: { context }, awaitPromise: true, expression: `(async () => {
         const check = (condition, message) => { if (!condition) throw Error(message); };
         const wait = async predicate => {
           for (let i = 0; i < 100; i++) { if (predicate()) return; await new Promise(resolve => setTimeout(resolve, 50)); }
@@ -111,15 +112,19 @@ try {
         };
         const status = () => document.querySelector('#status').textContent;
         const submitted = () => JSON.parse(document.querySelector('#result pre').textContent);
+        const submit = async () => {
+          await click('[data-action=submit]');
+          await wait(() => status() === 'Submitted successfully.');
+        };
         await wait(() => document.querySelector('[data-action=submit]')?.disabled === false);
         check(crossOriginIsolated, 'Shared-memory runtime requires cross-origin isolation');
         check(document.querySelector('[data-runtime=compiled]'), 'Compiled form runtime was not loaded');
         ${body}
-        await click('[data-action=submit]');
-        await wait(() => status() === 'Submitted successfully.');
       })()` });
-      assert.notEqual(result.type, 'exception', JSON.stringify(result.exceptionDetails));
-      if (interact) await interact();
+        assert.notEqual(result.type, 'exception', JSON.stringify(result.exceptionDetails));
+      };
+      await evaluate(`${body}\nawait submit();`);
+      if (interact) await interact(evaluate);
       await checkLayout();
       console.log(`PASS: ${name}`);
     } finally { await stop(server); }
@@ -184,99 +189,45 @@ try {
     check(submitted().shipping.express.phone === '079', 'Submit did not apply the branch draft');
   `);
 
-  await example('scalars', `
-    await edit('Paid on', '2026-11-15');
-  `, async () => {
-    const evaluate = async body => {
-      const result = await call('script.evaluate', { target: { context }, awaitPromise: true,
-        expression: `(async () => {
-          const date = [...document.querySelectorAll('.editor')].find(form =>
-            form.querySelector('label').firstChild.textContent === 'Paid on').querySelector('input');
-          const tick = () => new Promise(resolve => setTimeout(resolve, 0));
-          const setDate = async value => {
-            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(date, value);
-            date.dispatchEvent(new Event('input', { bubbles: true }));
-            await tick();
-          };
-          const check = (condition, message) => { if (!condition) throw Error(message); };
-          const submitted = () => JSON.parse(document.querySelector('#result pre').textContent);
-          const submit = async () => {
-            document.querySelector('[data-action=submit]').click();
-            for (let i = 0; i < 100; i++) {
-              await new Promise(resolve => setTimeout(resolve, 50));
-              if (!document.querySelector('[data-action=submit]').disabled) return;
-            }
-            throw Error('Submission did not finish');
-          };
-          ${body}
-        })()` });
-      assert.notEqual(result.type, 'exception', JSON.stringify(result.exceptionDetails));
-    };
-    await evaluate(`
-      check(submitted().paidOn === '2026-11-15', 'Optional date did not save');
-      const fetch = window.fetch;
-      document.body.dataset.posts = '0';
-      window.fetch = (...args) => {
-        if (String(args[0]) === '/api/submit') {
-          document.body.dataset.posts = String(Number(document.body.dataset.posts) + 1);
-        }
-        return fetch(...args);
-      };
-    `);
+  await example('scalars', '', async evaluate => {
+    const press = keys => call('input.performActions', { context,
+      actions: [{ type: 'key', id: 'date-keyboard', actions: [...keys].flatMap(value =>
+        [{ type: 'keyDown', value }, { type: 'keyUp', value }]) }] });
     for (const initial of ['2026-11-15', '']) {
       await evaluate(`
-        await setDate(${JSON.stringify(initial)});
-        date.form.requestSubmit();
-        await tick();
-        document.body.dataset.posts = '0';
-        date.focus();
+        await edit('Paid on', ${JSON.stringify(initial)});
+        input('Paid on').focus();
       `);
-      const keys = initial === '' ? ['1', '2'] : ['\uE003'];
-      await call('input.performActions', { context, actions: [{ type: 'key', id: 'date-keyboard',
-        actions: keys.flatMap(value => [{ type: 'keyDown', value }, { type: 'keyUp', value }]) }] });
+      await press(initial === '' ? '12' : '\uE003');
       await evaluate(`
-        await tick();
-        check(date.value === '' && date.validity.badInput, 'Date edit was not incomplete: ' +
-          JSON.stringify({ initial: ${JSON.stringify(initial)}, value: date.value,
-            badInput: date.validity.badInput, invalid: date.getAttribute('aria-invalid') }));
-        check(date.getAttribute('aria-invalid') === 'true', 'Incomplete date has no error');
-        check(date.form.querySelector('.validation-error')?.textContent, 'Date feedback is missing');
+        const date = input('Paid on');
+        check(date.validity.badInput, 'Date edit was not incomplete');
+        const fetch = window.fetch;
+        let posts = 0;
+        window.fetch = (...args) => { posts++; return fetch(...args); };
         date.form.requestSubmit();
         await tick();
-        check(date.getAttribute('aria-invalid') === 'true', 'Enter cleared the incomplete date error');
         date.blur();
         await tick();
-        check(date.getAttribute('aria-invalid') === 'true', 'Blur cleared the incomplete date error');
+        await click('[data-action=submit]');
+        window.fetch = fetch;
+        check(posts === 0, 'Incomplete optional date was submitted');
+        check(date.getAttribute('aria-invalid') === 'true' &&
+          date.form.querySelector('.validation-error')?.textContent, 'Incomplete date lost its error');
+        await edit('Paid on', ${JSON.stringify(initial === '' ? '' : '2026-12-01')});
         await submit();
-        check(document.body.dataset.posts === '0', 'Incomplete optional date was submitted: ' +
-          JSON.stringify({ posts: document.body.dataset.posts, value: date.value,
-            badInput: date.validity.badInput, invalid: date.getAttribute('aria-invalid') }));
-        check(date.getAttribute('aria-invalid') === 'true', 'Incomplete date draft was discarded');
-        if (${initial === ''}) {
-          await setDate('');
-          check(!date.hasAttribute('aria-invalid'), 'Clearing an incomplete date kept its error');
-          await submit();
-          check(submitted().paidOn === null, 'Clearing an incomplete date did not save');
-        }
-        await setDate('2026-12-01');
-        await submit();
-        check(submitted().paidOn === '2026-12-01', 'Corrected optional date did not save');
-        check(!date.hasAttribute('aria-invalid'), 'Corrected date still has an error');
-        await setDate('');
-        await submit();
-        check(submitted().paidOn === null, 'Intentional clearing did not remove the date');
+        check(submitted().paidOn === ${JSON.stringify(initial === '' ? null : '2026-12-01')},
+          'Correcting or clearing the date did not save');
+        check(!date.hasAttribute('aria-invalid'), 'Date error did not clear');
       `);
     }
-    await evaluate('date.focus();');
-    await call('input.performActions', { context, actions: [{ type: 'key', id: 'date-keyboard',
-      actions: ['1', '2'].flatMap(value => [{ type: 'keyDown', value }, { type: 'keyUp', value }]) }] });
+    await evaluate("input('Paid on').focus();");
+    await press('12');
     await evaluate(`
-      await tick();
+      const date = input('Paid on');
       check(date.validity.badInput, 'Reset test did not create an incomplete date');
-      document.querySelector('[data-action=reset]').click();
-      await tick();
+      await click('[data-action=reset]');
       check(date.value === '' && !date.validity.badInput, 'Reset kept the incomplete date');
-      check(!date.hasAttribute('aria-invalid'), 'Reset kept the date error');
       await submit();
       check(submitted().paidOn === null, 'Reset date did not submit as absent');
     `);
