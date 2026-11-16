@@ -61,7 +61,7 @@ private def mode : Component [] ExpenseReport.Raw := .group "Local load" [
     loadedBody]
 
 def run : IO Unit := do
-  let opened := ModelForm.openState rows [[10, 20], [30, 40]] Env.nil
+  let opened := ModelForm.openState (model := List (List Nat)) rows [[10, 20], [30, 40]] Env.nil
   let selected ← apply (model := List (List Nat)) rows opened "Select" none 3
   check "LocalListRowsHaveIndependentBindings"
     (rowSelection selected 0 == .none && rowSelection selected 1 == .row 1 && selected.value == opened.value)
@@ -77,12 +77,13 @@ def run : IO Unit := do
   let nested : Component [] (List Nat) := .bind RowSelection.none (.bind RowSelection.none
     (Component.void <| .table .self "Nested" (.numbered "Number") "Add number"
         0 columns[] (some (.there .here))))
-  let nestedOpened := ModelForm.openState nested [10, 20] Env.nil
+  let nestedOpened := ModelForm.openState (model := List Nat) nested [10, 20] Env.nil
   let nestedSelected ← apply (model := List Nat) nested nestedOpened "Select"
   check "LocalNestedBindingCanReferenceOuterVariable"
     (nestedSelected.locals.value == .row 0 && nestedSelected.locals.tail.producer.value == .none)
   let initial := { ExpenseReport.initial with employee := "table" }
-  let loaded := ModelForm.load mode (ModelForm.openState mode initial Env.nil)
+  let loaded := ModelForm.load mode
+    (ModelForm.openState (model := ExpenseReport) mode initial Env.nil)
   let picked ← apply (model := ExpenseReport) mode loaded "Select" none 1
   let same ← apply (model := ExpenseReport) mode picked "Mode" (some (.text "table"))
   check "LocalLoadRetainsStateForSameStatus"

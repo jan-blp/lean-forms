@@ -49,13 +49,16 @@ def ModelForm.Snapshot.toWire
           method := .POST
           headers := { «Content-Type» := "application/json" }
           body := some submission.compress }
-      | .fetch request => fetchEffect request }
+      | .fetch request => fetchEffect request
+      | .focus key => .focus (ControlKeyProtocol.toString key) }
 
 def ModelForm.Event.fromWire : Wire.Event → Except String ModelForm.Event
   | .apply key argument => do
     let argument ← InputProtocol.argumentFromJson (if argument == .null then none else some argument)
     pure (.apply (← ControlKeyProtocol.fromString key) argument)
   | .submit => .ok .submit
+  | .draft key message => do
+    pure (.draft (← ControlKeyProtocol.fromString key) message)
   | .reset => .ok .reset
   | .submitted (.response status body) =>
     .ok (.submitted (if 200 ≤ status && status < 300 then .accepted

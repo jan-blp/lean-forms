@@ -20,7 +20,7 @@ const status = model => { const notice = page(model).notice; return (notice.erro
 const result = model => page(model).result;
 /** Field error messages in a component tree. */
 const messages = value => !value || typeof value !== 'object' ? [] :
-  [...(typeof value.error === 'string' ? [value.error] : []), ...Object.values(value).flatMap(messages)];
+  [...(Array.isArray(value.errors) ? value.errors : []), ...Object.values(value).flatMap(messages)];
 for (const { start, initial, cases } of fixtures) {
   test(`compiled ${start.form} matches native Lean through actions, views, validation, and reset`, async () => {
     const model = await open(start);
@@ -177,7 +177,7 @@ test('Lean shows validation before submission and handles server feedback and re
     assert.deepEqual(messages(model.snapshot().view), ['Age must be at most 120.']);
     assert.deepEqual(model.snapshot().effects, []);
     model.send('submit');
-    assert.deepEqual(model.snapshot().effects, []);
+    assert.deepEqual(model.snapshot().effects, [{ focus: { key: quantity.key } }]);
     assert.ok(messages(model.snapshot().view).length);
     assert.equal(status(model), 'Age must be at most 120.');
     model.send({ apply: { key: quantity.key, argument: '2' } });

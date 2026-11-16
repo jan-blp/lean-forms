@@ -140,12 +140,26 @@ try {
     check(submitted().name === '<img src=x> Grace', 'Submit did not apply the draft');
     check(!document.querySelector('#controls img'), 'Name interpreted as HTML');
     const age = input('Age');
+    const committedAge = age.value;
     age.focus();
     await type(age, 'abc');
     age.blur();
     await tick();
     check(status() === 'Enter a non-negative whole number.', 'Leaving the field did not apply the edit');
     check(input('Age').value === 'abc', 'Rejected edit lost its draft');
+    await type(age, committedAge);
+    age.blur();
+    await tick();
+    check(!field('Age').querySelector('.validation-error'), 'Restoring the value kept a rejected-draft error');
+    // Submit applies every draft, then focuses the first problem in rendered order.
+    await type(age, 'abc');
+    await type(input('Name'), '');
+    await click('[data-action=submit]');
+    await wait(() => document.activeElement === input('Name'));
+    check(input('Age').value === 'abc', 'Submit discarded the rejected draft');
+    await edit('Name', 'Grace');
+    await edit('Age', committedAge);
+    await submit();
     await edit('Age', '21');
     await click('input[type=checkbox]');
     await type(input('Street'), 'Hidden draft');
@@ -187,6 +201,29 @@ try {
     await click('[data-action=submit]');
     await wait(() => status() === 'Submitted successfully.');
     check(submitted().shipping.express.phone === '079', 'Submit did not apply the branch draft');
+  `);
+
+  await example('navigation', `
+    check(!field('Street'), 'Address pane should start unplaced');
+    const visit = [...document.querySelectorAll('button')].find(button =>
+      button.textContent === 'Go to address problem');
+    visit.click();
+    await wait(() => field('Street') && document.activeElement === input('Street'));
+    visit.focus();
+    await type(input('Street'), 'Main');
+    check(document.activeElement === visit, 'A draft change replayed the focus effect');
+    field('Street').requestSubmit();
+    await tick();
+    const summary = [...document.querySelectorAll('output')].find(output =>
+      output.parentElement.firstChild.textContent === 'Current issues');
+    check(summary.textContent === '', 'Issue output did not refresh after editing');
+    check(visit.disabled, 'Navigation stayed enabled without an address problem');
+    await edit('Street', '');
+    check(!visit.disabled, 'Navigation stayed disabled when an address problem returned');
+    await click('[data-action=submit]');
+    await wait(() => document.activeElement === input('Street'));
+    check(summary.textContent === 'Enter your delivery street.', 'Validation issue disappeared');
+    await edit('Street', 'Main');
   `);
 
   await example('scalars', '', async evaluate => {

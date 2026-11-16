@@ -18,11 +18,13 @@ example : True := by
   trivial
 
 private def start
-  {α β : Type}
-  (component : Component [] α β)
-  (value : α)
+  {model β : Type}
+  [FormModel model]
+  [Validation model]
+  (component : Component [] (Raw model) β)
+  (value : Raw model)
   : ModelForm.State component :=
-  ModelForm.load component (ModelForm.openState component value Env.nil)
+  ModelForm.load component (ModelForm.openState (model := model) component value Env.nil)
 
 private def key
   {α β : Type}
@@ -91,7 +93,7 @@ private def modelDependent : Component [] Nat :=
       .computed "Observed" { inputs := inputs[.ui (Ref.here : InputRef _ Nat)], run := toString }])
 
 def run : IO Unit := do
-  let opened := start single 10
+  let opened := start (model := Nat) single 10
   check "ProducerOutputStartsFromOwnedState" (texts opened "Observer one" == ["0"])
   let incremented ← press (model := Nat) opened "Increment"
   check "IndependentObserversReadOwnedOutput"
@@ -106,7 +108,7 @@ def run : IO Unit := do
   let rememberedAgain ← press (model := Nat) latest "Remember output"
   check "ConsumerActionsReadCurrentOutput" (texts rememberedAgain "Remembered" == ["2"])
   let independent := Component.group "Independent instances" [single.void, single.void]
-  let independentUpdated ← press (model := Nat) (start independent 10) "Increment"
+  let independentUpdated ← press (model := Nat) (start (model := Nat) independent 10) "Increment"
   check "OutputReferencesBelongToTheirInstance" (texts independentUpdated "Observer one" == ["1", "0"])
   let reset ← IO.ofExcept (ModelForm.execute (model := Nat) single rememberedAgain .reset)
   check "OutputResetRestoresBothSubtrees"
@@ -116,7 +118,7 @@ def run : IO Unit := do
   check "OutputOwnerRespectsPendingState"
     (texts rejected "Observer one" == ["2"] && rejected.ui.rejection == some "Submission is in progress.")
 
-  let rows := start repeated initial
+  let rows := start (model := List Nat) repeated initial
   let first ← press (model := List Nat) rows "Increment"
   let second ← press (model := List Nat) first "Increment" 1
   let twice ← press (model := List Nat) second "Increment" 1
@@ -130,16 +132,16 @@ def run : IO Unit := do
   let resetRows ← IO.ofExcept (ModelForm.execute (model := List Nat) repeated twice .reset)
   check "ResetRestoresCollectedOutputs" (texts resetRows "Counts" == ["0, 0"] && resetRows.value == initial)
 
-  let functionUpdated ← press (model := Nat) (start functions 0) "Use successor"
+  let functionUpdated ← press (model := Nat) (start (model := Nat) functions 0) "Use successor"
   check "OutputsNeedNoSerialization" (texts functionUpdated "Result" == ["42"])
-  let dependent := start modelDependent 10
+  let dependent := start (model := Nat) modelDependent 10
   let changedModel ← IO.ofExcept (ModelForm.execute (model := Nat) modelDependent dependent
     (.apply (← key dependent "Model") (some (.text "17"))))
   let changedOwner ← press (model := Nat) changedModel "Increment"
   check "OutputObservesConsumerModelEditsAndOwnerStateTogether"
     (changedOwner.value == 17 && texts changedOwner "Observed" == ["18"])
 
-  let pairs := start nested initial
+  let pairs := start (model := List Nat) nested initial
   let left ← press (model := List Nat) pairs "Increment"
   let both ← press (model := List Nat) left "Increment" 1
   let other ← press (model := List Nat) both "Increment" 3
@@ -157,10 +159,10 @@ def run : IO Unit := do
   let embedded := Component.group "Normal nesting" [
     loaded,
     (Component.focus (.const (some .self)) single).void]
-  let embeddedUpdated ← press (model := Nat) (start embedded 10) "Increment" 1
+  let embeddedUpdated ← press (model := Nat) (start (model := Nat) embedded 10) "Increment" 1
   check "ObservationsEmbedUnderLoadAndFocus" (texts embeddedUpdated "Observer one" == ["0", "1"])
   let disabled := Component.disabledWhen (.const true) single
-  let disabledOpened := start disabled 10
+  let disabledOpened := start (model := Nat) disabled 10
   let disabledResult ← press (model := Nat) disabledOpened "Increment"
   check "ObservationUsesNormalAvailabilityChecks"
     (disabledResult.ui.rejection == some (toString InvocationError.disabled) && texts disabledResult "Observer one" == ["0"])
@@ -169,7 +171,8 @@ def run : IO Unit := do
       (.numbered "Row") "Add row" 0 columns[
     "Counters" => .observe pair
       (.computed "Cell total" { inputs := inputs[.ui (Ref.here : InputRef _ Nat)], run := toString })]
-  let tableChanged ← press (model := List Nat) (start table initial) "Increment" 1
+  let tableChanged ← press (model := List Nat)
+    (start (model := List Nat) table initial) "Increment" 1
   check "NestedOutputsWorkInsideTableCells" (texts tableChanged "Cell total" == ["1", "0"])
 
   let remote : Component [] Nat := .observe counter
@@ -177,7 +180,7 @@ def run : IO Unit := do
       inputs := inputs[.ui (Ref.here : InputRef _ Nat)]
       run := fun count => .fetch { method := .get, url := s!"/count/{count}", body := none } (Lean.fromJson? (α := Nat)) }
       (fun value => .computed "Loaded output" (.const (toString value))))
-  let remoteOpened := start remote 10
+  let remoteOpened := start (model := Nat) remote 10
   check "ConsumerRequestsReadInitialOutput"
     (remoteOpened.outbox == [.fetch { method := .get, url := "/count/0", body := none }])
   let remoteChanged ← press (model := Nat) remoteOpened "Increment"
@@ -195,7 +198,7 @@ def run : IO Unit := do
       (.group "Consumer" [
         .button "Set outer" (.set count.there (.const 5)),
         .computed "Outer observed" { inputs := inputs[.ui (Ref.here : InputRef _ Nat)], run := toString }])
-  let outerUpdated ← press (model := Nat) (start outer 0) "Set outer"
+  let outerUpdated ← press (model := Nat) (start (model := Nat) outer 0) "Set outer"
   check "ConsumerUpdatesPreserveSurroundingContext"
     (texts outerUpdated "Outer count" == ["5"] && texts outerUpdated "Outer observed" == ["5"])
 

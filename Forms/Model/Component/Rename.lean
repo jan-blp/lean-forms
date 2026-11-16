@@ -35,6 +35,7 @@ def ComponentNode.rename
   | .select (decidableEq := _) (key := _) path label options selected =>
     .select path (label.rename rename) (options.rename rename) selected
   | .output value => .output (value.rename rename)
+  | .issues => .issues
   | .collection path label row display =>
     .collection path (label.rename rename) (row.rename rename.liftRow) (display.rename rename)
   | .focus target body => .focus (target.rename rename) (body.rename rename)

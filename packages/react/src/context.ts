@@ -11,6 +11,7 @@ export interface LeanFormContext {
   components: Components;
   draft(name: string): string | undefined;
   draftError(name: string): string | undefined;
+  registerTarget(name: string, element: HTMLElement | null): void;
   /** Records the text of field `name`; `undefined` drops the draft. */
   setDraft(name: string, text: string | undefined, error?: string): void;
   run(action: FormsReact.Action, argument?: unknown): void;

@@ -1,6 +1,6 @@
 module
 
-public import Forms.Runtime.Feedback
+public import Forms.Model.Diagnostic
 
 @[expose] public section
 

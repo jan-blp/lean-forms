@@ -73,7 +73,7 @@ private def execute (state : State) (input : ModelForm.Event) : IO State :=
   IO.ofExcept (ModelForm.execute (model := Lookup) Lookup.form state input)
 
 private def snapshot (state : State) : ModelForm.Snapshot Lookup.Raw :=
-  ModelForm.snapshot (model := Lookup) Lookup.form state
+  ModelForm.snapshot Lookup.form state
 
 private def control? (state : State) (label : String) : Option Display.Control :=
   (snapshot state).controls.find? (·.label == label)
@@ -86,6 +86,7 @@ private def fetches (state : State) : List HttpRequest :=
   state.outbox.filterMap fun
     | .fetch request => some request
     | .submit => none
+    | .focus _ => none
 
 private def answer (request : HttpRequest) : Except String Json :=
   (Api.serve SupplierEndpoint.fixture request).elim (.error "Not found.") .ok
@@ -161,7 +162,8 @@ def run : IO Unit := do
   check "RemoteUnitUsesCoreCodec" (suppliers.body == some "{}")
   check "RemoteFetchEffectRoundtrip" (match fetchEffect (supplier "acme") with
     | .fetch id _ => (fetchedRequest id).toOption == some (supplier "acme")
-    | .submit _ => false)
+    | .submit _ => false
+    | .focus _ => false)
   let (opened, _) ← IO.ofExcept
     ((FormDefinition.ofModel Lookup Lookup.form Lookup.initial).openState (toJson Lookup.initial))
   let opened : State := opened
@@ -205,7 +207,8 @@ def run : IO Unit := do
   let otherLayout : HttpRequest.Cache := ({} : HttpRequest.Cache).insert layoutRequest
     (.loaded (toJson ["name", "age"]))
   check "RemoteReorderedKeepsField" (renamed otherLayout == some "Grace")
-  let shippingState := ModelForm.load shippingChoices (ModelForm.openState shippingChoices Order.initial Env.nil)
+  let shippingState := ModelForm.load shippingChoices
+    (ModelForm.openState (model := Order) shippingChoices Order.initial Env.nil)
   let some shipping := (ModelView.render shippingChoices shippingState.value shippingState.cache [] Env.nil).controls.head?
     | throw (IO.userError "FAIL no shipping choice")
   check "RemoteFallbackOffersPickup" (match shipping.input with

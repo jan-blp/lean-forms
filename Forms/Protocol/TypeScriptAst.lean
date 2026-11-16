@@ -59,7 +59,16 @@ private def renderType (current : List String) : TS.Type → String
     let text := renderType current element
     let text := match element with
       | .union .. => "(" ++ text ++ ")"
-      | _ => text
+      | .string
+      | .boolean
+      | .number
+      | .unknown
+      | .null
+      | .stringLiteral _
+      | .reference ..
+      | .array _
+      | .tuple _
+      | .object _ => text
     text ++ "[]"
   | .tuple elements => "[" ++ String.intercalate ", " (elements.map (renderType current)) ++ "]"
   | .union first second rest =>
@@ -77,7 +86,12 @@ private def typePaths : TS.Type → List (List String)
   | .tuple elements => elements.flatMap typePaths
   | .union first second rest => typePaths first ++ typePaths second ++ rest.flatMap typePaths
   | .object properties => properties.flatMap propertyPaths
-  | _ => []
+  | .string
+  | .boolean
+  | .number
+  | .unknown
+  | .null
+  | .stringLiteral _ => []
 
 private def propertyPaths : Property → List (List String)
   | .mk (type := type) .. => typePaths type

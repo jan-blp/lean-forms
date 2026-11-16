@@ -28,7 +28,7 @@ private def browserKey
   return control.key
 
 def run : IO Unit := do
-  let opened := ModelForm.openState form ExpenseReport.initial Env.nil
+  let opened := ModelForm.openState (model := ExpenseReport) form ExpenseReport.initial Env.nil
   let first ← browserKey opened "Select"
   let second ← browserKey opened "Select" 1
   let selected ← browse opened (.apply second none)
@@ -65,7 +65,8 @@ def run : IO Unit := do
   check "TableResetClearsSelection"
     (selection reset == .none && toJson reset.value == toJson ExpenseReport.initial)
   let disabled := Component.disabledWhen (.const true) form
-  let rejected ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) disabled (ModelForm.openState disabled ExpenseReport.initial Env.nil)
+  let rejected ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) disabled
+    (ModelForm.openState (model := ExpenseReport) disabled ExpenseReport.initial Env.nil)
     (.apply second none))
   check "TableDisabledSelectionRejects"
     (rejected.ui.rejection == some (toString InvocationError.disabled) &&
@@ -91,7 +92,8 @@ def run : IO Unit := do
     path[ExpenseReport.Field.expenses] "Expenses" (.numbered "Expense") "Add expense"
         ⟨"", 0, false⟩ columns[] (some .here))
   let twoTables := Component.group "Two selections" [table, table]
-  let multiple := ModelForm.openState twoTables ExpenseReport.initial Env.nil
+  let multiple := ModelForm.openState (model := ExpenseReport)
+    twoTables ExpenseReport.initial Env.nil
   let selectors := (ModelView.render twoTables multiple.value {} [] Env.nil multiple.locals).controls.filter (·.label == "Select")
   check "LocalBindingsKeepViewsIndependent" (selectors.length == 4)
   let some secondTableRow := selectors[3]? | throw (IO.userError "FAIL missing second table selection")
@@ -104,7 +106,8 @@ def run : IO Unit := do
     (.const (some (.ofPath path[ExpenseReport.Field.expenses])))
     (.bind RowSelection.none (Component.void <| .table .self "Nested"
         (.numbered "Expense") "Add expense" ⟨"", 0, false⟩ columns[] (some .here)))
-  let nestedOpened := ModelForm.openState nested ExpenseReport.initial Env.nil
+  let nestedOpened := ModelForm.openState (model := ExpenseReport)
+    nested ExpenseReport.initial Env.nil
   let some nestedSelect := (ModelView.render nested nestedOpened.value {} [] Env.nil).controls.find? (·.label == "Select")
     | throw (IO.userError "FAIL missing nested selection")
   let nestedSelected ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) nested nestedOpened
@@ -115,7 +118,8 @@ def run : IO Unit := do
     .bind false (Component.void <| .table path[ExpenseReport.Field.expenses] "Expenses"
         (.numbered "Expense") "Add expense" ⟨"", 0, false⟩
       columns[] (some (.there (.there .here))))
-  let mixedOpened := ModelForm.openState mixed ExpenseReport.initial env[.row 1, .none]
+  let mixedOpened := ModelForm.openState (model := ExpenseReport)
+    mixed ExpenseReport.initial env[.row 1, .none]
   let some mixedSelect := (ModelView.render mixed mixedOpened.value {} [] mixedOpened.env).controls.find?
       (·.label == "Select")
     | throw (IO.userError "FAIL missing selection in mixed context")

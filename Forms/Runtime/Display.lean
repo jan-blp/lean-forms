@@ -1,7 +1,7 @@
 module
 
 public import Forms.Runtime.Identity
-public import Forms.Runtime.Feedback
+public import Forms.Model.Diagnostic
 public import Forms.Model.Format
 
 @[expose] public section
@@ -43,7 +43,7 @@ structure Control where
   disabled : Bool
   location : ErasedLocation
   input : Editor
-  messages : Option String := none
+  messages : List String
   deriving BEq
 
 mutual
@@ -53,9 +53,9 @@ inductive View where
   | stack (label : Option String) (children : List View)
   | computed (label text : String)
   /-- `messages` are about the list as a whole. -/
-  | list (label : String) (children : List View) (messages : Option String)
+  | list (label : String) (children : List View) (messages : List String)
   | table (label : String) (headers : List String) (rows : List TableRow)
-      (footer : View) (messages : Option String)
+      (footer : View) (messages : List String)
 
 structure TableRow where
   label : String
@@ -140,7 +140,44 @@ def View.title (view : View) : String :=
     | .list label .. => label
     | .table label .. => label
     | .computed label .. => label
-    | _ => ""
+    | .hidden => ""
   if label.isEmpty then "Form" else label
+
+def Control.editable (control : Control) : Bool :=
+  !control.disabled && match control.input with
+    | .text .. => true
+    | .checkbox .. => true
+    | .choice .. => true
+    | .choices .. => true
+    | .action => false
+    | .tabs .. => false
+
+/-- Whether the control keeps uncommitted text, whose errors become draft diagnostics. -/
+def Control.acceptsDrafts (control : Control) : Bool :=
+  !control.disabled && match control.input with
+    | .text .. => true
+    | .checkbox .. => false
+    | .choice .. => false
+    | .choices .. => false
+    | .action => false
+    | .tabs .. => false
+
+def View.resolve
+  (view : View)
+  (locations : List ErasedLocation)
+  : Option ControlKey :=
+  let controls := view.controls.filter Control.editable
+  let exact := controls.find? fun control => locations.contains control.location
+  let descendant := controls.find? fun control =>
+    locations.any (·.isPrefixOf control.location)
+  (exact.orElse fun _ => descendant).map (·.key)
+
+/-- Resolves each target list on its own, then picks the earliest result in rendered order. -/
+def View.resolveFirst
+  (view : View)
+  (targets : List (List ErasedLocation))
+  : Option ControlKey :=
+  let keys := targets.filterMap view.resolve
+  (view.controls.find? fun control => keys.contains control.key).map (·.key)
 
 end Forms.Runtime.Display

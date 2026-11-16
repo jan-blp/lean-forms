@@ -15,6 +15,8 @@ inductive Action.Step (Γ : Context) (α : Type) where
       (path : Path α (List β))
       (item : Computation Γ α β)
       : Action.Step Γ α
+  | visit (target : Computation Γ α (Option Destination))
+      : Action.Step Γ α
 
 abbrev Action (Γ : Context) (α : Type) := FreeMonoid (Action.Step Γ α)
 
@@ -46,6 +48,7 @@ def Step.rename
   : Step Γ α → Step Δ α
   | .set ref value => .set (rename ref) (value.rename rename)
   | .append path item => .append path (item.rename rename)
+  | .visit target => .visit (target.rename rename)
 
 def rename
   {Γ Δ : Context}
@@ -63,8 +66,11 @@ def Step.run
   (env : Env Γ)
   : ComponentUpdate Γ α Unit :=
   match step with
-  | .set ref computed => ⟨value, ref.set (computed.eval value env) env, ()⟩
-  | .append path item => ⟨path.set (path.get value ++ [item.eval value env]) value, env, ()⟩
+  | .set ref computed => { value, state := ref.set (computed.eval value env) env, locals := () }
+  | .append path item =>
+    { value := path.set (path.get value ++ [item.eval value env]) value
+      state := env, locals := (), invalidatesDestinations := true }
+  | .visit target => { value, state := env, locals := (), visit := target.eval value env }
 
 def run
   {Γ : Context}
@@ -73,7 +79,21 @@ def run
   (value : α)
   (env : Env Γ)
   : ComponentUpdate Γ α Unit :=
-  action.toList.foldl (fun updated step => step.run updated.value updated.state) ⟨value, env, ()⟩
+  action.toList.foldl (fun updated step =>
+    let next := step.run updated.value updated.state
+    { next with
+      visit := next.visit.orElse fun _ => updated.visit
+      invalidatesDestinations := updated.invalidatesDestinations || next.invalidatesDestinations })
+    { value, state := env, locals := () }
+
+/-- Focuses `target` after the action runs. Does nothing if `target` is from an earlier
+evaluation or the action also edits the model. -/
+def visit
+  {Γ : Context}
+  {α : Type}
+  (target : Computation Γ α (Option Destination))
+  : Action Γ α :=
+  FreeMonoid.of (.visit target)
 
 end Action
 

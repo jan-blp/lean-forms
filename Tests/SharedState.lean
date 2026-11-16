@@ -52,7 +52,7 @@ private def values (state : ModelForm.State form) (label : String) : List String
   outputs label (ModelView.render form state.value state.cache [] state.env state.locals).view
 
 def run : IO Unit := do
-  let opened := ModelForm.openState form initial Env.nil
+  let opened := ModelForm.openState (model := List Nat) form initial Env.nil
   let first ← press opened "Increment shared"
   check "SharedStateUpdatesEveryConsumer"
     (values first "Shared count" == ["1", "1"] &&
@@ -81,7 +81,7 @@ def run : IO Unit := do
       values reset "Private count" == ["0", "0"])
 
   let independent := Component.group "Independent owners" [form, form]
-  let independentOpened := ModelForm.openState independent initial Env.nil
+  let independentOpened := ModelForm.openState (model := List Nat) independent initial Env.nil
   let independentChanged ← IO.ofExcept (ModelForm.execute (model := List Nat) independent independentOpened
     (.apply (← key independentOpened "Increment shared" 2) none))
   check "RepeatedOwnersKeepSeparateSharedState"
@@ -99,7 +99,7 @@ def run : IO Unit := do
         run := fun selection => match selection with
           | .none => "None"
           | .row index => toString index }]
-  let tablesOpened := ModelForm.openState tables [10, 20] Env.nil
+  let tablesOpened := ModelForm.openState (model := List Nat) tables [10, 20] Env.nil
   let selected ← IO.ofExcept (ModelForm.execute (model := List Nat) tables tablesOpened
     (.apply (← key tablesOpened "Select" 1) none))
   check "ExistingTablesShareSelectionBinding" (match

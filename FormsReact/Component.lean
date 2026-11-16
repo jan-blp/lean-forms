@@ -42,7 +42,7 @@ structure TextField where
   kind : TextKind
   value : String
   disabled : Bool
-  error : Option String
+  errors : List String
   onCommit : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -52,7 +52,7 @@ structure Checkbox where
   label : String
   checked : Bool
   disabled : Bool
-  error : Option String
+  errors : List String
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -68,7 +68,7 @@ structure Choice where
   value : String
   options : List ChoiceOption
   disabled : Bool
-  error : Option String
+  errors : List String
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -79,7 +79,7 @@ structure Choices where
   values : List String
   options : List ChoiceOption
   disabled : Bool
-  error : Option String
+  errors : List String
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -106,11 +106,11 @@ structure TabBar where
   deriving ToJson, FromJson, BEq, Repr
 
 mutual
-/-- Children grouped under an optional legend; `error` is about the group as a whole. -/
+/-- Children grouped under an optional legend; `errors` are about the group as a whole. -/
 structure Group where
   label : Option String
   children : List Component
-  error : Option String
+  errors : List String
 
 structure TableRow where
   label : String
@@ -122,7 +122,7 @@ structure Table where
   headers : List String
   rows : List TableRow
   footer : Component
-  error : Option String
+  errors : List String
 
 structure Page where
   title : String

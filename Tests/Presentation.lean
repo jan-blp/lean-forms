@@ -117,9 +117,10 @@ def run : IO Unit := do
   check "PresentationReorderedActionsReachTheirOwner"
     (edited.output == "Revised" && texts "Cell description" edited.view == ["same", "Revised", "other"])
 
-  let regrouped := (tableSummary (.group (some "New grouping") [
+  let regroupedForm := tableSummary (.group (some "New grouping") [
     .group (some "Summary") [.place .here],
-    .group (some "Editor") [.place (.there .here)]])).evaluate edited.value Env.nil {} edited.locals
+    .group (some "Editor") [.place (.there .here)]])
+  let regrouped := regroupedForm.evaluate edited.value Env.nil {} edited.locals
   check "PresentationRegroupingKeepsOwnershipRoutes"
     ((← control regrouped "Toggle selection" 1) == tableLast)
   let summaryOnly := (tableSummary (.place .here)).evaluate edited.value Env.nil {} edited.locals
@@ -133,12 +134,13 @@ def run : IO Unit := do
   let duplicated := (tableSummary duplicate).evaluate edited.value Env.nil {} edited.locals
   check "PresentationDuplicatePlacementKeepsOneEditableControl"
     (duplicated.view.controls.length == edited.view.controls.length)
-  let errors : List Feedback.Error := [⟨"Review this item", .locations [.index 1] []⟩]
-  let feedback := regrouped.feedback errors
+  let errors : List Diagnostic := [
+    { message := "Review this item", targets := .locations [.index 1] [] }]
+  let feedback := (regroupedForm.evaluate edited.value Env.nil {} edited.locals errors).view
   let some described := (feedback.controls.filter (·.label == "Description"))[1]?
     | throw (IO.userError "Missing described control")
   check "PresentationValidationFollowsTheOwner"
-    (described.messages == some "Review this item" && described.target == field.target)
+    (described.messages == ["Review this item"] && described.target == field.target)
 
   let tabs := sharedTabs.evaluate 0 Env.nil
   check "PresentationTabsOwnAllPanes" (texts "Shared count" tabs.view == ["0"])

@@ -34,6 +34,12 @@ structure Branch (Γ : Context) (α : Type) [Constructors α] where
   initial : Payload
   body : Component Γ Payload
 
+@[reducible] def Component.issues
+  {Γ : Context}
+  {α : Type}
+  : Component Γ α (List Issue) :=
+  { LocalState := Unit, node := .issues }
+
 def RowSelection.itemPath
   {α β : Type}
   (items : Path α (List β))
