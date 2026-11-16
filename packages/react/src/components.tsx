@@ -14,13 +14,28 @@ const inputs = {
   },
 } as const satisfies Record<FormsReact.TextKind, InputHTMLAttributes<HTMLInputElement>>;
 
+/** Marks an element invalid and points it at the messages rendered by `ValidationErrors`. */
+function invalid(errors: readonly string[], feedback: string) {
+  return errors.length === 0 ? {} : { 'aria-invalid': true, 'aria-describedby': feedback } as const;
+}
+
+function ValidationErrors({ id, errors }: { id: string; errors: readonly string[] }) {
+  if (errors.length === 0) return null;
+  return (
+    <div className="validation-error" id={id}>
+      {errors.map((error, index) => <p key={index}>{error}</p>)}
+    </div>
+  );
+}
+
 export function TextField(
-    { name, label, kind, value, disabled, error, onCommit }: FormsReact.TextField) {
+    { name, label, kind, value, disabled, errors, onCommit }: FormsReact.TextField) {
   const form = useLeanForm();
   const input = useRef<HTMLInputElement>(null);
   const feedback = useId();
   const draft = form.draft(name);
-  const message = form.draftError(name) ?? error;
+  const draftError = form.draftError(name);
+  const shown = draftError === undefined ? errors : [draftError];
   const commit = () => {
     if (form.draftError(name) === undefined && !input.current!.validity.badInput) {
       form.run(onCommit, input.current!.value);
@@ -46,7 +61,7 @@ export function TextField(
         form.registerTarget(name, element);
       }} {...inputs[kind]} value={draft ?? value}
         disabled={disabled}
-        aria-invalid={message === null ? undefined : true} aria-describedby={message === null ? undefined : feedback}
+        {...invalid(shown, feedback)}
         onInput={kind === 'date' ? event => change(event.currentTarget) : undefined}
         onChange={kind === 'date' ? undefined : event => change(event.currentTarget)}
         onKeyUp={kind === 'date' ? event => {
@@ -55,44 +70,43 @@ export function TextField(
           }
         } : undefined}
         onBlur={() => { if (form.draft(name) !== undefined) commit(); }} /></label>
-      {message !== null && <p className="validation-error" id={feedback}>{message}</p>}
+      <ValidationErrors id={feedback} errors={shown} />
     </form>
   );
 }
 
-export function Checkbox({ name, label, checked, disabled, error, onChange }: FormsReact.Checkbox) {
+export function Checkbox({ name, label, checked, disabled, errors, onChange }: FormsReact.Checkbox) {
   const form = useLeanForm();
   const feedback = useId();
   return (
     <form className="editor" noValidate onSubmit={event => event.preventDefault()}>
       <label>{label}<input ref={element => form.registerTarget(name, element)}
         type="checkbox" checked={checked} disabled={disabled}
-        aria-invalid={error === null ? undefined : true} aria-describedby={error === null ? undefined : feedback}
+        {...invalid(errors, feedback)}
         onChange={event => form.run(onChange, event.target.checked)} /></label>
-      {error !== null && <p className="validation-error" id={feedback}>{error}</p>}
+      <ValidationErrors id={feedback} errors={errors} />
     </form>
   );
 }
 
-export function Choice({ name, label, value, options, disabled, error, onChange }: FormsReact.Choice) {
+export function Choice({ name, label, value, options, disabled, errors, onChange }: FormsReact.Choice) {
   const form = useLeanForm();
   const feedback = useId();
   return (
     <fieldset ref={element => form.registerTarget(name,
       element?.querySelector<HTMLInputElement>('input:checked') ?? element?.querySelector('input') ?? null)}
-      className="choice" aria-invalid={error === null ? undefined : true}
-      aria-describedby={error === null ? undefined : feedback}>
+      className="choice" {...invalid(errors, feedback)}>
       <legend>{label}</legend>
       {options.map(option =>
         <label key={option.value}><input type="radio" name={name} value={option.value}
           checked={option.value === value} disabled={disabled}
           onChange={() => form.run(onChange, option.value)} />{option.label}</label>)}
-      {error !== null && <p className="validation-error" id={feedback}>{error}</p>}
+      <ValidationErrors id={feedback} errors={errors} />
     </fieldset>
   );
 }
 
-export function Choices({ name, label, values, options, disabled, error, onChange }: FormsReact.Choices) {
+export function Choices({ name, label, values, options, disabled, errors, onChange }: FormsReact.Choices) {
   const form = useLeanForm();
   const feedback = useId();
   const toggle = (value: string, checked: boolean) => form.run(onChange,
@@ -101,14 +115,13 @@ export function Choices({ name, label, values, options, disabled, error, onChang
   return (
     <fieldset ref={element => form.registerTarget(name,
       element?.querySelector<HTMLInputElement>('input:checked') ?? element?.querySelector('input') ?? null)}
-      className="choice" aria-invalid={error === null ? undefined : true}
-      aria-describedby={error === null ? undefined : feedback}>
+      className="choice" {...invalid(errors, feedback)}>
       <legend>{label}</legend>
       {options.map(option =>
         <label key={option.value}><input type="checkbox" value={option.value}
           checked={values.includes(option.value)} disabled={disabled}
           onChange={event => toggle(option.value, event.target.checked)} />{option.label}</label>)}
-      {error !== null && <p className="validation-error" id={feedback}>{error}</p>}
+      <ValidationErrors id={feedback} errors={errors} />
     </fieldset>
   );
 }
@@ -136,23 +149,21 @@ export function TabBar({ label, active, labels, disabled, onChange }: FormsReact
   );
 }
 
-export function Group({ label, children, error }: FormsReact.Group) {
+export function Group({ label, children, errors }: FormsReact.Group) {
   const feedback = useId();
-  const message = error !== null && <p className="validation-error" id={feedback}>{error}</p>;
+  const message = <ValidationErrors id={feedback} errors={errors} />;
   if (label === null) return <div className="stack"><Children components={children} />{message}</div>;
   return (
-    <fieldset className="component" aria-invalid={error === null ? undefined : true}
-      aria-describedby={error === null ? undefined : feedback}>
+    <fieldset className="component" {...invalid(errors, feedback)}>
       <legend>{label}</legend><Children components={children} />{message}
     </fieldset>
   );
 }
 
-export function Table({ label, headers, rows, footer, error }: FormsReact.Table) {
+export function Table({ label, headers, rows, footer, errors }: FormsReact.Table) {
   const feedback = useId();
   return (
-    <div className="table-component" aria-invalid={error === null ? undefined : true}
-      aria-describedby={error === null ? undefined : feedback}>
+    <div className="table-component" {...invalid(errors, feedback)}>
       <div className="table-scroll" tabIndex={0} role="region" aria-label={label}>
         <table>
           <caption>{label}</caption>
@@ -164,7 +175,7 @@ export function Table({ label, headers, rows, footer, error }: FormsReact.Table)
         </table>
       </div>
       {rows.length === 0 && <p className="empty">No items.</p>}
-      {error !== null && <p className="validation-error" id={feedback}>{error}</p>}
+      <ValidationErrors id={feedback} errors={errors} />
       <Render component={footer} />
     </div>
   );

@@ -140,7 +140,7 @@ def run : IO Unit := do
   let some described := (feedback.controls.filter (·.label == "Description"))[1]?
     | throw (IO.userError "Missing described control")
   check "PresentationValidationFollowsTheOwner"
-    (described.messages == some "Review this item" && described.target == field.target)
+    (described.messages == ["Review this item"] && described.target == field.target)
 
   let tabs := sharedTabs.evaluate 0 Env.nil
   check "PresentationTabsOwnAllPanes" (texts "Shared count" tabs.view == ["0"])

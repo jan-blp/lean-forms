@@ -25,7 +25,7 @@ def editor
   (location : ErasedLocation)
   (label : String)
   (disabled : Bool)
-  (messages : Option String)
+  (messages : List String)
   : Display.Control :=
   { key := .edit location, target, label, disabled, location, messages
     input := editorInput widget value }
@@ -44,7 +44,8 @@ def button
   (disabled : Bool)
   : Display.Control :=
   { key, target, label, disabled, location
-    input := .action }
+    input := .action
+    messages := [] }
 
 inductive ActionError where
   | decode (error : DecodeError)
@@ -80,10 +81,8 @@ def Ambient.of
   : Ambient :=
   { cache, diagnostics, revision, messages := Diagnostic.messageIndex diagnostics }
 
-def Ambient.messagesAt (ambient : Ambient) (location : ErasedLocation) : Option String :=
-  match ambient.messages.getD location [] with
-  | [] => none
-  | messages => some (String.intercalate "\n" messages)
+def Ambient.messagesAt (ambient : Ambient) (location : ErasedLocation) : List String :=
+  ambient.messages.getD location []
 
 structure Evaluated (Γ : Context) (α state β : Type)
   extends NodeEvaluation Γ α state β, Ambient where
@@ -195,7 +194,7 @@ def renderCollection
   (label : String)
   (rows : List (Vector Display.View views))
   (content : List Display.View)
-  (messages : Option String)
+  (messages : List String)
   : Display.View :=
   match display with
   | .list => .list label (rows.map (·[0]) ++ content) messages
@@ -253,7 +252,8 @@ def evaluateNode
         key := .press target.indices location
         target, location, disabled
         label := caption.eval value env
-        input := .action }
+        input := .action
+        messages := [] }
       requests := []
       apply := fun route argument => match route with
         | [] => do
@@ -268,7 +268,8 @@ def evaluateNode
         key := .tab target.indices location
         target, location, disabled
         label := label.eval value env
-        input := .tabs (active.get env).val (tabs.eval value env).toList }
+        input := .tabs (active.get env).val (tabs.eval value env).toList
+        messages := [] }
       requests := []
       apply := fun route argument => match route with
         | [] => do

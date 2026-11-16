@@ -31,17 +31,17 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       kind := kind.toReact
       value
       disabled
-      error := c.messages
+      errors := c.messages
       onCommit := .apply name }
   | .checkbox checked => .checkbox
-      { name, label := c.label, checked, disabled, error := c.messages, onChange := .apply name }
+      { name, label := c.label, checked, disabled, errors := c.messages, onChange := .apply name }
   | .choice value options => .choice {
       name
       label := c.label
       value
       options := options.map fun option => { value := option.value, label := option.label }
       disabled
-      error := c.messages
+      errors := c.messages
       onChange := .apply name }
   | .choices values options => .choices {
       name
@@ -49,7 +49,7 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       values
       options := options.map fun option => { value := option.value, label := option.label }
       disabled
-      error := c.messages
+      errors := c.messages
       onChange := .apply name }
   | .action => .button { label := c.label, variant := .secondary, disabled, onClick := .press name }
   | .tabs active labels =>
@@ -60,15 +60,15 @@ def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
   | .hidden => none
   | .control c => some (c.toReact pending)
   | .stack label children => some (.group
-      { label := label.filter (!·.isEmpty), children := children.filterMap (·.toReact pending), error := none })
+      { label := label.filter (!·.isEmpty), children := children.filterMap (·.toReact pending), errors := [] })
   | .list label children messages => some (.group
-      { label := some label, children := children.filterMap (·.toReact pending), error := messages })
+      { label := some label, children := children.filterMap (·.toReact pending), errors := messages })
   | .computed label value => some (.output { label, value })
   | .table label headers rows footer messages => some (.table {
       label, headers
       rows := tableRowsToReact pending rows
-      footer := (footer.toReact pending).getD (.group { label := none, children := [], error := none })
-      error := messages })
+      footer := (footer.toReact pending).getD (.group { label := none, children := [], errors := [] })
+      errors := messages })
 
 def tableRowsToReact (pending : Bool) : List Display.TableRow → List FormsReact.TableRow
   | [] => []
@@ -79,7 +79,7 @@ def tableRowsToReact (pending : Bool) : List Display.TableRow → List FormsReac
 def tableCellsToReact (pending : Bool) : List View → List FormsReact.Component
   | [] => []
   | cell :: rest =>
-    ((cell.toReact pending).getD (.group { label := none, children := [], error := none })) ::
+    ((cell.toReact pending).getD (.group { label := none, children := [], errors := [] })) ::
       tableCellsToReact pending rest
 end
 

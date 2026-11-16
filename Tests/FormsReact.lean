@@ -15,13 +15,13 @@ private def control
   (key : ControlKey)
   (label : String)
   (input : Display.Editor)
-  (messages : Option String := none)
+  (messages : List String := [])
   : Display.Control :=
   { key, target := {}, label, disabled := false, location := [], input, messages }
 
 def view : Display.View :=
   .stack (some "Person") [
-    .control (control (.edit [.field "name"]) "Name" (.text .plain "Ada") (messages := some "Enter your name.")),
+    .control (control (.edit [.field "name"]) "Name" (.text .plain "Ada") (messages := ["Enter your name."])),
     .control (control (.edit [.field "age"]) "Age" (.text .natural "36")),
     .hidden,
     .stack (some "") [.control (control (.edit [.field "delivery"]) "Delivery" (.checkbox true))],
@@ -37,7 +37,7 @@ def expected : FormsReact.Component :=
         kind := .plain
         value := "Ada"
         disabled := false
-        error := some "Enter your name."
+        errors := ["Enter your name."]
         onCommit := .apply "[\"edit\",\"name\"]" },
       .textField {
         name := "[\"edit\",\"age\"]"
@@ -45,7 +45,7 @@ def expected : FormsReact.Component :=
         kind := .natural
         value := "36"
         disabled := false
-        error := none
+        errors := []
         onCommit := .apply "[\"edit\",\"age\"]" },
       .group {
         label := none
@@ -55,11 +55,11 @@ def expected : FormsReact.Component :=
             label := "Delivery"
             checked := true
             disabled := false
-            error := none
+            errors := []
             onChange := .apply "[\"edit\",\"delivery\"]" }]
-        error := none },
+        errors := [] },
       .output { label := "Summary", value := "Ada, 36" }]
-    error := none }
+    errors := [] }
 
 def run : IO Unit := do
   check "Lowering changed" (view.toReact false == some expected)

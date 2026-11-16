@@ -40,7 +40,7 @@ def run : IO Unit := do
     | some (.group { children := [_, .table table, _], .. }) =>
       match table.rows with
       | first :: second :: _ =>
-        first.cells[2]? == some (.group { label := none, children := [], error := none }) &&
+        first.cells[2]? == some (.group { label := none, children := [], errors := [] }) &&
         (match first.cells[3]? with | some (FormsReact.Component.button _) => true | _ => false) &&
         (match second.cells[2]? with | some (FormsReact.Component.checkbox _) => true | _ => false)
       | _ => false

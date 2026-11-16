@@ -12,9 +12,6 @@ open Lean
 namespace DisplayProtocol
 open Display
 
-def messageFields (messages : Option String) : List (String × Json) :=
-  messages.toList.map fun message => ("messages", toJson message)
-
 def widgetName : Editor → String
   | .text .plain _ => "textInput"
   | .text .natural _ => "naturalInput"
@@ -33,7 +30,7 @@ def controlToJson (control : Control) : Json :=
     ("key", toJson (ControlKeyProtocol.toString control.key)), ("target", toJson control.target.indices),
     ("label", toJson control.label), ("disabled", toJson control.disabled),
     ("kind", toJson "editor"), ("location", FeedbackProtocol.locationToJson control.location),
-    ("widget", toJson (widgetName control.input))] ++ messageFields control.messages)
+    ("widget", toJson (widgetName control.input)), ("messages", toJson control.messages)])
 
 end DisplayProtocol
 

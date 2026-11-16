@@ -107,7 +107,7 @@ def run : IO Unit := do
   check "RejectedDraftBecomesObservableIssue"
     (invalid.evaluation.output.map (·.message) == ["Enter a non-negative whole number."] &&
       invalid.evaluation.view.controls.any
-        (fun control => control.label == "Age" && control.messages.isSome))
+        (fun control => control.label == "Age" && !control.messages.isEmpty))
   let corrected ← apply form invalid "Age" (some (.text "21"))
   check "SuccessfulCommitClearsDraftIssue" corrected.evaluation.output.isEmpty
   let browser ← IO.ofExcept (ModelForm.execute (model := Person) form numeric
@@ -149,7 +149,7 @@ def run : IO Unit := do
     { message := "First", targets := .locations name [] }]
   let controls := (fields.evaluate Person.initial Env.nil (diagnostics := repeated)).view.controls
   check "InlineMessagesAreDistinctAndOrdered"
-    ((controls.find? (·.location == name)).bind (·.messages) == some "First\nSecond")
+    ((controls.find? (·.location == name)).map (·.messages) == some ["First", "Second"])
 
   let _ : Validation Person := {
     validate := fun _ => .error [{

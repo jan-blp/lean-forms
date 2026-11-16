@@ -43,7 +43,7 @@ structure Control where
   disabled : Bool
   location : ErasedLocation
   input : Editor
-  messages : Option String := none
+  messages : List String
   deriving BEq
 
 mutual
@@ -53,9 +53,9 @@ inductive View where
   | stack (label : Option String) (children : List View)
   | computed (label text : String)
   /-- `messages` are about the list as a whole. -/
-  | list (label : String) (children : List View) (messages : Option String)
+  | list (label : String) (children : List View) (messages : List String)
   | table (label : String) (headers : List String) (rows : List TableRow)
-      (footer : View) (messages : Option String)
+      (footer : View) (messages : List String)
 
 structure TableRow where
   label : String

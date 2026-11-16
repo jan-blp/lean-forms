@@ -1,18 +1,18 @@
 // Generated from Lean. Run npm --prefix web run generate.
 export type Component = { "textField": TextField } | { "checkbox": Checkbox } | { "choice": Choice } | { "choices": Choices } | { "output": Output } | { "button": Button } | { "tabBar": TabBar } | { "group": Group } | { "table": Table } | { "page": Page };
-export type TextField = { "name": string; "label": string; "kind": TextKind; "value": string; "disabled": boolean; "error": string | null; "onCommit": Action };
+export type TextField = { "name": string; "label": string; "kind": TextKind; "value": string; "disabled": boolean; "errors": string[]; "onCommit": Action };
 export type TextKind = "plain" | "natural" | "integer" | "decimal" | "date" | "uuid";
 export type Action = { "apply": { "name": string } } | { "press": { "name": string } } | "submit" | "reset";
-export type Checkbox = { "name": string; "label": string; "checked": boolean; "disabled": boolean; "error": string | null; "onChange": Action };
-export type Choice = { "name": string; "label": string; "value": string; "options": ChoiceOption[]; "disabled": boolean; "error": string | null; "onChange": Action };
+export type Checkbox = { "name": string; "label": string; "checked": boolean; "disabled": boolean; "errors": string[]; "onChange": Action };
+export type Choice = { "name": string; "label": string; "value": string; "options": ChoiceOption[]; "disabled": boolean; "errors": string[]; "onChange": Action };
 export type ChoiceOption = { "value": string; "label": string };
-export type Choices = { "name": string; "label": string; "values": string[]; "options": ChoiceOption[]; "disabled": boolean; "error": string | null; "onChange": Action };
+export type Choices = { "name": string; "label": string; "values": string[]; "options": ChoiceOption[]; "disabled": boolean; "errors": string[]; "onChange": Action };
 export type Output = { "label": string; "value": string };
 export type Button = { "label": string; "variant": ButtonVariant; "disabled": boolean; "onClick": Action };
 export type ButtonVariant = "primary" | "secondary";
 export type TabBar = { "name": string; "label": string; "active": number; "labels": string[]; "disabled": boolean; "onChange": Action };
-export type Group = { "label": string | null; "children": Component[]; "error": string | null };
-export type Table = { "label": string; "headers": string[]; "rows": TableRow[]; "footer": Component; "error": string | null };
+export type Group = { "label": string | null; "children": Component[]; "errors": string[] };
+export type Table = { "label": string; "headers": string[]; "rows": TableRow[]; "footer": Component; "errors": string[] };
 export type TableRow = { "label": string; "cells": Component[]; "selected": boolean | null };
 export type Page = { "title": string; "busy": boolean; "body": Component[]; "toolbar": Component[]; "notice": Notice; "result": string | null };
 export type Notice = { "info": { "message": string } } | { "error": { "message": string } };
