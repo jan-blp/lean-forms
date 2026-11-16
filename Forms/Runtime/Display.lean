@@ -145,9 +145,12 @@ def View.title (view : View) : String :=
 
 def Control.editable (control : Control) : Bool :=
   !control.disabled && match control.input with
+    | .text .. => true
+    | .checkbox .. => true
+    | .choice .. => true
+    | .choices .. => true
     | .action => false
     | .tabs .. => false
-    | _ => true
 
 def View.resolve
   (view : View)

@@ -86,6 +86,8 @@ def run
       invalidatesDestinations := updated.invalidatesDestinations || next.invalidatesDestinations })
     { value, state := env, locals := () }
 
+/-- Focuses `target` after the action runs. Does nothing if `target` is from an earlier
+evaluation or the action also edits the model. -/
 def visit
   {Γ : Context}
   {α : Type}

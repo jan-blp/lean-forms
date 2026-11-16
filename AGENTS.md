@@ -14,6 +14,11 @@
 - Prefer to use named arguments when there are more than one wildcards in a pattern.
 - Prefer to use named fields over tuple syntax when there are multiple fields.
 
+# Pattern matching
+
+- Avoid catch-all `_` arms when matching on a sum type; list every constructor so that
+  adding one forces a decision.
+
 # Default values
 
 - Prefer to avoid default values. Default proofs are fine and encouraged when

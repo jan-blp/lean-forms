@@ -14,6 +14,8 @@ inductive Effect where
   | focus (key : ControlKey)
   deriving BEq
 
+/-- An error about a control's text that cannot enter the model, e.g. "abc" in a natural field;
+dropped when the control commits or leaves the view. -/
 structure DraftDiagnostic where
   control : ControlKey
   diagnostic : Model.Diagnostic
