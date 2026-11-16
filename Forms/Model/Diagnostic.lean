@@ -30,6 +30,11 @@ structure Issue where
   destination? : Option Destination
   deriving BEq, DecidableEq
 
+def Diagnostic.locations (diagnostic : Diagnostic) : List ErasedLocation :=
+  match diagnostic.targets with
+  | .global => []
+  | .locations first rest => first :: rest
+
 def Diagnostic.issues
   (diagnostics : List Diagnostic)
   (scope : ErasedLocation)

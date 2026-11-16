@@ -159,4 +159,12 @@ def View.resolve
     locations.any (·.isPrefixOf control.location)
   (exact.orElse fun _ => descendant).map (·.key)
 
+/-- Resolves each target list on its own, then picks the earliest result in rendered order. -/
+def View.resolveFirst
+  (view : View)
+  (targets : List (List ErasedLocation))
+  : Option ControlKey :=
+  let keys := targets.filterMap view.resolve
+  (view.controls.find? fun control => keys.contains control.key).map (·.key)
+
 end Forms.Runtime.Display

@@ -164,4 +164,17 @@ def run : IO Unit := do
   check "SubmitAndVisitPreferExactTargetsOverEarlierDescendants"
     (focuses submitted == [.edit name] && focuses visited == focuses submitted)
 
+  let _ : Validation Person := {
+    validate := fun _ => .error [
+      { message := "Check the age"
+        targets := .locations (.field Person.Field.age .self) },
+      { message := "Check the address"
+        targets := .locations (.field Person.Field.address .self) }] }
+  let ordered : Component [] Person.Raw := .group "Ordered" [
+    .field path[Person.Field.address, Address.Field.street] "Street" .text,
+    .field path[Person.Field.age] "Age" .natural]
+  let submitted := ModelForm.submit
+    (ModelForm.openState (model := Person) ordered Person.initial Env.nil)
+  check "SubmitFocusesTheFirstRenderedIssue" (focuses submitted == [.edit street])
+
 end Tests.Navigation

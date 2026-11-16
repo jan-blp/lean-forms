@@ -99,6 +99,16 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
     return next;
   }
 
+  /** Applies every draft it can and reports the rest, so Lean blocks the submit and picks the focus. */
+  function commitAllDrafts() {
+    let current = model.snapshot();
+    for (const [name, draft] of currentDrafts.current) {
+      if (!current.draftFields.includes(name)) continue;
+      if (draft.error !== undefined) current = send({ draft: { key: name, message: draft.error } });
+      else current = commit(name, draft.text) ?? current;
+    }
+  }
+
   function commitDrafts(): boolean {
     let current = model.snapshot();
     for (const [name, draft] of currentDrafts.current) {
@@ -124,7 +134,8 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
         updateDrafts(new Map());
         send('reset');
       } else if (action === 'submit') {
-        if (commitDrafts()) send('submit');
+        commitAllDrafts();
+        send('submit');
       } else if ('press' in action) {
         if (commitDrafts()) send({ apply: { key: action.press.name, argument: null } });
       } else commit(action.apply.name, argument);

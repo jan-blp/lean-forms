@@ -27,6 +27,8 @@ structure ComponentUpdate (Γ : Context) (α localState : Type) where
   state : Env Γ
   locals : localState
   visit : Option Destination := none
+  /-- Conservatively suppresses visits after model mutations, even append.
+  Skipping a valid visit is preferable to navigating to a different row. -/
   invalidatesDestinations : Bool := false
 
 def ComponentUpdate.mapValue

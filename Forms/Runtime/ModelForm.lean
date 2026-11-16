@@ -247,10 +247,7 @@ def submit
       outbox := state.outbox ++ [.submit] }
   else
     let diagnostics := state.draftDiagnostics.map (·.diagnostic) ++ errors
-    let locations := diagnostics.flatMap fun diagnostic => match diagnostic.targets with
-      | .global => []
-      | .locations first rest => first :: rest
-    let focus := state.evaluation.view.resolve locations
+    let focus := state.evaluation.view.resolveFirst (diagnostics.map (·.locations))
     { state with
       ui := state.ui.announce (Model.Diagnostic.summary diagnostics) true
       outbox := state.outbox ++ focus.toList.map .focus }

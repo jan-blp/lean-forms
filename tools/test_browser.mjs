@@ -151,6 +151,14 @@ try {
     age.blur();
     await tick();
     check(!field('Age').querySelector('.validation-error'), 'Restoring the value kept a rejected-draft error');
+    // Submit applies every draft, then focuses the first problem in rendered order.
+    await type(age, 'abc');
+    await type(input('Name'), '');
+    await click('[data-action=submit]');
+    await wait(() => document.activeElement === input('Name'));
+    check(input('Age').value === 'abc', 'Submit discarded the rejected draft');
+    await edit('Name', 'Grace');
+    await edit('Age', committedAge);
     await submit();
     await edit('Age', '21');
     await click('input[type=checkbox]');
