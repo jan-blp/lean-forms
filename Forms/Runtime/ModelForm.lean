@@ -14,6 +14,12 @@ inductive Effect where
   | focus (key : ControlKey)
   deriving BEq
 
+/-- Whether `view` can still act on `effect`: a focus needs its control to be editable. -/
+def Effect.applies (view : Display.View) : Effect → Bool
+  | .submit => true
+  | .fetch _ => true
+  | .focus key => view.controls.any fun control => control.key == key && control.editable
+
 /-- An error about a control's text that cannot enter the model, e.g. "abc" in a natural field;
 dropped when the control commits or leaves the view. -/
 structure DraftDiagnostic where
@@ -93,10 +99,7 @@ def load
     let cache := missing.foldl (fun cache request => cache.insert request .loading) state.cache
     let evaluation := ModelView.evaluate form state.value cache state.env state.locals
       state.evaluation.diagnostics (state.evaluation.revision + 1)
-    let outbox := state.outbox.filter fun
-      | .focus key => evaluation.view.controls.any
-          (fun control => control.key == key && control.editable)
-      | _ => true
+    let outbox := state.outbox.filter (·.applies evaluation.view)
     { state with
       evaluation
       outbox := outbox ++ missing.map .fetch }
@@ -277,15 +280,15 @@ def event {Γ : Model.Context}
             { control := key
               diagnostic := { message, targets := .locations control.location [] } } ::
               state.draftDiagnostics.filter (·.control != key)
-        | _ => state.draftDiagnostics
+        | .stale _ => state.draftDiagnostics
+        | .clientBug _ => state.draftDiagnostics
       pure (refresh form { state with
         draftDiagnostics := diagnostics
         ui := { ui with rejection := some message } })
   | .draft key message =>
     if state.ui.pending then return state
     let some control := state.evaluation.view.controls.find? (·.key == key) | return state
-    if control.disabled then return state
-    let .text .. := control.input | return state
+    unless control.acceptsDrafts do return state
     let diagnostics := state.draftDiagnostics.filter (·.control != key)
     let diagnostics := match message with
       | none => diagnostics
@@ -317,7 +320,9 @@ def event {Γ : Model.Context}
         evaluation := ModelView.evaluate form state.value
           (state.cache.insert request cached) state.env state.locals state.evaluation.diagnostics
           (state.evaluation.revision + 1) }
-    | _ => pure state
+    | none
+    | some (.loaded _)
+    | some (.failed _) => pure state
 
 def execute {Γ : Model.Context}
   {model β : Type}
@@ -332,15 +337,10 @@ def execute {Γ : Model.Context}
   let state := load form state
   let drafts := state.draftDiagnostics.filter fun draft =>
     state.evaluation.view.controls.any fun control =>
-      control.key == draft.control && !control.disabled && match control.input with
-        | .text .. => true
-        | _ => false
+      control.key == draft.control && control.acceptsDrafts
   let state := if drafts == state.draftDiagnostics then state
     else load form (refresh form { state with draftDiagnostics := drafts })
-  let outbox := state.outbox.filter fun
-    | .focus key => state.evaluation.view.controls.any
-        (fun control => control.key == key && control.editable)
-    | _ => true
+  let outbox := state.outbox.filter (·.applies state.evaluation.view)
   return { state with outbox }
 
 end Forms.Runtime.ModelForm

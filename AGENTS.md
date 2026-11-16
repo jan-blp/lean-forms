@@ -16,8 +16,8 @@
 
 # Pattern matching
 
-- Avoid catch-all `_` arms when matching on a sum type; list every constructor so that
-  adding one forces a decision.
+- Avoid catch-all `_` arms when matching on a sum type; list every constructor
+  so that adding one forces a decision. The same applies to refutable patterns.
 
 # Default values
 

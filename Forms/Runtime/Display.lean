@@ -140,7 +140,7 @@ def View.title (view : View) : String :=
     | .list label .. => label
     | .table label .. => label
     | .computed label .. => label
-    | _ => ""
+    | .hidden => ""
   if label.isEmpty then "Form" else label
 
 def Control.editable (control : Control) : Bool :=
@@ -149,6 +149,16 @@ def Control.editable (control : Control) : Bool :=
     | .checkbox .. => true
     | .choice .. => true
     | .choices .. => true
+    | .action => false
+    | .tabs .. => false
+
+/-- Whether the control keeps uncommitted text, whose errors become draft diagnostics. -/
+def Control.acceptsDrafts (control : Control) : Bool :=
+  !control.disabled && match control.input with
+    | .text .. => true
+    | .checkbox .. => false
+    | .choice .. => false
+    | .choices .. => false
     | .action => false
     | .tabs .. => false
 
