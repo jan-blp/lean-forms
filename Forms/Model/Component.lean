@@ -183,15 +183,16 @@ def Component.enumSet
   {Γ : Context}
   {α β : Type}
   [Constructors β]
+  [DecidableEq β]
   (path : Path α { items : List β // items.Nodup })
   (label : Computation Γ α String)
   (options : List (Labelled β))
   (tags_nodup : (options.map (Constructors.tag ·.value)).Nodup := by decide)
   (labels_nodup : (options.map (·.label)).Nodup := by decide)
   : Component Γ α :=
-  .field path label
-    (.choices (.ofValues options tags_nodup labels_nodup) Constructors.tag
-      (by simp [SelectOptions.ofValues]))
+  .field path label <|
+    (Editor.choices (.ofValues options tags_nodup labels_nodup) Constructors.tag).subtype
+      List.Nodup "Pick each option once."
 
 /-- Loads `source`; `body` builds the subtree from the data, with a note while loading or failed. -/
 def Component.loadWith

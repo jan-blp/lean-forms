@@ -26,23 +26,13 @@ inductive Editor : Type → Type 1 where
       [key : Key κ]
       (options : SelectOptions κ β)
       (selected : β → κ)
-      (keyed : ∀ option ∈ options.options, selected option.start = option.key)
-      : Editor { items : List β // items.Nodup }
-
-theorem SelectOptions.starts_nodup
-  {κ β : Type}
-  {options : SelectOptions κ β}
-  {picked : List (SelectOption κ β)}
-  (selected : β → κ)
-  (keyed : ∀ option ∈ options.options, selected option.start = option.key)
-  (sublist : picked.Sublist options.options)
-  : (picked.map (·.start)).Nodup := by
-  have keys : (picked.map (·.key)).Nodup := options.keys_nodup.sublist (sublist.map _)
-  rw [← List.map_congr_left fun option member => keyed option (sublist.subset member)] at keys
-  unfold List.Nodup at *
-  exact List.Pairwise.of_map (S := (· ≠ ·)) selected
-    (fun _ _ distinct same => distinct (congrArg selected same))
-    (by simpa [Function.comp_def] using keys)
+      : Editor (List β)
+  | refine {α β : Type}
+      (editor : Editor α)
+      (print : β → α)
+      (parse : α → Except String β)
+      (parse_print : ∀ value, parse (print value) = .ok value)
+      : Editor β
 
 @[reducible] def Editor.text : Editor String := .formatted .plain
 
@@ -59,6 +49,17 @@ theorem SelectOptions.starts_nodup
 @[reducible] def Editor.date : Editor Std.Time.PlainDate := .formatted .date
 
 @[reducible] def Editor.uuid : Editor Uuid := .formatted .uuid
+
+def Editor.subtype
+    {α : Type}
+    (editor : Editor α)
+    (property : α → Prop)
+    [DecidablePred property]
+    (errorMsg : String)
+    : Editor { value : α // property value } :=
+  editor.refine Subtype.val
+    (fun value => if valid : property value then .ok ⟨value, valid⟩ else .error errorMsg)
+    (fun value => by simp [value.property])
 
 inductive Availability where
   | enabled

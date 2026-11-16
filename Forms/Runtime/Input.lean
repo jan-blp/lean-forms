@@ -45,12 +45,13 @@ def Input.decode {α : Type} (editor : Model.Editor α) (input : Input) : Except
   | .checkbox => match input with
     | .boolean value => .ok value
     | _ => .error (.clientBug (.wrongArgument "a boolean"))
-  | .choices (key := _) options selected keyed => match input with
+  | .choices (key := _) { options, .. } _ => match input with
     | .texts keys =>
-      if keys.all fun key => options.options.any (Model.Key.encode ·.key == key) then
-        let picked := options.options.filter (keys.contains <| Model.Key.encode ·.key)
-        .ok ⟨picked.map (·.start), options.starts_nodup selected keyed List.filter_sublist⟩
+      if keys.all fun key => options.any (Model.Key.encode ·.key == key) then
+        .ok (options.filter (keys.contains <| Model.Key.encode ·.key) |>.map (·.start))
       else .error (.clientBug .unknownOption)
     | _ => .error (.clientBug (.wrongArgument "a list of options"))
+  | .refine editor _ parse _ => do
+    (parse (← Input.decode editor input)).mapError .input
 
 end Forms.Runtime
