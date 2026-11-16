@@ -129,6 +129,8 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       {α β : Type}
       (value : Computation Γ α β)
       : ComponentNode Γ α Unit β 0
+  /-- Outputs the issues inside the `α` value this node receives, rendered or not; global issues
+  are included only when that value is the whole model. -/
   | issues {Γ : Context}
       {α : Type}
       : ComponentNode Γ α Unit (List Issue) 0
