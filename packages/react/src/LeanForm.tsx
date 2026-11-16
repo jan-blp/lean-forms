@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { defaultComponents } from './components.js';
 import { Context, type Components, type LeanFormContext } from './context.js';
 import type * as Wire from './protocol/Forms/Runtime/Wire.js';
@@ -50,23 +50,37 @@ interface Draft {
 function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
   const [snapshot, setSnapshot] = useState(() => model.snapshot());
   const [drafts, setDrafts] = useState<ReadonlyMap<string, Draft>>(new Map());
+  const currentDrafts = useRef(drafts);
+  const targets = useRef(new Map<string, HTMLElement>());
   useEffect(() => onSnapshot?.(snapshot), [snapshot, onSnapshot]);
   // The opened snapshot may already request data; Lean ignores repeated responses.
   useEffect(() => performAll(model.snapshot()), [model]);
+  useEffect(() => {
+    for (const effect of snapshot.effects) {
+      if ('focus' in effect) targets.current.get(effect.focus.key)?.focus();
+    }
+  }, [snapshot]);
 
   function send(event: Wire.Event): Wire.Snapshot {
     const next = model.send(event);
     setSnapshot(next);
-    setDrafts(drafts => new Map([...drafts].filter(([name]) => next.draftFields.includes(name))));
+    updateDrafts(new Map([...currentDrafts.current].filter(([name]) => next.draftFields.includes(name))));
     performAll(next);
     return next;
   }
 
-  function performAll(snapshot: Wire.Snapshot) {
-    for (const effect of snapshot.effects) void perform(effect);
+  function updateDrafts(next: ReadonlyMap<string, Draft>) {
+    currentDrafts.current = next;
+    setDrafts(next);
   }
 
-  async function perform(effect: Wire.Effect) {
+  function performAll(snapshot: Wire.Snapshot) {
+    for (const effect of snapshot.effects) {
+      if (!('focus' in effect)) void perform(effect);
+    }
+  }
+
+  async function perform(effect: Exclude<Wire.Effect, { focus: unknown }>) {
     const { url, ...request } = 'submit' in effect ? effect.submit.request : effect.fetch.request;
     let outcome: Wire.HttpOutcome;
     try {
@@ -81,17 +95,23 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
   function commit(name: string, argument: unknown): Wire.Snapshot | undefined {
     const next = send({ apply: { key: name, argument } });
     if (next.rejection !== null) return undefined;
-    setDrafts(drafts => withDraft(drafts, name, undefined));
+    updateDrafts(withDraft(currentDrafts.current, name, undefined));
     return next;
   }
 
   function commitDrafts(): boolean {
-    let current = snapshot;
-    for (const [name, draft] of drafts) {
+    let current = model.snapshot();
+    for (const [name, draft] of currentDrafts.current) {
       if (!current.draftFields.includes(name)) continue;
-      if (draft.error !== undefined) return false;
+      if (draft.error !== undefined) {
+        targets.current.get(name)?.focus();
+        return false;
+      }
       const next = commit(name, draft.text);
-      if (!next) return false;
+      if (!next) {
+        targets.current.get(name)?.focus();
+        return false;
+      }
       current = next;
     }
     return true;
@@ -101,7 +121,7 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
   function run(action: FormsReact.Action, argument?: unknown) {
     try {
       if (action === 'reset') {
-        setDrafts(new Map());
+        updateDrafts(new Map());
         send('reset');
       } else if (action === 'submit') {
         if (commitDrafts()) send('submit');
@@ -113,9 +133,19 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
 
   const context: LeanFormContext = {
     components,
-    draft: name => drafts.get(name)?.text,
-    draftError: name => drafts.get(name)?.error,
-    setDraft: (name, text, error) => setDrafts(drafts => withDraft(drafts, name, text, error)),
+    draft: name => currentDrafts.current.get(name)?.text,
+    draftError: name => currentDrafts.current.get(name)?.error,
+    registerTarget: (name, element) => {
+      if (element) targets.current.set(name, element); else targets.current.delete(name);
+    },
+    setDraft: (name, text, error) => {
+      const previousError = currentDrafts.current.get(name)?.error;
+      updateDrafts(withDraft(currentDrafts.current, name, text, error));
+      // Dropping a draft also retires errors reported by Lean on a rejected commit.
+      if (text === undefined || previousError !== error) {
+        send({ draft: { key: name, message: error ?? null } });
+      }
+    },
     run,
   };
   return <Context value={context}><Render component={snapshot.view} /></Context>;

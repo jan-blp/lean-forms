@@ -1,6 +1,7 @@
 module
 
 public import Forms.Runtime.ModelView
+public import Forms.Runtime.Feedback
 public import Forms.Runtime.Interaction
 public import Forms.Model.Requests
 
@@ -10,6 +11,12 @@ namespace Forms.Runtime.ModelForm
 inductive Effect where
   | submit
   | fetch (request : Model.HttpRequest)
+  | focus (key : ControlKey)
+  deriving BEq
+
+structure DraftDiagnostic where
+  control : ControlKey
+  diagnostic : Model.Diagnostic
   deriving BEq
 
 structure State {Γ : Model.Context} {α β : Type} (form : Model.Component Γ α β) where
@@ -20,6 +27,8 @@ structure State {Γ : Model.Context} {α β : Type} (form : Model.Component Γ �
   ui : Interaction.State
   serverFeedback : Option Feedback.ServerError
   outbox : List Effect
+  validationDiagnostics : List Model.Diagnostic
+  draftDiagnostics : List DraftDiagnostic := []
 
 variable {Γ : Model.Context} {α β : Type} {form : Model.Component Γ α β}
 
@@ -28,20 +37,47 @@ variable {Γ : Model.Context} {α β : Type} {form : Model.Component Γ α β}
 @[reducible] def State.cache (state : State form) : Model.HttpRequest.Cache := state.evaluation.cache
 @[reducible] def State.locals (state : State form) : form.LocalState := state.evaluation.locals
 
+def validationErrors
+  {model : Type}
+  [FormModel model]
+  [Model.Validation model]
+  (value : Model.Raw model)
+  : List Model.Diagnostic :=
+  (Model.errors (Model.Validation.validate (model := model) value)).map ModelView.error
+
 def openState
+  {Γ : Model.Context}
+  {model β : Type}
+  [FormModel model]
+  [Model.Validation model]
+  (form : Model.Component Γ (Model.Raw model) β)
+  (value : Model.Raw model)
+  (env : Model.Env Γ)
+  (cache : Model.HttpRequest.Cache := {})
+  (revision : Nat := 0)
+  : State form :=
+  let validationDiagnostics := validationErrors (model := model) value
+  { evaluation := ModelView.evaluate form value cache env form.initialState
+      validationDiagnostics revision
+    initial := value
+    initialEnv := env
+    ui := .initial
+    serverFeedback := none
+    outbox := []
+    validationDiagnostics }
+
+def refresh
   {Γ : Model.Context}
   {α β : Type}
   (form : Model.Component Γ α β)
-  (value : α)
-  (env : Model.Env Γ)
-  (cache : Model.HttpRequest.Cache := {})
-  : State form where
-  evaluation := ModelView.evaluate form value cache env form.initialState
-  initial := value
-  initialEnv := env
-  ui := .initial
-  serverFeedback := none
-  outbox := []
+  (state : State form)
+  : State form :=
+  let diagnostics := state.draftDiagnostics.map (·.diagnostic) ++
+    (state.serverFeedback.map (·.errors)).getD state.validationDiagnostics
+  if diagnostics == state.evaluation.diagnostics then state else
+    { state with
+      evaluation := ModelView.evaluate form state.value state.cache state.env state.locals
+        diagnostics (state.evaluation.revision + 1) }
 
 /-- Marks the requests `form` reads but has not loaded as loading, and queues them. -/
 def load
@@ -53,22 +89,31 @@ def load
   let missing := (state.evaluation.requests.filter (!state.cache.contains ·)).eraseDups
   if missing.isEmpty then state else
     let cache := missing.foldl (fun cache request => cache.insert request .loading) state.cache
+    let evaluation := ModelView.evaluate form state.value cache state.env state.locals
+      state.evaluation.diagnostics (state.evaluation.revision + 1)
+    let outbox := state.outbox.filter fun
+      | .focus key => evaluation.view.controls.any
+          (fun control => control.key == key && control.editable)
+      | _ => true
     { state with
-      evaluation := ModelView.evaluate form state.value cache state.env state.locals
-      outbox := state.outbox ++ missing.map .fetch }
+      evaluation
+      outbox := outbox ++ missing.map .fetch }
 
 /-- Starts over from `initial`, keeping loaded responses; failed requests are retried. -/
 def restart
   {Γ : Model.Context}
-  {α β : Type}
-  {form : Model.Component Γ α β}
+  {model β : Type}
+  [FormModel model]
+  [Model.Validation model]
+  {form : Model.Component Γ (Model.Raw model) β}
   (state : State form)
   : State form :=
   let cache := state.cache.filter fun _ response => match response with
     | .failed _ => false
     | .loading => true
     | .loaded _ => true
-  openState form state.initial state.initialEnv cache
+  openState (model := model) form state.initial state.initialEnv cache
+    (state.evaluation.revision + 1)
 
 inductive SubmitOutcome where
   | accepted
@@ -78,18 +123,11 @@ inductive SubmitOutcome where
 -- Message from Ts to Lean (see `Wire.Event` for the serialized type)
 inductive Event where
   | apply (key : ControlKey) (argument : Option Input)
+  | draft (key : ControlKey) (message : Option String)
   | submit
   | reset
   | submitted (outcome : SubmitOutcome)
   | loaded (request : Model.HttpRequest) (response : Except String Lean.Json)
-
-def validationErrors
-  {model : Type}
-  [FormModel model]
-  [Model.Validation model]
-  (value : Model.Raw model)
-  : List Feedback.Error :=
-  (Model.errors (Model.Validation.validate (model := model) value)).map ModelView.error
 
 -- Message from Lean to Ts (see `Wire.Snapshot` for the serialized type)
 structure Snapshot (α : Type) where
@@ -97,23 +135,20 @@ structure Snapshot (α : Type) where
   controls : List Display.Control
   value : α
   ui : Interaction.State
-  errors : List Feedback.Error
+  errors : List Model.Diagnostic
   effects : List Effect
 
-def snapshot {Γ : Model.Context}
-  {model β : Type}
-  [FormModel model]
-  [Model.Validation model]
-  (form : Model.Component Γ (Model.Raw model) β)
+def snapshot
+  {Γ : Model.Context}
+  {α β : Type}
+  (form : Model.Component Γ α β)
   (state : State form)
-  : Snapshot (Model.Raw model) :=
-  let errors := validationErrors (model := model) state.value
-  let visible := match state.serverFeedback with
-    | some feedback => feedback.errors
-    | none => errors
-  let view := if visible.isEmpty then state.evaluation.view else state.evaluation.feedback visible
-  { view, controls := view.controls, value := state.value,
-    ui := state.ui, errors,
+  : Snapshot α :=
+  { view := state.evaluation.view
+    controls := state.evaluation.view.controls
+    value := state.value
+    ui := state.ui
+    errors := state.validationDiagnostics
     effects := state.outbox }
 
 inductive StaleError where
@@ -159,43 +194,66 @@ def validateAction
 
 def applyUpdate
   {Γ : Model.Context}
-  {α β : Type}
-  (form : Model.Component Γ α β)
+  {model β : Type}
+  [FormModel model]
+  [Model.Validation model]
+  (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
-  (updated : Model.ComponentUpdate Γ α form.LocalState)
+  (updated : Model.ComponentUpdate Γ (Model.Raw model) form.LocalState)
   : State form :=
+  let validationDiagnostics := validationErrors (model := model) updated.value
+  let diagnostics := state.draftDiagnostics.map (·.diagnostic) ++ validationDiagnostics
+  let evaluation := ModelView.evaluate form updated.value state.cache updated.state updated.locals
+    diagnostics (state.evaluation.revision + 1)
+  let focus := updated.visit.bind fun destination =>
+    if destination.revision == state.evaluation.revision && !updated.invalidatesDestinations
+    then evaluation.view.resolve destination.locations else none
   { state with
-    evaluation := ModelView.evaluate form updated.value state.cache updated.state updated.locals
+    evaluation
+    validationDiagnostics
     serverFeedback := none
+    outbox := state.outbox ++ focus.toList.map .focus
     ui := { state.ui with notice := .info "", resultVisible := false } }
 
 def apply
   {Γ : Model.Context}
-  {α β : Type}
-  (form : Model.Component Γ α β)
+  {model β : Type}
+  [FormModel model]
+  [Model.Validation model]
+  (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
   (key : ControlKey)
   (argument : Option Input)
   : Except Rejection (State form) := do
-  return applyUpdate form state (← validateAction form state key argument)
+  let updated ← validateAction form state key argument
+  let state := { state with draftDiagnostics := state.draftDiagnostics.filter (·.control != key) }
+  let state := applyUpdate (model := model) form state updated
+  let drafts := state.draftDiagnostics.filter fun draft =>
+    state.evaluation.view.controls.any (·.key == draft.control)
+  return refresh form { state with draftDiagnostics := drafts }
 
 def submit
   {Γ : Model.Context}
-  {model β : Type}
-  [FormModel model]
-  [Model.Validation model]
-  {form : Model.Component Γ (Model.Raw model) β}
+  {α β : Type}
+  {form : Model.Component Γ α β}
   (state : State form)
   : State form :=
   if state.ui.pending then state else
-  let errors := validationErrors (model := model) state.value
-  let state := { state with serverFeedback := none }
-  if errors.isEmpty then
+  let errors := state.validationDiagnostics
+  let state := refresh form { state with serverFeedback := none }
+  if errors.isEmpty && state.draftDiagnostics.isEmpty then
     { state with
       ui := { state.ui with pending := true, notice := .info "Submitting…" }
       outbox := state.outbox ++ [.submit] }
   else
-    { state with ui := state.ui.announce (Feedback.summary errors) true }
+    let diagnostics := state.draftDiagnostics.map (·.diagnostic) ++ errors
+    let locations := diagnostics.flatMap fun diagnostic => match diagnostic.targets with
+      | .global => []
+      | .locations first rest => first :: rest
+    let focus := state.evaluation.view.resolve locations
+    { state with
+      ui := state.ui.announce (Model.Diagnostic.summary diagnostics) true
+      outbox := state.outbox ++ focus.toList.map .focus }
 
 def event {Γ : Model.Context}
   {model β : Type}
@@ -207,24 +265,47 @@ def event {Γ : Model.Context}
   let state := { state with ui := { state.ui with rejection := none } }
   match event with
   | .apply key argument =>
-    match apply form state key argument with
+    match apply (model := model) form state key argument with
     | .ok state => pure state
     | .error (.clientBug error) => throw (toString error)
     | .error rejection =>
       let message := toString rejection
       let ui := if state.ui.pending then state.ui else state.ui.announce message true
-      pure { state with ui := { ui with rejection := some message } }
-  | .submit => pure (submit (model := model) state)
+      let diagnostics := match rejection with
+        | .input _ => match state.evaluation.view.controls.find? (·.key == key) with
+          | none => state.draftDiagnostics
+          | some control =>
+            { control := key
+              diagnostic := { message, targets := .locations control.location [] } } ::
+              state.draftDiagnostics.filter (·.control != key)
+        | _ => state.draftDiagnostics
+      pure (refresh form { state with
+        draftDiagnostics := diagnostics
+        ui := { ui with rejection := some message } })
+  | .draft key message =>
+    if state.ui.pending then return state
+    let some control := state.evaluation.view.controls.find? (·.key == key) | return state
+    if control.disabled then return state
+    let .text .. := control.input | return state
+    let diagnostics := state.draftDiagnostics.filter (·.control != key)
+    let diagnostics := match message with
+      | none => diagnostics
+      | some message =>
+        { control := key
+          diagnostic := { message, targets := .locations control.location [] } } :: diagnostics
+    pure (refresh form { state with draftDiagnostics := diagnostics })
+  | .submit => pure (submit state)
   | .reset => pure (if state.ui.pending then state else
-      { restart state with ui := { Interaction.State.initial with notice := .info "Started over." } })
+      { restart (model := model) state with
+        ui := { Interaction.State.initial with notice := .info "Started over." } })
   | .submitted outcome =>
     if !state.ui.pending then return state
     match outcome with
     | .accepted => pure { state with ui := { state.ui with
         pending := false, resultVisible := true, notice := .info "Submitted successfully." } }
-    | .rejected feedback => pure { state with
+    | .rejected feedback => pure (refresh form { state with
         serverFeedback := some feedback
-        ui := { (state.ui.announce feedback.message true) with pending := false } }
+        ui := { (state.ui.announce feedback.message true) with pending := false } })
     | .unreachable message =>
       pure { state with ui := { (state.ui.announce message true) with pending := false } }
   | .loaded request response =>
@@ -233,7 +314,10 @@ def event {Γ : Model.Context}
       let cached := match response with
         | .ok json => .loaded json
         | .error message => .failed message
-      pure { state with evaluation := ModelView.evaluate form state.value (state.cache.insert request cached) state.env state.locals }
+      pure { state with
+        evaluation := ModelView.evaluate form state.value
+          (state.cache.insert request cached) state.env state.locals state.evaluation.diagnostics
+          (state.evaluation.revision + 1) }
     | _ => pure state
 
 def execute {Γ : Model.Context}
@@ -243,7 +327,21 @@ def execute {Γ : Model.Context}
   (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
   (input : Event)
-  : Except String (State form) :=
-  load form <$> event (model := model) form { state with outbox := [] } input
+  : Except String (State form) := do
+  let state := { state with outbox := [] }
+  let state ← event (model := model) form state input
+  let state := load form state
+  let drafts := state.draftDiagnostics.filter fun draft =>
+    state.evaluation.view.controls.any fun control =>
+      control.key == draft.control && !control.disabled && match control.input with
+        | .text .. => true
+        | _ => false
+  let state := if drafts == state.draftDiagnostics then state
+    else load form (refresh form { state with draftDiagnostics := drafts })
+  let outbox := state.outbox.filter fun
+    | .focus key => state.evaluation.view.controls.any
+        (fun control => control.key == key && control.editable)
+    | _ => true
+  return { state with outbox }
 
 end Forms.Runtime.ModelForm

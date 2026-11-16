@@ -1,7 +1,7 @@
 module
 
 public import Forms.Runtime.Identity
-public import Forms.Runtime.Feedback
+public import Forms.Model.Diagnostic
 public import Forms.Model.Format
 
 @[expose] public section
@@ -142,5 +142,21 @@ def View.title (view : View) : String :=
     | .computed label .. => label
     | _ => ""
   if label.isEmpty then "Form" else label
+
+def Control.editable (control : Control) : Bool :=
+  !control.disabled && match control.input with
+    | .action => false
+    | .tabs .. => false
+    | _ => true
+
+def View.resolve
+  (view : View)
+  (locations : List ErasedLocation)
+  : Option ControlKey :=
+  let controls := view.controls.filter Control.editable
+  let exact := controls.find? fun control => locations.contains control.location
+  let descendant := controls.find? fun control =>
+    locations.any (·.isPrefixOf control.location)
+  (exact.orElse fun _ => descendant).map (·.key)
 
 end Forms.Runtime.Display

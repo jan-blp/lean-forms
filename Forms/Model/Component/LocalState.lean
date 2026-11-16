@@ -18,6 +18,7 @@ def ComponentNode.initialState
   | .button .. => ()
   | .tabBar .. => ()
   | .output .. => ()
+  | .issues => ()
   | .withAvailability _ body => body.initialState
   | .select (decidableEq := _) (key := _) .. => ()
   | .collection .. => []

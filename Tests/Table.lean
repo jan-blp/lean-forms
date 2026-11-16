@@ -28,13 +28,14 @@ private def apply (state : State) (label : String) (argument : Option Input) (nt
   execute state (.apply (← key state label nth) argument)
 
 def run : IO Unit := do
-  let opened := ModelForm.openState ExpenseReport.form ExpenseReport.initial Env.nil
+  let opened := ModelForm.openState (model := ExpenseReport)
+    ExpenseReport.form ExpenseReport.initial Env.nil
   check "TableHeadersAndRows" (match (rendered opened).view with
     | .stack (children := [_, .table "Expenses" headers rows .., _]) .. =>
       headers == ["Description", "Amount (CHF)", "Receipt", "Actions"] &&
       rows.map (·.cells.length) == [4, 4] && rows.map (·.label) == ["Expense 1", "Expense 2"]
     | _ => false)
-  let wire := (ModelForm.snapshot (model := ExpenseReport) ExpenseReport.form opened).view.toReact false
+  let wire := (ModelForm.snapshot ExpenseReport.form opened).view.toReact false
   check "TableHiddenCellKeepsColumn" (match wire with
     | some (.group { children := [_, .table table, _], .. }) =>
       match table.rows with
@@ -54,7 +55,8 @@ def run : IO Unit := do
   let visible ← apply edited "Amount (CHF)" (some (.text "100"))
   check "TableCellVisibility" (((rendered visible).controls.filter (·.label == "Receipt attached")).length == 2)
   let disabled := Component.disabledWhen (.const true) ExpenseReport.form
-  let disabledState ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) disabled (ModelForm.openState disabled ExpenseReport.initial Env.nil)
+  let disabledState ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) disabled
+    (ModelForm.openState (model := ExpenseReport) disabled ExpenseReport.initial Env.nil)
     (.apply (← key opened "Remove") none))
   check "TableDisabledRemoveRejects"
     (disabledState.ui.rejection == some (toString InvocationError.disabled) &&
@@ -77,7 +79,7 @@ def run : IO Unit := do
     (toJson added.value.expenses == toJson ([⟨"", 0, false⟩] : List Expense.Raw))
   let validated ← execute added .submit
   check "TableValidatesCells"
-    ((ModelForm.snapshot (model := ExpenseReport) ExpenseReport.form validated).errors.map (·.message) ==
+    ((ModelForm.snapshot ExpenseReport.form validated).errors.map (·.message) ==
       ["Describe the expense.", "Enter an amount of at least CHF 1."])
   let request (amount : Nat) : HttpRequest := { method := .post, url := s!"/api/expense/{amount}", body := none }
   let loading : Component [] ExpenseReport.Raw := Component.void <| .table

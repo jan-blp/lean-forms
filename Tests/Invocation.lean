@@ -87,25 +87,26 @@ def run : IO Unit := do
   check "InvocationWrongArgument"
     (rejected Person.form Person.initial (keyOf Person.form Person.initial "Age") (some (.boolean true))
       == clientBug (.wrongArgument "text"))
-  let opened := ModelForm.openState Person.form Person.initial Env.nil
+  let opened := ModelForm.openState (model := Person) Person.form Person.initial Env.nil
   let age := keyOf Person.form Person.initial "Age"
-  let initiallyInvalid := ModelForm.openState Person.form { Person.initial with age := 150 } Env.nil
-  let initialSnapshot := ModelForm.snapshot (model := Person) Person.form initiallyInvalid
+  let initiallyInvalid := ModelForm.openState (model := Person) Person.form
+    { Person.initial with age := 150 } Env.nil
+  let initialSnapshot := ModelForm.snapshot Person.form initiallyInvalid
   check "ValidationVisibleOnOpen"
     ((initialSnapshot.controls.find? (·.label == "Age")).bind (·.messages) == some "Age must be at most 120." &&
       initiallyInvalid.outbox.isEmpty)
   let edited ← IO.ofExcept (ModelForm.execute (model := Person) Person.form opened (.apply age (some (.text "150"))))
-  let editedSnapshot := ModelForm.snapshot (model := Person) Person.form edited
+  let editedSnapshot := ModelForm.snapshot Person.form edited
   check "ValidationVisibleBeforeSubmit"
     ((editedSnapshot.controls.find? (·.label == "Age")).bind (·.messages) == some "Age must be at most 120." &&
       edited.outbox.isEmpty && !edited.ui.pending)
   let corrected ← IO.ofExcept (ModelForm.execute (model := Person) Person.form initiallyInvalid (.apply age (some (.text "21"))))
-  let correctedSnapshot := ModelForm.snapshot (model := Person) Person.form corrected
+  let correctedSnapshot := ModelForm.snapshot Person.form corrected
   check "ValidationClearsBeforeSubmit"
     correctedSnapshot.errors.isEmpty
   let reset ← IO.ofExcept (ModelForm.execute (model := Person) Person.form corrected .reset)
   check "ResetKeepsInitialValidationVisible"
-    (((ModelForm.snapshot (model := Person) Person.form reset).controls.find? (·.label == "Age")).bind (·.messages)
+    (((ModelForm.snapshot Person.form reset).controls.find? (·.label == "Age")).bind (·.messages)
       == some "Age must be at most 120.")
   check "EventInputRejects"
     ((ModelForm.event (model := Person) Person.form opened (.apply age (some (.text "abc")))).toOption.bind

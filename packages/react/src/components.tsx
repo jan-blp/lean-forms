@@ -41,7 +41,10 @@ export function TextField(
   // A picked date applies at once; the date input reports "" while a typed date is incomplete.
   return (
     <form className="editor" noValidate onSubmit={event => { event.preventDefault(); commit(); }}>
-      <label>{label}<input ref={input} {...inputs[kind]} value={draft ?? value}
+      <label>{label}<input ref={element => {
+        input.current = element;
+        form.registerTarget(name, element);
+      }} {...inputs[kind]} value={draft ?? value}
         disabled={disabled}
         aria-invalid={message === null ? undefined : true} aria-describedby={message === null ? undefined : feedback}
         onInput={kind === 'date' ? event => change(event.currentTarget) : undefined}
@@ -57,12 +60,13 @@ export function TextField(
   );
 }
 
-export function Checkbox({ label, checked, disabled, error, onChange }: FormsReact.Checkbox) {
+export function Checkbox({ name, label, checked, disabled, error, onChange }: FormsReact.Checkbox) {
   const form = useLeanForm();
   const feedback = useId();
   return (
     <form className="editor" noValidate onSubmit={event => event.preventDefault()}>
-      <label>{label}<input type="checkbox" checked={checked} disabled={disabled}
+      <label>{label}<input ref={element => form.registerTarget(name, element)}
+        type="checkbox" checked={checked} disabled={disabled}
         aria-invalid={error === null ? undefined : true} aria-describedby={error === null ? undefined : feedback}
         onChange={event => form.run(onChange, event.target.checked)} /></label>
       {error !== null && <p className="validation-error" id={feedback}>{error}</p>}
@@ -74,7 +78,9 @@ export function Choice({ name, label, value, options, disabled, error, onChange 
   const form = useLeanForm();
   const feedback = useId();
   return (
-    <fieldset className="choice" aria-invalid={error === null ? undefined : true}
+    <fieldset ref={element => form.registerTarget(name,
+      element?.querySelector<HTMLInputElement>('input:checked') ?? element?.querySelector('input') ?? null)}
+      className="choice" aria-invalid={error === null ? undefined : true}
       aria-describedby={error === null ? undefined : feedback}>
       <legend>{label}</legend>
       {options.map(option =>
@@ -86,14 +92,16 @@ export function Choice({ name, label, value, options, disabled, error, onChange 
   );
 }
 
-export function Choices({ label, values, options, disabled, error, onChange }: FormsReact.Choices) {
+export function Choices({ name, label, values, options, disabled, error, onChange }: FormsReact.Choices) {
   const form = useLeanForm();
   const feedback = useId();
   const toggle = (value: string, checked: boolean) => form.run(onChange,
     options.map(option => option.value)
       .filter(option => option === value ? checked : values.includes(option)));
   return (
-    <fieldset className="choice" aria-invalid={error === null ? undefined : true}
+    <fieldset ref={element => form.registerTarget(name,
+      element?.querySelector<HTMLInputElement>('input:checked') ?? element?.querySelector('input') ?? null)}
+      className="choice" aria-invalid={error === null ? undefined : true}
       aria-describedby={error === null ? undefined : feedback}>
       <legend>{label}</legend>
       {options.map(option =>

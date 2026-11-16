@@ -43,11 +43,12 @@ def FormDefinition.ofModel
   Raw := Model.Raw model
   initial := toJson initial
   openState value := do
-    let state := ModelForm.load form (ModelForm.openState form (← fromJson? value) Model.Env.nil)
-    pure (state, ModelForm.snapshot (model := model) form state)
+    let state := ModelForm.load form
+      (ModelForm.openState (model := model) form (← fromJson? value) Model.Env.nil)
+    pure (state, ModelForm.snapshot form state)
   execute state input := do
     let state ← ModelForm.execute (model := model) form state input
-    pure (state, ModelForm.snapshot (model := model) form state)
+    pure (state, ModelForm.snapshot form state)
   verify name fingerprint json := do
     let value ← (decodeSubmission (Model.Raw model) name fingerprint json).mapError fun message =>
       Json.mkObj [("kind", toJson "request"), ("message", toJson message)]
@@ -57,7 +58,7 @@ def FormDefinition.ofModel
       let errors := errors.map ModelView.error
       throw (.mkObj [
         ("kind", toJson "validation"),
-        ("message", toJson (Feedback.summary errors)),
+        ("message", toJson (Model.Diagnostic.summary errors)),
         ("errors", toJson (errors.map FeedbackProtocol.errorToJson))])
 
 structure RegisteredForm where

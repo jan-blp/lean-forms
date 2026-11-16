@@ -177,7 +177,7 @@ test('Lean shows validation before submission and handles server feedback and re
     assert.deepEqual(messages(model.snapshot().view), ['Age must be at most 120.']);
     assert.deepEqual(model.snapshot().effects, []);
     model.send('submit');
-    assert.deepEqual(model.snapshot().effects, []);
+    assert.deepEqual(model.snapshot().effects, [{ focus: { key: quantity.key } }]);
     assert.ok(messages(model.snapshot().view).length);
     assert.equal(status(model), 'Age must be at most 120.');
     model.send({ apply: { key: quantity.key, argument: '2' } });

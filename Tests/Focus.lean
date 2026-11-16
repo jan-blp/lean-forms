@@ -84,8 +84,8 @@ def run : IO Unit := do
     (phoneControl.location == [.constructor "express", .field "phone"])
   let changed ← IO.ofExcept ((perform phone express phoneControl.key (some (.text "079")) Env.nil).mapError toString)
   check "FocusWritesConstructorPayload" (toJson changed == toJson (Shipping.Raw.express ⟨⟨"Main", "Bern"⟩, "079"⟩))
-  let invalid := ModelForm.openState phone express Env.nil
-  let snapshot := ModelForm.snapshot (model := Shipping) phone invalid
+  let invalid := ModelForm.openState (model := Shipping) phone express Env.nil
+  let snapshot := ModelForm.snapshot phone invalid
   check "FocusMatchesValidationMessages"
     (snapshot.controls.head?.bind (·.messages) == some "Enter a phone number for the courier.")
   -- A selected-item focus works by itself, with no table in the component tree.
@@ -102,8 +102,8 @@ def run : IO Unit := do
       edited.employee == selected.employee)
   let invalidValue : ExpenseReport.Raw := { selected with
     expenses := [⟨"Train to Bern", 58, false⟩, ⟨"", 180, true⟩] }
-  let invalidState := ModelForm.openState details invalidValue selectedUi
-  let invalidDetails := ModelForm.snapshot (model := ExpenseReport) details invalidState
+  let invalidState := ModelForm.openState (model := ExpenseReport) details invalidValue selectedUi
+  let invalidDetails := ModelForm.snapshot details invalidState
   check "FocusListValidationLocation"
     (invalidDetails.controls.head?.bind (·.messages) == some "Describe the expense." &&
       detail.location == [.field "expenses", .index 1, .field "description"])

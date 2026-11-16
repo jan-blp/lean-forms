@@ -14,6 +14,7 @@ inductive HttpOutcome where
 
 inductive Event where
   | apply (key : String) (argument : Json)
+  | draft (key : String) (message : Option String)
   | submit
   | reset
   | submitted (outcome : HttpOutcome)
@@ -49,6 +50,7 @@ structure HttpEffect where
   deriving ToJson, FromJson
 
 inductive Effect where
+  | focus (key : String)
   /-- Answered by `submitted`. -/
   | submit (request : HttpEffect)
   /-- Answered by `fetched` with `id`. -/

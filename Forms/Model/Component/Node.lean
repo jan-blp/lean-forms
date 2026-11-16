@@ -129,6 +129,9 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       {α β : Type}
       (value : Computation Γ α β)
       : ComponentNode Γ α Unit β 0
+  | issues {Γ : Context}
+      {α : Type}
+      : ComponentNode Γ α Unit (List Issue) 0
   /-- Shows `row` for each item at `path` as `display` says, then the content of its hole. -/
   | collection {Γ : Context}
       {α β γ rowState : Type}

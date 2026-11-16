@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.Context
+public import Forms.Model.Diagnostic
 
 @[expose] public section
 namespace Forms.Model
@@ -25,6 +26,8 @@ structure ComponentUpdate (Γ : Context) (α localState : Type) where
   value : α
   state : Env Γ
   locals : localState
+  visit : Option Destination := none
+  invalidatesDestinations : Bool := false
 
 def ComponentUpdate.mapValue
   {Γ : Context}

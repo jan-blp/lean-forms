@@ -1,0 +1,274 @@
+#+title: Component operations and error navigation
+
+* Status
+
+Design proposal with an experimental implementation. Public signatures are not
+settled; general message handles remain illustrative. The prototype findings at
+the end describe the implemented parts and their current limits.
+
+* Motivation
+
+Outputs let a parent observe a child without exposing its private state. We need
+the corresponding ability to ask a child to do something without exposing that
+state.
+
+A child might need to select a row, change tabs, or open a section before a field
+can receive focus. Its parent should not need to know how that private state is
+represented.
+
+The starting point is *issues as observable data and navigation as an ordinary
+action*. Components can expose navigation operations through their outputs when
+revealing a destination requires access to private state.
+
+* Issues as ordinary output
+
+An =.issues= source produces =List Issue= as its ordinary component output, without
+a view. Authors can observe it, compute counts, combine it with other outputs,
+or pass it to another component.
+
+Its public shape is:
+
+#+begin_src lean
+Component Γ α (List Issue)
+#+end_src
+
+Issues use the existing output parameter and the same =own=, =observe=, and
+composition mechanisms as any other result. There is no separate issue-output
+channel or implicit aggregation of child outputs.
+
+The built-in part is how the source obtains its value: it reads the current
+diagnostics scoped to its model location. *Diagnostics are an evaluation input;
+=.issues= exposes them as ordinary output.* Consumers need no special access to
+the runtime.
+
+Its scope follows the evaluated model location and ownership. Under a model
+focus it describes that part of the model; inside a collection row it describes
+that row. Moving its presentation must not change what it observes. Targets
+remain meaningful when issues flow out through observation or collection outputs.
+
+Current issues become an evaluation input. Inline messages consume that same
+input, allowing the separate =NodeEvaluation.feedback= pass to be removed.
+Validation depends on the raw model value; rendering depends on both the model
+and the diagnostic input. New server feedback or changed draft diagnostics must
+refresh issue-dependent outputs, views, and requests even when the model value
+has not changed.
+
+The source exposes current issues independently of whether a summary is shown.
+Submission-attempt state is observed separately, so authors can choose when to
+show a summary without hiding issues from counts or other consumers.
+
+** Draft diagnostics
+
+Model validation cannot observe a rejected numeric draft or an incomplete browser
+date, because neither is represented in the raw model value.
+
+To include them in =.issues=, the frontend must supply transient diagnostics as
+an input to the Lean runtime. Their source owns their lifecycle: an edit,
+successful commit, control removal, or reset must update or clear them as
+appropriate. They must not be stored in the submitted model or change the
+meaning of model validation.
+
+The protocol must handle this boundary explicitly. The prototype below explores
+a transient diagnostic event from the frontend.
+
+* Navigation action
+
+An ordinary action requests a visit to a destination. The request is carried
+through =ComponentUpdate=, alongside model and UI changes, and resolved after
+those changes have been applied.
+
+This supports actions such as activating a tab and then visiting a field in it.
+Resolution uses the resulting component state and view. It must not require the
+target to have been visible before the action.
+
+Model error locations and UI destinations remain distinct. Resolution can prefer
+an exact editable target, then an eligible descendant for a record or row-level
+error. It must consider all applicable targets of a multi-target issue, rather
+than always selecting its first target. Eligibility and ordering are explicit
+policies; unresolved or global errors can remain plain summary entries.
+
+* Component operations
+
+Explicit reveal hooks may be enough for navigation. A general typed operation
+mechanism is a candidate if the composition examples require it, rather than a
+prerequisite for observing issues or focusing visible controls:
+
+1. A component installs a handler for a typed message.
+2. It receives an opaque handle for sending those messages.
+3. The handle can be included in its ordinary output.
+4. An action sends a message through a handle.
+5. The handler executes against the owning component's current state.
+
+Schematically:
+
+#+begin_src lean
+structure AddressOutput where
+  summary : String
+  visit : Handle AddressDestination
+#+end_src
+
+The parent can read =summary= and request =visit=. It cannot inspect or modify
+the address component's private tab or selection variables.
+
+Existing ownership, observation, and output composition remain useful. There
+should be no parallel system for exporting navigation, and ordinary components
+should not need to change their output types unless they expose operations.
+
+* Rendering issues
+
+A summary should be a convenience built from ordinary components. A read-only
+collection over a =Computation=, with arbitrary row presentation, would let
+authors render issue messages and navigation buttons without a dedicated
+=issueList= node in the core. The same collection could render other computed
+lists.
+
+The collection needs explicit item-identity semantics. An old row action must
+not silently address a different issue after the list changes.
+
+* Navigation as an application
+
+Visiting a destination composes two operations:
+
+1. Reveal it through the component hierarchy.
+2. Request focus from the renderer once the resulting view is mounted.
+
+A tabbed component reveals a destination by activating the appropriate tab. A
+table editor selects the appropriate row. A custom accordion opens its section.
+These should be ordinary uses of the mechanism, without special cases in the
+form runtime for each container.
+
+The owner supplies its reveal operation explicitly. The runtime should not search
+possible tab values or try to invert arbitrary visibility computations. Nested
+containers compose their reveal operations before the final focus request.
+
+Error navigation resolves diagnostics to destinations and requests a visit.
+Browser errors, Lean parsing errors, and model or server validation errors should
+use the same navigation mechanism while retaining their existing responsibilities.
+
+The default submission policy can focus the first invalid, reachable, enabled
+control in rendered order. Typing and blur can show errors without moving focus.
+Drafts remain intact. Errors with no focusable destination remain in the summary.
+
+* Boundaries and invariants
+
+- *Error locations describe data; destinations identify places in the UI.*
+  Resolution connects them. One validation error may have several destinations,
+  or none.
+
+- *Ownership determines identity; layout determines presentation.* Moving a
+  component must preserve its destination. Choosing the first error in visual
+  order is a policy applied to the current layout.
+
+- *Issue scope is independent of placement.* An unplaced producer can still
+  expose issues, just as it can expose other output. Observation alone does not
+  make its targets visible or reachable.
+
+- *Revealability is explicit.* Navigation must not automatically override
+  arbitrary visibility or disabled rules.
+
+- *Observation stays pure.* Producing or reading a handle does nothing. Only an
+  explicit action invokes it.
+
+- *Handlers use current state.* A handle identifies its owner; it does not capture
+  a historical copy of that owner's environment.
+
+- *Stale requests fail safely.* A handle for a removed row must never silently
+  target its replacement. An absolute location containing an index is not a
+  stable identity, and making it opaque does not solve this. Snapshot-scoped
+  destinations need freshness checks; destinations that survive updates need
+  stable owner identity. The chosen lifetime must be explicit.
+
+- *Lean handles revealing; the renderer handles actual focus.* Focus occurs after
+  the resulting view is mounted, once per request. The renderer does not inspect
+  the component's private state to decide which tab or row to activate.
+
+* Implementation concern
+
+Simply exporting an =Action= that closes over a child's environment is insufficient.
+It could capture stale state or leak the child's scope. Invocation needs to route
+back to the owning component and execute in its latest environment.
+
+The representation and lifetime of handles, their routing through ownership, and
+their interaction with availability need to be worked out before fixing the
+combinator signatures. First establish whether explicit reveal hooks suffice;
+introduce general message handles only if they improve the composition examples.
+
+* Design exercise
+
+Work out the API using an editor that exports both a normal result and navigation,
+nested inside tabs and repeated rows.
+
+The example should compose without manual IDs, exposed private variables, or
+changes to unrelated components' output types. It should support a custom
+container through the same public mechanism used by the standard containers.
+
+Also check that issue counts survive layout reordering, navigation resolves after
+UI changes, and removing a row invalidates its old destinations. These examples
+should determine the necessary primitives and their lifetime rules.
+
+This is the test of whether the abstraction fits the existing component system.
+
+* Prototype findings
+
+** Implemented
+
+- =Component.issues= is a =Component Γ α (List Issue)= with no view. It works
+  through ordinary observation, focus, collection outputs, and unplaced panes.
+- Diagnostics are an evaluation input; =NodeEvaluation.feedback= is removed.
+  Inline messages and issue outputs read the same diagnostics.
+- Model errors, server feedback, rejected Lean input, and browser-reported draft
+  errors feed the source. =Wire.Event.draft= carries transient browser messages
+  without changing the model. Committing, resetting, removing, or disabling a
+  control clears the corresponding draft diagnostics.
+- React updates draft bookkeeping synchronously between handler calls. Returning
+  to committed text explicitly clears any rejected-input diagnostic in Lean.
+- =Action.visit= requests a destination. Requests survive context and local-state
+  wrappers and resolve against the resulting view. Focus effects are interpreted
+  after React renders, using a registry local to each form.
+- A failed submit requests focus for an invalid visible control. Browser draft
+  failures also focus their controls when they block submission.
+- Submit and =visit= share location resolution: editable exact targets first,
+  then editable descendants, with rendered order breaking ties.
+- Model validation is cached at open/reset and after each successful action,
+  using the model's =Validation= instance. Diagnostic refreshes combine the
+  cached result with server/draft diagnostics; snapshots only read prepared state.
+
+The =navigation= example in =Forms/ExampleForms/Navigation.lean= observes root and
+address-scoped issues, displays a summary using an ordinary computed component,
+and activates a private tab before visiting its address issue:
+
+#+begin_src sh
+lake -q exe forms-web navigation --open
+#+end_src
+
+** What the experiment established
+
+Issue observation fits the current output machinery without another export
+channel. Scoping follows model focus; an unplaced pane can still supply issues.
+Server and draft diagnostic changes refresh consumers even when the raw model
+does not change.
+
+An explicit =set activeTab ... ++ visit destination= works because resolution
+happens after the action. Focus is an event effect, so subsequent draft renders
+do not repeat it.
+
+** Limits and next experiments
+
+- Destinations currently contain absolute locations and an evaluation revision.
+  Saved destinations from an older revision are ignored. This is conservative:
+  an unrelated state change also invalidates a saved destination. It establishes
+  snapshot-scoped behavior, not persistent component identity or general handles.
+- Revealing currently requires authoring the action where the owner's private
+  state is in scope. An outside parent receiving only an issue cannot activate
+  that private tab. The next composition exercise is an owner-supplied reveal
+  operation that an outside parent can invoke without learning the owner's
+  variables. The local action example does not settle that design.
+- A generic read-only collection is not implemented. The example uses existing
+  computed and button components; rendering an arbitrary list of issue links
+  still needs the collection and item-identity design described above.
+- Successful actions still validate once even when they only change UI state.
+  Skipping those calls would require distinguishing model updates without
+  imposing equality or serialization requirements on raw model values.
+- Before sending submit, React flushes drafts and stops at the first rejected
+  draft. This preflight behavior remains separate from Lean's shared location
+  resolver; any unification must preserve the draft-flushing semantics.

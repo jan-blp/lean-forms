@@ -13,10 +13,10 @@ theorem render_keys_nodup
   (component : Model.Component Γ α β)
   (value : α)
   (cache : Model.HttpRequest.Cache)
-  (errors : List Feedback.Error)
+  (errors : List Model.Diagnostic)
   (state : Model.Env Γ)
   : ((render component value cache errors state).controls.map (·.key)).Nodup := by
   unfold render evaluate
-  split <;> exact Display.View.dedupe_keys_nodup _
+  exact Display.View.dedupe_keys_nodup _
 
 end Forms.Runtime.ModelView

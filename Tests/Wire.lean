@@ -28,6 +28,7 @@ def run : IO Unit := do
   check "Nullable field must be present" (((toJson absent).getObjVal? "required").toOption == some Json.null)
   check "Optional field must be omitted" (!((toJson absent).getObjVal? "omitted").isOk)
   for event in [Event.apply "key" Json.null, .apply "key" (toJson "12"),
+      .draft "key" (some "Incomplete"), .draft "key" none,
       .submit, .reset, .submitted (.response 200 "ok"), .submitted (.unreachable "offline"),
       .fetched "id" (.response 200 "[]"), .fetched "id" (.unreachable "offline")] do
     roundtrip event

@@ -9,6 +9,7 @@ public import Forms.ExampleForms.Outputs
 public import Forms.ExampleForms.Presentation
 public import Forms.ExampleForms.Scalars
 public import Forms.ExampleForms.Selections
+public import Forms.ExampleForms.Navigation
 public import Forms.Runtime.FormDefinition
 public import Std.Data.HashMap
 
@@ -53,6 +54,9 @@ def forms : List (String × RegisteredForm) := [
     submitUrl := "/api/submit" }),
   ("scalars", {
     definition := .ofModel Payment Payment.form Payment.initial
+    submitUrl := "/api/submit" }),
+  ("navigation", {
+    definition := .ofModel Person Navigation.form Navigation.initial
     submitUrl := "/api/submit" }),
   ("selections", {
     definition := .ofModel Preferences Preferences.form Preferences.initial
