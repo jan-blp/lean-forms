@@ -5,12 +5,13 @@ public import Forms.Runtime.Feedback
 @[expose] public section
 
 namespace Forms.Runtime
+open Forms.Model (ErasedLocation)
 
 inductive ControlKey where
-  | edit (location : Feedback.Location)
-  | select (location : Feedback.Location)
-  | press (route : List Nat) (location : Feedback.Location)
-  | tab (route : List Nat) (location : Feedback.Location)
+  | edit (location : ErasedLocation)
+  | select (location : ErasedLocation)
+  | press (route : List Nat) (location : ErasedLocation)
+  | tab (route : List Nat) (location : ErasedLocation)
   deriving DecidableEq
 
 structure DomId where

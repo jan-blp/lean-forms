@@ -7,6 +7,7 @@ public import Forms.Model.Format
 @[expose] public section
 
 namespace Forms.Runtime.Display
+open Forms.Model (ErasedLocation)
 
 /-- A control's position in the component tree, as zero-based child indices; actions are decoded
 along it. -/
@@ -40,7 +41,7 @@ structure Control where
   target : Target
   label : String
   disabled : Bool
-  location : Feedback.Location
+  location : ErasedLocation
   input : Editor
   messages : Option String := none
   deriving BEq

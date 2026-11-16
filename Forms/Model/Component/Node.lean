@@ -141,7 +141,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
   | focus {Γ : Context}
       {α β γ state : Type}
       {holes : Nat}
-      (target : Computation Γ α (PartialPath α β))
+      (target : Computation Γ α (Option (PartialPath α β)))
       (body : ComponentNode Γ β state γ holes)
       : ComponentNode Γ α state (Option γ) holes
   | load {Γ : Context}

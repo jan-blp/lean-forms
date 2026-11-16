@@ -44,4 +44,13 @@ instance {α β : Type} (path : Path α β) : LeanLens.LawfulLens path.toLens wh
   set_view := path.set_get
   set_set := path.set_set
 
+theorem Path.erase_trans
+  {α β γ : Type}
+  (first : Path α β)
+  (second : Path β γ)
+  : (first.trans second).erase = first.erase ++ second.erase := by
+  induction first with
+  | self => rfl
+  | stepField f rest ih => simp [trans, erase, ih]
+
 end Forms.Model

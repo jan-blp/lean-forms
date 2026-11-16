@@ -101,7 +101,7 @@ def run : IO Unit := do
     (independent.locals.producer.value == .none && independent.locals.consumers.producer.value == .row 1 &&
       toJson independent.value == toJson multiple.value)
   let nested : Component [] ExpenseReport.Raw := Component.void <| .focus
-    (.const (.ofPath path[ExpenseReport.Field.expenses]))
+    (.const (some (.ofPath path[ExpenseReport.Field.expenses])))
     (.bind RowSelection.none (Component.void <| .table .self "Nested"
         (.numbered "Expense") "Add expense" ⟨"", 0, false⟩ columns[] (some .here)))
   let nestedOpened := ModelForm.openState nested ExpenseReport.initial Env.nil

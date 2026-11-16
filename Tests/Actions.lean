@@ -117,7 +117,7 @@ def run : IO Unit := do
   let functionUpdated ← press (model := Nat) (ModelForm.openState functions 10 Env.nil) "Use successor"
   check "ActionsSupportValuesWithoutCodecs" (functionUpdated.locals.value 41 == 42)
   let focused : Component [] (List Nat) := .bind (0 : Nat) (Component.void <| .focus
-    { inputs := inputs[.ui (Ref.here)], run := fun index => .index index .self }
+    { inputs := inputs[.ui (Ref.here)], run := fun index => some (.index index .self) }
     (.button "Next item" (.set .here {
       inputs := inputs[.ui (Ref.here)], run := fun index => index + 1 })))
   let first := ModelForm.openState focused [10, 20] Env.nil

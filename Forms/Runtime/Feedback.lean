@@ -1,23 +1,15 @@
 module
 
-
+public import Forms.Model.ErasedLocation
 
 @[expose] public section
 
 namespace Forms.Runtime.Feedback
-
-/-- Display locations retain field and constructor identity independently of JSON. -/
-inductive Step where
-  | field (name : String)
-  | constructor (tag : String)
-  | index (position : Nat)
-  deriving BEq, DecidableEq
-
-abbrev Location := List Step
+open Forms.Model (ErasedLocation)
 
 inductive Targets where
   | global
-  | locations (first : Location) (rest : List Location)
+  | locations (first : ErasedLocation) (rest : List ErasedLocation)
 
 structure Error where
   message : String
@@ -30,7 +22,7 @@ structure ServerError where
 def summary (errors : List Error) : String :=
   String.intercalate "\n" (errors.map (·.message))
 
-def messages (errors : List Error) (path : Location) : Option String :=
+def messages (errors : List Error) (path : ErasedLocation) : Option String :=
   let matched := (errors.filterMap fun error =>
     match error.targets with
     | .locations first rest => if (first :: rest).contains path then some error.message else none

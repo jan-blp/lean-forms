@@ -154,7 +154,9 @@ def run : IO Unit := do
   let loaded : Component [] Nat := .load (.const (.pure true)) fun
     | .ready true => single.void
     | _ => .computed "Status" (.const "Loading")
-  let embedded := Component.group "Normal nesting" [loaded, (Component.focus (.const .self) single).void]
+  let embedded := Component.group "Normal nesting" [
+    loaded,
+    (Component.focus (.const (some .self)) single).void]
   let embeddedUpdated ← press (model := Nat) (start embedded 10) "Increment" 1
   check "ObservationsEmbedUnderLoadAndFocus" (texts embeddedUpdated "Observer one" == ["0", "1"])
   let disabled := Component.disabledWhen (.const true) single
