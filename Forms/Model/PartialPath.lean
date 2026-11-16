@@ -8,7 +8,6 @@ namespace Forms.Model
 /-- A type-preserving affine traversal represented as an inspectable path to zero or one value. -/
 inductive PartialPath : Type → Type → Type 1 where
   | self {α : Type} : PartialPath α α
-  | empty {α β : Type} : PartialPath α β
   | field
       {α β γ : Type}
       [fields : Fields α]
@@ -39,11 +38,17 @@ def PartialPath.trans
   : PartialPath α γ :=
   match first with
   | .self => second
-  | .empty => .empty
   | .field (fields := _) f rest => .field f (rest.trans second)
   | .constructor (constructors := _) (lawful := _) ctor rest =>
     .constructor ctor (rest.trans second)
   | .index position rest => .index position (rest.trans second)
+
+def PartialPath.erase {α β : Type} : PartialPath α β → ErasedLocation
+  | .self => []
+  | .field (fields := _) f rest => .field (Fields.key f) :: rest.erase
+  | .constructor (constructors := _) (lawful := _) ctor rest =>
+    .constructor (Constructors.key ctor) :: rest.erase
+  | .index position rest => .index position :: rest.erase
 
 def PartialPath.get?
   {α β : Type}
@@ -52,7 +57,6 @@ def PartialPath.get?
   : Option β :=
   match path with
   | .self => some value
-  | .empty => none
   | .field (fields := _) f rest => rest.get? (Fields.get f value)
   | .constructor (constructors := _) (lawful := _) ctor rest =>
     (Constructors.project ctor value).bind rest.get?
@@ -66,7 +70,6 @@ def PartialPath.set
   : α :=
   match path with
   | .self => new
-  | .empty => value
   | .field (fields := _) f rest => Fields.set f (rest.set new (Fields.get f value)) value
   | .constructor (constructors := _) (lawful := _) ctor rest =>
     match Constructors.project ctor value with

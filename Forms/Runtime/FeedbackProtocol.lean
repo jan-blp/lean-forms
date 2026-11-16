@@ -7,14 +7,15 @@ public import Lean.Data.Json
 
 namespace Forms.Runtime.FeedbackProtocol
 open Lean Feedback
+open Forms.Model (ErasedLocation)
 
-def locationToJson (location : Location) : Json :=
+def locationToJson (location : ErasedLocation) : Json :=
   toJson (location.map fun step => match step with
     | .field name => Json.mkObj [("kind", toJson "field"), ("name", toJson name)]
     | .constructor tag => Json.mkObj [("kind", toJson "constructor"), ("tag", toJson tag)]
     | .index position => Json.mkObj [("kind", toJson "index"), ("position", toJson position)])
 
-def locationFromJson (json : Json) : Except String Location := do
+def locationFromJson (json : Json) : Except String ErasedLocation := do
   (← json.getArr?).toList.mapM fun step => do
     match ← step.getObjValAs? String "kind" with
     | "field" => pure (.field (← step.getObjValAs? String "name"))

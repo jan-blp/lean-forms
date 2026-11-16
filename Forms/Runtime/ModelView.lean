@@ -22,7 +22,7 @@ def editor
   (widget : Model.Editor α)
   (value : α)
   (target : Display.Target)
-  (location : Feedback.Location)
+  (location : ErasedLocation)
   (label : String)
   (disabled : Bool)
   (errors : List Feedback.Error)
@@ -31,34 +31,16 @@ def editor
     input := editorInput widget value
     messages := Feedback.messages errors location }
 
-def location {α : Type} {value : α} : Model.Location value → Feedback.Location
-  | .self => []
-  | .field (fields := _) f rest => .field (Fields.key f) :: location rest
-  | .constructor (constructors := _) c rest => .constructor (Constructors.key c) :: location rest
-  | .index position rest => .index position.val :: location rest
-
 def error {α : Type} {value : α} (error : Model.Error value) : Feedback.Error where
   message := error.message
   targets := match error.targets with
     | .global => .global
-    | .locations first rest => .locations (location first) (rest.map location)
-
-def pathLocation {α β : Type} : Model.Path α β → Feedback.Location
-  | .self => []
-  | .stepField (fields := _) f rest => .field (Fields.key f) :: pathLocation rest
-
-def partialPathLocation {α β : Type} : Model.PartialPath α β → Feedback.Location
-  | .self => []
-  | .empty => []
-  | .field (fields := _) f rest => .field (Fields.key f) :: partialPathLocation rest
-  | .constructor (constructors := _) (lawful := _) ctor rest =>
-    .constructor (Constructors.key ctor) :: partialPathLocation rest
-  | .index position rest => .index position :: partialPathLocation rest
+    | .locations first rest => .locations first.erase (rest.map (·.erase))
 
 def button
   (key : ControlKey)
   (target : Display.Target)
-  (location : Feedback.Location)
+  (location : ErasedLocation)
   (label : String)
   (disabled : Bool)
   : Display.Control :=
@@ -220,12 +202,12 @@ def evaluateNode
   (cache : HttpRequest.Cache)
   (locals : state)
   (target : Display.Target)
-  (location : Feedback.Location)
+  (location : ErasedLocation)
   (disabled : Bool := false)
   : NodeEvaluation Γ α state β (Hollow holes) :=
   match component with
   | .field path label widget =>
-    let location := location ++ pathLocation path
+    let location := location ++ path.erase
     let control := editor widget (path.get value) target location (label.eval value env) disabled []
     { output := ()
       locals := ()
@@ -294,7 +276,7 @@ def evaluateNode
   | .select (decidableEq := _) (key := _) path label options selected =>
     let options := (options.eval value env).options
     let selected := selected (path.get value)
-    let location := location ++ pathLocation path
+    let location := location ++ path.erase
     let shown := if options.any (·.key == selected) then Key.encode selected else ""
     let control : Display.Control := {
       key := .select location
@@ -326,16 +308,18 @@ def evaluateNode
       requests := []
       apply := fun _ _ => absent }
   | .focus computation body =>
-    let path := computation.eval value env
-    match path.get? value with
-    | none =>
+    let path? := computation.eval value env
+    match path?, path?.bind (·.get? value) with
+    | none, _
+    | _, none =>
       { output := none
         locals
         view := fun _ => .hidden
         requests := []
         apply := fun _ _ => absent }
-    | some focused =>
-      let body := evaluateNode body focused env cache locals target (location ++ partialPathLocation path) disabled
+    | some path, some focused =>
+      let body := evaluateNode body focused env cache locals target (location ++ path.erase)
+        disabled
       { output := some body.output
         locals := body.locals
         view := body.view
@@ -361,7 +345,7 @@ def evaluateNode
       fun views _ => views[0]
   | .collection path label row display =>
     let items := path.get value
-    let location := location ++ pathLocation path
+    let location := location ++ path.erase
     let rows := items.mapFinIdx fun index item bound =>
       evaluatePresentation row item (Env.row items ⟨index, bound⟩ env) cache
         (locals[index]?.getD row.initialState) (target.child index) (location ++ [.index index])
@@ -397,7 +381,7 @@ def evaluatePresentation
   (cache : HttpRequest.Cache)
   (locals : state)
   (target : Display.Target)
-  (location : Feedback.Location)
+  (location : ErasedLocation)
   (disabled : Bool)
   (presentations : Presentations slots)
   : NodeEvaluation Γ α state β (Vector Display.View views) :=

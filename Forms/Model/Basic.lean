@@ -1,6 +1,7 @@
 module
 
 public import Lean.Data.Json
+public import Forms.Model.ErasedLocation
 public import Forms.Model.LawfulJson
 public import LeanLens.Lawful
 public import Std.Data.HashMap
@@ -118,9 +119,14 @@ def Path.trans
   | .self => second
   | .stepField (fields := _) f rest => .stepField f (rest.trans second)
 
+def Path.erase {α β : Type} : Path α β → ErasedLocation
+  | .self => []
+  | .stepField (fields := _) f rest => .field (Fields.key f) :: rest.erase
+
 def Path.toLens {α β : Type} (path : Path α β) : Lens' α β :=
   LeanLens.mkLens path.get path.set
 
+-- TODO: define as a `PartialPath` known to resolve in `value`, leaving two typed path types.
 inductive Location : {α : Type} → α → Type 1 where
   | self {α : Type} {value : α} : Location value
   | field
@@ -149,6 +155,12 @@ def Location.keys {α : Type} {value : α} : Location value → List String
   | .field (fields := _) f rest => Fields.key f :: rest.keys
   | .constructor (constructors := _) c rest => Constructors.key c :: rest.keys
   | index position rest => toString position.val :: rest.keys
+
+def Location.erase {α : Type} {value : α} : Location value → ErasedLocation
+  | .self => []
+  | .field (fields := _) f rest => .field (Fields.key f) :: rest.erase
+  | .constructor (constructors := _) c rest => .constructor (Constructors.key c) :: rest.erase
+  | .index position rest => .index position.val :: rest.erase
 
 inductive Targets (α : Type) (value : α) where
   | global

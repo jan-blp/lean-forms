@@ -37,9 +37,9 @@ structure Branch (Γ : Context) (α : Type) [Constructors α] where
 def RowSelection.itemPath
   {α β : Type}
   (items : Path α (List β))
-  : RowSelection → PartialPath α β
-  | .none => .empty
-  | .row index => (PartialPath.ofPath items).trans (.index index .self)
+  : RowSelection → Option (PartialPath α β)
+  | .none => Option.none
+  | .row index => some ((PartialPath.ofPath items).trans (.index index .self))
 
 @[reducible] def Component.output
   {Γ : Context}
@@ -107,7 +107,7 @@ def RowSelection.itemPath
   {Γ : Context}
   {α β γ : Type}
   {holes : Nat}
-  (target : Computation Γ α (PartialPath α β))
+  (target : Computation Γ α (Option (PartialPath α β)))
   (body : Component Γ β γ holes)
   : Component Γ α (Option γ) holes :=
   ⟨body.LocalState, .focus target body.node⟩
@@ -578,7 +578,7 @@ def Component.choice
     labels_nodup := by simpa [List.map_map, Function.comp_def] using labels_nodup }
   let bodies := branches.map fun branch =>
     let focus := (PartialPath.ofPath path).trans (.constructor branch.constructor .self)
-    Component.focus (.const focus) branch.body
+    Component.focus (.const (some focus)) branch.body
   .present <|
     .own (.select path label (.const options) Constructors.tag) <|
       Presentation.ownAll Renaming.shift { inputs := inputs[path], run := Constructors.tag }

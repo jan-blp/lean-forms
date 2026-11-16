@@ -7,13 +7,14 @@ public import Lean.Data.Json
 
 namespace Forms.Runtime.ControlKeyProtocol
 open Lean
+open Forms.Model (ErasedLocation)
 
-def stepToJson : Feedback.Step → Json
+def stepToJson : ErasedLocation.Step → Json
   | .field name => toJson name
   | .constructor tag => Json.mkObj [("constructor", toJson tag)]
   | .index position => toJson position
 
-def stepFromJson : Json → Except String Feedback.Step
+def stepFromJson : Json → Except String ErasedLocation.Step
   | .str name => .ok (.field name)
   | .num number => .index <$> fromJson? (.num number)
   | json => .constructor <$> json.getObjValAs? String "constructor"

@@ -172,7 +172,7 @@ def run : IO Unit := do
     (waitingConsumer.output == 1 && readyConsumer.output == 2 && changedConsumer.output == 3)
 
   let focused : Component [] (List Nat) (Option Nat) :=
-    .focus (.const (.index 0 .self)) single
+    .focus (.const (some (.index 0 .self))) single
   let focusedFirst := focused.evaluate [10] Env.nil
   let increment ← press focusedFirst "Increment"
   let focusedUpdated := focused.evaluate increment.value increment.state {} increment.locals

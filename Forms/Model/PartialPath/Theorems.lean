@@ -14,7 +14,6 @@ theorem PartialPath.set_get
   : path.set old value = value := by
   induction path with
   | self => simpa [get?, set] using present.symm
-  | empty => rfl
   | field f rest ih =>
     simp only [set, ih _ _ present]
     exact (Fields.lawful f).set_view value
@@ -31,7 +30,6 @@ theorem PartialPath.get_set
   : path.get? (path.set new value) = some new := by
   induction path with
   | self => rfl
-  | empty => simp [get?] at present
   | field f rest ih =>
     simpa only [set, get?, Fields.get, Fields.set, (Fields.lawful f).view_set]
       using ih _ _ _ present
@@ -48,7 +46,6 @@ theorem PartialPath.set_absent
   : path.set new value = value := by
   induction path with
   | self => simp [get?] at absent
-  | empty => rfl
   | field f rest ih =>
     simp only [set, ih _ _ absent]
     exact (Fields.lawful f).set_view value
@@ -64,12 +61,30 @@ theorem PartialPath.set_set
   : path.set second (path.set first value) = path.set second value := by
   induction path with
   | self => rfl
-  | empty => rfl
   | field f rest ih =>
     simp only [set, Fields.get, Fields.set, (Fields.lawful f).view_set, ih,
       (Fields.lawful f).set_set]
   | constructor ctor rest ih =>
     grind [set, LawfulConstructors.project_inject]
   | index position rest ih => grind [set, List.set_set]
+
+theorem PartialPath.erase_ofPath
+  {α β : Type}
+  (path : Path α β)
+  : (PartialPath.ofPath path).erase = path.erase := by
+  induction path with
+  | self => rfl
+  | stepField f rest ih => simp [ofPath, erase, Path.erase, ih]
+
+theorem PartialPath.erase_trans
+  {α β γ : Type}
+  (first : PartialPath α β)
+  (second : PartialPath β γ)
+  : (first.trans second).erase = first.erase ++ second.erase := by
+  induction first with
+  | self => rfl
+  | field f rest ih => simp [trans, erase, ih]
+  | constructor ctor rest ih => simp [trans, erase, ih]
+  | index position rest ih => simp [trans, erase, ih]
 
 end Forms.Model
