@@ -56,7 +56,6 @@ class MonadFreshId (m : Type → Type) where
 
 export MonadFreshId (freshId)
 
-/-- Hands out the fixed ids `Uuid.ofNat 1`, `2`, … in order, for example data. -/
 structure IdGen (α : Type) where
   toStateM : StateM Nat α
 
@@ -74,6 +73,9 @@ def IdGen.run {α : Type} (gen : IdGen α) : α :=
 A xoshiro256** generator, following the reference implementation at
 <https://prng.di.unimi.it/xoshiro256starstar.c> (Blackman and Vigna,
 "Scrambled Linear Pseudorandom Number Generators", <https://doi.org/10.1145/3460772>).
+
+The *only* requirement is that the UUIDs it generates are unique. Nothing relies on them being
+unpredictable or statistically random.
 
 Notes:
 - Pure algorithm that depends on external seed.
