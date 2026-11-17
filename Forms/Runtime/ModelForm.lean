@@ -194,9 +194,10 @@ def validateAction
   (state : State form)
   (key : ControlKey)
   (argument : Option Input)
-  : StateT Model.Supply (Except Rejection) (Model.ComponentUpdate Γ α form.LocalState) := do
-  if state.ui.pending then throw (.stale .pending)
-  fun supply => ((state.evaluation.applyKey key argument).run supply).mapError .ofAction
+  : StateT Model.Supply (Except Rejection) (Model.ComponentUpdate Γ α form.LocalState) :=
+  fun supply => do
+    if state.ui.pending then throw (.stale .pending)
+    state.evaluation.applyKey key argument |>.run supply |>.mapError .ofAction
 
 def applyUpdate
   {Γ : Model.Context}
