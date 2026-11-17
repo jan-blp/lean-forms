@@ -168,8 +168,8 @@ export function Table({ label, headers, rows, footer, errors }: FormsReact.Table
         <table>
           <caption>{label}</caption>
           <thead><tr>{headers.map((header, index) => <th key={index} scope="col">{header}</th>)}</tr></thead>
-          <tbody>{rows.map((row, index) =>
-            <tr key={index} aria-label={row.label} aria-selected={row.selected ?? undefined}
+          <tbody>{rows.map(row =>
+            <tr key={row.key} aria-label={row.label} aria-selected={row.selected ?? undefined}
               className={row.selected ? 'selected' : undefined}>{row.cells.map((cell, column) =>
               <td key={column}><Children components={[cell]} /></td>)}</tr>)}</tbody>
         </table>

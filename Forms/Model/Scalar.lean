@@ -50,6 +50,8 @@ structure Uuid where
 instance : Repr Uuid where
   reprPrec uuid _ := repr uuid.value
 
+instance : Hashable Uuid := ⟨(hash ·.value)⟩
+
 def Int32.ofInt? (value : Int) : Option Int32 :=
   if h : Int32.minValue.toInt ≤ value ∧ value ≤ Int32.maxValue.toInt then
     some (Int32.ofIntLE value h.1 h.2)

@@ -2,6 +2,7 @@ module
 
 public import Forms.ExampleForms.Registry
 meta import Forms.Model.PartialPath.Theorems
+public import Tests.Supply
 
 public section
 namespace Tests.Focus
@@ -20,7 +21,7 @@ private def perform
   (argument : Option Input)
   (state : Env Γ)
   : Except ModelForm.Rejection α := do
-  let invocation ← (ModelView.decodeKey form {} current key argument state).mapError .ofAction
+  let invocation ← ((ModelView.decodeKey form {} current key argument state).run' supply).mapError .ofAction
   return invocation.value
 
 private def firstControl
@@ -63,13 +64,13 @@ def run : IO Unit := do
     | .error (.stale (.invocation .disabled)) => true
     | _ => false)
   let outOfBounds : PartialPath ExpenseReport.Raw Expense.Raw :=
-    (PartialPath.ofPath path[ExpenseReport.Field.expenses]).trans (.index 99 .self)
+    (PartialPath.ofPath path[ExpenseReport.Field.expenses]).trans (.item thirdId .self)
   let absent : Component [] ExpenseReport.Raw := Component.void <| .focus
     (.const (some outOfBounds))
     (.field path[Expense.Field.description] "Description" .text)
-  check "FocusMissingIndexIsHidden"
+  check "FocusMissingItemIsHidden"
     ((ModelView.render absent ExpenseReport.initial {} [] Env.nil).view == .hidden &&
-      toJson (outOfBounds.set ⟨"Ignored", 1, false⟩ ExpenseReport.initial) == toJson ExpenseReport.initial)
+      toJson (outOfBounds.set ⟨thirdId, "Ignored", 1, false⟩ ExpenseReport.initial) == toJson ExpenseReport.initial)
   let phonePath : PartialPath Shipping.Raw String :=
     .constructor Shipping.Constructor.express (.ofPath path[Shipping.express.Field.phone])
   let phone : Component [] Shipping.Raw := Component.void <| .focus
@@ -84,7 +85,7 @@ def run : IO Unit := do
     (phoneControl.location == [.constructor "express", .field "phone"])
   let changed ← IO.ofExcept ((perform phone express phoneControl.key (some (.text "079")) Env.nil).mapError toString)
   check "FocusWritesConstructorPayload" (toJson changed == toJson (Shipping.Raw.express ⟨⟨"Main", "Bern"⟩, "079"⟩))
-  let invalid := ModelForm.openState (model := Shipping) phone express Env.nil
+  let invalid := ModelForm.openState (model := Shipping) (supply := supply) phone express Env.nil
   let snapshot := ModelForm.snapshot phone invalid
   check "FocusMatchesValidationMessages"
     (snapshot.controls.head?.map (·.messages) == some ["Enter a phone number for the courier."])
@@ -94,19 +95,19 @@ def run : IO Unit := do
       run := RowSelection.itemPath path[ExpenseReport.Field.expenses] }
     (.field path[Expense.Field.description] "Description" .text)
   let selected := ExpenseReport.initial
-  let selectedUi : Env [⟨.writable, RowSelection⟩] := env[.row 1]
+  let selectedUi : Env [⟨.writable, RowSelection⟩] := env[.row secondId]
   let detail ← firstControl details selected selectedUi
   let edited ← IO.ofExcept ((perform details selected detail.key (some (.text "Independent")) selectedUi).mapError toString)
   check "FocusIndependentOfTable"
     (edited.expenses.map (·.description) == ["Train to Bern", "Independent"] &&
       edited.employee == selected.employee)
   let invalidValue : ExpenseReport.Raw := { selected with
-    expenses := [⟨"Train to Bern", 58, false⟩, ⟨"", 180, true⟩] }
-  let invalidState := ModelForm.openState (model := ExpenseReport) details invalidValue selectedUi
+    expenses := [⟨firstId, "Train to Bern", 58, false⟩, ⟨secondId, "", 180, true⟩] }
+  let invalidState := ModelForm.openState (model := ExpenseReport) (supply := supply) details invalidValue selectedUi
   let invalidDetails := ModelForm.snapshot details invalidState
   check "FocusListValidationLocation"
     (invalidDetails.controls.head?.map (·.messages) == some ["Describe the expense."] &&
-      detail.location == [.field "expenses", .index 1, .field "description"])
+      detail.location == [.field "expenses", .item secondId, .field "description"])
   let moved : Component [⟨.writable, RowSelection⟩] ExpenseReport.Raw := .group "Elsewhere" [
     .computed "Summary" (.const "Summary"), .group "Details" [details]]
   let movedControl ← firstControl moved selected selectedUi

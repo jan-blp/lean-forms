@@ -1,6 +1,7 @@
 module
 
 public import Forms.ExampleForms.Registry
+public import Tests.Supply
 
 public section
 namespace Tests.TableSelection
@@ -28,12 +29,12 @@ private def browserKey
   return control.key
 
 def run : IO Unit := do
-  let opened := ModelForm.openState (model := ExpenseReport) form ExpenseReport.initial Env.nil
+  let opened := ModelForm.openState (model := ExpenseReport) (supply := supply) form ExpenseReport.initial Env.nil
   let first ← browserKey opened "Select"
   let second ← browserKey opened "Select" 1
   let selected ← browse opened (.apply second none)
   check "TableSelectKeepsItems"
-    (selection selected == .row 1 &&
+    (selection selected == .row secondId &&
       toJson selected.value == toJson opened.value &&
       selection opened == .none)
   check "TableSelectedRowMarked" (match (ModelView.render form selected.value {} [] selected.env selected.locals).view with
@@ -52,7 +53,7 @@ def run : IO Unit := do
   let selectedAgain ← browse edited (.apply second none)
   let removedEarlier ← browse selectedAgain (.apply (← browserKey selectedAgain "Remove") none)
   check "TableRemoveEarlierKeepsSelectedItem"
-    (selection removedEarlier == .row 0 &&
+    (selection removedEarlier == .row secondId &&
       removedEarlier.value.expenses.map (·.description) == ["Updated hotel"])
   let remainingDetail ← browserKey removedEarlier "Description"
   let removedSelected ← browse removedEarlier (.apply (← browserKey removedEarlier "Remove") none)
@@ -66,7 +67,7 @@ def run : IO Unit := do
     (selection reset == .none && toJson reset.value == toJson ExpenseReport.initial)
   let disabled := Component.disabledWhen (.const true) form
   let rejected ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) disabled
-    (ModelForm.openState (model := ExpenseReport) disabled ExpenseReport.initial Env.nil)
+    (ModelForm.openState (model := ExpenseReport) (supply := supply) disabled ExpenseReport.initial Env.nil)
     (.apply second none))
   check "TableDisabledSelectionRejects"
     (rejected.ui.rejection == some (toString InvocationError.disabled) &&
@@ -84,15 +85,15 @@ def run : IO Unit := do
     })
     (body := .loadWith (.const (.fetch request (fromJson? (α := String))))
       (fun details => .computed "Details" (.const details))))
-  let selectedLocals : loading.LocalState := { loading.initialState with value := .row 1 }
+  let selectedLocals : loading.LocalState := { loading.initialState with value := .row secondId }
   check "FocusLoadsOnlySelectedDetails"
     ((loading.requests {} opened.value Env.nil).isEmpty &&
       loading.requests {} selected.value Env.nil selectedLocals == [request])
   let table : Component [] ExpenseReport.Raw := .bind RowSelection.none (Component.void <| .table
     path[ExpenseReport.Field.expenses] "Expenses" (.numbered "Expense") "Add expense"
-        ⟨"", 0, false⟩ columns[] (some .here))
+        (fun id => ⟨id, "", 0, false⟩) columns[] (some .here))
   let twoTables := Component.group "Two selections" [table, table]
-  let multiple := ModelForm.openState (model := ExpenseReport)
+  let multiple := ModelForm.openState (model := ExpenseReport) (supply := supply)
     twoTables ExpenseReport.initial Env.nil
   let selectors := (ModelView.render twoTables multiple.value {} [] Env.nil multiple.locals).controls.filter (·.label == "Select")
   check "LocalBindingsKeepViewsIndependent" (selectors.length == 4)
@@ -100,33 +101,33 @@ def run : IO Unit := do
   let independent ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) twoTables multiple
     (.apply secondTableRow.key none))
   check "SelectionChangesOnlyItsBinding"
-    (independent.locals.producer.value == .none && independent.locals.consumers.producer.value == .row 1 &&
+    (independent.locals.producer.value == .none && independent.locals.consumers.producer.value == .row secondId &&
       toJson independent.value == toJson multiple.value)
   let nested : Component [] ExpenseReport.Raw := Component.void <| .focus
     (.const (some (.ofPath path[ExpenseReport.Field.expenses])))
     (.bind RowSelection.none (Component.void <| .table .self "Nested"
-        (.numbered "Expense") "Add expense" ⟨"", 0, false⟩ columns[] (some .here)))
-  let nestedOpened := ModelForm.openState (model := ExpenseReport)
+        (.numbered "Expense") "Add expense" (fun id => ⟨id, "", 0, false⟩) columns[] (some .here)))
+  let nestedOpened := ModelForm.openState (model := ExpenseReport) (supply := supply)
     nested ExpenseReport.initial Env.nil
   let some nestedSelect := (ModelView.render nested nestedOpened.value {} [] Env.nil).controls.find? (·.label == "Select")
     | throw (IO.userError "FAIL missing nested selection")
   let nestedSelected ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) nested nestedOpened
     (.apply nestedSelect.key none))
   check "FocusPreservesNestedUiUpdates"
-    (nestedSelected.locals.producer.value == .row 0 && toJson nestedSelected.value == toJson nestedOpened.value)
+    (nestedSelected.locals.producer.value == .row firstId && toJson nestedSelected.value == toJson nestedOpened.value)
   let mixed : Component [⟨.readOnly, RowSelection⟩, ⟨.writable, RowSelection⟩] ExpenseReport.Raw :=
     .bind false (Component.void <| .table path[ExpenseReport.Field.expenses] "Expenses"
-        (.numbered "Expense") "Add expense" ⟨"", 0, false⟩
+        (.numbered "Expense") "Add expense" (fun id => ⟨id, "", 0, false⟩)
       columns[] (some (.there (.there .here))))
-  let mixedOpened := ModelForm.openState (model := ExpenseReport)
-    mixed ExpenseReport.initial env[.row 1, .none]
+  let mixedOpened := ModelForm.openState (model := ExpenseReport) (supply := supply)
+    mixed ExpenseReport.initial env[.row secondId, .none]
   let some mixedSelect := (ModelView.render mixed mixedOpened.value {} [] mixedOpened.env).controls.find?
       (·.label == "Select")
     | throw (IO.userError "FAIL missing selection in mixed context")
   let mixedSelected ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) mixed mixedOpened
     (.apply mixedSelect.key none))
   check "TableSelectionPreservesReadOnlyInputs"
-    (mixedSelected.env.value == .row 1 && mixedSelected.env.tail.value == .row 0 &&
+    (mixedSelected.env.value == .row secondId && mixedSelected.env.tail.value == .row firstId &&
       mixedSelected.locals.value == false &&
       toJson mixedSelected.value == toJson mixedOpened.value)
 

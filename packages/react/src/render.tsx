@@ -31,8 +31,9 @@ const named = {
   page: false,
 } as const satisfies { [K in Kind]: Props<K> extends { name: string } ? true : false };
 
-/** Fields keep their identity, and focus, when siblings appear or disappear. */
+/** Fields and list rows keep their identity, and focus, when siblings appear or disappear. */
 function key(component: FormsReact.Component, index: number): string {
+  if ('group' in component && component.group.key) return `group:${component.group.key}`;
   const [kind, props] = entry(component);
   return named[kind] ? `${kind}:${(props as { name: string }).name}` : `${kind}#${index}`;
 }

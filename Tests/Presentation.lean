@@ -3,6 +3,7 @@ module
 public import Forms.ExampleForms.Presentation
 public import Forms.Runtime.ModelForm
 public import Forms.Runtime.ControlKeyProtocol
+public import Tests.Supply
 
 public section
 namespace Tests.Presentation
@@ -49,7 +50,7 @@ private def press
   (argument : Option Input := none)
   : IO (Evaluated [] α component.LocalState β) := do
   let control ← control evaluated label nth
-  let updated ← IO.ofExcept ((evaluated.applyKey control.key argument).mapError fun error =>
+  let updated ← IO.ofExcept (((evaluated.applyKey control.key argument).run' supply).mapError fun error =>
     toString (ModelForm.Rejection.ofAction error))
   return component.evaluate updated.value updated.state {} updated.locals
 
@@ -69,7 +70,9 @@ private def texts (label : String) : Display.View → List String
   | .stack _ children => textsAll label children
   | .list (children := children) .. => textsAll label children
   | .table (rows := rows) (footer := footer) .. => textsRows label rows ++ texts label footer
-  | _ => []
+  | .keyed _ body => texts label body
+  | .control _ => []
+  | .hidden => []
 
 private def textsAll (label : String) : List Display.View → List String
   | [] => []
@@ -85,7 +88,9 @@ private partial def order : Display.View → List String
   | .table label .. => [label]
   | .stack _ children => children.flatMap order
   | .list (children := children) .. => children.flatMap order
-  | _ => []
+  | .keyed _ body => order body
+  | .control _ => []
+  | .hidden => []
 
 def request : HttpRequest := { method := .get, url := "/hidden-value", body := none }
 
@@ -99,7 +104,7 @@ def request : HttpRequest := { method := .get, url := "/hidden-value", body := n
       .layout { inputs := inputs[.ui (Ref.here : InputRef _ Nat)], run := id } (.const (.group none []))
 
 def run : IO Unit := do
-  let initial := ["same", "same", "other"]
+  let initial := Item.numbered ["same", "same", "other"]
   let opened := (tableSummary).evaluate initial Env.nil
   check "PresentationSummaryPrecedesItsProducer"
     (order opened.view == ["Selected descriptions", "Items"] && opened.output == "")
@@ -125,8 +130,9 @@ def run : IO Unit := do
     ((← control regrouped "Toggle selection" 1) == tableLast)
   let summaryOnly := (tableSummary (.place .here)).evaluate edited.value Env.nil {} edited.locals
   check "PresentationUnplacedControlsRejectStaleActions"
-    (summaryOnly.view.controls.isEmpty && !(summaryOnly.applyKey tableLast.key).toBool)
-  let refreshed := (tableSummary (.place .here)).evaluate ["same", "Fresh", "other"] Env.nil {} edited.locals
+    (summaryOnly.view.controls.isEmpty && !((summaryOnly.applyKey tableLast.key none).run' supply).toBool)
+  let refreshed := (tableSummary (.place .here)).evaluate (Item.numbered ["same", "Fresh", "other"]) Env.nil {}
+    edited.locals
   check "PresentationUnplacedOwnersStillProduceFreshOutputs"
     (refreshed.output == "Fresh" && texts "Selected descriptions" refreshed.view == ["Fresh"])
   let duplicate : Layout [0, 0] :=
@@ -134,8 +140,9 @@ def run : IO Unit := do
   let duplicated := (tableSummary duplicate).evaluate edited.value Env.nil {} edited.locals
   check "PresentationDuplicatePlacementKeepsOneEditableControl"
     (duplicated.view.controls.length == edited.view.controls.length)
+  let some reviewed := initial[1]? | throw (IO.userError "Missing second item")
   let errors : List Diagnostic := [
-    { message := "Review this item", targets := .locations [.index 1] [] }]
+    { message := "Review this item", targets := .locations [.item reviewed.id, .field "value"] [] }]
   let feedback := (regroupedForm.evaluate edited.value Env.nil {} edited.locals errors).view
   let some described := (feedback.controls.filter (·.label == "Description"))[1]?
     | throw (IO.userError "Missing described control")
@@ -151,7 +158,7 @@ def run : IO Unit := do
   check "PresentationTabsShareStateAndKeepPrivateStateSeparate"
     (tabs.output == 1 && texts "Shared count" tabs.view == ["1"] && texts "Private count" tabs.view == ["0"])
   check "PresentationInactiveTabRejectsStaleActions"
-    (!(tabs.applyKey firstPrivate.key).toBool)
+    (!((tabs.applyKey firstPrivate.key none).run' supply).toBool)
   let tabs ← press sharedTabs tabs "Increment shared"
   let tabs ← press sharedTabs tabs "Increment private"
   let tabs ← press sharedTabs tabs "Increment private"
@@ -164,7 +171,7 @@ def run : IO Unit := do
     (texts "Private count" tabs.view == ["2"])
   let bar ← control tabs "Panes"
   check "TabBarShowsTheActiveTab" (bar.input == .tabs 1 ["First pane", "Second pane"])
-  check "TabBarRejectsMissingTabs" (!(tabs.applyKey bar.key (some (.text "2"))).toBool)
+  check "TabBarRejectsMissingTabs" (!((tabs.applyKey bar.key (some (.text "2"))).run' supply).toBool)
   check "TabBarKeyRoundTrips"
     (match ControlKeyProtocol.fromString (ControlKeyProtocol.toString bar.key) with
       | .ok key => key == bar.key
@@ -177,7 +184,7 @@ def run : IO Unit := do
   let loaded := unplaced.evaluate 0 Env.nil cache pending.locals
   check "PresentationUnplacedLoadUpdatesItsOutput" (loaded.output == 7)
 
-  let opened := notes.evaluate ["a", "b"] Env.nil
+  let opened := notes.evaluate (Item.numbered ["a", "b"]) Env.nil
   check "NestedPresentationsRenderInsideTheirOwner"
     (opened.output == 2 && order opened.view == ["Note count"] &&
       (opened.view.controls.filter (·.label == "Text")).length == 2)
@@ -187,14 +194,14 @@ def run : IO Unit := do
       (preview.view.controls.filter (·.label == "Text")).length == 1)
   let edited ← press notes preview "Text" 0 (some (.text "x"))
   check "NestedRowActionsReachTheirRow"
-    (edited.value == ["x", "b"] && texts "Preview" edited.view == ["«b»"])
+    (edited.value.map (·.value) == ["x", "b"] && texts "Preview" edited.view == ["«b»"])
   let removed ← press notes edited "Remove" 0
   check "NestedRowRemovalKeepsRemainingRowState"
-    (removed.value == ["b"] && removed.output == 1 && texts "Preview" removed.view == ["«b»"] &&
+    (removed.value.map (·.value) == ["b"] && removed.output == 1 && texts "Preview" removed.view == ["«b»"] &&
       (removed.view.controls.filter (·.label == "Text")).isEmpty)
   let added ← press notes removed "Add note"
   check "NestedNewRowsStartOnTheirFirstTab"
-    (added.value == ["b", ""] && texts "Preview" added.view == ["«b»"] &&
+    (added.value.map (·.value) == ["b", ""] && texts "Preview" added.view == ["«b»"] &&
       (added.view.controls.filter (·.label == "Text")).length == 1)
 
 end Tests.Presentation

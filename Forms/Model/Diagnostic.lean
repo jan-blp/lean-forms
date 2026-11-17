@@ -20,10 +20,9 @@ structure Diagnostic where
   targets : Diagnostic.Targets
   deriving BEq, DecidableEq
 
-/-- Valid for one evaluation revision; locations remain absolute across model focus. -/
+/-- Locations remain absolute across model focus. -/
 structure Destination where
   locations : List ErasedLocation
-  revision : Nat
   deriving BEq, DecidableEq
 
 structure Issue where
@@ -39,7 +38,6 @@ def Diagnostic.locations (diagnostic : Diagnostic) : List ErasedLocation :=
 def Diagnostic.issues
   (diagnostics : List Diagnostic)
   (scope : ErasedLocation)
-  (revision : Nat)
   : List Issue :=
   diagnostics.filterMap fun diagnostic => match diagnostic.targets with
     | .global =>
@@ -47,7 +45,7 @@ def Diagnostic.issues
     | .locations first rest =>
       let locations := (first :: rest).filter (scope.isPrefixOf ·)
       if locations.isEmpty then none
-      else some { message := diagnostic.message, destination? := some { locations, revision } }
+      else some { message := diagnostic.message, destination? := some { locations } }
 
 def Diagnostic.summary (diagnostics : List Diagnostic) : String :=
   String.intercalate "\n" (diagnostics.map (·.message))

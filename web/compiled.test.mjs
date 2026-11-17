@@ -10,9 +10,10 @@ const fixtures = JSON.parse(execFileSync('lake', ['env', 'lean', '--run', 'tools
   cwd, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
 }));
 const fixture = name => fixtures.find(f => f.start.form === name);
+const seed = fixtures[0].seed;
 
 const moduleUrl = new URL('./dist/wasm/forms.mjs', import.meta.url);
-const open = start => openForm(start, moduleUrl);
+const open = start => openForm(start, moduleUrl, seed);
 function snapshot(model) { return model.snapshot(); }
 const page = model => model.snapshot().view.page;
 const submitButton = model => page(model).toolbar.find(c => c.button.onClick === 'submit').button;
@@ -23,10 +24,11 @@ const messages = value => !value || typeof value !== 'object' ? [] :
   [...(Array.isArray(value.errors) ? value.errors : []), ...Object.values(value).flatMap(messages)];
 for (const { start, initial, cases } of fixtures) {
   test(`compiled ${start.form} matches native Lean through actions, views, validation, and reset`, async () => {
-    const model = await open(start);
-    try {
-      assert.deepEqual(snapshot(model), initial);
-      for (const { action, expected } of cases) {
+    // A fresh model per case: reset keeps drawing new item ids, unlike the native fixture.
+    for (const { action, expected } of cases) {
+      const model = await open(start);
+      try {
+        assert.deepEqual(snapshot(model), initial);
         model.send({ apply: { key: action.key, argument: action.argument ?? null } });
         assert.deepEqual(snapshot(model), expected);
         model.send('reset');
@@ -34,8 +36,8 @@ for (const { start, initial, cases } of fixtures) {
         assert.deepEqual(snapshot(model), { ...initial,
           view: { ...initial.view, page: { ...initial.view.page, notice: { info: { message: 'Started over.' } } } },
           effects: initial.effects.filter(e => 'submit' in e) });
-      }
-    } finally { model.dispose(); }
+      } finally { model.dispose(); }
+    }
   });
 }
 
@@ -86,7 +88,7 @@ test('disposed handles stay invalid and rejected requests leave state unchanged'
   const { createFormRuntime } = await import('../wasm/form-api.mjs');
   const runtime = await createFormRuntime();
   const call = ({ operation, handle, ...fields }) => runtime.form(JSON.stringify(
-    operation === 'open' ? { open: { start: fields } } : operation === 'dispose' ? { dispose: { handle } }
+    operation === 'open' ? { open: { start: fields, seed } } : operation === 'dispose' ? { dispose: { handle } }
       : { send: { handle, event: Object.keys(fields).length ? { [operation]: fields } : operation } }));
   const cycle = () => {
     const opened = call({ operation: 'open', ...fixture('person').start });
@@ -161,7 +163,7 @@ test('Wasm exposes only the compiled-form API and recovers using a fresh instanc
   const trapped = await createFormRuntime();
   assert.throws(() => trapped.form('['.repeat(200000) + ']'.repeat(200000)), /stack overflow|maximum call stack size exceeded/i);
   const fresh = await createFormRuntime();
-  const result = fresh.form(JSON.stringify({ open: { start: fixture('person').start } }));
+  const result = fresh.form(JSON.stringify({ open: { start: fixture('person').start, seed } }));
   assert.equal(result.ok, true);
   assert.equal(result.value.opened.snapshot.submission.value.age, 20);
   assert.equal(fresh.form(JSON.stringify({ dispose: { handle: result.value.opened.handle } })).ok, true);
@@ -357,10 +359,13 @@ test('expenses adds, removes, and validates items', async () => {
   try {
     assert.match(outputs(), /CHF 238/);
     apply('Add expense', null);
-    assert.deepEqual(expenses().at(-1), { description: '', amount: 0, receipt: false });
+    const { id: added, ...fields } = expenses().at(-1);
+    assert.match(added, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    assert.deepEqual(fields, { description: '', amount: 0, receipt: false });
     const items = page(model).body[0].group.children[1];
     assert.deepEqual(items.table.headers, ['Description', 'Amount (CHF)', 'Receipt', 'Actions']);
     assert.deepEqual(items.table.rows.map(row => row.label), ['Expense 1', 'Expense 2', 'Expense 3']);
+    assert.deepEqual(items.table.rows.map(row => row.key), expenses().map(e => e.id));
     assert.equal(items.table.rows.every(row => row.cells.length === 4), true);
     assert.equal(items.table.footer.button.label, 'Add expense');
     apply('Select', null, 2);
@@ -368,7 +373,7 @@ test('expenses adds, removes, and validates items', async () => {
     submit();
     assert.deepEqual(messages(model.snapshot().view), ['Describe the expense.', 'Enter an amount of at least CHF 1.']);
     assert.deepEqual(model.snapshot().errors[0].targets.locations[0],
-      [{ kind: 'field', name: 'expenses' }, { kind: 'index', position: 2 }, { kind: 'field', name: 'description' }]);
+      [{ kind: 'field', name: 'expenses' }, { kind: 'item', id: added }, { kind: 'field', name: 'description' }]);
     apply('Description', 'Taxi');
     apply('Amount (CHF)', '5000');
     // The report limit is checked once every expense is valid.
@@ -503,6 +508,9 @@ test('project planner keeps task selections local to each project', async () => 
     addProject();
     assert.deepEqual([selected(0), selected(1)], [1, -1]);
     assert.equal(details(1), undefined);
+    // A new project starts without tasks.
+    assert.equal(table(1).rows.length, 0);
+    send(field('Add task', 1));
     select(1, 0);
     send(field('Task title', 1), 'Plan follow-up');
     send(buttonKey(rowButton(0, 1, 'Remove')));
@@ -517,46 +525,17 @@ test('project planner keeps task selections local to each project', async () => 
     model.send('submit');
     assert.deepEqual(messages(model.snapshot().view), ['Give the task a title.']);
     assert.deepEqual(model.snapshot().errors[0].targets.locations[0], [
-      { kind: 'field', name: 'projects' }, { kind: 'index', position: 0 },
-      { kind: 'field', name: 'tasks' }, { kind: 'index', position: 0 }, { kind: 'field', name: 'title' },
+      { kind: 'field', name: 'projects' }, { kind: 'item', id: initialValue.projects[0].id },
+      { kind: 'field', name: 'tasks' }, { kind: 'item', id: initialValue.projects[0].tasks[0].id },
+      { kind: 'field', name: 'title' },
     ]);
     send(field('Task title'), 'Map the new navigation');
     model.send('submit');
     const submitted = JSON.parse(model.snapshot().effects[0].submit.request.body).value;
     assert.deepEqual(Object.keys(submitted).sort(), ['name', 'projects']);
-    assert.deepEqual(Object.keys(submitted.projects[0]).sort(), ['name', 'tasks']);
-    assert.deepEqual(Object.keys(submitted.projects[0].tasks[0]).sort(), ['completed', 'hours', 'notes', 'owner', 'title']);
-  } finally { model.dispose(); }
-});
-
-
-test('owned row outputs update outside observers through repeated actions', async () => {
-  const model = await open(fixture('row-outputs').start);
-  const press = (label, index = 0) => {
-    const key = model.snapshot().controls.filter(control => control.label === label)[index].key;
-    model.send({ apply: { key, argument: null } });
-  };
-  const output = (value, label) => {
-    if (!value || typeof value !== 'object') return [];
-    if (value.output?.label === label) return [value.output.value];
-    return Object.values(value).flatMap(child => output(child, label));
-  };
-  try {
-    press('Increment');
-    press('Increment', 1);
-    press('Increment', 1);
-    assert.deepEqual(output(page(model), 'Counts'), ['1, 2']);
-    assert.deepEqual(output(page(model), 'Sum'), ['3']);
-    assert.deepEqual(model.snapshot().submission.value, [10, 20]);
-    press('Change private');
-    assert.deepEqual(output(page(model), 'Counts'), ['1, 2']);
-    press('Remove');
-    assert.deepEqual(output(page(model), 'Counts'), ['2']);
-    press('Add counter');
-    assert.deepEqual(output(page(model), 'Counts'), ['2, 0']);
-    assert.deepEqual(model.snapshot().submission.value, [20, 0]);
-    model.send('reset');
-    assert.deepEqual(output(page(model), 'Counts'), ['0, 0']);
+    assert.deepEqual(Object.keys(submitted.projects[0]).sort(), ['id', 'name', 'tasks']);
+    assert.deepEqual(Object.keys(submitted.projects[0].tasks[0]).sort(),
+      ['completed', 'hours', 'id', 'notes', 'owner', 'title']);
   } finally { model.dispose(); }
 });
 
@@ -583,15 +562,17 @@ test('nested components consume child outputs and export their sum', async () =>
     assert.deepEqual(output(page(model), 'Overall sum'), ['4']);
     press('Remove');
     assert.deepEqual(output(page(model), 'Pair totals'), ['2']);
+    assert.deepEqual(model.snapshot().submission.value.map(item => item.value), [20]);
     press('Add pair');
     assert.deepEqual(output(page(model), 'Pair totals'), ['2, 0']);
+    assert.deepEqual(model.snapshot().submission.value.map(item => item.value), [20, 0]);
     model.send('reset');
     assert.deepEqual(output(page(model), 'Pair totals'), ['0, 0']);
   } finally { model.dispose(); }
 });
 
 test('table cells expose row-local selection to an independent summary', async () => {
-  const model = await open(fixture('table-outputs').start);
+  const model = await open(fixture('present-table').start);
   const apply = (label, index = 0, argument = null) => {
     const key = model.snapshot().controls.filter(control => control.label === label)[index].key;
     model.send({ apply: { key, argument } });
@@ -608,7 +589,8 @@ test('table cells expose row-local selection to an independent summary', async (
     assert.deepEqual(output(page(model)), ['Same description, Same description']);
     apply('Description', 0, 'Revised');
     assert.deepEqual(output(page(model)), ['Revised, Same description']);
-    assert.deepEqual(model.snapshot().submission.value, ['Revised', 'Same description', 'Another item']);
+    assert.deepEqual(model.snapshot().submission.value.map(item => item.value),
+      ['Revised', 'Same description', 'Another item']);
     apply('Remove');
     assert.deepEqual(output(page(model)), ['Same description']);
     apply('Add item');

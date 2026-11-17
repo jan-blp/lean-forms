@@ -12,7 +12,7 @@ structure FormDefinition where
   Raw : Type
   [encode : ToJson Raw]
   initial : Json
-  openState (value : Json) : Except String (State × ModelForm.Snapshot Raw)
+  openState (value : Json) (supply : Model.Supply) : Except String (State × ModelForm.Snapshot Raw)
   execute : State → ModelForm.Event → Except String (State × ModelForm.Snapshot Raw)
   verify (name fingerprint : String) (submission : Json) : Except Json Unit
 
@@ -42,9 +42,13 @@ def FormDefinition.ofModel
   State := ModelForm.State form
   Raw := Model.Raw model
   initial := toJson initial
-  openState value := do
+  openState value supply := do
+    let value ← fromJson? value
+    if (Model.errors (Model.Validation.validate (model := model) value)).any
+        (·.message == Model.duplicateIdsMessage) then
+      throw Model.duplicateIdsMessage
     let state := ModelForm.load form
-      (ModelForm.openState (model := model) form (← fromJson? value) Model.Env.nil)
+      (ModelForm.openState (model := model) form value Model.Env.nil supply)
     pure (state, ModelForm.snapshot form state)
   execute state input := do
     let state ← ModelForm.execute (model := model) form state input
@@ -95,8 +99,9 @@ def RegisteredForm.open
   (form : RegisteredForm)
   (name fingerprint : String)
   (value : Json)
+  (supply : Model.Supply)
   : Except String (FormInstance × Wire.Snapshot) := do
-  let (state, snapshot) ← form.definition.openState value
+  let (state, snapshot) ← form.definition.openState value supply
   pure (form.instance name fingerprint state, form.toWire name fingerprint snapshot)
 
 end Forms.Runtime

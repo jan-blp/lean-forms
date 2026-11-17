@@ -2,22 +2,24 @@ module
 
 public import Forms.Runtime.Identity
 public import Lean.Data.Json
+public import Forms.Model.Format
 
 @[expose] public section
 
 namespace Forms.Runtime.ControlKeyProtocol
 open Lean
-open Forms.Model (ErasedLocation)
+open Forms.Model (ErasedLocation Uuid)
 
 def stepToJson : ErasedLocation.Step → Json
   | .field name => toJson name
   | .constructor tag => Json.mkObj [("constructor", toJson tag)]
-  | .index position => toJson position
+  | .item id => Json.mkObj [("item", toJson id)]
 
 def stepFromJson : Json → Except String ErasedLocation.Step
   | .str name => .ok (.field name)
-  | .num number => .index <$> fromJson? (.num number)
-  | json => .constructor <$> json.getObjValAs? String "constructor"
+  | json => match json.getObjValAs? Uuid "item" with
+    | .ok id => pure (.item id)
+    | .error _ => .constructor <$> json.getObjValAs? String "constructor"
 
 def toString (key : ControlKey) : String :=
   let json := match key with

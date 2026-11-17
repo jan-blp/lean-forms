@@ -138,6 +138,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
   | collection {Γ : Context}
       {α β γ rowState : Type}
       {views : Nat}
+      [keyed : Keyed β]
       (path : Path α (List β))
       (label : Computation Γ α String)
       (row : PresentationNode [] (Context.row β Γ) β rowState γ views)
@@ -149,6 +150,13 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (target : Computation Γ α (Option (PartialPath α β)))
       (body : ComponentNode Γ β state γ holes)
       : ComponentNode Γ α state (Option γ) holes
+  /-- Shows `body` on the part of the value at `path`, which is always there. -/
+  | within {Γ : Context}
+      {α β γ state : Type}
+      {holes : Nat}
+      (path : Path α β)
+      (body : ComponentNode Γ β state γ holes)
+      : ComponentNode Γ α state γ holes
   | load {Γ : Context}
       {α β data : Type}
       {states : Status data → Type}

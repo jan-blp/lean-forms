@@ -51,10 +51,17 @@ inductive ActionError where
   | decode (error : DecodeError)
   | invalid (error : Model.InvocationError)
 
-def noArgument {α : Type} (argument : Option Input) (invocation : α) : Except ActionError α :=
+def noArgument
+  {m : Type → Type}
+  {α : Type}
+  [Monad m]
+  [MonadExcept ActionError m]
+  (argument : Option Input)
+  (invocation : α)
+  : m α :=
   match argument with
-  | none => .ok invocation
-  | some _ => .error (.decode (.clientBug .unexpectedArgument))
+  | none => pure invocation
+  | some _ => throw (.decode (.clientBug .unexpectedArgument))
 
 structure NodeEvaluation
   (Γ : Context)
@@ -64,7 +71,10 @@ structure NodeEvaluation
   locals : state
   view : viewType
   requests : List HttpRequest
-  apply : List Nat → Option Input → Except ModelView.ActionError (ComponentUpdate Γ α state)
+  /-- Draws new item ids from the `Supply` state. -/
+  apply :
+    List Nat → Option Input →
+      StateT Supply (Except ModelView.ActionError) (ComponentUpdate Γ α state)
 
 /-- Runtime facts shared by one evaluation; unlike `Env`, components cannot bind or set them.
 Build with `Ambient.of`, which derives `messages` from `diagnostics`. -/
@@ -72,14 +82,12 @@ structure Ambient where
   cache : HttpRequest.Cache
   diagnostics : List Diagnostic
   messages : Std.HashMap ErasedLocation (List String)
-  revision : Nat
 
 def Ambient.of
   (cache : HttpRequest.Cache)
   (diagnostics : List Diagnostic)
-  (revision : Nat)
   : Ambient :=
-  { cache, diagnostics, revision, messages := Diagnostic.messageIndex diagnostics }
+  { cache, diagnostics, messages := Diagnostic.messageIndex diagnostics }
 
 def Ambient.messagesAt (ambient : Ambient) (location : ErasedLocation) : List String :=
   ambient.messages.getD location []
@@ -89,8 +97,8 @@ structure Evaluated (Γ : Context) (α state β : Type)
   value : α
   env : Env Γ
 
-def absent {α : Type} : Except ActionError α :=
-  .error (.invalid .absent)
+def absent {m : Type → Type} {α : Type} [MonadExcept ActionError m] : m α :=
+  throw (.invalid .absent)
 
 /-- A `bind` around an evaluated `body`, which stores the bound value at its head. -/
 def bound
@@ -187,6 +195,7 @@ def renderCollection
   {Γ : Context}
   {α β : Type}
   {views : Nat}
+  [Keyed β]
   (display : CollectionDisplay Γ α β views)
   (value : α)
   (env : Env Γ)
@@ -197,12 +206,17 @@ def renderCollection
   (messages : List String)
   : Display.View :=
   match display with
-  | .list => .list label (rows.map (·[0]) ++ content) messages
+  | .list =>
+    .list label ((items.zipWith (fun item row => .keyed (Keyed.id item) row[0]) rows) ++ content)
+      messages
   | .table headers rowLabel selected =>
     let rows := (items.mapFinIdx fun index item bound =>
       let rowEnv := Env.row items ⟨index, bound⟩ env
-      (rowLabel.eval item rowEnv, selected.map (·.eval item rowEnv))).zipWith
-      (fun (label, selected) cells => { label, selected, cells := cells.toList }) rows
+      ({ key := Keyed.id item
+         label := rowLabel.eval item rowEnv
+         selected := selected.map (·.eval item rowEnv)
+         cells := [] } : Display.TableRow)).zipWith
+      (fun row cells => { row with cells := cells.toList }) rows
     .table label (headers.eval value env).toList rows (.ofList content) messages
 
 mutual
@@ -232,12 +246,11 @@ def evaluateNode
         | [] => do
           if disabled then throw (.invalid .disabled)
           let some input := argument | throw (.decode (.clientBug .missingArgument))
-          let updated ← (Input.decode widget input).mapError .decode
+          let updated ← ((Input.decode widget input).mapError .decode : Except ActionError _)
           return {
             value := path.set updated value
             state := env
-            locals := ()
-            invalidatesDestinations := true }
+            locals := () }
         | _ => absent }
   | .computed label computation =>
     { output := ()
@@ -259,7 +272,7 @@ def evaluateNode
         | [] => do
           if disabled then throw (.invalid .disabled)
           noArgument argument ()
-          return action.run value env
+          action.run value env
         | _ => absent }
   | .tabBar (n := n) label active tabs =>
     { output := ()
@@ -276,7 +289,8 @@ def evaluateNode
           if disabled then throw (.invalid .disabled)
           let some (.text chosen) := argument | throw (.decode (.clientBug (.wrongArgument "text")))
           let some index := chosen.toNat? | throw (.decode (.clientBug .unknownOption))
-          if h : index < n then return { value, state := active.set ⟨index, h⟩ env, locals := () }
+          if h : index < n then
+            return { value, state := active.set ⟨index, h⟩ env, locals := () }
           throw (.decode (.clientBug .unknownOption))
         | _ => absent }
   | .withAvailability availability body =>
@@ -288,8 +302,8 @@ def evaluateNode
       view := fun content => if availability == .hidden then .hidden else body.view content
       requests := if availability == .hidden then [] else body.requests
       apply := fun route argument => match availability with
-        | .hidden => .error (.invalid .hidden)
-        | .disabled => .error (.invalid .disabled)
+        | .hidden => throw (.invalid .hidden)
+        | .disabled => throw (.invalid .disabled)
         | .enabled => body.apply route argument }
   | .select (decidableEq := _) (key := _) path label options selected =>
     let options := (options.eval value env).options
@@ -317,8 +331,7 @@ def evaluateNode
           return {
             value := path.set option.start value
             state := env
-            locals := ()
-            invalidatesDestinations := true }
+            locals := () }
         | [], some _ => throw (.decode (.clientBug (.wrongArgument "an option")))
         | [], none => throw (.decode (.clientBug .missingArgument))
         | _, _ => absent }
@@ -329,7 +342,7 @@ def evaluateNode
       requests := []
       apply := fun _ _ => absent }
   | .issues =>
-    { output := Diagnostic.issues ambient.diagnostics location ambient.revision
+    { output := Diagnostic.issues ambient.diagnostics location
       locals := ()
       view := fun _ => .hidden
       requests := []
@@ -354,6 +367,13 @@ def evaluateNode
         apply := fun route argument => do
           let updated ← body.apply route argument
           return updated.mapValue (fun focused => path.set focused value) }
+  | .within path body =>
+    let body := evaluateNode body (path.get value) env ambient locals target
+      (location ++ path.erase) disabled
+    { body with
+      apply := fun route argument => do
+        let updated ← body.apply route argument
+        return updated.mapValue (fun focused => path.set focused value) }
   | .load (inst := _inst) (source := source) (body := body) .. =>
     let source := source.eval value env
     let status := source.resolve ambient.cache
@@ -370,12 +390,13 @@ def evaluateNode
     (evaluatePresentation body value env ambient locals target location disabled
       (nomatch ·)).mapView
       fun views _ => views[0]
-  | .collection path label row display =>
+  | .collection (keyed := _) path label row display =>
     let items := path.get value
     let location := location ++ path.erase
     let rows := items.mapFinIdx fun index item bound =>
       evaluatePresentation row item (Env.row items ⟨index, bound⟩ env) ambient
-        (locals[index]?.getD row.initialState) (target.child index) (location ++ [.index index])
+        (locals[index]?.getD row.initialState) (target.child index)
+        (location ++ [.item (Keyed.id item)])
         disabled (nomatch ·)
     let states := rows.map (·.locals)
     let render views (content : Vector (List Display.View) 1) :=
@@ -394,8 +415,7 @@ def evaluateNode
             return {
               value := path.set (items.eraseIdx index) value
               state := env
-              locals := states.eraseIdx index
-              invalidatesDestinations := true }
+              locals := states.eraseIdx index }
           return { updated with
             value := path.set (items.set index updated.value) value
             state := env
@@ -449,9 +469,8 @@ def evaluate
   (env : Env Γ)
   (locals : component.LocalState := component.initialState)
   (diagnostics : List Diagnostic := [])
-  (revision : Nat := 0)
   : Evaluated Γ α component.LocalState β :=
-  let ambient := Ambient.of cache diagnostics revision
+  let ambient := Ambient.of cache diagnostics
   let evaluated := (evaluateNode component.node value env ambient locals {} []).closed
   { toNodeEvaluation := { evaluated with view := evaluated.view.dedupe }
     toAmbient := ambient
@@ -462,8 +481,8 @@ def Evaluated.applyKey
   {α state β : Type}
   (evaluated : Evaluated Γ α state β)
   (key : ControlKey)
-  (argument : Option Input := none)
-  : Except ActionError (ComponentUpdate Γ α state) := do
+  (argument : Option Input)
+  : StateT Supply (Except ActionError) (ComponentUpdate Γ α state) := do
   let some control := evaluated.view.controls.find? (·.key == key) | absent
   evaluated.apply control.target.indices argument
 
@@ -494,7 +513,7 @@ def decodeKey
   (argument : Option Input)
   (env : Env Γ)
   (locals : component.LocalState := component.initialState)
-  : Except ActionError (ComponentUpdate Γ α component.LocalState) :=
+  : StateT Supply (Except ActionError) (ComponentUpdate Γ α component.LocalState) :=
   (evaluate component value cache env locals).applyKey key argument
 
 end Forms.Runtime.ModelView
@@ -510,8 +529,7 @@ def Component.evaluate
   (cache : HttpRequest.Cache := {})
   (locals : component.LocalState := component.initialState)
   (diagnostics : List Diagnostic := [])
-  (revision : Nat := 0)
   : Runtime.ModelView.Evaluated Γ α component.LocalState β :=
-  Runtime.ModelView.evaluate component value cache env locals diagnostics revision
+  Runtime.ModelView.evaluate component value cache env locals diagnostics
 
 end Forms.Model

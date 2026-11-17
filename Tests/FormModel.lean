@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.Derive
+public import Forms.Model.Supply
 meta import Forms.Model.Path.Theorems
 
 @[expose] public section
@@ -75,6 +76,7 @@ inductive Choice where
   deriving FormModel
 
 structure Line where
+  id : Uuid
   amount : Nat
   amount_valid : 1 ≤ amount
   deriving FormModel
@@ -84,6 +86,8 @@ instance : ConstraintRule Line.Constraint.amount_valid where
     if h : 1 ≤ parts.amount then .valid h
     else .invalid (proof := h) (message := "Enter an amount.")
       (targets := locations[Line.Field.amount])
+
+instance : Keyed Line.Raw := ⟨(·.id)⟩
 
 structure Basket where
   lines : List Line
@@ -325,9 +329,16 @@ public def run : IO Unit := do
   check "ModelNestedPathUpdate" (street.get updated == "Road" && updated.age == 20)
   check "ModelPathLensUpdate"
     (LeanLens.view street.toLens (LeanLens.set street.toLens "Road" good) == "Road")
-  check "ModelListValid" ((Basket.validate ⟨[⟨1⟩, ⟨2⟩]⟩).toOption.any (·.val.lines.length == 2))
-  check "ModelListItemErrors" ((errors (Basket.validate ⟨[⟨1⟩, ⟨0⟩, ⟨0⟩]⟩)).map targetKeys ==
-    [[["lines", "1", "amount"]], [["lines", "2", "amount"]]])
+  let first : Uuid := .ofNat 1
+  let second : Uuid := .ofNat 2
+  let third : Uuid := .ofNat 3
+  check "ModelListValid"
+    ((Basket.validate ⟨[⟨first, 1⟩, ⟨second, 2⟩]⟩).toOption.any (·.val.lines.length == 2))
+  check "ModelListItemErrorsUseItemIds"
+    ((errors (Basket.validate ⟨[⟨first, 1⟩, ⟨second, 0⟩, ⟨third, 0⟩]⟩)).map targetKeys ==
+      [[["lines", second.value, "amount"]], [["lines", third.value, "amount"]]])
+  check "ModelListRejectsDuplicateIds"
+    ((errors (Basket.validate ⟨[⟨first, 1⟩, ⟨first, 2⟩]⟩)).map (·.message) == [duplicateIdsMessage])
   check "ModelListConstraint" ((errors (Basket.validate ⟨[]⟩)).map targetKeys == [[["lines"]]])
   check "DeriveProjectActiveConstructor"
     ((Constructors.project Delivery.Constructor.campus (Delivery.Raw.campus ⟨20⟩)).map (·.age) == some 20)

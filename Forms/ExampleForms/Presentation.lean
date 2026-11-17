@@ -9,8 +9,8 @@ open Forms.Model Forms.ExampleForms.Outputs
 def summary
   {Γ : Context}
   (table : InputRef Γ (List RowOutput))
-  : Component Γ (List String) String :=
-  let text : Computation Γ (List String) String := {
+  : Component Γ (List (Item String)) String :=
+  let text : Computation Γ (List (Item String)) String := {
     inputs := inputs[.ui table]
     run := fun rows => String.intercalate ", " ((rows.filter (·.selected)).map (·.description)) }
   .withOutput (.computed "Selected descriptions" text) text
@@ -24,7 +24,7 @@ def tableAbove : Layout [0, 0] :=
 /-- Owns the table and its summary; `arrangement` only decides where they appear. -/
 def tableSummary
   (arrangement : Layout [0, 0] := summaryAbove)
-  : Component [] (List String) String :=
+  : Component [] (List (Item String)) String :=
   .present <|
     .own selectionTable <|
       .own (summary .here) <|
@@ -75,11 +75,14 @@ def noteTabs {Γ : Context} : Component Γ String :=
               #v[.place (.there .here), .place .here][active]] }
 
 /-- An outer presentation that owns rows with their own presentations. -/
-def notes : Component [] (List String) Nat :=
+def notes : Component [] (List (Item String)) Nat :=
   .present <|
-    .own (Component.void (.list .self "Notes" (.numbered "Note") "Add note" "" noteTabs)) <|
+    .own (Component.void (.list .self "Notes" (.numbered "Note") "Add note" (Item.fresh "")
+        (.within path[Item.Field.value] noteTabs))) <|
       .own (.computed "Note count" { inputs := inputs[path[]], run := fun notes => toString notes.length }) <|
         .layout { inputs := inputs[path[]], run := List.length }
           (.const (.group none [.place .here, .place (.there .here)]))
+
+def initialNotes : List (Item String) := Item.numbered ["First note", "Second note"]
 
 end Forms.ExampleForms.Presentation

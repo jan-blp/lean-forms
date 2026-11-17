@@ -2,25 +2,26 @@ module
 
 public import Forms.Runtime.Feedback
 public import Lean.Data.Json
+public import Forms.Model.Format
 
 @[expose] public section
 
 namespace Forms.Runtime.FeedbackProtocol
 open Lean Feedback
-open Forms.Model (ErasedLocation)
+open Forms.Model (ErasedLocation Uuid)
 
 def locationToJson (location : ErasedLocation) : Json :=
   toJson (location.map fun step => match step with
     | .field name => Json.mkObj [("kind", toJson "field"), ("name", toJson name)]
     | .constructor tag => Json.mkObj [("kind", toJson "constructor"), ("tag", toJson tag)]
-    | .index position => Json.mkObj [("kind", toJson "index"), ("position", toJson position)])
+    | .item id => Json.mkObj [("kind", toJson "item"), ("id", toJson id)])
 
 def locationFromJson (json : Json) : Except String ErasedLocation := do
   (← json.getArr?).toList.mapM fun step => do
     match ← step.getObjValAs? String "kind" with
     | "field" => pure (.field (← step.getObjValAs? String "name"))
     | "constructor" => pure (.constructor (← step.getObjValAs? String "tag"))
-    | "index" => pure (.index (← step.getObjValAs? Nat "position"))
+    | "item" => pure (.item (← step.getObjValAs? Uuid "id"))
     | _ => throw "Invalid location step"
 
 def errorToJson (error : Model.Diagnostic) : Json :=

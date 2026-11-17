@@ -1,7 +1,7 @@
 // Generated from Lean. Run npm --prefix web run generate.
 import type * as FormsReact from "../../FormsReact.js";
 
-export type Request = { "open": { "start": FormStart } } | { "send": { "handle": string; "event": Event } } | { "dispose": { "handle": string } };
+export type Request = { "open": { "start": FormStart; "seed": string } } | { "send": { "handle": string; "event": Event } } | { "dispose": { "handle": string } };
 export type FormStart = { "form": string; "fingerprint": string; "value": unknown };
 export type Event = { "apply": { "key": string; "argument": unknown } } | { "draft": { "key": string; "message": string | null } } | "submit" | "reset" | { "submitted": { "outcome": HttpOutcome } } | { "fetched": { "id": string; "outcome": HttpOutcome } };
 export type HttpOutcome = { "response": { "status": number; "body": string } } | { "unreachable": { "message": string } };

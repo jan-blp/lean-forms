@@ -32,6 +32,9 @@ theorem View.dedupeFrom_spec
       rw [footer_keys, row_keys]
       simp
     · simpa [View.dedupeFrom] using footer_nodup
+  | .keyed key body =>
+    have := View.dedupeFrom_spec seen body nodup
+    simpa [View.dedupeFrom, View.controls] using this
   | .hidden => simp [View.dedupeFrom, View.controls, nodup]
   | .computed .. => simp [View.dedupeFrom, View.controls, nodup]
 
@@ -62,7 +65,7 @@ theorem View.dedupeRows_spec
     (View.dedupeRows seen rows).seen.Nodup := by
   match rows with
   | [] => simp [View.dedupeRows, View.controlsRows, nodup]
-  | ⟨label, cells, selected⟩ :: rest =>
+  | ⟨key, label, cells, selected⟩ :: rest =>
     have ⟨head_keys, head_nodup⟩ := View.dedupeAll_spec seen cells nodup
     have ⟨tail_keys, tail_nodup⟩ := View.dedupeRows_spec (View.dedupeAll seen cells).seen rest head_nodup
     refine ⟨?_, ?_⟩

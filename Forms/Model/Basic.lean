@@ -2,6 +2,7 @@ module
 
 public import Lean.Data.Json
 public import Forms.Model.ErasedLocation
+public import Forms.Model.Keyed
 public import Forms.Model.LawfulJson
 public import LeanLens.Lawful
 public import Std.Data.HashMap
@@ -145,6 +146,7 @@ inductive Location : {α : Type} → α → Type 1 where
       : Location (Constructors.inject constructor value)
   | index
       {α : Type}
+      [keyed : Keyed α]
       {value : List α}
       (position : Fin value.length)
       (rest : Location (value.get position))
@@ -154,13 +156,15 @@ def Location.keys {α : Type} {value : α} : Location value → List String
   | .self => []
   | .field (fields := _) f rest => Fields.key f :: rest.keys
   | .constructor (constructors := _) c rest => Constructors.key c :: rest.keys
-  | index position rest => toString position.val :: rest.keys
+  | .index (keyed := _) (value := items) position rest =>
+    (Keyed.id (items.get position)).value :: rest.keys
 
 def Location.erase {α : Type} {value : α} : Location value → ErasedLocation
   | .self => []
   | .field (fields := _) f rest => .field (Fields.key f) :: rest.erase
   | .constructor (constructors := _) c rest => .constructor (Constructors.key c) :: rest.erase
-  | .index position rest => .index position.val :: rest.erase
+  | .index (keyed := _) (value := items) position rest =>
+    .item (Keyed.id (items.get position)) :: rest.erase
 
 inductive Targets (α : Type) (value : α) where
   | global
@@ -303,19 +307,46 @@ instance : Validation Uuid := ⟨fun value => .ok ⟨value, rfl⟩⟩
 @[reducible] instance {α : Type} [FormModel α] : FormModel (List α) :=
   ⟨List (Raw α), List.map FormModel.erase⟩
 
-/-- Validates every item; errors point at their item's position. -/
-instance {α : Type} [FormModel α] [Validation α] : Validation (List α) where
+/-- Scalars whose raw values are always valid; lists of them need no item ids. -/
+class Unconstrained (α : Type) [FormModel α] where
+  validated : (raw : Raw α) → Validated α raw
+
+instance : Unconstrained String := ⟨fun value => ⟨value, rfl⟩⟩
+instance : Unconstrained Bool := ⟨fun value => ⟨value, rfl⟩⟩
+instance : Unconstrained Nat := ⟨fun value => ⟨value, rfl⟩⟩
+instance : Unconstrained Int := ⟨fun value => ⟨value, rfl⟩⟩
+instance : Unconstrained Int32 := ⟨fun value => ⟨value, rfl⟩⟩
+instance : Unconstrained Int64 := ⟨fun value => ⟨value, rfl⟩⟩
+instance : Unconstrained Decimal := ⟨fun value => ⟨value, rfl⟩⟩
+instance : Unconstrained Std.Time.PlainDate := ⟨fun value => ⟨value, rfl⟩⟩
+instance : Unconstrained Uuid := ⟨fun value => ⟨value, rfl⟩⟩
+
+instance {α : Type} [FormModel α] [Unconstrained α] : Validation (List α) where
+  validate raw := .ok ⟨raw.map fun item => (Unconstrained.validated item).val, by
+    simp [FormModel.erase, Function.comp_def, (Unconstrained.validated _).property]⟩
+
+def duplicateIdsMessage : String := "Two items share an id."
+
+def duplicateIds {β : Type} [Keyed β] (items : List β) : Bool :=
+  let ids := items.map Keyed.id
+  ids.eraseDups.length != ids.length
+
+/-- Validates every item; errors point at their item's id. Repeated ids are an error. -/
+instance {α : Type} [FormModel α] [Validation α] [Keyed (Raw α)] : Validation (List α) where
   validate raw :=
     let results (position : Fin raw.length) := Validation.validate (model := α) (raw.get position)
-    if valid : ∀ position, (results position).isOk then
+    let duplicates : List (Error raw) :=
+      if duplicateIds raw then [{ message := duplicateIdsMessage, targets := .locations .self }]
+      else []
+    if valid : (∀ position, (results position).isOk) ∧ duplicates.isEmpty then
       let values (position : Fin raw.length) : Validated α (raw.get position) :=
-        match results position, valid position with
+        match results position, valid.1 position with
         | .ok value, _ => value
         | .error _, h => nomatch h
       .ok ⟨List.ofFn fun position => (values position).val, by
         simp [FormModel.erase, Function.comp_def, (values _).property]⟩
     else
-      .error ((List.finRange raw.length).flatMap fun position =>
+      .error (duplicates ++ (List.finRange raw.length).flatMap fun position =>
         (errors (results position)).map (Error.mapLocations (.index position)))
 
 /-- A model whose raw values are all valid. -/

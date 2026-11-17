@@ -22,10 +22,14 @@ private def actionArgument (input : Display.Editor) : Json :=
     let picked (value : String) := (value == toggled) != selected.contains value
     toJson ((options.map (·.value)).filter picked)
 
+private def seed : String :=
+  "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+
 /-- The initial snapshot, and the snapshot after applying an argument to each control. -/
 private def fixture (name : String) (form : RegisteredForm) : Except String Json := do
-  let (_, typed) ← form.definition.openState form.definition.initial
-  let (opened, initial) ← form.open name formFingerprint form.definition.initial
+  let some supply := Model.Supply.ofSeed? seed | throw "Invalid seed"
+  let (_, typed) ← form.definition.openState form.definition.initial supply
+  let (opened, initial) ← form.open name formFingerprint form.definition.initial supply
   let cases ← typed.controls.mapM fun control => do
     let argument := actionArgument control.input
     let key := ControlKeyProtocol.toString control.key
@@ -35,6 +39,7 @@ private def fixture (name : String) (form : RegisteredForm) : Except String Json
       ("expected", toJson expected)])
   pure (Json.mkObj [
     ("start", toJson (form.start name formFingerprint)),
+    ("seed", toJson seed),
     ("initial", toJson initial),
     ("cases", toJson cases)])
 

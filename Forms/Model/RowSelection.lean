@@ -1,18 +1,13 @@
 module
 
+public import Forms.Model.Scalar
+
 @[expose] public section
 namespace Forms.Model
 
 inductive RowSelection where
   | none
-  | row (index : Nat)
+  | row (id : Uuid)
   deriving BEq, DecidableEq, Repr
-
-/-- Removing a row keeps the same item selected, unless that item was removed. -/
-def RowSelection.remove (removed : Nat) : RowSelection → RowSelection
-  | .none => .none
-  | .row index =>
-    if index == removed then .none
-    else .row (if removed < index then index - 1 else index)
 
 end Forms.Model

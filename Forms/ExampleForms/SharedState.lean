@@ -22,15 +22,15 @@ def consumer
       .button "Increment private" (.set own {
         inputs := inputs[.ui own], run := fun count => count + 1 })]
 
-def form : Component [] (List Nat) :=
+def form : Component [] (List (Item Nat)) :=
   .bind (0 : Nat) <|
     let shared : Var [⟨.writable, Nat⟩] Nat := .here
     .group "Shared local state" [
       Component.void <| .list .self "Consumers" (.numbered "Consumer") "Add consumer"
-          0 (consumer shared),
+          (Item.fresh 0) (.within path[Item.Field.value] (consumer shared)),
       .computed "Shared count outside the list" { inputs := inputs[.ui shared], run := toString },
       .button "Clear shared" (.set shared (.const 0))]
 
-def initial : List Nat := [10, 20]
+def initial : List (Item Nat) := Item.numbered [10, 20]
 
 end Forms.ExampleForms.SharedState

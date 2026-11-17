@@ -1,7 +1,9 @@
 module
 
 public import Forms.ExampleForms.Navigation
+public import Forms.ExampleForms.Expenses
 public import Forms.Runtime.ModelForm
+public import Tests.Supply
 
 public section
 namespace Tests.Navigation
@@ -16,7 +18,7 @@ private def opened
   (form : Component [] Person.Raw β)
   (value : Person.Raw)
   : ModelForm.State form :=
-  ModelForm.openState (model := Person) form value Env.nil
+  ModelForm.openState (model := Person) (supply := supply) form value Env.nil
 
 private def apply
   {β : Type}
@@ -53,31 +55,51 @@ private def remembered : Component [] Person.Raw :=
         .button "Visit saved" (.visit { inputs := inputs[.ui saved], run := id }),
         .button "Visit current" (.visit first)]
 
+private def rememberedRow : Component [] ExpenseReport.Raw :=
+  .bind (none : Option Destination) <|
+    .observe .issues <|
+      let saved : Var _ (Option Destination) := .there .here
+      .group "Remembered row" [
+        ExpenseReport.listForm,
+        .button "Remember" (.set saved {
+          inputs := inputs[.ui (Ref.here : InputRef _ (List Issue))]
+          run := fun issues => issues.head?.bind (·.destination?) }),
+        .button "Visit saved" (.visit { inputs := inputs[.ui saved], run := id })]
+
+private def press
+  (form : Component [] ExpenseReport.Raw)
+  (state : ModelForm.State form)
+  (label : String)
+  : IO (ModelForm.State form) := do
+  let some control := state.evaluation.view.controls.find? (·.label == label)
+    | throw (IO.userError s!"Missing control: {label}")
+  IO.ofExcept (ModelForm.execute (model := ExpenseReport) form state (.apply control.key none))
+
 def run : IO Unit := do
   let name : ErasedLocation := [.field "name"]
   let street : ErasedLocation := [.field "address", .field "street"]
   let diagnostics : List Diagnostic := [
     { message := "Both", targets := .locations name [street] },
     { message := "Global", targets := .global }]
-  let root := Component.issues.evaluate Person.initial Env.nil
-    (diagnostics := diagnostics) (revision := 7)
+  let root := Component.issues.evaluate Person.initial Env.nil (diagnostics := diagnostics)
   let address : Component [] Person.Raw (Option (List Issue)) :=
     .focus (.const (some (.ofPath path[Person.Field.address]))) .issues
-  let addressIssues := (address.evaluate Person.initial Env.nil
-    (diagnostics := diagnostics) (revision := 7)).output.getD []
+  let addressIssues :=
+    (address.evaluate Person.initial Env.nil (diagnostics := diagnostics)).output.getD []
   check "IssuesAreOrdinaryScopedOutput"
     (root.output.length == 2 && addressIssues.map (·.message) == ["Both"] &&
-      addressIssues.head?.bind (·.destination?) == some { locations := [street], revision := 7 })
+      addressIssues.head?.bind (·.destination?) == some { locations := [street] })
 
-  let rows : Component [] (List Address.Raw) (List (List Issue)) :=
-    .list .self "Addresses" (.numbered "Address") "Add" ⟨""⟩ .issues
+  let rows : Component [] (List (Item Address.Raw)) (List (List Issue)) :=
+    .list .self "Addresses" (.numbered "Address") "Add" (Item.fresh ⟨""⟩) .issues
+  let secondStreet : ErasedLocation := [.item secondId, .field "value", .field "street"]
   let rowIssues : List Diagnostic := [
-    { message := "Second address", targets := .locations [.index 1, .field "street"] [] }]
-  let collected := (rows.evaluate [⟨"Main"⟩, ⟨""⟩] Env.nil (diagnostics := rowIssues)).output
+    { message := "Second address", targets := .locations secondStreet [] }]
+  let collected := (rows.evaluate [⟨firstId, ⟨"Main"⟩⟩, ⟨secondId, ⟨""⟩⟩] Env.nil
+    (diagnostics := rowIssues)).output
   check "CollectionsCollectIssueOutputs"
     (collected.map List.length == [0, 1] &&
-      (collected[1]?.getD []).head?.bind (·.destination?) ==
-        some { locations := [[.index 1, .field "street"]], revision := 0 })
+      (collected[1]?.getD []).head?.bind (·.destination?) == some { locations := [secondStreet] })
 
   let form := Forms.ExampleForms.Navigation.form
   let initial := opened form Forms.ExampleForms.Navigation.initial
@@ -130,13 +152,24 @@ def run : IO Unit := do
 
   let invalidName := opened remembered { Person.initial with name := "" }
   let saved ← apply remembered invalidName "Remember"
-  let stale ← apply remembered saved "Visit saved"
-  let fresh ← apply remembered stale "Visit current"
-  check "SavedDestinationsCannotRetargetAfterRevision"
-    ((focuses stale).isEmpty && focuses fresh == [.edit name])
+  let later ← apply remembered saved "Visit saved"
+  let fresh ← apply remembered later "Visit current"
+  check "SavedDestinationsStayValid"
+    (focuses later == [.edit name] && focuses fresh == [.edit name])
   let acknowledged ← IO.ofExcept
     (ModelForm.execute (model := Person) remembered fresh (.submitted .accepted))
   check "FocusIsAnEventEffect" (focuses acknowledged).isEmpty
+
+  let report : ExpenseReport.Raw := { ExpenseReport.initial with
+    expenses := [⟨firstId, "Train to Bern", 58, false⟩, ⟨secondId, "", 180, true⟩] }
+  let rowsOpened := ModelForm.openState (model := ExpenseReport) (supply := supply) rememberedRow
+    report Env.nil
+  let rowSaved ← press rememberedRow rowsOpened "Remember"
+  let rowRemoved ← press rememberedRow rowSaved "Remove"
+  let rowVisited ← press rememberedRow rowRemoved "Visit saved"
+  check "SavedDestinationFollowsItsRowAfterRemoval"
+    (rowRemoved.value.expenses.length == 1 &&
+      focuses rowVisited == [.edit [.field "expenses", .item secondId, .field "description"]])
 
   let fields : Component [] Person.Raw := .group "Fields" [
     .disabledWhen (.const true) (.field path[Person.Field.name] "Name" .text),
@@ -163,7 +196,7 @@ def run : IO Unit := do
       .button "Visit" (.visit {
         inputs := inputs[.ui (Ref.here : InputRef _ (List Issue))]
         run := fun issues => issues.head?.bind (·.destination?) })]
-  let initial := ModelForm.openState (model := Person) resolution Person.initial Env.nil
+  let initial := ModelForm.openState (model := Person) (supply := supply) resolution Person.initial Env.nil
   let submitted := ModelForm.submit initial
   let some visit := initial.evaluation.view.controls.find? (·.label == "Visit")
     | throw (IO.userError "Missing visit control")
@@ -182,7 +215,7 @@ def run : IO Unit := do
     .field path[Person.Field.address, Address.Field.street] "Street" .text,
     .field path[Person.Field.age] "Age" .natural]
   let submitted := ModelForm.submit
-    (ModelForm.openState (model := Person) ordered Person.initial Env.nil)
+    (ModelForm.openState (model := Person) (supply := supply) ordered Person.initial Env.nil)
   check "SubmitFocusesTheFirstRenderedIssue" (focuses submitted == [.edit street])
 
 end Tests.Navigation

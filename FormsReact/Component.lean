@@ -111,8 +111,11 @@ structure Group where
   label : Option String
   children : List Component
   errors : List String
+  /-- The item id of a list row; React keeps the row's state when siblings move. -/
+  key : Option String
 
 structure TableRow where
+  key : String
   label : String
   cells : List Component
   selected : Option Bool
@@ -167,7 +170,7 @@ def draftFieldsOf : List Component → List String
 
 def draftFieldsOfRows : List TableRow → List String
   | [] => []
-  | ⟨_, cells, _⟩ :: rest => draftFieldsOf cells ++ draftFieldsOfRows rest
+  | ⟨_, _, cells, _⟩ :: rest => draftFieldsOf cells ++ draftFieldsOfRows rest
 end
 
 end FormsReact

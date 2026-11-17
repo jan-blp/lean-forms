@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.RowSelection
+public import Forms.Model.Item
 public import Forms.Model.Component.Rename
 
 @[expose] public section
@@ -42,10 +43,11 @@ structure Branch (Γ : Context) (α : Type) [Constructors α] where
 
 def RowSelection.itemPath
   {α β : Type}
+  [Keyed β]
   (items : Path α (List β))
   : RowSelection → Option (PartialPath α β)
   | .none => Option.none
-  | .row index => some ((PartialPath.ofPath items).trans (.index index .self))
+  | .row id => some ((PartialPath.ofPath items).trans (.item id .self))
 
 @[reducible] def Component.output
   {Γ : Context}
@@ -102,6 +104,7 @@ def RowSelection.itemPath
   {Γ : Context}
   {α β γ : Type}
   {views : Nat}
+  [Keyed β]
   (path : Path α (List β))
   (label : Computation Γ α String)
   (row : Presentation [] (Context.row β Γ) β γ views)
@@ -117,6 +120,15 @@ def RowSelection.itemPath
   (body : Component Γ β γ holes)
   : Component Γ α (Option γ) holes :=
   ⟨body.LocalState, .focus target body.node⟩
+
+@[reducible] def Component.within
+  {Γ : Context}
+  {α β γ : Type}
+  {holes : Nat}
+  (path : Path α β)
+  (body : Component Γ β γ holes)
+  : Component Γ α γ holes :=
+  ⟨body.LocalState, .within path body.node⟩
 
 /-- Loaded subtree state persists while its resolved status is equal. -/
 @[reducible] def Component.load
@@ -473,14 +485,15 @@ The first entry in `body`'s context is the producer's current output, available 
 @[reducible] def Component.withAddButton
   {Γ : Context}
   {α β γ : Type}
+  [Keyed β]
   (path : Path α (List β))
   (caption : Computation Γ α String)
-  (initial : β)
+  (initial : Uuid → β)
   (collection : Component Γ α γ (holes := 1))
   : Component Γ α γ :=
   .present <|
     .own collection <|
-      .own (.button (caption.rename Renaming.shift) (.append path (.const initial))) <|
+      .own (.button (caption.rename Renaming.shift) (.appendFresh path (.const initial))) <|
         .layout { inputs := inputs[.ui (Ref.there Ref.here)], run := id }
           (.const (.fill (.there .here) (.cons [.place .here] .nil)))
 
@@ -495,11 +508,12 @@ The first entry in `body`'s context is the producer's current output, available 
 @[reducible] def Component.list
   {Γ : Context}
   {α β γ : Type}
+  [Keyed β]
   (path : Path α (List β))
   (label : Computation Γ α String)
   (rowLabel : Computation (Context.row β Γ) β String)
   (addCaption : Computation Γ α String)
-  (initial : β)
+  (initial : Uuid → β)
   (body : Component Γ β γ)
   : Component Γ α (List γ) :=
   let rowLabel := rowLabel.rename fun ref => .there (.there ref)
@@ -514,11 +528,12 @@ The first entry in `body`'s context is the producer's current output, available 
 @[reducible] def Component.table
   {Γ : Context}
   {α β γ : Type}
+  [Keyed β]
   (path : Path α (List β))
   (label : Computation Γ α String)
   (rowLabel : Computation (Context.row β Γ) β String)
   (addCaption : Computation Γ α String)
-  (initial : β)
+  (initial : Uuid → β)
   (columns : Columns Γ β γ)
   (selection : Option (Var Γ RowSelection) := none)
   : Component Γ α (List γ) :=
@@ -526,18 +541,20 @@ The first entry in `body`'s context is the producer's current output, available 
   let isSelected (selection : Var (Context.row β Γ) RowSelection)
       : Computation (Context.row β Γ) β Bool :=
     { inputs := inputs[.ui selection, .ui Ref.row]
-      run := fun current row => current == .row row.index }
+      run := fun current row => current == .row (Keyed.id row.current) }
   let actions : Component (Context.row β Γ) β := match selection with
     | none => .button "Remove" removeRow
     | some selection =>
       let selection := Renaming.row selection
       .sequence
         (.button ((if · then "Selected" else "Select") <$> isSelected selection)
-          (.set selection { inputs := inputs[.ui Ref.row], run := fun row => .row row.index }))
+          (.set selection
+            { inputs := inputs[.ui Ref.row], run := fun row => .row (Keyed.id row.current) }))
         (.button "Remove" <|
           .set selection
             { inputs := inputs[.ui selection, .ui Ref.row]
-              run := fun current row => current.remove row.index } ++ removeRow)
+              run := fun current row =>
+                if current == .row (Keyed.id row.current) then .none else current } ++ removeRow)
   let selected := selection.map (isSelected ∘ Renaming.row)
   let columns := (columns.rename Renaming.row).snoc "Actions" actions
   .withAddButton path addCaption initial <|
