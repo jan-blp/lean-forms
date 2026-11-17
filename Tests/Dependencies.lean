@@ -3,6 +3,7 @@ module
 public import Forms.Model.Computation
 public import Forms.Model.RowSelection
 public import Tests.FormModel
+public import Tests.FreshId
 
 @[expose] public section
 namespace Tests.Dependencies
@@ -53,11 +54,11 @@ def run : IO Unit := do
   check "DependenciesComposeWhenEmbedded" (embedded.eval person Env.nil == street.eval person.address Env.nil)
   let selection : Var [⟨.writable, RowSelection⟩, ⟨.writable, RowSelection⟩] RowSelection := .here
   let other : Var [⟨.writable, RowSelection⟩, ⟨.writable, RowSelection⟩] RowSelection := .there .here
-  let ui : Env [⟨.writable, RowSelection⟩, ⟨.writable, RowSelection⟩] := env[.row 1, .none]
+  let ui : Env [⟨.writable, RowSelection⟩, ⟨.writable, RowSelection⟩] := env[.row secondId, .none]
   let initial : Env [⟨.writable, RowSelection⟩, ⟨.writable, RowSelection⟩] := env[.none, .none]
   let selectedStreet : Computation [⟨.writable, RowSelection⟩, ⟨.writable, RowSelection⟩] Address.Raw String :=
     .mk (inputs[path[Address.Field.street], .ui selection]) fun street selected =>
-      if selected == .row 1 then street else "Nothing selected"
+      if selected == .row secondId then street else "Nothing selected"
   let selectedEmbedded := selectedStreet.weaken path[Person.Field.address]
   check "DependenciesReadModelAndUi"
     (selectedStreet.eval person.address ui == "Campus" &&
@@ -66,7 +67,7 @@ def run : IO Unit := do
     (selectedEmbedded.eval person ui == selectedStreet.eval person.address ui)
   let readSelection : Computation [⟨.writable, RowSelection⟩, ⟨.writable, RowSelection⟩] Nat RowSelection :=
     .mk (inputs[.ui selection]) id
-  check "DependenciesSelectionIndependentOfModelType" (readSelection.eval 42 ui == .row 1)
+  check "DependenciesSelectionIndependentOfModelType" (readSelection.eval 42 ui == .row secondId)
   check "DependenciesVariablesIndependent" (other.get ui == .none)
   let expanded : Var [⟨.writable, Bool⟩, ⟨.writable, String⟩] Bool := .here
   let filter : Var [⟨.writable, Bool⟩, ⟨.writable, String⟩] String := .there .here

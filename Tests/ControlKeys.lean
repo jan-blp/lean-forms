@@ -1,10 +1,11 @@
 module
 
 import Forms.Runtime.ModelProtocol
+import Tests.FreshId
 
 public section
 namespace Tests.ControlKeys
-open Lean Forms.Runtime
+open Lean Forms.Runtime Tests
 
 private def check (message : String) (ok : Bool) : IO Unit := do
   unless ok do throw (IO.userError s!"FAIL {message}")
@@ -12,9 +13,9 @@ private def check (message : String) (ok : Bool) : IO Unit := do
 def run : IO Unit := do
   let examples : List (ControlKey × String) := [
     (.edit [], "[\"edit\"]"),
-    (.edit [.field "items", .index 0, .field "name"], "[\"edit\",\"items\",0,\"name\"]"),
+    (.edit [.field "items", .item firstId, .field "name"], "[\"edit\",\"items\",{\"item\":\"00000000-0000-4000-8000-000000000001\"},\"name\"]"),
     (.select [.field "shipping"], "[\"select\",\"shipping\"]"),
-    (.press [0, 1] [.field "items", .index 2], "[\"press\",[0,1],[\"items\",2]]"),
+    (.press [0, 1] [.field "items", .item secondId], "[\"press\",[0,1],[\"items\",{\"item\":\"00000000-0000-4000-8000-000000000002\"}]]"),
     (.edit [.constructor "express", .field "phone"], "[\"edit\",{\"constructor\":\"express\"},\"phone\"]"),
     (.edit [.field "a\"b\\c"], "[\"edit\",\"a\\\"b\\\\c\"]")]
   for (key, encoded) in examples do
@@ -25,15 +26,19 @@ def run : IO Unit := do
       | .apply decoded (some (.text "21")) => decoded == key
       | _ => false)
   let distinct : List ControlKey := [
-    .edit [.field "0"], .edit [.index 0], .edit [.constructor "0"],
-    .select [.field "0"], .press [0] [], .press [] [.index 0]]
+    .edit [.field "0"], .edit [.item firstId], .edit [.constructor "0"],
+    .select [.field "0"], .press [0] [], .press [] [.item firstId]]
   check "Distinct keys collided on the wire" ((distinct.map ControlKeyProtocol.toString).eraseDups.length == distinct.length)
   for malformed in ["missing", "{}", "[]", "[\"unknown\"]", "[\"edit\",true]",
-      "[\"edit\",-1]", "[\"edit\",1.5]", "[\"edit\",{}]", "[\"selectRow\"]",
+      "[\"edit\",0]", "[\"edit\",{\"item\":\"nope\"}]", "[\"edit\",{}]", "[\"selectRow\"]",
       "[\"selectRow\",\"0\"]", "[\"press\",[0]]", "[\"press\",[-1],[]]",
       "[\"press\",[],[],0]"] do
     check "Malformed key accepted" (!(ControlKeyProtocol.fromString malformed).isOk)
     check "Event accepted malformed key" (!(ModelForm.Event.fromWire (.apply malformed Json.null)).isOk)
+  check "Malformed item id not reported as a UUID error"
+    (match ControlKeyProtocol.fromString "[\"edit\",{\"item\":\"nope\"}]" with
+      | .error message => (message.splitOn "UUID").length > 1
+      | .ok _ => false)
   IO.println "PASS structured control keys and protocol boundary"
 
 end Tests.ControlKeys

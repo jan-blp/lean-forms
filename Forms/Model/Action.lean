@@ -2,6 +2,8 @@ module
 
 public import Forms.Model.Computation
 public import Forms.Model.Invocation
+public import Forms.Model.FreshId
+public import Forms.Model.HasUuid
 
 @[expose] public section
 namespace Forms.Model
@@ -12,8 +14,9 @@ inductive Action.Step (Γ : Context) (α : Type) where
       (value : Computation Γ α β)
       : Action.Step Γ α
   | append {β : Type}
+      [hasUuid : HasUuid β]
       (path : Path α (List β))
-      (item : Computation Γ α β)
+      (item : Computation Γ α (HasUuid.WithoutUuid β))
       : Action.Step Γ α
   | visit (target : Computation Γ α (Option Destination))
       : Action.Step Γ α
@@ -36,8 +39,9 @@ def set
 def append
   {Γ : Context}
   {α β : Type}
+  [HasUuid β]
   (path : Path α (List β))
-  (item : Computation Γ α β)
+  (item : Computation Γ α (HasUuid.WithoutUuid β))
   : Action Γ α :=
   FreeMonoid.of (.append path item)
 
@@ -47,7 +51,7 @@ def Step.rename
   (rename : Renaming Γ Δ)
   : Step Γ α → Step Δ α
   | .set ref value => .set (rename ref) (value.rename rename)
-  | .append path item => .append path (item.rename rename)
+  | .append (hasUuid := _) path item => .append path (item.rename rename)
   | .visit target => .visit (target.rename rename)
 
 def rename
@@ -61,33 +65,41 @@ def rename
 def Step.run
   {Γ : Context}
   {α : Type}
+  {m : Type → Type}
+  [Monad m]
+  [MonadFreshId m]
   (step : Step Γ α)
   (value : α)
   (env : Env Γ)
-  : ComponentUpdate Γ α Unit :=
+  : m (ComponentUpdate Γ α Unit) :=
   match step with
-  | .set ref computed => { value, state := ref.set (computed.eval value env) env, locals := () }
-  | .append path item =>
-    { value := path.set (path.get value ++ [item.eval value env]) value
-      state := env, locals := (), invalidatesDestinations := true }
-  | .visit target => { value, state := env, locals := (), visit := target.eval value env }
+  | .set ref computed =>
+    pure { value, state := ref.set (computed.eval value env) env, locals := () }
+  | .append (hasUuid := _) path item => do
+    let id ← freshId
+    return {
+      value := path.set (path.get value ++ [HasUuid.withUuid id (item.eval value env)]) value
+      state := env
+      locals := () }
+  | .visit target =>
+    pure { value, state := env, locals := (), visit := target.eval value env }
 
 def run
   {Γ : Context}
   {α : Type}
+  {m : Type → Type}
+  [Monad m]
+  [MonadFreshId m]
   (action : Action Γ α)
   (value : α)
   (env : Env Γ)
-  : ComponentUpdate Γ α Unit :=
-  action.toList.foldl (fun updated step =>
-    let next := step.run updated.value updated.state
-    { next with
-      visit := next.visit.orElse fun _ => updated.visit
-      invalidatesDestinations := updated.invalidatesDestinations || next.invalidatesDestinations })
+  : m (ComponentUpdate Γ α Unit) :=
+  action.toList.foldlM (fun updated step => do
+    let next ← step.run updated.value updated.state
+    return { next with visit := next.visit.orElse fun _ => updated.visit })
     { value, state := env, locals := () }
 
-/-- Focuses `target` after the action runs. Does nothing if `target` is from an earlier
-evaluation or the action also edits the model. -/
+/-- Focuses `target` after the action runs. -/
 def visit
   {Γ : Context}
   {α : Type}

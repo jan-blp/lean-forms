@@ -28,29 +28,22 @@ def forms : List (String × RegisteredForm) := [
     definition := .ofModel ProjectPlanner ProjectPlanner.form ProjectPlanner.initial
     submitUrl := "/api/submit" }),
   ("shared-state", {
-    definition := .ofModel (List Nat) SharedState.form SharedState.initial
+    definition := .ofModel (List (Item Nat)) SharedState.form SharedState.initial
     submitUrl := "/api/submit" }),
   ("outputs", {
     definition := .ofModel Nat Outputs.single 10
     submitUrl := "/api/submit" }),
-  ("row-outputs", {
-    definition := .ofModel (List Nat) Outputs.repeated Outputs.initial
-    submitUrl := "/api/submit" }),
   ("nested-outputs", {
-    definition := .ofModel (List Nat) Outputs.nested Outputs.initial
-    submitUrl := "/api/submit" }),
-  ("table-outputs", {
-    definition := .ofModel (List String) Outputs.selectedDescriptions ["Same description", "Same description", "Another item"]
+    definition := .ofModel (List (Item Nat)) Outputs.nested Outputs.initial
     submitUrl := "/api/submit" }),
   ("present-table", {
-    definition := .ofModel (List String) Presentation.tableSummary
-      ["Same description", "Same description", "Another item"]
+    definition := .ofModel (List (Item String)) Presentation.tableSummary Outputs.descriptions
     submitUrl := "/api/submit" }),
   ("present-tabs", {
     definition := .ofModel Nat Presentation.sharedTabs 0
     submitUrl := "/api/submit" }),
   ("present-notes", {
-    definition := .ofModel (List String) Presentation.notes ["First note", "Second note"]
+    definition := .ofModel (List (Item String)) Presentation.notes Presentation.initialNotes
     submitUrl := "/api/submit" }),
   ("scalars", {
     definition := .ofModel Payment Payment.form Payment.initial

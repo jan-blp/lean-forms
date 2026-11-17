@@ -1,10 +1,11 @@
 module
 
 public import Forms.ExampleForms.Registry
+public import Tests.FreshId
 
 public section
 namespace Tests.Actions
-open Forms.Model Forms.Runtime
+open Forms.Model Forms.Runtime Tests
 
 private def check (message : String) (ok : Bool) : IO Unit := do
   unless ok do throw (IO.userError s!"FAIL {message}")
@@ -60,7 +61,7 @@ private def clicks : Component [] Nat := .bind (0 : Nat) (.button
   (.set .here { inputs := inputs[.ui (Ref.here)], run := fun count => count + 1 }))
 
 def run : IO Unit := do
-  let opened := ModelForm.openState (model := Nat) counter 10 env[2]
+  let opened := ModelForm.openState (model := Nat) (supply := supply) counter 10 env[2]
   let increment ← key opened "Increment"
   let clear ← key opened "Clear"
   check "ActionButtonsShareVariableWithoutDeduplication" (increment != clear)
@@ -80,12 +81,12 @@ def run : IO Unit := do
     (!(ModelForm.execute (model := Nat) counter opened
       (.apply increment (some (.text "100")))).toBool)
   let disabled := Component.disabledWhen (.const true) counter
-  let disabledOpened := ModelForm.openState (model := Nat) disabled 10 env[2]
+  let disabledOpened := ModelForm.openState (model := Nat) (supply := supply) disabled 10 env[2]
   let rejected ← press (model := Nat) disabledOpened "Increment"
   check "ActionDisabledRejects"
     (rejected.ui.rejection == some (toString InvocationError.disabled) && rejected.locals.value == 0)
   let hidden := Component.visibleWhen (.const false) counter
-  let hiddenOpened := ModelForm.openState (model := Nat) hidden 10 env[2]
+  let hiddenOpened := ModelForm.openState (model := Nat) (supply := supply) hidden 10 env[2]
   let absent ← IO.ofExcept (ModelForm.execute (model := Nat) hidden hiddenOpened (.apply increment none))
   check "ActionHiddenRejects"
     (absent.ui.rejection == some (toString InvocationError.absent) && absent.locals.value == 0)
@@ -96,41 +97,54 @@ def run : IO Unit := do
   let nested : Component [] Nat := .bind (0 : Nat) (.bind false
     (.button "Set outer" (.set (.there .here) (.const 7))))
   let nestedUpdated ← press (model := Nat)
-    (ModelForm.openState (model := Nat) nested 10 Env.nil) "Set outer"
+    (ModelForm.openState (model := Nat) (supply := supply) nested 10 Env.nil) "Set outer"
   check "ActionCanUpdateOuterBinding"
     (nestedUpdated.locals.value == 7 && nestedUpdated.locals.tail.producer.value == false && nestedUpdated.value == 10)
   let siblings := Component.group "Counters" [next, next]
   let siblingUpdated ← press (model := Nat)
-    (ModelForm.openState (model := Nat) siblings 10 Env.nil) "Increment" 1
+    (ModelForm.openState (model := Nat) (supply := supply) siblings 10 Env.nil) "Increment" 1
   check "ActionSiblingBindingsAreIndependent"
     (siblingUpdated.locals.producer.value == 0 &&
       siblingUpdated.locals.consumers.producer.value == 1)
-  let rows : Component [] (List Nat) := Component.void <| Component.list .self "Counters"
-      (.numbered "Counter") "Add counter" 0 next
-  let rowUpdated ← press (model := List Nat)
-    (ModelForm.openState (model := List Nat) rows [10, 20] Env.nil) "Increment" 1
-  let removed ← press (model := List Nat) rowUpdated "Remove"
+  let rows : Component [] (List (Item Nat)) := Component.void <| Component.list .self "Counters"
+      (.numbered "Counter") "Add counter" (Item.mkWithoutUuid 0)
+      (.zoom path[Item.Field.value] next)
+  let rowUpdated ← press (model := List (Item Nat))
+    (ModelForm.openState (model := List (Item Nat)) (supply := supply) rows
+      [⟨firstId, 10⟩, ⟨secondId, 20⟩] Env.nil) "Increment" 1
+  let removed ← press (model := List (Item Nat)) rowUpdated "Remove"
   let states : List (ObservationState (Binding Nat (ObservationState Unit Unit))
       (ObservationState Unit Unit)) :=
     removed.locals.producer.producer
   let remaining := states.map (·.producer.value)
-  check "ActionRowStateFollowsRemoval" (removed.value == [20] && remaining[0]? == some 1)
+  check "ActionRowStateFollowsRemoval"
+    (removed.value.map (·.value) == [20] && remaining[0]? == some 1)
+  let adder : Component [] (List (Item Nat)) :=
+    .button "Add" (.append .self (.const (Item.mkWithoutUuid 0)))
+  let added ← press (model := List (Item Nat))
+    (ModelForm.openState (model := List (Item Nat)) (supply := supply) adder [] Env.nil) "Add"
+  let addedTwice ← press (model := List (Item Nat)) added "Add"
+  let firstDrawn := supply.next
+  check "AppendFreshDrawsSeededDistinctIds"
+    (addedTwice.value.map (·.id) == [firstDrawn.id, firstDrawn.supply.next.id] &&
+      firstDrawn.id != firstDrawn.supply.next.id)
   let functions : Component [] Nat := .bind (fun n : Nat => n)
     (.button "Use successor" (.set .here (.const (fun n : Nat => n + 1))))
   let functionUpdated ← press (model := Nat)
-    (ModelForm.openState (model := Nat) functions 10 Env.nil) "Use successor"
+    (ModelForm.openState (model := Nat) (supply := supply) functions 10 Env.nil) "Use successor"
   check "ActionsSupportValuesWithoutCodecs" (functionUpdated.locals.value 41 == 42)
-  let focused : Component [] (List Nat) := .bind (0 : Nat) (Component.void <| .focus
-    { inputs := inputs[.ui (Ref.here)], run := fun index => some (.index index .self) }
-    (.button "Next item" (.set .here {
-      inputs := inputs[.ui (Ref.here)], run := fun index => index + 1 })))
-  let first := ModelForm.openState (model := List Nat) focused [10, 20] Env.nil
+  let focused : Component [] (List (Item Nat)) := .bind firstId (Component.void <| .zoom?
+    { inputs := inputs[.ui (Ref.here)], run := fun id => some (.item id .self) }
+    (.button "Next item" (.set .here (.const secondId))))
+  let first := ModelForm.openState (model := List (Item Nat)) (supply := supply) focused
+    [⟨firstId, 10⟩, ⟨secondId, 20⟩] Env.nil
   let firstKey ← key first "Next item"
-  let second ← press (model := List Nat) first "Next item"
+  let second ← press (model := List (Item Nat)) first "Next item"
   let secondKey ← key second "Next item"
-  let stale ← IO.ofExcept (ModelForm.execute (model := List Nat) focused second (.apply firstKey none))
-  check "ActionFocusRejectsStaleLocation"
-    (firstKey != secondKey && stale.locals.value == 1 &&
+  let stale ← IO.ofExcept
+    (ModelForm.execute (model := List (Item Nat)) focused second (.apply firstKey none))
+  check "ActionZoomRejectsStaleLocation"
+    (firstKey != secondKey && stale.locals.value == secondId &&
       stale.ui.rejection == some (toString InvocationError.absent))
   check "ActionsUseDraftFlushingButtons" (match
       ((ModelView.render counter opened.value {} [] opened.env opened.locals).view.toReact false) with
@@ -138,7 +152,7 @@ def run : IO Unit := do
         | .button button => button.onClick == .press (ControlKeyProtocol.toString increment)
         | _ => false
     | _ => false)
-  let clicked := ModelForm.openState (model := Nat) clicks 0 Env.nil
+  let clicked := ModelForm.openState (model := Nat) (supply := supply) clicks 0 Env.nil
   let first ← key clicked "Clicked 0"
   let clicked ← press (model := Nat) clicked "Clicked 0"
   check "ActionCaptionsAreComputedWithStableKeys" ((← key clicked "Clicked 1") == first)

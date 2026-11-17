@@ -1,6 +1,7 @@
 module
 
 public import Forms.ExampleForms.Registry
+public import Tests.FreshId
 
 public section
 namespace Tests.Invocation
@@ -36,7 +37,7 @@ private def perform
   (key : ControlKey)
   (argument : Option Input)
   : Except ModelForm.Rejection α := do
-  let invocation ← (ModelView.decodeKey form {} value key argument Env.nil).mapError .ofAction
+  let invocation ← ((ModelView.decodeKey form {} value key argument Env.nil).run' supply).mapError .ofAction
   return invocation.value
 
 private def rejected
@@ -87,9 +88,9 @@ def run : IO Unit := do
   check "InvocationWrongArgument"
     (rejected Person.form Person.initial (keyOf Person.form Person.initial "Age") (some (.boolean true))
       == clientBug (.wrongArgument "text"))
-  let opened := ModelForm.openState (model := Person) Person.form Person.initial Env.nil
+  let opened := ModelForm.openState (model := Person) (supply := supply) Person.form Person.initial Env.nil
   let age := keyOf Person.form Person.initial "Age"
-  let initiallyInvalid := ModelForm.openState (model := Person) Person.form
+  let initiallyInvalid := ModelForm.openState (model := Person) (supply := supply) Person.form
     { Person.initial with age := 150 } Env.nil
   let initialSnapshot := ModelForm.snapshot Person.form initiallyInvalid
   check "ValidationVisibleOnOpen"

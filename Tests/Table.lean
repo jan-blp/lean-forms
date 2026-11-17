@@ -1,6 +1,7 @@
 module
 
 public import Forms.ExampleForms.Registry
+public import Tests.FreshId
 
 public section
 namespace Tests.Table
@@ -28,19 +29,21 @@ private def apply (state : State) (label : String) (argument : Option Input) (nt
   execute state (.apply (← key state label nth) argument)
 
 def run : IO Unit := do
-  let opened := ModelForm.openState (model := ExpenseReport)
+  let opened := ModelForm.openState (model := ExpenseReport) (supply := supply)
     ExpenseReport.form ExpenseReport.initial Env.nil
   check "TableHeadersAndRows" (match (rendered opened).view with
     | .stack (children := [_, .table "Expenses" headers rows .., _]) .. =>
       headers == ["Description", "Amount (CHF)", "Receipt", "Actions"] &&
-      rows.map (·.cells.length) == [4, 4] && rows.map (·.label) == ["Expense 1", "Expense 2"]
+      rows.map (·.cells.length) == [4, 4] && rows.map (·.label) == ["Expense 1", "Expense 2"] &&
+        rows.map (·.key) == [firstId, secondId]
     | _ => false)
   let wire := (ModelForm.snapshot ExpenseReport.form opened).view.toReact false
   check "TableHiddenCellKeepsColumn" (match wire with
     | some (.group { children := [_, .table table, _], .. }) =>
       match table.rows with
       | first :: second :: _ =>
-        first.cells[2]? == some (.group { label := none, children := [], errors := [] }) &&
+        first.cells[2]? == some (.group { label := none, children := [], errors := [], key := none }) &&
+        first.key == firstId.value &&
         (match first.cells[3]? with | some (FormsReact.Component.button _) => true | _ => false) &&
         (match second.cells[2]? with | some (FormsReact.Component.checkbox _) => true | _ => false)
       | _ => false
@@ -56,7 +59,7 @@ def run : IO Unit := do
   check "TableCellVisibility" (((rendered visible).controls.filter (·.label == "Receipt attached")).length == 2)
   let disabled := Component.disabledWhen (.const true) ExpenseReport.form
   let disabledState ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) disabled
-    (ModelForm.openState (model := ExpenseReport) disabled ExpenseReport.initial Env.nil)
+    (ModelForm.openState (model := ExpenseReport) (supply := supply) disabled ExpenseReport.initial Env.nil)
     (.apply (← key opened "Remove") none))
   check "TableDisabledRemoveRejects"
     (disabledState.ui.rejection == some (toString InvocationError.disabled) &&
@@ -76,18 +79,27 @@ def run : IO Unit := do
     | _ => false)
   let added ← apply empty "Add expense" none
   check "TableAddsInitialRow"
-    (toJson added.value.expenses == toJson ([⟨"", 0, false⟩] : List Expense.Raw))
+    (toJson added.value.expenses == toJson ([⟨supply.next.id, "", 0, false⟩] : List Expense.Raw))
   let validated ← execute added .submit
   check "TableValidatesCells"
     ((ModelForm.snapshot ExpenseReport.form validated).errors.map (·.message) ==
       ["Describe the expense.", "Enter an amount of at least CHF 1."])
   let request (amount : Nat) : HttpRequest := { method := .post, url := s!"/api/expense/{amount}", body := none }
   let loading : Component [] ExpenseReport.Raw := Component.void <| .table
-    path[ExpenseReport.Field.expenses] "Expenses" (.numbered "Expense") "Add expense" ⟨"", 0, false⟩
+    path[ExpenseReport.Field.expenses] "Expenses" (.numbered "Expense") "Add expense"
+      Expense.initial
     columns["Details" => .loadWith
       { inputs := inputs[path[Expense.Field.amount]], run := fun amount =>
           Source.fetch (request amount) (fromJson? (α := String)) }
       (fun details => .computed "Details" (.const details))]
   check "TableRequestsEveryRow" (loading.requests {} opened.value Env.nil == [request 58, request 180])
+  let duplicated : ExpenseReport.Raw := { ExpenseReport.initial with
+    expenses := [⟨firstId, "Train to Bern", 58, false⟩, ⟨firstId, "Hotel", 180, true⟩] }
+  let definition := FormDefinition.ofModel ExpenseReport ExpenseReport.form ExpenseReport.initial
+  check "OpeningRejectsDuplicateItemIds"
+    ((match definition.openState (toJson duplicated) supply with
+      | .error message => message == duplicateIdsMessage [firstId]
+      | .ok _ => false) &&
+      (definition.openState (toJson ExpenseReport.initial) supply).toOption.isSome)
 
 end Tests.Table

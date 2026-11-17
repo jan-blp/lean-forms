@@ -55,32 +55,56 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
   | .tabs active labels =>
     .tabBar { name, label := c.label, active, labels, disabled, onChange := .apply name }
 
+/-- A group with no label or messages. -/
+def plainGroup
+  (key : Option String)
+  (children : List FormsReact.Component)
+  : FormsReact.Component :=
+  .group { label := none, children, errors := [], key }
+
 mutual
 def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
   | .hidden => none
   | .control c => some (c.toReact pending)
-  | .stack label children => some (.group
-      { label := label.filter (!·.isEmpty), children := children.filterMap (·.toReact pending), errors := [] })
-  | .list label children messages => some (.group
-      { label := some label, children := children.filterMap (·.toReact pending), errors := messages })
+  | .stack label children => some (.group {
+      label := label.filter (!·.isEmpty)
+      children := children.filterMap (·.toReact pending)
+      errors := []
+      key := none })
+  | .list label children messages => some (.group {
+      label := some label
+      children := children.filterMap (·.toReact pending)
+      errors := messages
+      key := none })
+  | .keyed key body => (body.toReact pending).map fun component => match component with
+    | .group group => .group { group with key := some key.value }
+    | .textField _
+    | .checkbox _
+    | .choice _
+    | .choices _
+    | .output _
+    | .button _
+    | .tabBar _
+    | .table _
+    | .page _ => plainGroup (some key.value) [component]
   | .computed label value => some (.output { label, value })
   | .table label headers rows footer messages => some (.table {
       label, headers
       rows := tableRowsToReact pending rows
-      footer := (footer.toReact pending).getD (.group { label := none, children := [], errors := [] })
+      footer := (footer.toReact pending).getD (plainGroup none [])
       errors := messages })
 
 def tableRowsToReact (pending : Bool) : List Display.TableRow → List FormsReact.TableRow
   | [] => []
-  | ⟨label, cells, selected⟩ :: rest =>
-    { label, selected, cells := tableCellsToReact pending cells } :: tableRowsToReact pending rest
+  | ⟨key, label, cells, selected⟩ :: rest =>
+    { key := key.value, label, selected, cells := tableCellsToReact pending cells } ::
+      tableRowsToReact pending rest
 
 /-- Hidden cells stay empty so later cells keep their column. -/
 def tableCellsToReact (pending : Bool) : List View → List FormsReact.Component
   | [] => []
   | cell :: rest =>
-    ((cell.toReact pending).getD (.group { label := none, children := [], errors := [] })) ::
-      tableCellsToReact pending rest
+    (cell.toReact pending).getD (plainGroup none []) :: tableCellsToReact pending rest
 end
 
 def Display.View.toReactPage

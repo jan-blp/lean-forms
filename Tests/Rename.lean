@@ -3,6 +3,7 @@ module
 public import Forms.ExampleForms.Registry
 public import Forms.ExampleForms.Presentation
 public import Forms.Model.Component.Rename
+public import Tests.FreshId
 
 public section
 namespace Tests.Rename
@@ -38,7 +39,7 @@ private def weakeningPreserves
   let mut same := true
   for control in original.view.controls do
     let input := argument control.input
-    match original.applyKey control.key input, shifted.applyKey control.key input with
+    match (original.applyKey control.key input).run' supply, (shifted.applyKey control.key input).run' supply with
     | .ok first, .ok second =>
       let first := component.evaluate first.value first.state {} first.locals
       let second := weakened.evaluate second.value second.state {} second.locals
@@ -51,8 +52,8 @@ private def weakeningPreserves
 def run : IO Unit := do
   weakeningPreserves "SharedState" SharedState.form SharedState.initial
   weakeningPreserves "Outputs" Outputs.nested Outputs.initial
-  weakeningPreserves "Selection" Outputs.selectedDescriptions ["same", "same", "other"]
+  weakeningPreserves "Selection" (Presentation.tableSummary) (items ["same", "same", "other"])
   weakeningPreserves "Tabs" Presentation.sharedTabs 0
-  weakeningPreserves "Notes" Presentation.notes ["a", "b"]
+  weakeningPreserves "Notes" Presentation.notes (items ["a", "b"])
 
 end Tests.Rename

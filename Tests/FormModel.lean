@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.Derive
+public import Tests.FreshId
 meta import Forms.Model.Path.Theorems
 
 @[expose] public section
@@ -26,8 +27,6 @@ structure Person where
   age_valid : age ≤ 120
   delivery_valid : address.street = "Campus" → 18 ≤ age
   deriving FormModel
-
-#fields Person.Parts
 
 example (value : Person.Raw) :
     (locations[Person.Field.address / Address.Field.street, Person.Field.age] : Targets Person.Raw value) =
@@ -75,6 +74,7 @@ inductive Choice where
   deriving FormModel
 
 structure Line where
+  id : Uuid
   amount : Nat
   amount_valid : 1 ≤ amount
   deriving FormModel
@@ -84,6 +84,8 @@ instance : ConstraintRule Line.Constraint.amount_valid where
     if h : 1 ≤ parts.amount then .valid h
     else .invalid (proof := h) (message := "Enter an amount.")
       (targets := locations[Line.Field.amount])
+
+deriving instance HasUuid for Line.Raw
 
 structure Basket where
   lines : List Line
@@ -325,9 +327,14 @@ public def run : IO Unit := do
   check "ModelNestedPathUpdate" (street.get updated == "Road" && updated.age == 20)
   check "ModelPathLensUpdate"
     (LeanLens.view street.toLens (LeanLens.set street.toLens "Road" good) == "Road")
-  check "ModelListValid" ((Basket.validate ⟨[⟨1⟩, ⟨2⟩]⟩).toOption.any (·.val.lines.length == 2))
-  check "ModelListItemErrors" ((errors (Basket.validate ⟨[⟨1⟩, ⟨0⟩, ⟨0⟩]⟩)).map targetKeys ==
-    [[["lines", "1", "amount"]], [["lines", "2", "amount"]]])
+  check "ModelListValid"
+    ((Basket.validate ⟨[⟨firstId, 1⟩, ⟨secondId, 2⟩]⟩).toOption.any (·.val.lines.length == 2))
+  check "ModelListItemErrorsUseItemIds"
+    ((errors (Basket.validate ⟨[⟨firstId, 1⟩, ⟨secondId, 0⟩, ⟨thirdId, 0⟩]⟩)).map targetKeys ==
+      [[["lines", secondId.value, "amount"]], [["lines", thirdId.value, "amount"]]])
+  check "ModelListRejectsDuplicateIds"
+    ((errors (Basket.validate ⟨[⟨firstId, 1⟩, ⟨firstId, 2⟩]⟩)).map (·.message) ==
+      [duplicateIdsMessage [firstId]])
   check "ModelListConstraint" ((errors (Basket.validate ⟨[]⟩)).map targetKeys == [[["lines"]]])
   check "DeriveProjectActiveConstructor"
     ((Constructors.project Delivery.Constructor.campus (Delivery.Raw.campus ⟨20⟩)).map (·.age) == some 20)
@@ -389,8 +396,18 @@ inductive Recursive where
 deriving instance FormModel for Recursive
 
 structure Container where
-  values : List String
+  values : List (Item String)
   deriving FormModel
+
+structure PlainList where
+  values : List String
+
+/--
+error: deriving FormModel for `Tests.FormModel.PlainList`: validation: Validation List
+  String is missing: declare its constraint rules before deriving Tests.FormModel.PlainList
+-/
+#guard_msgs in
+deriving instance FormModel for PlainList
 
 structure OptionalField where
   value : Option String

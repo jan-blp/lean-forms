@@ -28,7 +28,8 @@ structure FormStart where
   deriving ToJson, FromJson
 
 inductive Request where
-  | open (start : FormStart)
+  /-- `seed` is 64 hexadecimal digits of fresh randomness for new item ids. -/
+  | open (start : FormStart) (seed : String)
   | send (handle : String) (event : Event)
   | dispose (handle : String)
   deriving ToJson, FromJson

@@ -402,7 +402,7 @@ def optional
     | none => by
       cases h : format.parse "" with
       | ok => simp [h, Except.isOk, Except.toBool] at blank
-      | error => simp [h]; rfl
+      | error => simp; rfl
     | some value => by simp [format.parse_print]
 
 @[instance_reducible]

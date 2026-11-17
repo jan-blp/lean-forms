@@ -14,13 +14,18 @@ export interface FormModel {
 
 const loading = new Map<string, Promise<Runtime>>();
 
-/** Opens `start` in the Emscripten module at `moduleUrl` (the app's `forms.mjs`). */
-export async function openForm(start: Wire.FormStart, moduleUrl: string | URL): Promise<FormModel> {
+/** Opens `start` in the Emscripten module at `moduleUrl` (the app's `forms.mjs`).
+ * Pass `seed` only in tests, to get the same item ids on every run. */
+export async function openForm(
+  start: Wire.FormStart,
+  moduleUrl: string | URL,
+  seed: string = randomSeed(),
+): Promise<FormModel> {
   const url = String(moduleUrl);
   let runtime = loading.get(url);
   if (!runtime) loading.set(url, runtime = load(url));
   const { form } = await runtime;
-  const opened = form({ open: { start } });
+  const opened = form({ open: { start, seed } });
   if (typeof opened !== 'object' || !('opened' in opened)) throw new Error('Expected an opened form.');
   const { handle } = opened.opened;
   let snapshot = opened.opened.snapshot;
@@ -39,6 +44,12 @@ export async function openForm(start: Wire.FormStart, moduleUrl: string | URL): 
       if (!disposed) { form({ dispose: { handle } }); disposed = true; }
     },
   };
+}
+
+/** Fresh randomness for new item ids; a repeated seed would repeat ids. */
+function randomSeed(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function traceRequested(): boolean {

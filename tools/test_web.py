@@ -66,12 +66,12 @@ def serve(example):
 
 
 def validation_error(request, submission, message, steps):
-    """`steps` are field names, `('constructor', tag)` for a sum's branch, or `('index', n)` for a list item."""
+    """`steps` are field names, `('constructor', tag)` for a sum's branch, or `('item', id)` for a list item."""
     status, _, body = request('/api/submit', submission)
     assert status == 422, (status, body)
     error = json.loads(body)['error']
     assert error['kind'] == 'validation' and error['message'] == message, error
-    names = {'constructor': 'tag', 'index': 'position'}
+    names = {'constructor': 'tag', 'item': 'id'}
     location = [{'kind': s[0], names[s[0]]: s[1]} if isinstance(s, tuple) else {'kind': 'field', 'name': s}
                 for s in steps]
     assert error['errors'] == [{'message': message, 'targets': {
@@ -105,11 +105,16 @@ def expenses_session():
         initial = {'form': 'expenses', 'fingerprint': start['fingerprint'], 'value': start['value']}
         assert request('/api/submit', initial)[0] == 204
         value = start['value']
-        taxi = {'description': 'Taxi', 'amount': 150, 'receipt': False}
+        taxi = {'id': '00000000-0000-4000-8000-000000000099', 'description': 'Taxi', 'amount': 150,
+                'receipt': False}
+        train = value['expenses'][0]
         for changes, message, steps in [
             ({'expenses': []}, 'Add at least one expense.', ['expenses']),
             ({'expenses': [*value['expenses'], taxi]}, 'Attach a receipt for CHF 100 or more.',
-             ['expenses', ('index', 2), 'receipt']),
+             ['expenses', ('item', taxi['id']), 'receipt']),
+            ({'expenses': [train, {**train, 'description': 'Copy'}]},
+             f"These UUIDs are shared by more than one item: {train['id']}. "
+             'This is a bug in the form data; please contact BLP.', ['expenses']),
             ({'expenses': [{**taxi, 'amount': 6000, 'receipt': True}]}, "A report is limited to CHF 5'000.",
              ['expenses']),
         ]:

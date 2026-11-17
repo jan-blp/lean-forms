@@ -3,6 +3,7 @@ module
 public import Forms.ExampleForms.Registry
 meta import Forms.Model.Derive
 meta import Forms.Deriving.FinEnum
+public import Tests.FreshId
 
 public section
 namespace Tests.Remote
@@ -150,7 +151,7 @@ private def performIn
   (key : ControlKey)
   (argument : Option Input)
   : Except ModelForm.Rejection α := do
-  let invocation ← (ModelView.decodeKey form cache value key argument Env.nil).mapError .ofAction
+  let invocation ← ((ModelView.decodeKey form cache value key argument Env.nil).run' supply).mapError .ofAction
   return invocation.value
 
 def run : IO Unit := do
@@ -165,7 +166,8 @@ def run : IO Unit := do
     | .submit _ => false
     | .focus _ => false)
   let (opened, _) ← IO.ofExcept
-    ((FormDefinition.ofModel Lookup Lookup.form Lookup.initial).openState (toJson Lookup.initial))
+    ((FormDefinition.ofModel Lookup Lookup.form Lookup.initial).openState (toJson Lookup.initial)
+      supply)
   let opened : State := opened
   check "RemoteOpenFetches" (fetches opened == [supplier "acme"])
   check "RemoteDetailsLoading" (control? opened "Purchase order").isNone
@@ -208,7 +210,7 @@ def run : IO Unit := do
     (.loaded (toJson ["name", "age"]))
   check "RemoteReorderedKeepsField" (renamed otherLayout == some "Grace")
   let shippingState := ModelForm.load shippingChoices
-    (ModelForm.openState (model := Order) shippingChoices Order.initial Env.nil)
+    (ModelForm.openState (model := Order) (supply := supply) shippingChoices Order.initial Env.nil)
   let some shipping := (ModelView.render shippingChoices shippingState.value shippingState.cache [] Env.nil).controls.head?
     | throw (IO.userError "FAIL no shipping choice")
   check "RemoteFallbackOffersPickup" (match shipping.input with

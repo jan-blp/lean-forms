@@ -2,6 +2,7 @@ module
 
 public import Forms.ExampleForms.Outputs
 public import Forms.Runtime.ModelForm
+public import Tests.FreshId
 
 public section
 namespace Tests.Outputs
@@ -24,7 +25,7 @@ private def start
   (component : Component [] (Raw model) β)
   (value : Raw model)
   : ModelForm.State component :=
-  ModelForm.load component (ModelForm.openState (model := model) component value Env.nil)
+  ModelForm.load component (ModelForm.openState (model := model) (supply := supply) component value Env.nil)
 
 private def key
   {α β : Type}
@@ -55,7 +56,9 @@ private def outputs (label : String) : Display.View → List String
   | .stack _ children => outputsAll label children
   | .list (children := children) .. => outputsAll label children
   | .table (rows := rows) (footer := footer) .. => outputsRows label rows ++ outputs label footer
-  | _ => []
+  | .keyed _ body => outputs label body
+  | .control _ => []
+  | .hidden => []
 
 private def outputsAll (label : String) : List Display.View → List String
   | [] => []
@@ -118,20 +121,6 @@ def run : IO Unit := do
   check "OutputOwnerRespectsPendingState"
     (texts rejected "Observer one" == ["2"] && rejected.ui.rejection == some "Submission is in progress.")
 
-  let rows := start (model := List Nat) repeated initial
-  let first ← press (model := List Nat) rows "Increment"
-  let second ← press (model := List Nat) first "Increment" 1
-  let twice ← press (model := List Nat) second "Increment" 1
-  check "ListCollectsCurrentRowOutputs" (texts twice "Counts" == ["1, 2"] && texts twice "Sum" == ["3"])
-  let removed ← press (model := List Nat) twice "Remove"
-  check "RemovingRowRemovesItsOutputAndRetainsOthers" (removed.value == [20] && texts removed "Counts" == ["2"])
-  let added ← press (model := List Nat) removed "Add counter"
-  check "NewRowStartsWithItsOwnOutput" (texts added "Counts" == ["2, 0"])
-  let empty ← press (model := List Nat) (← press (model := List Nat) added "Remove") "Remove"
-  check "NoRowsMeansNoCollectedOutputs" (texts empty "Counts" == [""] && texts empty "Sum" == ["0"])
-  let resetRows ← IO.ofExcept (ModelForm.execute (model := List Nat) repeated twice .reset)
-  check "ResetRestoresCollectedOutputs" (texts resetRows "Counts" == ["0, 0"] && resetRows.value == initial)
-
   let functionUpdated ← press (model := Nat) (start (model := Nat) functions 0) "Use successor"
   check "OutputsNeedNoSerialization" (texts functionUpdated "Result" == ["42"])
   let dependent := start (model := Nat) modelDependent 10
@@ -141,38 +130,44 @@ def run : IO Unit := do
   check "OutputObservesConsumerModelEditsAndOwnerStateTogether"
     (changedOwner.value == 17 && texts changedOwner "Observed" == ["18"])
 
-  let pairs := start (model := List Nat) nested initial
-  let left ← press (model := List Nat) pairs "Increment"
-  let both ← press (model := List Nat) left "Increment" 1
-  let other ← press (model := List Nat) both "Increment" 3
-  let otherTwice ← press (model := List Nat) other "Increment" 3
+  let pairs := start (model := List (Item Nat)) nested initial
+  let left ← press (model := List (Item Nat)) pairs "Increment"
+  let both ← press (model := List (Item Nat)) left "Increment" 1
+  let other ← press (model := List (Item Nat)) both "Increment" 3
+  let otherTwice ← press (model := List (Item Nat)) other "Increment" 3
   check "CompositeConsumesChildOutputsAndExportsSum"
     (texts otherTwice "Pair sum" == ["2", "2"] && texts otherTwice "Pair totals" == ["2, 2"] &&
       texts otherTwice "Overall sum" == ["4"])
-  let survivor ← press (model := List Nat) otherTwice "Remove"
+  let survivor ← press (model := List (Item Nat)) otherTwice "Remove"
   check "RepeatedCompositeRetainsNestedStateAfterRemoval"
-    (texts survivor "Pair sum" == ["2"] && texts survivor "Overall sum" == ["2"] && survivor.value == [20])
+    (texts survivor "Pair sum" == ["2"] && texts survivor "Overall sum" == ["2"] && survivor.value.map (·.value) == [20])
+  let added ← press (model := List (Item Nat)) survivor "Add pair"
+  check "NewRowStartsWithItsOwnOutput" (texts added "Pair totals" == ["2, 0"])
+  let empty ← press (model := List (Item Nat)) (← press (model := List (Item Nat)) added "Remove") "Remove"
+  check "NoRowsMeansNoCollectedOutputs" (texts empty "Pair totals" == [""] && texts empty "Overall sum" == ["0"])
+  let resetRows ← IO.ofExcept (ModelForm.execute (model := List (Item Nat)) nested otherTwice .reset)
+  check "ResetRestoresCollectedOutputs" (texts resetRows "Pair totals" == ["0, 0"] && resetRows.value == initial)
 
   let loaded : Component [] Nat := .load (.const (.pure true)) fun
     | .ready true => single.void
     | _ => .computed "Status" (.const "Loading")
   let embedded := Component.group "Normal nesting" [
     loaded,
-    (Component.focus (.const (some .self)) single).void]
+    (Component.zoom? (.const (some .self)) single).void]
   let embeddedUpdated ← press (model := Nat) (start (model := Nat) embedded 10) "Increment" 1
-  check "ObservationsEmbedUnderLoadAndFocus" (texts embeddedUpdated "Observer one" == ["0", "1"])
+  check "ObservationsEmbedUnderLoadAndZoom" (texts embeddedUpdated "Observer one" == ["0", "1"])
   let disabled := Component.disabledWhen (.const true) single
   let disabledOpened := start (model := Nat) disabled 10
   let disabledResult ← press (model := Nat) disabledOpened "Increment"
   check "ObservationUsesNormalAvailabilityChecks"
     (disabledResult.ui.rejection == some (toString InvocationError.disabled) && texts disabledResult "Observer one" == ["0"])
 
-  let table : Component [] (List Nat) := Component.void <| .table .self "Rows"
-      (.numbered "Row") "Add row" 0 columns[
-    "Counters" => .observe pair
+  let table : Component [] (List (Item Nat)) := Component.void <| .table .self "Rows"
+      (.numbered "Row") "Add row" (Item.mkWithoutUuid 0) columns[
+    "Counters" => .zoom path[Item.Field.value] <| .observe pair
       (.computed "Cell total" { inputs := inputs[.ui (Ref.here : InputRef _ Nat)], run := toString })]
-  let tableChanged ← press (model := List Nat)
-    (start (model := List Nat) table initial) "Increment" 1
+  let tableChanged ← press (model := List (Item Nat))
+    (start (model := List (Item Nat)) table initial) "Increment" 1
   check "NestedOutputsWorkInsideTableCells" (texts tableChanged "Cell total" == ["1", "0"])
 
   let remote : Component [] Nat := .observe counter

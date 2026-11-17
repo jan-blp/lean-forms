@@ -2,23 +2,15 @@ module
 
 public import Lean.Data.Json
 public import Forms.Model.ErasedLocation
+public import Forms.Model.HasUuid
 public import Forms.Model.LawfulJson
 public import LeanLens.Lawful
+public import Mathlib.Data.List.Dedup
 public import Std.Data.HashMap
 open LeanLens
 
 @[expose] public section
 namespace Forms.Model
-
-theorem lawfulMkLens
-  {s a : Type}
-  {get : s → a}
-  {put : a → s → s}
-  (view_set : ∀ v src, get (put v src) = v)
-  (set_view : ∀ src, put (get src) src = src)
-  (set_set : ∀ v v' src, put v' (put v src) = put v' src)
-  : LawfulLens (mkLens get put) :=
-  ⟨view_set, set_view, set_set⟩
 
 class Fields (α : Type) where
   Field : Type → Type
@@ -126,7 +118,7 @@ def Path.erase {α β : Type} : Path α β → ErasedLocation
 def Path.toLens {α β : Type} (path : Path α β) : Lens' α β :=
   LeanLens.mkLens path.get path.set
 
--- TODO: define as a `PartialPath` known to resolve in `value`, leaving two typed path types.
+-- TODO: define as a `PartialPath` known to resolve in `value`
 inductive Location : {α : Type} → α → Type 1 where
   | self {α : Type} {value : α} : Location value
   | field
@@ -143,24 +135,26 @@ inductive Location : {α : Type} → α → Type 1 where
       (constructor : Constructors.Constructor α β)
       (rest : Location value)
       : Location (Constructors.inject constructor value)
-  | index
+  | item
       {α : Type}
-      {value : List α}
-      (position : Fin value.length)
-      (rest : Location (value.get position))
-      : Location value
+      [hasUuid : HasUuid α]
+      {items : List α}
+      (item : α)
+      (member : item ∈ items)
+      (rest : Location item)
+      : Location items
 
 def Location.keys {α : Type} {value : α} : Location value → List String
   | .self => []
   | .field (fields := _) f rest => Fields.key f :: rest.keys
   | .constructor (constructors := _) c rest => Constructors.key c :: rest.keys
-  | index position rest => toString position.val :: rest.keys
+  | .item (hasUuid := _) (items := items) entry _ rest => (HasUuid.id entry).value :: rest.keys
 
 def Location.erase {α : Type} {value : α} : Location value → ErasedLocation
   | .self => []
   | .field (fields := _) f rest => .field (Fields.key f) :: rest.erase
   | .constructor (constructors := _) c rest => .constructor (Constructors.key c) :: rest.erase
-  | .index position rest => .index position.val :: rest.erase
+  | .item (hasUuid := _) (items := items) entry _ rest => .item (HasUuid.id entry) :: rest.erase
 
 inductive Targets (α : Type) (value : α) where
   | global
@@ -178,7 +172,14 @@ macro "locations[" paths:sepBy1(locationPath, ", ") "]" : term => do
   let rest := locations.extract 1 locations.size
   `(Targets.locations (first := $(locations[0]!)) (rest := [$rest,*]))
 
+inductive Error.Kind where
+  /-- The input is invalid (e.g. an empty required field or a malformed email). -/
+  | invalid
+  /-- The data breaks an invariant the form relies on (e.g. duplicate UUID). -/
+  | corrupt
+
 structure Error {α : Type} (value : α) where
+  kind : Error.Kind
   message : String
   targets : Targets α value
 
@@ -189,6 +190,7 @@ def Error.mapLocations
   (step : Location value → Location outer)
   (error : Error value)
   : Error outer where
+  kind := error.kind
   message := error.message
   targets := match error.targets with
     | .global => .locations (step .self)
@@ -222,7 +224,7 @@ def Decision.errors
   {value : α}
   : Decision property value → List (Error value)
   | .valid _ => []
-  | .invalid _ message targets => [{ message, targets }]
+  | .invalid _ message targets => [{ kind := .invalid, message, targets }]
 
 def Decision.toExcept
   {property : Prop}
@@ -303,20 +305,37 @@ instance : Validation Uuid := ⟨fun value => .ok ⟨value, rfl⟩⟩
 @[reducible] instance {α : Type} [FormModel α] : FormModel (List α) :=
   ⟨List (Raw α), List.map FormModel.erase⟩
 
-/-- Validates every item; errors point at their item's position. -/
-instance {α : Type} [FormModel α] [Validation α] : Validation (List α) where
+def duplicateIdsMessage (ids : List Uuid) : String :=
+  s!"These UUIDs are shared by more than one item: {", ".intercalate (ids.map (·.value))}. " ++
+    "This is a bug in the form data; please contact BLP."
+
+/-- The UUIDs that appear more than once. -/
+def duplicateIds {β : Type} [HasUuid β] (items : List β) : { ids : List Uuid // ids.Nodup } :=
+  let ids := items.map HasUuid.id
+  ⟨(ids.filter (ids.count · > 1)).dedup, List.nodup_dedup _⟩
+
+/-- Validates every item; errors point at their item's id. Repeated ids are an error. -/
+instance {α : Type} [FormModel α] [Validation α] [HasUuid (Raw α)] : Validation (List α) where
   validate raw :=
     let results (position : Fin raw.length) := Validation.validate (model := α) (raw.get position)
-    if valid : ∀ position, (results position).isOk then
+    let duplicates : List (Error raw) :=
+      match duplicateIds raw with
+      | ⟨[], _⟩ => []
+      | ids => [{
+          kind := .corrupt
+          message := duplicateIdsMessage ids.val
+          targets := .locations .self }]
+    if valid : (∀ position, (results position).isOk) ∧ duplicates.isEmpty then
       let values (position : Fin raw.length) : Validated α (raw.get position) :=
-        match results position, valid position with
+        match results position, valid.1 position with
         | .ok value, _ => value
         | .error _, h => nomatch h
       .ok ⟨List.ofFn fun position => (values position).val, by
         simp [FormModel.erase, Function.comp_def, (values _).property]⟩
     else
-      .error ((List.finRange raw.length).flatMap fun position =>
-        (errors (results position)).map (Error.mapLocations (.index position)))
+      .error (duplicates ++ (List.finRange raw.length).flatMap fun position =>
+        (errors (results position)).map
+          (Error.mapLocations (.item (raw.get position) (List.get_mem raw position))))
 
 /-- A model whose raw values are all valid. -/
 class AlwaysValid (α : Type) [FormModel α] where

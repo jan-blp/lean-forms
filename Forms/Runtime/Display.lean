@@ -56,8 +56,11 @@ inductive View where
   | list (label : String) (children : List View) (messages : List String)
   | table (label : String) (headers : List String) (rows : List TableRow)
       (footer : View) (messages : List String)
+  /-- A list row, kept apart from its siblings by its item id. -/
+  | keyed (key : Model.Uuid) (body : View)
 
 structure TableRow where
+  key : Model.Uuid
   label : String
   cells : List View
   selected : Option Bool
@@ -76,6 +79,7 @@ def View.controls : View → List Control
   | .stack _ children => View.controlsAll children
   | .list (children := children) .. => View.controlsAll children
   | .table (rows := rows) (footer := footer) .. => View.controlsRows rows ++ footer.controls
+  | .keyed _ body => body.controls
   | .hidden => []
   | .computed .. => []
 
@@ -111,6 +115,9 @@ def View.dedupeFrom (seen : List ControlKey) : View → DedupeResult View
     let rows := View.dedupeRows seen rows
     let footer := footer.dedupeFrom rows.seen
     { deduped := .table label headers rows.deduped footer.deduped messages, seen := footer.seen }
+  | .keyed key body =>
+    let result := body.dedupeFrom seen
+    { deduped := .keyed key result.deduped, seen := result.seen }
   | .hidden => { deduped := .hidden, seen }
   | .computed label text => { deduped := .computed label text, seen }
 
@@ -123,10 +130,10 @@ def View.dedupeAll (seen : List ControlKey) : List View → DedupeResult (List V
 
 def View.dedupeRows (seen : List ControlKey) : List TableRow → DedupeResult (List TableRow)
   | [] => { deduped := [], seen }
-  | ⟨label, cells, selected⟩ :: rest =>
+  | ⟨key, label, cells, selected⟩ :: rest =>
     let head := View.dedupeAll seen cells
     let tail := View.dedupeRows head.seen rest
-    { deduped := ⟨label, head.deduped, selected⟩ :: tail.deduped, seen := tail.seen }
+    { deduped := ⟨key, label, head.deduped, selected⟩ :: tail.deduped, seen := tail.seen }
 end
 
 /-- Replaces each control whose key appeared earlier with a note. -/
@@ -134,14 +141,16 @@ def View.dedupe (view : View) : View :=
   (view.dedupeFrom []).deduped
 
 def View.title (view : View) : String :=
-  let label := match view with
+  let rec labelOf : View → String
     | .control c => c.label
     | .stack label _ => label.getD ""
     | .list label .. => label
     | .table label .. => label
     | .computed label .. => label
+    | .keyed _ body => labelOf body
     | .hidden => ""
-  if label.isEmpty then "Form" else label
+  let title := labelOf view
+  if title.isEmpty then "Form" else title
 
 def Control.editable (control : Control) : Bool :=
   !control.disabled && match control.input with

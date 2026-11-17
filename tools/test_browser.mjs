@@ -371,6 +371,9 @@ try {
     await tick();
     check(projects().length === 2 && !projectField(1, 'Task title'), 'New project inherited a selection');
     check(projectInput(0, 'Task title').value === 'Measure activation', 'Adding a project changed an existing selection');
+    check(rows(1).length === 0, 'New project should start without tasks');
+    button(projects()[1], 'Add task').click();
+    await tick();
     await select(1, 0);
     await editIn(1, 'Task title', 'Plan follow-up');
     button(rows(0)[1], 'Remove').click();
@@ -399,24 +402,6 @@ try {
     check(output('Observer one') === '0' && output('Remembered') === '0' && output('Private value') === '100',
       'Reset did not restore both subtrees');
   `);
-  await example('row-outputs', `
-    const output = label => [...document.querySelectorAll('output')].find(element =>
-      element.parentElement.firstChild.textContent === label).textContent;
-    const press = async (label, index = 0) => {
-      [...document.querySelectorAll('button')].filter(button => button.textContent === label)[index].click();
-      await tick();
-    };
-    await press('Increment');
-    await press('Increment', 1);
-    await press('Increment', 1);
-    check(output('Counts') === '1, 2' && output('Sum') === '3', 'Row outputs were not collected');
-    await press('Remove');
-    check(output('Counts') === '2' && output('Sum') === '2', 'Removal lost surviving row state');
-    await press('Add counter');
-    check(output('Counts') === '2, 0', 'New counter did not start with a fresh output');
-    await click('[data-action=reset]');
-    check(output('Counts') === '0, 0' && output('Sum') === '0', 'Reset did not restore row outputs');
-  `);
   await example('nested-outputs', `
     const output = label => [...document.querySelectorAll('output')].find(element =>
       element.parentElement.firstChild.textContent === label).textContent;
@@ -438,7 +423,7 @@ try {
     await click('[data-action=reset]');
     check(output('Pair totals') === '0, 0', 'Reset did not restore nested outputs');
   `);
-  await example('table-outputs', `
+  await example('present-table', `
     const output = () => [...document.querySelectorAll('output')].find(element =>
       element.parentElement.firstChild.textContent === 'Selected descriptions').textContent;
     const press = async (label, index = 0) => {

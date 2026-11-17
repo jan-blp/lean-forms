@@ -43,13 +43,14 @@ def pair {Γ : Context} : Component Γ Nat Nat :=
         inputs := inputs[.ui first, .ui second], run := Nat.add }
       .withOutput (.computed "Pair sum" (toString <$> total)) total
 
-def rows : Component [] (List Nat) (List Nat) :=
-  .list .self "Pairs" (.numbered "Pair") "Add pair" 0 pair
+def rows : Component [] (List (Item Nat)) (List Nat) :=
+  .list .self "Pairs" (.numbered "Pair") "Add pair"
+      (Item.mkWithoutUuid 0) (.zoom path[Item.Field.value] pair)
 
-def nested : Component [] (List Nat) Nat :=
+def nested : Component [] (List (Item Nat)) Nat :=
   .labeled "Nested outputs" <|
   .observe rows <|
-    let total : Computation [⟨.readOnly, List Nat⟩] (List Nat) Nat := {
+    let total : Computation [⟨.readOnly, List Nat⟩] (List (Item Nat)) Nat := {
       inputs := inputs[.ui (Ref.here : InputRef _ (List Nat))], run := List.sum }
     .withOutput (.group "Outer observers" [
       .computed "Pair totals" {
@@ -57,27 +58,18 @@ def nested : Component [] (List Nat) Nat :=
         run := fun values => String.intercalate ", " (values.map toString) },
       .computed "Overall sum" (toString <$> total)]) total
 
-def repeated : Component [] (List Nat) :=
-  .group "Outputs of owned counters" [
-    .observe (Component.list .self "Counters" (.numbered "Counter") "Add counter" 0 counter) <|
-      let counts : InputRef [⟨.readOnly, List Nat⟩] (List Nat) := .here
-      .group "Observers outside the list" [
-        .computed "Counts" {
-          inputs := inputs[.ui counts]
-          run := fun values => String.intercalate ", " (values.map toString) },
-        .computed "Sum" { inputs := inputs[.ui counts], run := fun values => toString values.sum }]]
-
-def initial : List Nat := [10, 20]
+def initial : List (Item Nat) := IdGen.run ([10, 20].mapM Item.fresh)
 
 structure RowOutput where
   description : String
   selected : Bool
   deriving BEq, Repr
 
-def descriptionCell {Γ : Context} : Component Γ String String :=
-  .withOutput (.field .self "Description" .text) { inputs := inputs[path[]], run := id }
+def descriptionCell {Γ : Context} : Component Γ (Item String) String :=
+  .zoom path[Item.Field.value] <|
+    .withOutput (.field .self "Description" .text) { inputs := inputs[path[]], run := id }
 
-def selectionCell {Γ : Context} : Component (⟨.readOnly, String⟩ :: Γ) String Bool :=
+def selectionCell {Γ : Context} : Component (⟨.readOnly, String⟩ :: Γ) (Item String) Bool :=
   .bind false <|
     let selected : Var (⟨.writable, Bool⟩ :: ⟨.readOnly, String⟩ :: Γ) Bool := .here
     let description : InputRef (⟨.writable, Bool⟩ :: ⟨.readOnly, String⟩ :: Γ) String := .there .here
@@ -88,7 +80,7 @@ def selectionCell {Γ : Context} : Component (⟨.readOnly, String⟩ :: Γ) Str
         .button "Toggle selection" (.set selected { inputs := inputs[.ui selected], run := Bool.not })])
       { inputs := inputs[.ui selected], run := id }
 
-def selectionColumns {Γ : Context} : Columns Γ String RowOutput :=
+def selectionColumns {Γ : Context} : Columns Γ (Item String) RowOutput :=
   ⟨#v["Description", "Selected"],
     .own descriptionCell <|
       .own selectionCell <|
@@ -100,15 +92,12 @@ def selectionColumns {Γ : Context} : Columns Γ String RowOutput :=
             run := fun description selected => { description, selected } }
           (.const #v[.place (.there .here), .place .here])⟩
 
-def selectionTable : Component [] (List String) (List RowOutput) :=
-  .table .self "Items" (.numbered "Item") "Add item" "New item" selectionColumns
+def selectionTable : Component [] (List (Item String)) (List RowOutput) :=
+  .table .self "Items" (.numbered "Item") "Add item"
+      (Item.mkWithoutUuid "New item") selectionColumns
 
-def selectedDescriptions : Component [] (List String) String :=
-  .labeled "Row-local selection" <|
-  .observe selectionTable <|
-    let summary : Computation [⟨.readOnly, List RowOutput⟩] (List String) String := {
-      inputs := inputs[.ui (Ref.here : InputRef _ (List RowOutput))]
-      run := fun rows => String.intercalate ", " ((rows.filter (·.selected)).map (·.description)) }
-    .withOutput (.computed "Selected descriptions" summary) summary
+/-- Two rows share a description, so selection must follow rows, not text. -/
+def descriptions : List (Item String) :=
+  IdGen.run (["Same description", "Same description", "Another item"].mapM Item.fresh)
 
 end Forms.ExampleForms.Outputs

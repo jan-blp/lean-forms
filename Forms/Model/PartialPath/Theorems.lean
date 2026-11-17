@@ -5,6 +5,20 @@ public import Forms.Model.PartialPath
 public section
 namespace Forms.Model
 
+private theorem modify_eq_self_of_fixed
+  {α : Type}
+  (value : List α)
+  (position : Nat)
+  (f : α → α)
+  (fixed : ∀ child, value[position]? = some child → f child = child)
+  : value.modify position f = value := by
+  apply List.ext_getElem?
+  intro index
+  rw [List.getElem?_modify]
+  split
+  · cases child : value[index]? <;> simp_all
+  · simp
+
 theorem PartialPath.set_get
   {α β : Type}
   (path : PartialPath α β)
@@ -19,23 +33,14 @@ theorem PartialPath.set_get
     exact (Fields.lawful f).set_view value
   | constructor ctor rest ih =>
     grind [get?, set, LawfulConstructors.inject_project]
-  | index position rest ih => grind [get?, set, List.set_getElem_self]
-
-theorem PartialPath.get_set
-  {α β : Type}
-  (path : PartialPath α β)
-  (value : α)
-  (old new : β)
-  (present : path.get? value = some old)
-  : path.get? (path.set new value) = some new := by
-  induction path with
-  | self => rfl
-  | field f rest ih =>
-    simpa only [set, get?, Fields.get, Fields.set, (Fields.lawful f).view_set]
-      using ih _ _ _ present
-  | constructor ctor rest ih =>
-    grind [get?, set, LawfulConstructors.project_inject]
-  | index position rest ih => grind [get?, set]
+  | item id rest ih =>
+    simp only [get?, set, List.find?_eq_bind_findIdx?_getElem?] at present ⊢
+    cases found : value.findIdx? (HasUuid.id · == id) with
+    | none => rfl
+    | some position =>
+      simp only [found, Option.bind_some] at present ⊢
+      exact modify_eq_self_of_fixed _ _ _ fun child here =>
+        ih child old (by simpa [here] using present)
 
 theorem PartialPath.set_absent
   {α β : Type}
@@ -51,22 +56,14 @@ theorem PartialPath.set_absent
     exact (Fields.lawful f).set_view value
   | constructor ctor rest ih =>
     grind [get?, set, LawfulConstructors.inject_project]
-  | index position rest ih => grind [get?, set, List.set_getElem_self]
-
-theorem PartialPath.set_set
-  {α β : Type}
-  (path : PartialPath α β)
-  (value : α)
-  (first second : β)
-  : path.set second (path.set first value) = path.set second value := by
-  induction path with
-  | self => rfl
-  | field f rest ih =>
-    simp only [set, Fields.get, Fields.set, (Fields.lawful f).view_set, ih,
-      (Fields.lawful f).set_set]
-  | constructor ctor rest ih =>
-    grind [set, LawfulConstructors.project_inject]
-  | index position rest ih => grind [set, List.set_set]
+  | item id rest ih =>
+    simp only [get?, set, List.find?_eq_bind_findIdx?_getElem?] at absent ⊢
+    cases found : value.findIdx? (HasUuid.id · == id) with
+    | none => rfl
+    | some position =>
+      simp only [found, Option.bind_some] at absent ⊢
+      exact modify_eq_self_of_fixed _ _ _ fun child here =>
+        ih child new (by simpa [here] using absent)
 
 theorem PartialPath.erase_ofPath
   {α β : Type}
@@ -85,6 +82,6 @@ theorem PartialPath.erase_trans
   | self => rfl
   | field f rest ih => simp [trans, erase, ih]
   | constructor ctor rest ih => simp [trans, erase, ih]
-  | index position rest ih => simp [trans, erase, ih]
+  | item id rest ih => simp [trans, erase, ih]
 
 end Forms.Model

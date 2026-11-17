@@ -12,7 +12,6 @@ inductive Input where
   | texts (values : List String)
 
 inductive ClientBug where
-  | unknownControl
   | missingArgument
   | unexpectedArgument
   | wrongArgument (expected : String)
@@ -21,7 +20,6 @@ inductive ClientBug where
 
 instance : ToString ClientBug where
   toString
-    | .unknownControl => "Unknown control."
     | .missingArgument => "Missing action argument."
     | .unexpectedArgument => "This action takes no argument."
     | .wrongArgument expected => s!"Expected {expected}."

@@ -2,6 +2,7 @@ module
 
 public import Forms.ExampleForms.Outputs
 public import Forms.Runtime.ModelForm
+public import Tests.FreshId
 
 public section
 namespace Tests.OutputEvaluation
@@ -22,7 +23,7 @@ private def press
   : IO (ComponentUpdate [] α state) := do
   let some control := (evaluated.view.controls.filter (·.label == label))[nth]?
     | throw (IO.userError s!"Missing control: {label} {nth}")
-  IO.ofExcept ((evaluated.applyKey control.key argument).mapError fun error =>
+  IO.ofExcept (((evaluated.applyKey control.key argument).run' supply).mapError fun error =>
     toString (ModelForm.Rejection.ofAction error))
 
 mutual
@@ -31,7 +32,9 @@ private def texts (label : String) : Display.View → List String
   | .stack _ children => textsAll label children
   | .list (children := children) .. => textsAll label children
   | .table (rows := rows) (footer := footer) .. => textsRows label rows ++ texts label footer
-  | _ => []
+  | .keyed _ body => texts label body
+  | .control _ => []
+  | .hidden => []
 
 private def textsAll (label : String) : List Display.View → List String
   | [] => []
@@ -98,7 +101,7 @@ def run : IO Unit := do
   check "EvaluationKeepsPrivateVariablesPrivate"
     (privateChanged.output == 2 && texts "Private value" privateChanged.view == ["101"])
 
-  let pairs := rows.evaluate [10, 10] Env.nil
+  let pairs := rows.evaluate (items [10, 10]) Env.nil
   let first ← press pairs "Increment"
   let first := rows.evaluate first.value first.state {} first.locals
   let second ← press first "Increment" 1
@@ -109,7 +112,7 @@ def run : IO Unit := do
     (both.output == [2, 1] && texts "Pair sum" both.view == ["2", "1"])
   let removed ← press both "Remove"
   let survivor := rows.evaluate removed.value removed.state {} removed.locals
-  check "EvaluationRemovalRetainsSurvivingPrivateState" (removed.value == [10] && survivor.output == [1])
+  check "EvaluationRemovalRetainsSurvivingPrivateState" (removed.value.map (·.value) == [10] && survivor.output == [1])
   let added ← press survivor "Add pair"
   let added := rows.evaluate added.value added.state {} added.locals
   check "EvaluationNewRowsStartFresh" (added.output == [1, 0])
@@ -118,7 +121,7 @@ def run : IO Unit := do
   let removeLast ← press last "Remove"
   let empty := rows.evaluate removeLast.value removeLast.state {} removeLast.locals
   check "EvaluationCollectsEmptyRows" (empty.output == [])
-  let totals := nested.evaluate [10, 10] Env.nil {}
+  let totals := nested.evaluate (items [10, 10]) Env.nil {}
     ⟨⟨both.locals, nested.initialState.producer.consumers⟩, ()⟩
   check "EvaluationObservesCollectedOutputs" (totals.output == 3 && texts "Overall sum" totals.view == ["3"])
 
@@ -171,13 +174,13 @@ def run : IO Unit := do
   check "EvaluationReadOnlyStatusKeepsConsumerState"
     (waitingConsumer.output == 1 && readyConsumer.output == 2 && changedConsumer.output == 3)
 
-  let focused : Component [] (List Nat) (Option Nat) :=
-    .focus (.const (some (.index 0 .self))) single
-  let focusedFirst := focused.evaluate [10] Env.nil
+  let focused : Component [] (List (Item Nat)) (Option Nat) :=
+    .zoom? (.const (some (.item firstId (.field Item.Field.value .self)))) single
+  let focusedFirst := focused.evaluate [⟨firstId, 10⟩] Env.nil
   let increment ← press focusedFirst "Increment"
   let focusedUpdated := focused.evaluate increment.value increment.state {} increment.locals
   let missing := focused.evaluate [] Env.nil {} focusedUpdated.locals
-  check "EvaluationOutputsComposeUnderFocus"
+  check "EvaluationOutputsComposeUnderZoom"
     (focusedUpdated.output == some 1 && missing.output == none && missing.view.controls.isEmpty && missing.requests.isEmpty)
 
   let outer : Component [] Nat Nat := .bind (0 : Nat) <|
@@ -189,7 +192,7 @@ def run : IO Unit := do
   let outerUpdated := outer.evaluate outerEdit.value outerEdit.state {} outerEdit.locals
   check "EvaluationPreservesOuterWritableContext" (outerUpdated.output == 5)
 
-  let table := selectionTable.evaluate ["same", "same"] Env.nil
+  let table := selectionTable.evaluate (items ["same", "same"]) Env.nil
   check "EvaluationTableStartsWithRowLocalOutputs"
     (table.output == [⟨"same", false⟩, ⟨"same", false⟩])
   let toggle ← press table "Toggle selection"
@@ -205,10 +208,6 @@ def run : IO Unit := do
   check "EvaluationColumnOutputsFeedLaterCells"
     (edited.output == [⟨"Revised", true⟩, ⟨"same", true⟩] &&
       texts "Cell description" edited.view == ["Revised", "same"])
-  let summary := selectedDescriptions.evaluate edit.value edit.state {}
-    ⟨⟨edited.locals, selectedDescriptions.initialState.producer.consumers⟩, ()⟩
-  check "EvaluationTableOutputsFeedIndependentSummary"
-    (summary.output == "Revised, same" && texts "Selected descriptions" summary.view == ["Revised, same"])
   let remove ← press edited "Remove"
   let remaining := selectionTable.evaluate remove.value remove.state {} remove.locals
   check "EvaluationTableRemovalRetainsCellState" (remaining.output == [⟨"same", true⟩])
@@ -230,25 +229,27 @@ def run : IO Unit := do
     | .table (rows := rows) .. => rows.all (·.selected.isNone)
     | _ => false)
 
-  let ordinaryColumns : Columns [] String Unit :=
-    columns["Description" => .field .self "Description" .text]
-  let ordinary := Component.table .self "Ordinary" (.numbered "Item") "Add item" "" ordinaryColumns
-  let ordinaryResult := ordinary.evaluate ["one", "two"] Env.nil
+  let ordinaryColumns : Columns [] (Item String) Unit :=
+    columns["Description" => .field path[Item.Field.value] "Description" .text]
+  let ordinary := Component.table .self "Ordinary" (.numbered "Item") "Add item"
+    (Item.mkWithoutUuid "") ordinaryColumns
+  let ordinaryResult := ordinary.evaluate (items ["one", "two"]) Env.nil
   check "EvaluationOrdinaryColumnsReturnUnit" (ordinaryResult.output == [(), ()])
 
-  let rowBound : Columns [] String Bool := ⟨#v["Selection"], .bind false <|
+  let rowBound : Columns [] (Item String) Bool := ⟨#v["Selection"], .bind false <|
     let selected : Var [⟨.writable, Bool⟩] Bool := .here
     .own (.button "Row toggle"
         (.set selected { inputs := inputs[.ui selected], run := Bool.not })) <|
       let selected : Var [⟨.readOnly, Unit⟩, ⟨.writable, Bool⟩] Bool := .there .here
       .layouts { inputs := inputs[.ui selected], run := id } (.const #v[.place .here])⟩
-  let rowBoundTable := Component.table .self "Rows" (.numbered "Row") "Add row" "" rowBound
-  let rowBoundOpened := rowBoundTable.evaluate ["same", "same"] Env.nil
+  let rowBoundTable := Component.table .self "Rows" (.numbered "Row") "Add row"
+    (Item.mkWithoutUuid "") rowBound
+  let rowBoundOpened := rowBoundTable.evaluate (items ["same", "same"]) Env.nil
   let rowBoundEdit ← press rowBoundOpened "Row toggle"
   let rowBoundUpdated := rowBoundTable.evaluate rowBoundEdit.value rowBoundEdit.state {} rowBoundEdit.locals
   check "EvaluationColumnsCanOwnRowLocalVariables" (rowBoundUpdated.output == [true, false])
 
-  let remoteColumns : Columns [] String Nat := ⟨#v["Description", "Remote"],
+  let remoteColumns : Columns [] (Item String) Nat := ⟨#v["Description", "Remote"],
     .own descriptionCell <|
       .own
         (.load {
@@ -261,13 +262,14 @@ def run : IO Unit := do
             | _ => 0)))) <|
         .layouts { inputs := inputs[.ui (Ref.here : InputRef _ Nat)], run := id }
           (.const #v[.place (.there .here), .place .here])⟩
-  let remoteTable := Component.table .self "Rows" (.numbered "Row") "Add row" "" remoteColumns
-  let remoteRows := remoteTable.evaluate ["one", "two"] Env.nil
+  let remoteTable := Component.table .self "Rows" (.numbered "Row") "Add row"
+    (Item.mkWithoutUuid "") remoteColumns
+  let remoteRows := remoteTable.evaluate (items ["one", "two"]) Env.nil
   check "EvaluationColumnRequestsUseEarlierCellOutputs"
     (remoteRows.requests.map (·.url) == ["/row/one", "/row/two"] && remoteRows.output == [0, 0])
   let some firstRequest := remoteRows.requests.head? | throw (IO.userError "Missing row request")
   let rowCache := ({} : HttpRequest.Cache).insert firstRequest (.loaded (Lean.toJson (21 : Nat)))
-  let loadedRows := remoteTable.evaluate ["one", "two"] Env.nil rowCache remoteRows.locals
+  let loadedRows := remoteTable.evaluate (items ["one", "two"]) Env.nil rowCache remoteRows.locals
   check "EvaluationColumnOutputsRefreshAfterLoading" (loadedRows.output == [21, 0])
 
   let hiddenProducer : Component [] Nat Nat := Component.visibleWhen (.const false) <|

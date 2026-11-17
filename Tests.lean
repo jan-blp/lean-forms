@@ -13,7 +13,7 @@ import Tests.FormsReact
 import Tests.Invocation
 import Tests.Remote
 import Tests.Table
-import Tests.Focus
+import Tests.Zoom
 import Tests.TableSelection
 import Tests.SharedState
 import Tests.Outputs
@@ -38,7 +38,7 @@ public def main : IO Unit := do
   Tests.Invocation.run
   Tests.Remote.run
   Tests.Table.run
-  Tests.Focus.run
+  Tests.Zoom.run
   Tests.TableSelection.run
   Tests.SharedState.run
   Tests.Outputs.run

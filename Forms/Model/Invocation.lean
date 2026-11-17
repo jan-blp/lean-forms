@@ -16,20 +16,19 @@ inductive InvocationError where
   deriving DecidableEq, Repr
 
 instance : ToString InvocationError where
-  toString
-    | .hidden => "This action is unavailable: the control is hidden."
-    | .disabled => "This action is unavailable: the control is disabled."
-    | .absent => "This action is unavailable: the control is no longer shown."
-    | .unavailableBranch key => s!"This action is unavailable: branch '{key}' is no longer available."
+  toString error :=
+    let reason := match error with
+      | .hidden => "the control is hidden"
+      | .disabled => "the control is disabled"
+      | .absent => "the control is no longer shown"
+      | .unavailableBranch key => s!"branch '{key}' is no longer available"
+    s!"This action is unavailable: {reason}."
 
 structure ComponentUpdate (Γ : Context) (α localState : Type) where
   value : α
   state : Env Γ
   locals : localState
   visit : Option Destination := none
-  /-- Conservatively suppresses visits after model mutations, even append.
-  Skipping a valid visit is preferable to navigating to a different row. -/
-  invalidatesDestinations : Bool := false
 
 def ComponentUpdate.mapValue
   {Γ : Context}

@@ -10,7 +10,7 @@ def form : Component [] Person.Raw (List Issue) :=
   .present <|
     .tabs "Sections" #v["Person", "Address"] <|
       .own .issues <|
-        .own (.focus (.const (some (.ofPath path[Person.Field.address]))) .issues) <|
+        .own (.zoom? (.const (some (.ofPath path[Person.Field.address]))) .issues) <|
           let active : Var _ (Fin 2) := .there (.there (.there .here))
           let issues : Computation _ Person.Raw (List Issue) := {
             inputs := inputs[.ui (Ref.there Ref.here)], run := id }

@@ -8,6 +8,7 @@ namespace Forms.ExampleForms
 open Forms.Model
 
 structure PlannerTask where
+  id : Uuid
   title : String
   owner : String
   hours : Nat
@@ -36,7 +37,15 @@ instance PlannerTask.hours_valid_rule : ConstraintRule PlannerTask.Constraint.ho
     else .invalid (proof := h) (message := "Estimate at least one hour.")
       (targets := locations[PlannerTask.Field.hours])
 
-def PlannerTask.initial : PlannerTask.Raw := ⟨"New task", "Unassigned", 1, false, ""⟩
+deriving instance HasUuid for PlannerTask.Raw
+
+def PlannerTask.initial : HasUuid.WithoutUuid PlannerTask.Raw :=
+  PlannerTask.Raw.mkWithoutUuid
+    (title := "New task")
+    (owner := "Unassigned")
+    (hours := 1)
+    (completed := false)
+    (notes := "")
 
 def PlannerTask.details {Γ : Context} : Component Γ PlannerTask.Raw :=
   .group "Task details" [
@@ -47,14 +56,15 @@ def PlannerTask.details {Γ : Context} : Component Γ PlannerTask.Raw :=
     .field path[PlannerTask.Field.notes] "Notes" .text]
 
 def PlannerTask.columns {Γ : Context} : Columns Γ PlannerTask.Raw := columns[
-  "Task" => .computed "Task" { inputs := inputs[path[PlannerTask.Field.title]], run := id },
-  "Owner" => .computed "Owner" { inputs := inputs[path[PlannerTask.Field.owner]], run := id },
+  "Task" => .computed "Task" { inputs := inputs[path[PlannerTask.Field.title]], run := fun title => title },
+  "Owner" => .computed "Owner" { inputs := inputs[path[PlannerTask.Field.owner]], run := fun owner => owner },
   "Estimate" => .computed "Estimate" {
     inputs := inputs[path[PlannerTask.Field.hours]], run := fun hours => s!"{hours} h" },
   "Status" => .computed "Status" {
     inputs := inputs[path[PlannerTask.Field.completed]], run := fun completed => if completed then "Done" else "To do" }]
 
 structure PlannerProject where
+  id : Uuid
   name : String
   tasks : List PlannerTask
   name_valid : name ≠ ""
@@ -66,7 +76,10 @@ instance PlannerProject.name_valid_rule : ConstraintRule PlannerProject.Constrai
     else .invalid (proof := h) (message := "Give the project a name.")
       (targets := locations[PlannerProject.Field.name])
 
-def PlannerProject.initial : PlannerProject.Raw := ⟨"New project", [PlannerTask.initial]⟩
+deriving instance HasUuid for PlannerProject.Raw
+
+def PlannerProject.initial : HasUuid.WithoutUuid PlannerProject.Raw :=
+  PlannerProject.Raw.mkWithoutUuid (name := "New project") (tasks := [])
 
 /-- Every project instance owns its selection. The table and editor share only that local variable. -/
 def PlannerProject.form {Γ : Context} : Component Γ PlannerProject.Raw :=
@@ -87,7 +100,7 @@ def PlannerProject.form {Γ : Context} : Component Γ PlannerProject.Raw :=
       .visibleWhen
         { inputs := inputs[.ui selectedTask], run := fun selected => selected != .none }
         (.button "Close task" (.set selectedTask (.const .none))),
-      Component.void <| .focus
+      Component.void <| .zoom?
         { inputs := inputs[.ui selectedTask]
           run := RowSelection.itemPath path[PlannerProject.Field.tasks] }
         PlannerTask.details]
@@ -104,14 +117,17 @@ instance ProjectPlanner.name_valid_rule : ConstraintRule ProjectPlanner.Constrai
     else .invalid (proof := h) (message := "Give the plan a name.")
       (targets := locations[ProjectPlanner.Field.name])
 
-def ProjectPlanner.initial : ProjectPlanner.Raw := ⟨"Team launch plan", [
-  ⟨"Website refresh", [
-    ⟨"Map the new navigation", "Ada", 3, true, "Agree on the page hierarchy before wireframes."⟩,
-    ⟨"Build accessible navigation", "Grace", 5, false, "Keyboard support, focus states, and the mobile menu."⟩,
-    ⟨"Check the release", "Linus", 2, false, "Run smoke tests and prepare the rollout."⟩]⟩,
-  ⟨"Customer onboarding", [
-    ⟨"Draft the welcome email", "Maya", 2, false, "Keep it short and include the first useful action."⟩,
-    ⟨"Measure activation", "Sam", 3, false, "Choose an activation event and add a dashboard."⟩]⟩]⟩
+def ProjectPlanner.initial : ProjectPlanner.Raw := IdGen.run do
+  pure ⟨"Team launch plan", [
+    ⟨← freshId, "Website refresh", [
+      ⟨← freshId, "Map the new navigation", "Ada", 3, true, "Agree on the page hierarchy before wireframes."⟩,
+      ⟨← freshId, "Build accessible navigation", "Grace", 5, false,
+        "Keyboard support, focus states, and the mobile menu."⟩,
+      ⟨← freshId, "Check the release", "Linus", 2, false, "Run smoke tests and prepare the rollout."⟩]⟩,
+    ⟨← freshId, "Customer onboarding", [
+      ⟨← freshId, "Draft the welcome email", "Maya", 2, false,
+        "Keep it short and include the first useful action."⟩,
+      ⟨← freshId, "Measure activation", "Sam", 3, false, "Choose an activation event and add a dashboard."⟩]⟩]⟩
 
 def ProjectPlanner.counted (count : Nat) (noun : String) : String :=
   s!"{count} {noun}{if count == 1 then "" else "s"}"

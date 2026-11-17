@@ -11,6 +11,7 @@ open Forms.Model
 /-! Rules are named: auto-generated names can clash with other example forms. -/
 
 structure Expense where
+  id : Uuid
   description : String
   amount : Nat
   receipt : Bool
@@ -36,6 +37,11 @@ instance Expense.receipt_valid_rule : ConstraintRule Expense.Constraint.receipt_
     if h : 100 ≤ parts.amount → parts.receipt = true then .valid h
     else .invalid (proof := h) (message := "Attach a receipt for CHF 100 or more.")
       (targets := locations[Expense.Field.receipt])
+
+deriving instance HasUuid for Expense.Raw
+
+def Expense.initial : HasUuid.WithoutUuid Expense.Raw :=
+  Expense.Raw.mkWithoutUuid (description := "") (amount := 0) (receipt := false)
 
 structure ExpenseReport where
   employee : String
@@ -66,7 +72,10 @@ instance ExpenseReport.limit_valid_rule : ConstraintRule ExpenseReport.Constrain
       (targets := locations[ExpenseReport.Field.expenses])
 
 def ExpenseReport.initial : ExpenseReport.Raw :=
-  ⟨"Ada Lovelace", [⟨"Train to Bern", 58, false⟩, ⟨"Hotel", 180, true⟩]⟩
+  IdGen.run do
+    pure ⟨"Ada Lovelace", [
+      ⟨← freshId, "Train to Bern", 58, false⟩,
+      ⟨← freshId, "Hotel", 180, true⟩]⟩
 
 def Expense.columns {Γ : Context} : Columns Γ Expense.Raw := columns[
   "Description" => .field
@@ -101,7 +110,7 @@ def ExpenseReport.listForm {Γ : Context} : Component Γ ExpenseReport.Raw :=
     (label := "Expenses")
     (rowLabel := .numbered "Expense")
     (addCaption := "Add expense")
-    (initial := ⟨"", 0, false⟩)
+    (initial := Expense.initial)
     (body := Expense.columns.group ""))
 
 def ExpenseReport.form {Γ : Context} : Component Γ ExpenseReport.Raw :=
@@ -110,7 +119,7 @@ def ExpenseReport.form {Γ : Context} : Component Γ ExpenseReport.Raw :=
     (label := "Expenses")
     (rowLabel := .numbered "Expense")
     (addCaption := "Add expense")
-    (initial := ⟨"", 0, false⟩)
+    (initial := Expense.initial)
     (columns := Expense.columns))
 
 def ExpenseReport.focusForm : Component [] ExpenseReport.Raw :=
@@ -123,7 +132,7 @@ def ExpenseReport.focusForm : Component [] ExpenseReport.Raw :=
       (label := "Expenses")
       (rowLabel := .numbered "Expense")
       (addCaption := "Add expense")
-      (initial := ⟨"", 0, false⟩)
+      (initial := Expense.initial)
       (columns := columns[
         "Description" => .computed "Description" {
           inputs := inputs[path[Expense.Field.description]], run := id },
@@ -132,7 +141,7 @@ def ExpenseReport.focusForm : Component [] ExpenseReport.Raw :=
         "Receipt" => .computed "Receipt" {
           inputs := inputs[path[Expense.Field.receipt]], run := fun receipt => if receipt then "Yes" else "No" }])
       (selection := some .here),
-    Component.void <| .focus
+    Component.void <| .zoom?
       (target := {
         inputs := inputs[.ui .here]
         run := RowSelection.itemPath path[ExpenseReport.Field.expenses]
