@@ -29,8 +29,6 @@ structure Person where
   delivery_valid : address.street = "Campus" → 18 ≤ age
   deriving FormModel
 
-#fields Person.Parts
-
 example (value : Person.Raw) :
     (locations[Person.Field.address / Address.Field.street, Person.Field.age] : Targets Person.Raw value) =
       .locations (.field Person.Field.address (.field Address.Field.street .self)) [.field Person.Field.age .self] :=

@@ -588,8 +588,8 @@ initialize registerDerivingHandler ``FormModel fun names => do
   for name in names do deriveOne name
   return true
 
-/-- `deriving HasUuid` for a structure with an `id : Uuid` field. Also generates `template`, which
-takes the other fields, for add buttons. -/
+/-- `deriving HasUuid` for a structure with an `id : Uuid` field. Also generates `mkWithoutUuid`,
+which takes the other fields. -/
 private def deriveHasUuid (name : Name) : CommandElabM Unit := do
   let env ← getEnv
   unless isStructure env name do throwError "`{name}` is not a structure"
@@ -613,11 +613,12 @@ private def deriveHasUuid (name : Name) : CommandElabM Unit := do
   let rest := fields.filter (·.1 != `id)
   let binders ← rest.mapM fun (field, type) => do
     `(Parser.Term.bracketedBinderF| ($(ident field) : $(← delabRooted {} {} type)))
-  let template ← app (global ctor.name) <| ← fields.mapM fun (field, _) =>
+  let representative ← app (global ctor.name) <| ← fields.mapM fun (field, _) =>
     if field == `id then `(Forms.Model.Uuid.nil) else pure (ident field)
-  emit (← `(command| @[expose] def $(global (name ++ `template)):ident $binders:bracketedBinder* :
+  let constructor := global (name ++ `mkWithoutUuid)
+  emit (← `(command| @[expose] def $constructor:ident $binders:bracketedBinder* :
       Forms.Model.HasUuid.WithoutUuid $(global name) :=
-    Forms.Model.HasUuid.withoutUuid $template))
+    Forms.Model.HasUuid.withoutUuid $representative))
 
 initialize registerDerivingHandler ``HasUuid fun names => do
   for name in names do

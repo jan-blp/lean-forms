@@ -91,7 +91,7 @@ def run : IO Unit := do
       loading.requests {} selected.value Env.nil selectedLocals == [request])
   let table : Component [] ExpenseReport.Raw := .bind RowSelection.none (Component.void <| .table
     path[ExpenseReport.Field.expenses] "Expenses" (.numbered "Expense") "Add expense"
-        (Expense.Raw.template "" 0 false) columns[] (some .here))
+        Expense.initial columns[] (some .here))
   let twoTables := Component.group "Two selections" [table, table]
   let multiple := ModelForm.openState (model := ExpenseReport) (supply := supply)
     twoTables ExpenseReport.initial Env.nil
@@ -106,7 +106,7 @@ def run : IO Unit := do
   let nested : Component [] ExpenseReport.Raw := Component.void <| .focus
     (.const (some (.ofPath path[ExpenseReport.Field.expenses])))
     (.bind RowSelection.none (Component.void <| .table .self "Nested"
-        (.numbered "Expense") "Add expense" (Expense.Raw.template "" 0 false) columns[]
+        (.numbered "Expense") "Add expense" Expense.initial columns[]
         (some .here)))
   let nestedOpened := ModelForm.openState (model := ExpenseReport) (supply := supply)
     nested ExpenseReport.initial Env.nil
@@ -118,7 +118,7 @@ def run : IO Unit := do
     (nestedSelected.locals.producer.value == .row firstId && toJson nestedSelected.value == toJson nestedOpened.value)
   let mixed : Component [⟨.readOnly, RowSelection⟩, ⟨.writable, RowSelection⟩] ExpenseReport.Raw :=
     .bind false (Component.void <| .table path[ExpenseReport.Field.expenses] "Expenses"
-        (.numbered "Expense") "Add expense" (Expense.Raw.template "" 0 false)
+        (.numbered "Expense") "Add expense" Expense.initial
       columns[] (some (.there (.there .here))))
   let mixedOpened := ModelForm.openState (model := ExpenseReport) (supply := supply)
     mixed ExpenseReport.initial env[.row secondId, .none]

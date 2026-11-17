@@ -41,7 +41,7 @@ instance {β : Type} [FormModel β] [Validation β] : Validation (Item β) where
     | .error errors => .error (errors.map (Error.lift (value := raw) Item.Field.value))
 
 /-- A new item's value, for add buttons. -/
-def Item.template {β : Type} (value : β) : HasUuid.WithoutUuid (Item β) :=
+def Item.mkWithoutUuid {β : Type} (value : β) : HasUuid.WithoutUuid (Item β) :=
   HasUuid.withoutUuid { id := .nil, value }
 
 def Item.fresh

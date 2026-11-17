@@ -78,7 +78,7 @@ def noteTabs {Γ : Context} : Component Γ String :=
 def notes : Component [] (List (Item String)) Nat :=
   .present <|
     .own (Component.void (.list .self "Notes" (.numbered "Note") "Add note"
-        (Item.template "")
+        (Item.mkWithoutUuid "")
         (.within path[Item.Field.value] noteTabs))) <|
       .own (.computed "Note count" { inputs := inputs[path[]], run := fun notes => toString notes.length }) <|
         .layout { inputs := inputs[path[]], run := List.length }

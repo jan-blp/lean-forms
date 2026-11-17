@@ -45,7 +45,7 @@ def pair {Γ : Context} : Component Γ Nat Nat :=
 
 def rows : Component [] (List (Item Nat)) (List Nat) :=
   .list .self "Pairs" (.numbered "Pair") "Add pair"
-      (Item.template 0) (.within path[Item.Field.value] pair)
+      (Item.mkWithoutUuid 0) (.within path[Item.Field.value] pair)
 
 def nested : Component [] (List (Item Nat)) Nat :=
   .labeled "Nested outputs" <|
@@ -94,7 +94,7 @@ def selectionColumns {Γ : Context} : Columns Γ (Item String) RowOutput :=
 
 def selectionTable : Component [] (List (Item String)) (List RowOutput) :=
   .table .self "Items" (.numbered "Item") "Add item"
-      (Item.template "New item") selectionColumns
+      (Item.mkWithoutUuid "New item") selectionColumns
 
 /-- Two rows share a description, so selection must follow rows, not text. -/
 def descriptions : List (Item String) :=

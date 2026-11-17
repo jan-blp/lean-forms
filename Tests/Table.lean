@@ -87,7 +87,7 @@ def run : IO Unit := do
   let request (amount : Nat) : HttpRequest := { method := .post, url := s!"/api/expense/{amount}", body := none }
   let loading : Component [] ExpenseReport.Raw := Component.void <| .table
     path[ExpenseReport.Field.expenses] "Expenses" (.numbered "Expense") "Add expense"
-      (Expense.Raw.template "" 0 false)
+      Expense.initial
     columns["Details" => .loadWith
       { inputs := inputs[path[Expense.Field.amount]], run := fun amount =>
           Source.fetch (request amount) (fromJson? (α := String)) }

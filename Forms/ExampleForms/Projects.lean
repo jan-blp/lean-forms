@@ -40,7 +40,12 @@ instance PlannerTask.hours_valid_rule : ConstraintRule PlannerTask.Constraint.ho
 deriving instance HasUuid for PlannerTask.Raw
 
 def PlannerTask.initial : HasUuid.WithoutUuid PlannerTask.Raw :=
-  PlannerTask.Raw.template "New task" "Unassigned" 1 false ""
+  PlannerTask.Raw.mkWithoutUuid
+    (title := "New task")
+    (owner := "Unassigned")
+    (hours := 1)
+    (completed := false)
+    (notes := "")
 
 def PlannerTask.details {Γ : Context} : Component Γ PlannerTask.Raw :=
   .group "Task details" [
@@ -74,7 +79,7 @@ instance PlannerProject.name_valid_rule : ConstraintRule PlannerProject.Constrai
 deriving instance HasUuid for PlannerProject.Raw
 
 def PlannerProject.initial : HasUuid.WithoutUuid PlannerProject.Raw :=
-  PlannerProject.Raw.template "New project" []
+  PlannerProject.Raw.mkWithoutUuid (name := "New project") (tasks := [])
 
 /-- Every project instance owns its selection. The table and editor share only that local variable. -/
 def PlannerProject.form {Γ : Context} : Component Γ PlannerProject.Raw :=
