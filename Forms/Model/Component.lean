@@ -488,12 +488,12 @@ The first entry in `body`'s context is the producer's current output, available 
   [HasUuid β]
   (path : Path α (List β))
   (caption : Computation Γ α String)
-  (initial : Uuid → β)
+  (initial : HasUuid.WithoutUuid β)
   (collection : Component Γ α γ (holes := 1))
   : Component Γ α γ :=
   .present <|
     .own collection <|
-      .own (.button (caption.rename Renaming.shift) (.appendFresh path (.const initial))) <|
+      .own (.button (caption.rename Renaming.shift) (.append path (.const initial))) <|
         .layout { inputs := inputs[.ui (Ref.there Ref.here)], run := id }
           (.const (.fill (.there .here) (.cons [.place .here] .nil)))
 
@@ -513,7 +513,7 @@ The first entry in `body`'s context is the producer's current output, available 
   (label : Computation Γ α String)
   (rowLabel : Computation (Context.row β Γ) β String)
   (addCaption : Computation Γ α String)
-  (initial : Uuid → β)
+  (initial : HasUuid.WithoutUuid β)
   (body : Component Γ β γ)
   : Component Γ α (List γ) :=
   let rowLabel := rowLabel.rename fun ref => .there (.there ref)
@@ -533,7 +533,7 @@ The first entry in `body`'s context is the producer's current output, available 
   (label : Computation Γ α String)
   (rowLabel : Computation (Context.row β Γ) β String)
   (addCaption : Computation Γ α String)
-  (initial : Uuid → β)
+  (initial : HasUuid.WithoutUuid β)
   (columns : Columns Γ β γ)
   (selection : Option (Var Γ RowSelection) := none)
   : Component Γ α (List γ) :=

@@ -37,10 +37,10 @@ instance PlannerTask.hours_valid_rule : ConstraintRule PlannerTask.Constraint.ho
     else .invalid (proof := h) (message := "Estimate at least one hour.")
       (targets := locations[PlannerTask.Field.hours])
 
-instance PlannerTask.hasUuid : HasUuid PlannerTask.Raw where
-  id := (·.id)
+deriving instance HasUuid for PlannerTask.Raw
 
-def PlannerTask.initial (id : Uuid) : PlannerTask.Raw := ⟨id, "New task", "Unassigned", 1, false, ""⟩
+def PlannerTask.initial : HasUuid.WithoutUuid PlannerTask.Raw :=
+  PlannerTask.Raw.template "New task" "Unassigned" 1 false ""
 
 def PlannerTask.details {Γ : Context} : Component Γ PlannerTask.Raw :=
   .group "Task details" [
@@ -71,10 +71,10 @@ instance PlannerProject.name_valid_rule : ConstraintRule PlannerProject.Constrai
     else .invalid (proof := h) (message := "Give the project a name.")
       (targets := locations[PlannerProject.Field.name])
 
-instance PlannerProject.hasUuid : HasUuid PlannerProject.Raw where
-  id := (·.id)
+deriving instance HasUuid for PlannerProject.Raw
 
-def PlannerProject.initial (id : Uuid) : PlannerProject.Raw := ⟨id, "New project", []⟩
+def PlannerProject.initial : HasUuid.WithoutUuid PlannerProject.Raw :=
+  PlannerProject.Raw.template "New project" []
 
 /-- Every project instance owns its selection. The table and editor share only that local variable. -/
 def PlannerProject.form {Γ : Context} : Component Γ PlannerProject.Raw :=

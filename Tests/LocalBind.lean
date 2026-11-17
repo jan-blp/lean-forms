@@ -38,12 +38,12 @@ private def apply
 
 @[expose] def row : Component [] (List (Item Nat)) := .bind RowSelection.none
   (Component.void <| .table .self "Choices" (.numbered "Choice") "Add choice"
-      ({ id := ·, value := 0 })
+      (Item.template 0)
     columns["Number" => .computed "Number" { inputs := inputs[path[Item.Field.value]], run := toString }]
     (some .here))
 
 @[expose] def rows : Component [] (List (Item (List (Item Nat)))) :=
-  Component.void <| .list .self "Rows" (.numbered "Row") "Add row" ({ id := ·, value := [] })
+  Component.void <| .list .self "Rows" (.numbered "Row") "Add row" (Item.template [])
     (.within path[Item.Field.value] row)
 
 private def rowSelection (state : ModelForm.State rows) (index : Nat) : RowSelection :=
@@ -52,7 +52,7 @@ private def rowSelection (state : ModelForm.State rows) (index : Nat) : RowSelec
 
 private def loadedBody : Status Bool → Component [] ExpenseReport.Raw
   | .ready true => .bind RowSelection.none (Component.void <| .table path[ExpenseReport.Field.expenses]
-      "Expenses" (.numbered "Expense") "Add expense" (fun id => ⟨id, "", 0, false⟩) columns[]
+      "Expenses" (.numbered "Expense") "Add expense" (Expense.Raw.template "" 0 false) columns[]
       (some .here))
   | .ready false => .bind (fun n : Nat => n + 1) (.computed "Function" {
       inputs := inputs[.ui (Ref.here : Var [⟨.writable, Nat → Nat⟩] (Nat → Nat))]
@@ -85,7 +85,7 @@ def run : IO Unit := do
     (reset.value == opened.value && rowSelection reset 0 == .none && rowSelection reset 1 == .none)
   let nested : Component [] (List (Item Nat)) := .bind RowSelection.none (.bind RowSelection.none
     (Component.void <| .table .self "Nested" (.numbered "Number") "Add number"
-        ({ id := ·, value := 0 }) columns[] (some (.there .here))))
+        (Item.template 0) columns[] (some (.there .here))))
   let nestedOpened := ModelForm.openState (model := List (Item Nat)) (supply := supply) nested
     [⟨firstId, 10⟩, ⟨secondId, 20⟩] Env.nil
   let nestedSelected ← apply (model := List (Item Nat)) nested nestedOpened "Select"

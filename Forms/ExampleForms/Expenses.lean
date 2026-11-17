@@ -38,8 +38,7 @@ instance Expense.receipt_valid_rule : ConstraintRule Expense.Constraint.receipt_
     else .invalid (proof := h) (message := "Attach a receipt for CHF 100 or more.")
       (targets := locations[Expense.Field.receipt])
 
-instance Expense.hasUuid : HasUuid Expense.Raw where
-  id := (·.id)
+deriving instance HasUuid for Expense.Raw
 
 structure ExpenseReport where
   employee : String
@@ -108,7 +107,7 @@ def ExpenseReport.listForm {Γ : Context} : Component Γ ExpenseReport.Raw :=
     (label := "Expenses")
     (rowLabel := .numbered "Expense")
     (addCaption := "Add expense")
-    (initial := fun id => ⟨id, "", 0, false⟩)
+    (initial := Expense.Raw.template "" 0 false)
     (body := Expense.columns.group ""))
 
 def ExpenseReport.form {Γ : Context} : Component Γ ExpenseReport.Raw :=
@@ -117,7 +116,7 @@ def ExpenseReport.form {Γ : Context} : Component Γ ExpenseReport.Raw :=
     (label := "Expenses")
     (rowLabel := .numbered "Expense")
     (addCaption := "Add expense")
-    (initial := fun id => ⟨id, "", 0, false⟩)
+    (initial := Expense.Raw.template "" 0 false)
     (columns := Expense.columns))
 
 def ExpenseReport.focusForm : Component [] ExpenseReport.Raw :=
@@ -130,7 +129,7 @@ def ExpenseReport.focusForm : Component [] ExpenseReport.Raw :=
       (label := "Expenses")
       (rowLabel := .numbered "Expense")
       (addCaption := "Add expense")
-      (initial := fun id => ⟨id, "", 0, false⟩)
+      (initial := Expense.Raw.template "" 0 false)
       (columns := columns[
         "Description" => .computed "Description" {
           inputs := inputs[path[Expense.Field.description]], run := id },

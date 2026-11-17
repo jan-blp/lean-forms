@@ -106,19 +106,27 @@ private def inspect (name : Name) : MetaM (Bool × Array Constructor) := do
       return ⟨ctorName, fields, context, ← getLocalInstances⟩
   return (record, ctors)
 
-private def fieldType (ctor : Constructor) (field : FieldInfo) : CommandElabM TermSyntax := do
+/-- Prints `type` so that it re-elaborates to the same term inside generated namespaces. -/
+private def delabRooted
+  (context : LocalContext)
+  (instances : LocalInstances)
+  (type : Expr)
+  : CommandElabM TermSyntax := do
   -- Preserve names and coercion targets when re-elaborating generated code.
-  let type ← liftTermElabM <| withLCtx ctor.context ctor.instances <|
+  let delabbed ← liftTermElabM <| withLCtx context instances <|
     withOptions (fun opts => opts.setBool `pp.fullNames true |>.setBool `pp.coercions.types true
         |>.setBool `pp.funBinderTypes true) <|
-      PrettyPrinter.delab field.type
+      PrettyPrinter.delab type
   -- Generated code is elaborated inside the model's namespace, where these names could be shadowed.
   let env ← getEnv
-  let rooted ← type.raw.replaceM fun node => do
+  let rooted ← delabbed.raw.replaceM fun node => do
     let .ident _ _ name _ := node | return none
-    if (ctor.context.findFromUserName? name).isSome || !env.contains name then return none
+    if (context.findFromUserName? name).isSome || !env.contains name then return none
     return some (mkIdent (`_root_ ++ name)).raw
   return ⟨rooted⟩
+
+private def fieldType (ctor : Constructor) (field : FieldInfo) : CommandElabM TermSyntax :=
+  delabRooted ctor.context ctor.instances field.type
 
 private def app (fn : TermSyntax) (args : Array TermSyntax) : CommandElabM TermSyntax :=
   `($fn $args*)
@@ -578,6 +586,42 @@ private def deriveOne (name : Name) : CommandElabM Unit := do
 
 initialize registerDerivingHandler ``FormModel fun names => do
   for name in names do deriveOne name
+  return true
+
+/-- `deriving HasUuid` for a structure with an `id : Uuid` field. Also generates `template`, which
+takes the other fields, for add buttons. -/
+private def deriveHasUuid (name : Name) : CommandElabM Unit := do
+  let env ← getEnv
+  unless isStructure env name do throwError "`{name}` is not a structure"
+  let ctor := getStructureCtor env name
+  unless ctor.numParams == 0 do throwError "the structure must not have parameters"
+  let fields ← liftTermElabM <| forallTelescope ctor.type fun args _ => args.mapM fun arg => do
+    let decl ← arg.fvarId!.getDecl
+    if decl.type.hasFVar then throwError "fields cannot be dependent"
+    return (decl.userName, decl.type)
+  let some (_, idType) := fields.find? (·.1 == `id)
+    | throwError "the structure needs an `id : Uuid` field"
+  unless ← liftTermElabM (isDefEq idType (mkConst ``Uuid)) do
+    throwError "the `id` field must have type `Uuid`"
+  let item ← fresh `item
+  let uuid ← fresh `uuid
+  let withUuid ← app (global ctor.name) <| ← fields.mapM fun (field, _) =>
+    if field == `id then pure uuid else app (global (name ++ field)) #[item]
+  emit (← `(command| @[expose] instance $(global (name ++ `hasUuid)):ident :
+      Forms.Model.HasUuid $(global name) where
+    lens := LeanLens.mkLens $(global (name ++ `id)) fun $uuid:ident $item:ident => $withUuid))
+  let rest := fields.filter (·.1 != `id)
+  let binders ← rest.mapM fun (field, type) => do
+    `(Parser.Term.bracketedBinderF| ($(ident field) : $(← delabRooted {} {} type)))
+  let template ← app (global ctor.name) <| ← fields.mapM fun (field, _) =>
+    if field == `id then `(Forms.Model.Uuid.nil) else pure (ident field)
+  emit (← `(command| @[expose] def $(global (name ++ `template)):ident $binders:bracketedBinder* :
+      Forms.Model.HasUuid.WithoutUuid $(global name) :=
+    Forms.Model.HasUuid.withoutUuid $template))
+
+initialize registerDerivingHandler ``HasUuid fun names => do
+  for name in names do
+    emitting m!"deriving HasUuid for `{privateToUserName name}`" (deriveHasUuid name)
   return true
 
 elab "#fields " id:ident : command => do

@@ -2,6 +2,7 @@ module
 
 public import Forms.Model.Computation
 public import Forms.Model.Invocation
+public import Forms.Model.FreshId
 public import Forms.Model.HasUuid
 
 @[expose] public section
@@ -13,14 +14,9 @@ inductive Action.Step (Γ : Context) (α : Type) where
       (value : Computation Γ α β)
       : Action.Step Γ α
   | append {β : Type}
-      (path : Path α (List β))
-      (item : Computation Γ α β)
-      : Action.Step Γ α
-  /-- Appends an item built from a fresh id. -/
-  | appendFresh {β : Type}
       [hasUuid : HasUuid β]
       (path : Path α (List β))
-      (item : Computation Γ α (Uuid → β))
+      (item : Computation Γ α (HasUuid.WithoutUuid β))
       : Action.Step Γ α
   | visit (target : Computation Γ α (Option Destination))
       : Action.Step Γ α
@@ -43,19 +39,11 @@ def set
 def append
   {Γ : Context}
   {α β : Type}
-  (path : Path α (List β))
-  (item : Computation Γ α β)
-  : Action Γ α :=
-  FreeMonoid.of (.append path item)
-
-def appendFresh
-  {Γ : Context}
-  {α β : Type}
   [HasUuid β]
   (path : Path α (List β))
-  (item : Computation Γ α (Uuid → β))
+  (item : Computation Γ α (HasUuid.WithoutUuid β))
   : Action Γ α :=
-  FreeMonoid.of (.appendFresh path item)
+  FreeMonoid.of (.append path item)
 
 def Step.rename
   {Γ Δ : Context}
@@ -63,8 +51,7 @@ def Step.rename
   (rename : Renaming Γ Δ)
   : Step Γ α → Step Δ α
   | .set ref value => .set (rename ref) (value.rename rename)
-  | .append path item => .append path (item.rename rename)
-  | .appendFresh (hasUuid := _) path item => .appendFresh path (item.rename rename)
+  | .append (hasUuid := _) path item => .append path (item.rename rename)
   | .visit target => .visit (target.rename rename)
 
 def rename
@@ -88,15 +75,10 @@ def Step.run
   match step with
   | .set ref computed =>
     pure { value, state := ref.set (computed.eval value env) env, locals := () }
-  | .append path item =>
-    pure
-      { value := path.set (path.get value ++ [item.eval value env]) value
-        state := env
-        locals := () }
-  | .appendFresh (hasUuid := _) path item => do
+  | .append (hasUuid := _) path item => do
     let id ← freshId
     return {
-      value := path.set (path.get value ++ [item.eval value env id]) value
+      value := path.set (path.get value ++ [HasUuid.withUuid id (item.eval value env)]) value
       state := env
       locals := () }
   | .visit target =>

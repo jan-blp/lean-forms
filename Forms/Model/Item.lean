@@ -18,7 +18,7 @@ inductive Item.Field (β : Type) : Type → Type where
   | value : Item.Field β β
 
 instance {β : Type} : HasUuid (Item β) where
-  id := Item.id
+  lens := mkLens Item.id fun id item => { item with id }
 
 instance {β : Type} : Fields (Item β) where
   Field := Item.Field β
@@ -39,6 +39,10 @@ instance {β : Type} [FormModel β] [Validation β] : Validation (Item β) where
   validate raw := match Validation.validate (model := β) raw.value with
     | .ok value => .ok ⟨{ id := raw.id, value := value.val }, by simp [FormModel.erase, value.property]⟩
     | .error errors => .error (errors.map (Error.lift (value := raw) Item.Field.value))
+
+/-- A new item's value, for add buttons. -/
+def Item.template {β : Type} (value : β) : HasUuid.WithoutUuid (Item β) :=
+  HasUuid.withoutUuid { id := .nil, value }
 
 def Item.fresh
   {m : Type → Type}

@@ -91,7 +91,7 @@ def run : IO Unit := do
       addressIssues.head?.bind (·.destination?) == some { locations := [street] })
 
   let rows : Component [] (List (Item Address.Raw)) (List (List Issue)) :=
-    .list .self "Addresses" (.numbered "Address") "Add" ({ id := ·, value := ⟨""⟩ }) .issues
+    .list .self "Addresses" (.numbered "Address") "Add" (Item.template ⟨""⟩) .issues
   let secondStreet : ErasedLocation := [.item secondId, .field "value", .field "street"]
   let rowIssues : List Diagnostic := [
     { message := "Second address", targets := .locations secondStreet [] }]

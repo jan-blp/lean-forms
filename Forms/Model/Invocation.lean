@@ -2,7 +2,6 @@ module
 
 public import Forms.Model.Context
 public import Forms.Model.Diagnostic
-public import Forms.Model.FreshId
 
 @[expose] public section
 namespace Forms.Model

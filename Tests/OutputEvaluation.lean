@@ -232,7 +232,7 @@ def run : IO Unit := do
   let ordinaryColumns : Columns [] (Item String) Unit :=
     columns["Description" => .field path[Item.Field.value] "Description" .text]
   let ordinary := Component.table .self "Ordinary" (.numbered "Item") "Add item"
-      ({ id := ·, value := "" })
+      (Item.template "")
     ordinaryColumns
   let ordinaryResult := ordinary.evaluate (items ["one", "two"]) Env.nil
   check "EvaluationOrdinaryColumnsReturnUnit" (ordinaryResult.output == [(), ()])
@@ -244,7 +244,7 @@ def run : IO Unit := do
       let selected : Var [⟨.readOnly, Unit⟩, ⟨.writable, Bool⟩] Bool := .there .here
       .layouts { inputs := inputs[.ui selected], run := id } (.const #v[.place .here])⟩
   let rowBoundTable := Component.table .self "Rows" (.numbered "Row") "Add row"
-      ({ id := ·, value := "" })
+      (Item.template "")
     rowBound
   let rowBoundOpened := rowBoundTable.evaluate (items ["same", "same"]) Env.nil
   let rowBoundEdit ← press rowBoundOpened "Row toggle"
@@ -265,7 +265,7 @@ def run : IO Unit := do
         .layouts { inputs := inputs[.ui (Ref.here : InputRef _ Nat)], run := id }
           (.const #v[.place (.there .here), .place .here])⟩
   let remoteTable := Component.table .self "Rows" (.numbered "Row") "Add row"
-      ({ id := ·, value := "" })
+      (Item.template "")
     remoteColumns
   let remoteRows := remoteTable.evaluate (items ["one", "two"]) Env.nil
   check "EvaluationColumnRequestsUseEarlierCellOutputs"
