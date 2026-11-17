@@ -38,7 +38,7 @@ private def apply
 
 @[expose] def row : Component [] (List (Item Nat)) := .bind RowSelection.none
   (Component.void <| .table .self "Choices" (.numbered "Choice") "Add choice"
-      (Item.mkWithoutUuid 0)
+    (Item.mkWithoutUuid 0)
     columns["Number" => .computed "Number" { inputs := inputs[path[Item.Field.value]], run := toString }]
     (some .here))
 

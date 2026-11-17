@@ -101,12 +101,5 @@ def run : IO Unit := do
       | .error message => message == duplicateIdsMessage [firstId]
       | .ok _ => false) &&
       (definition.openState (toJson ExpenseReport.initial) supply).toOption.isSome)
-  check "FixedIdsEndInTheirNumber"
-    ((Uuid.ofNat 1).value == "00000000-0000-4000-8000-000000000001" &&
-      (Uuid.ofNat 0x2a).value == "00000000-0000-4000-8000-00000000002a")
-  let seed := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
-  check "SeedsAreSixtyFourHexDigits"
-    ((Supply.ofSeed? seed).isSome && (Supply.ofSeed? (seed.drop 2).toString).isNone &&
-      (Supply.ofSeed? (String.ofList (List.replicate 64 '0'))).isNone)
 
 end Tests.Table

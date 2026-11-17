@@ -1,8 +1,7 @@
 module
 
 public import Forms.Model.Derive
-public import Forms.Model.Item
-public import Forms.Model.FreshId
+public import Tests.FreshId
 meta import Forms.Model.Path.Theorems
 
 @[expose] public section
@@ -328,16 +327,14 @@ public def run : IO Unit := do
   check "ModelNestedPathUpdate" (street.get updated == "Road" && updated.age == 20)
   check "ModelPathLensUpdate"
     (LeanLens.view street.toLens (LeanLens.set street.toLens "Road" good) == "Road")
-  let first : Uuid := .ofNat 1
-  let second : Uuid := .ofNat 2
-  let third : Uuid := .ofNat 3
   check "ModelListValid"
-    ((Basket.validate ⟨[⟨first, 1⟩, ⟨second, 2⟩]⟩).toOption.any (·.val.lines.length == 2))
+    ((Basket.validate ⟨[⟨firstId, 1⟩, ⟨secondId, 2⟩]⟩).toOption.any (·.val.lines.length == 2))
   check "ModelListItemErrorsUseItemIds"
-    ((errors (Basket.validate ⟨[⟨first, 1⟩, ⟨second, 0⟩, ⟨third, 0⟩]⟩)).map targetKeys ==
-      [[["lines", second.value, "amount"]], [["lines", third.value, "amount"]]])
+    ((errors (Basket.validate ⟨[⟨firstId, 1⟩, ⟨secondId, 0⟩, ⟨thirdId, 0⟩]⟩)).map targetKeys ==
+      [[["lines", secondId.value, "amount"]], [["lines", thirdId.value, "amount"]]])
   check "ModelListRejectsDuplicateIds"
-    ((errors (Basket.validate ⟨[⟨first, 1⟩, ⟨first, 2⟩]⟩)).map (·.message) == [duplicateIdsMessage [first]])
+    ((errors (Basket.validate ⟨[⟨firstId, 1⟩, ⟨firstId, 2⟩]⟩)).map (·.message) ==
+      [duplicateIdsMessage [firstId]])
   check "ModelListConstraint" ((errors (Basket.validate ⟨[]⟩)).map targetKeys == [[["lines"]]])
   check "DeriveProjectActiveConstructor"
     ((Constructors.project Delivery.Constructor.campus (Delivery.Raw.campus ⟨20⟩)).map (·.age) == some 20)

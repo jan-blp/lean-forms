@@ -95,10 +95,9 @@ def run : IO Unit := do
   let tables : Component [] (List (Item Nat)) := .bind RowSelection.none <|
     .group "Two views" [
       Component.void <| .table .self "First" (.numbered "Item") "Add item"
-          (Item.mkWithoutUuid 0) columns[]
-        (some .here),
+        (Item.mkWithoutUuid 0) columns[] (some .here),
       Component.void <| .table .self "Second" (.numbered "Item") "Add item"
-          (Item.mkWithoutUuid 0) columns[] (some .here),
+        (Item.mkWithoutUuid 0) columns[] (some .here),
       .computed "Selection" {
         inputs := inputs[.ui (Ref.here : Var _ RowSelection)]
         run := fun selection => match selection with

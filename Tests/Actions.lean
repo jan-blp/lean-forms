@@ -107,8 +107,8 @@ def run : IO Unit := do
     (siblingUpdated.locals.producer.value == 0 &&
       siblingUpdated.locals.consumers.producer.value == 1)
   let rows : Component [] (List (Item Nat)) := Component.void <| Component.list .self "Counters"
-      (.numbered "Counter") "Add counter"
-          (Item.mkWithoutUuid 0) (.zoom path[Item.Field.value] next)
+      (.numbered "Counter") "Add counter" (Item.mkWithoutUuid 0)
+      (.zoom path[Item.Field.value] next)
   let rowUpdated ← press (model := List (Item Nat))
     (ModelForm.openState (model := List (Item Nat)) (supply := supply) rows
       [⟨firstId, 10⟩, ⟨secondId, 20⟩] Env.nil) "Increment" 1
