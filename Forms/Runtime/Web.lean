@@ -11,7 +11,8 @@ namespace Forms.Runtime.Web
 open Std Http Async
 
 structure ComponentEndpoint where
-  submit : Lean.Json → Except Lean.Json Unit
+  /-- Answers with the stored document. -/
+  submit : Lean.Json → Except Lean.Json Lean.Json
 
 inductive GetRoute where
   | index
@@ -158,7 +159,7 @@ def Application.submit
   | .ok submission =>
       match app.form.submit submission with
       | .error error => respond .unprocessableEntity (.json (Lean.Json.mkObj [("error", error)]))
-      | .ok () => respond .noContent .empty
+      | .ok saved => respond .ok (.json saved)
 
 instance : Server.Handler Application where
   ResponseBody := Body.Full
@@ -217,7 +218,7 @@ def run
   let app : Application := {
     formStart := Lean.toJson (form.start name ExampleForms.formFingerprint)
     logger := ← TrafficLog.Logger.create
-    form := { submit := form.definition.verify name ExampleForms.formFingerprint }
+    form := { submit := form.definition.save name ExampleForms.formFingerprint }
     html := ← IO.FS.readFile "web/index.html"
     script := ← IO.FS.readFile "web/dist/app.js"
     wasmLoader := ← if ← System.FilePath.pathExists "web/dist/wasm/forms.mjs"

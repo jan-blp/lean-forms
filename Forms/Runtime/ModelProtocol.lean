@@ -16,6 +16,20 @@ structure Submission (α : Type) where
   value : α
   deriving ToJson, FromJson
 
+/-- The body of a successful submit response: the document the server stored. -/
+structure Saved (α : Type) where
+  value : α
+  deriving ToJson, FromJson
+
+def ModelForm.SubmitOutcome.ofSuccess
+  {α : Type}
+  [FromJson α]
+  (body : String)
+  : ModelForm.SubmitOutcome α :=
+  match Json.parse body >>= fromJson? (α := Saved α) with
+  | .ok saved => .accepted saved.value
+  | .error message => .unreachable s!"Could not read the saved form: {message}"
+
 def fetchEffect (request : Model.HttpRequest) : Wire.Effect :=
   .fetch (toJson request).compress {
     url := request.url
@@ -52,7 +66,10 @@ def ModelForm.Snapshot.toWire
       | .fetch request => fetchEffect request
       | .focus key => .focus (ControlKeyProtocol.toString key) }
 
-def ModelForm.Event.fromWire : Wire.Event → Except String ModelForm.Event
+def ModelForm.Event.fromWire
+  {α : Type}
+  [FromJson α]
+  : Wire.Event → Except String (ModelForm.Event α)
   | .apply key argument => do
     let argument ← InputProtocol.argumentFromJson (if argument == .null then none else some argument)
     pure (.apply (← ControlKeyProtocol.fromString key) argument)
@@ -61,7 +78,7 @@ def ModelForm.Event.fromWire : Wire.Event → Except String ModelForm.Event
     pure (.draft (← ControlKeyProtocol.fromString key) message)
   | .reset => .ok .reset
   | .submitted (.response status body) =>
-    .ok (.submitted (if 200 ≤ status && status < 300 then .accepted
+    .ok (.submitted (if 200 ≤ status && status < 300 then .ofSuccess body
       else .rejected (FeedbackProtocol.serverError status body)))
   | .submitted (.unreachable message) => .ok (.submitted (.unreachable message))
   | .fetched id outcome => do

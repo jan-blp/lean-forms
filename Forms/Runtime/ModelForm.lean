@@ -135,18 +135,19 @@ def restart
     | .loaded _ => true
   openState (model := model) form state.initial state.initialEnv state.supply cache
 
-inductive SubmitOutcome where
-  | accepted
+inductive SubmitOutcome (α : Type) where
+  /-- `saved` is the document the server stored. -/
+  | accepted (saved : α)
   | rejected (feedback : Feedback.ServerError)
   | unreachable (message : String)
 
 -- Message from Ts to Lean (see `Wire.Event` for the serialized type)
-inductive Event where
+inductive Event (α : Type) where
   | apply (key : ControlKey) (argument : Option Input)
   | draft (key : ControlKey) (message : Option String)
   | submit
   | reset
-  | submitted (outcome : SubmitOutcome)
+  | submitted (outcome : SubmitOutcome α)
   | loaded (request : Model.HttpRequest) (response : Except String Lean.Json)
 
 -- Message from Lean to Ts (see `Wire.Snapshot` for the serialized type)
@@ -285,7 +286,7 @@ def event {Γ : Model.Context}
   [Model.Reports model]
   (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
-  : Event → Except String (State form) := fun event => do
+  : Event (Model.Raw model) → Except String (State form) := fun event => do
   let state := { state with ui := { state.ui with rejection := none } }
   match event with
   | .apply key argument =>
@@ -326,7 +327,11 @@ def event {Γ : Model.Context}
   | .submitted outcome =>
     if !state.ui.pending then return state
     match outcome with
-    | .accepted => pure { state with ui := { state.ui with
+    | .accepted saved =>
+      -- The saved document becomes the new starting point; UI state is kept.
+      let state := { applyUpdate (model := model) form state
+        { value := saved, state := state.env, locals := state.locals } with initial := saved }
+      pure { state with ui := { state.ui with
         pending := false, resultVisible := true, notice := .info "Submitted successfully." } }
     | .rejected feedback => pure (refresh form { state with
         serverFeedback := some feedback
@@ -353,7 +358,7 @@ def execute {Γ : Model.Context}
   [Model.Reports model]
   (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
-  (input : Event)
+  (input : Event (Model.Raw model))
   : Except String (State form) := do
   let state := { state with outbox := [] }
   let state ← event (model := model) form state input

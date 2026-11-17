@@ -11,10 +11,12 @@ structure FormDefinition where
   State : Type
   Raw : Type
   [encode : ToJson Raw]
+  [decode : FromJson Raw]
   initial : Json
   openState (value : Json) (supply : Model.Supply) : Except String (State × ModelForm.Snapshot Raw)
-  execute : State → ModelForm.Event → Except String (State × ModelForm.Snapshot Raw)
-  verify (name fingerprint : String) (submission : Json) : Except Json Unit
+  execute : State → ModelForm.Event Raw → Except String (State × ModelForm.Snapshot Raw)
+  /-- Validates and stores a submission, returning the stored document. -/
+  save (name fingerprint : String) (submission : Json) : Except Json Json
 
 /-- Checked first, so a stale client gets a reload hint instead of a decode error. -/
 def decodeSubmission
@@ -39,6 +41,7 @@ def FormDefinition.ofModel
   [FromJson (Model.Raw model)]
   (form : Model.Component [] (Model.Raw model) β)
   (initial : Model.Raw model)
+  (store : Model.Raw model → Model.Raw model)
   : FormDefinition where
   State := ModelForm.State form
   Raw := Model.Raw model
@@ -54,11 +57,11 @@ def FormDefinition.ofModel
   execute state input := do
     let state ← ModelForm.execute (model := model) form state input
     pure (state, ModelForm.snapshot form state)
-  verify name fingerprint json := do
+  save name fingerprint json := do
     let value ← (decodeSubmission (Model.Raw model) name fingerprint json).mapError fun message =>
       Json.mkObj [("kind", toJson "request"), ("message", toJson message)]
     match Model.Validation.validate (model := model) value with
-    | .ok _ => pure ()
+    | .ok _ => pure (toJson ({ value := store value } : Saved (Model.Raw model)))
     | .error errors =>
       let errors := errors.map ModelView.error
       throw (.mkObj [
@@ -91,6 +94,7 @@ partial def RegisteredForm.instance
   (name fingerprint : String)
   (state : form.definition.State)
   : FormInstance :=
+  letI := form.definition.decode
   .mk fun message => do
     let input ← ModelForm.Event.fromWire message
     let (state, snapshot) ← form.definition.execute state input

@@ -245,7 +245,7 @@ test('Lean owns submission effects, pending locks, and reset', async () => {
     assert.equal(status(model), 'Submission failed (HTTP 503).');
     assert.equal(submitButton(model).disabled, false);
     send('submit');
-    respond(200, '');
+    respond(200, JSON.stringify({ value: model.snapshot().submission.value }));
     assert.equal(JSON.parse(result(model)).age, 7);
     assert.equal('error' in page(model).notice, false);
     respond(500, '');
@@ -254,7 +254,8 @@ test('Lean owns submission effects, pending locks, and reset', async () => {
     assert.equal(result(model), null);
     assert.equal(model.snapshot().submission.value.age, 8);
     send('reset');
-    assert.equal(model.snapshot().submission.value.age, 20);
+    // Reset returns to the saved document.
+    assert.equal(model.snapshot().submission.value.age, 7);
     send('submit');
     assert.equal((model.snapshot().effects.length > 0), true);
   } finally { model.dispose(); }

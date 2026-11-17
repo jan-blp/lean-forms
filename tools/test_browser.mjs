@@ -173,13 +173,18 @@ try {
     const originalFetch = window.fetch;
     let finish;
     let posts = 0;
-    window.fetch = () => { posts++; return new Promise(resolve => { finish = resolve; }); };
+    let body;
+    window.fetch = (_, request) => {
+      posts++;
+      body = request.body;
+      return new Promise(resolve => { finish = resolve; });
+    };
     // A second click and a reset before React disables the buttons; Lean must ignore both.
     document.querySelector('[data-action=submit]').click();
     document.querySelector('[data-action=submit]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     document.querySelector('[data-action=reset]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     check(posts === 1, 'Duplicate submission while pending');
-    finish(new Response(null, { status: 204 }));
+    finish(new Response(JSON.stringify({ value: JSON.parse(body).value }), { status: 200 }));
     await wait(() => status() === 'Submitted successfully.');
     check(input('Age').value === '21', 'Reset ran while pending');
     window.fetch = originalFetch;

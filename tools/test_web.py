@@ -81,8 +81,8 @@ def validation_error(request, submission, message, steps):
 def order_session():
     with serve('order') as (request, start, _):
         initial = {'form': 'order', 'fingerprint': start['fingerprint'], 'value': start['value']}
-        assert request('/api/submit', initial)[0] == 204
-        assert request('/api/submit', {**initial, 'value': {**start['value'], 'shipping': 'pickup'}})[0] == 204
+        assert request('/api/submit', initial)[0] == 200
+        assert request('/api/submit', {**initial, 'value': {**start['value'], 'shipping': 'pickup'}})[0] == 200
         value = start['value']
         for changes, message, fields in [
             ({'customer': {**value['customer'], 'email': 'grace'}}, 'Enter a valid email address.',
@@ -100,10 +100,20 @@ def order_session():
         assert status == 422 and json.loads(body)['error']['kind'] == 'request'
 
 
+def payment_method_session():
+    with serve('payment-method') as (request, start, _):
+        submission = {'form': 'payment-method', 'fingerprint': start['fingerprint'],
+                      'value': {**start['value'], 'value': 'blpCreditCard'}}
+        status, headers, body = request('/api/submit', submission)
+        assert status == 200 and headers['Content-Type'] == 'application/json', (status, headers)
+        checks = json.loads(body)['value']['checks']
+        assert [check['isFailing'] for check in checks] == [False], checks
+
+
 def expenses_session():
     with serve('expenses') as (request, start, _):
         initial = {'form': 'expenses', 'fingerprint': start['fingerprint'], 'value': start['value']}
-        assert request('/api/submit', initial)[0] == 204
+        assert request('/api/submit', initial)[0] == 200
         value = start['value']
         taxi = {'id': '00000000-0000-4000-8000-000000000099', 'description': 'Taxi', 'amount': 150,
                 'receipt': False}
@@ -144,8 +154,8 @@ def session(example):
         assert request('/api/submit', raw=b'x' * (1024 * 1024 + 1))[0] == 413
         initial = {'form': example, 'fingerprint': start['fingerprint'], 'value': start['value']}
         status, headers, body = request('/api/submit', initial)
-        assert status == 204 and body == ''
-        assert 'Content-Type' not in headers
+        assert status == 200 and headers['Content-Type'] == 'application/json', (status, headers)
+        assert json.loads(body) == {'value': start['value']}, body
         script = """
 import { openForm } from '@blp/lean-forms-react/runtime';
 import { readFileSync } from 'node:fs';
@@ -166,7 +176,7 @@ model.dispose();
             input=json.dumps(start).encode(), cwd=ROOT))
         assert submission['value']['name'] == 'Grace'
         assert submission['value']['address'] == {'street': 'Campus'}
-        assert request('/api/submit', submission)[0] == 204
+        assert request('/api/submit', submission)[0] == 200
         assert submission['fingerprint'] == start['fingerprint']
         for stale in [{'form': example, 'value': start['value']}, {**initial, 'fingerprint': 'compiled-2-0'}]:
             status, _, body = request('/api/submit', stale)
@@ -182,14 +192,14 @@ model.dispose();
             ({'age': 17, 'address': {'street': 'Campus'}}, 'Campus delivery requires an adult.', ['age']),
         ]:
             validation_error(request, {**initial, 'value': {**initial['value'], **changes}}, message, fields)
-        assert request('/api/submit', initial)[0] == 204
+        assert request('/api/submit', initial)[0] == 200
         traffic_log.seek(0)
         traffic = traffic_log.read().decode()
         assert '\x1b[' not in traffic
         assert 'CLIENT → SERVER GET /api/form-start' in traffic
         assert 'SERVER → CLIENT 200 GET /api/form-start' in traffic
         assert 'CLIENT → SERVER POST /api/submit' in traffic
-        assert 'SERVER → CLIENT 204 POST /api/submit\n' in traffic
+        assert 'SERVER → CLIENT 200 POST /api/submit' in traffic
         assert 'SERVER → CLIENT 422 POST /api/submit' in traffic
         assert '"Grace"' in traffic
 
@@ -301,7 +311,8 @@ browser_flag(1)
 session('person')
 order_session()
 expenses_session()
+payment_method_session()
 terminal_colors()
 terminal_colors(no_color=True)
 terminal_colors(term='dumb')
-print('PASS: HTTP traffic, person, order and expenses validation, request errors, terminal colors, NO_COLOR, and --open')
+print('PASS: HTTP traffic, person, order and expenses validation, saved payment method, request errors, terminal colors, NO_COLOR, and --open')
