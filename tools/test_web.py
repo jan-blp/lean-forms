@@ -112,7 +112,9 @@ def expenses_session():
             ({'expenses': []}, 'Add at least one expense.', ['expenses']),
             ({'expenses': [*value['expenses'], taxi]}, 'Attach a receipt for CHF 100 or more.',
              ['expenses', ('item', taxi['id']), 'receipt']),
-            ({'expenses': [train, {**train, 'description': 'Copy'}]}, 'Two items share an id.', ['expenses']),
+            ({'expenses': [train, {**train, 'description': 'Copy'}]},
+             f"These UUIDs are shared by more than one item: {train['id']}. "
+             'This is a bug in the form data; please contact BLP.', ['expenses']),
             ({'expenses': [{**taxi, 'amount': 6000, 'receipt': True}]}, "A report is limited to CHF 5'000.",
              ['expenses']),
         ]:

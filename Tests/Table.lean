@@ -97,7 +97,9 @@ def run : IO Unit := do
     expenses := [⟨firstId, "Train to Bern", 58, false⟩, ⟨firstId, "Hotel", 180, true⟩] }
   let definition := FormDefinition.ofModel ExpenseReport ExpenseReport.form ExpenseReport.initial
   check "OpeningRejectsDuplicateItemIds"
-    ((definition.openState (toJson duplicated) supply).toOption.isNone &&
+    ((match definition.openState (toJson duplicated) supply with
+      | .error message => message == duplicateIdsMessage [firstId]
+      | .ok _ => false) &&
       (definition.openState (toJson ExpenseReport.initial) supply).toOption.isSome)
   check "FixedIdsEndInTheirNumber"
     ((Uuid.ofNat 1).value == "00000000-0000-4000-8000-000000000001" &&

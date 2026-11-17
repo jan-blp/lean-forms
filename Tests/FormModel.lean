@@ -340,7 +340,7 @@ public def run : IO Unit := do
     ((errors (Basket.validate ⟨[⟨first, 1⟩, ⟨second, 0⟩, ⟨third, 0⟩]⟩)).map targetKeys ==
       [[["lines", second.value, "amount"]], [["lines", third.value, "amount"]]])
   check "ModelListRejectsDuplicateIds"
-    ((errors (Basket.validate ⟨[⟨first, 1⟩, ⟨first, 2⟩]⟩)).map (·.message) == [duplicateIdsMessage])
+    ((errors (Basket.validate ⟨[⟨first, 1⟩, ⟨first, 2⟩]⟩)).map (·.message) == [duplicateIdsMessage [first]])
   check "ModelListConstraint" ((errors (Basket.validate ⟨[]⟩)).map targetKeys == [[["lines"]]])
   check "DeriveProjectActiveConstructor"
     ((Constructors.project Delivery.Constructor.campus (Delivery.Raw.campus ⟨20⟩)).map (·.age) == some 20)

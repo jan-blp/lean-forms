@@ -5,6 +5,7 @@ public import Forms.Model.ErasedLocation
 public import Forms.Model.HasUuid
 public import Forms.Model.LawfulJson
 public import LeanLens.Lawful
+public import Mathlib.Data.List.Dedup
 public import Std.Data.HashMap
 open LeanLens
 
@@ -306,19 +307,25 @@ instance : Validation Uuid := ⟨fun value => .ok ⟨value, rfl⟩⟩
 @[reducible] instance {α : Type} [FormModel α] : FormModel (List α) :=
   ⟨List (Raw α), List.map FormModel.erase⟩
 
-def duplicateIdsMessage : String := "Two items share an id."
+def duplicateIdsPrefix : String := "These UUIDs are shared by more than one item:"
 
-def duplicateIds {β : Type} [HasUuid β] (items : List β) : Bool :=
+def duplicateIdsMessage (ids : List Uuid) : String :=
+  s!"{duplicateIdsPrefix} {", ".intercalate (ids.map (·.value))}. " ++
+    "This is a bug in the form data; please contact BLP."
+
+/-- The UUIDs that appear more than once. -/
+def duplicateIds {β : Type} [HasUuid β] (items : List β) : { ids : List Uuid // ids.Nodup } :=
   let ids := items.map HasUuid.id
-  ids.eraseDups.length != ids.length
+  ⟨(ids.filter (ids.count · > 1)).dedup, List.nodup_dedup _⟩
 
 /-- Validates every item; errors point at their item's id. Repeated ids are an error. -/
 instance {α : Type} [FormModel α] [Validation α] [HasUuid (Raw α)] : Validation (List α) where
   validate raw :=
     let results (position : Fin raw.length) := Validation.validate (model := α) (raw.get position)
     let duplicates : List (Error raw) :=
-      if duplicateIds raw then [{ message := duplicateIdsMessage, targets := .locations .self }]
-      else []
+      match duplicateIds raw with
+      | ⟨[], _⟩ => []
+      | ids => [{ message := duplicateIdsMessage ids.val, targets := .locations .self }]
     if valid : (∀ position, (results position).isOk) ∧ duplicates.isEmpty then
       let values (position : Fin raw.length) : Validated α (raw.get position) :=
         match results position, valid.1 position with

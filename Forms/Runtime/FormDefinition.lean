@@ -44,9 +44,9 @@ def FormDefinition.ofModel
   initial := toJson initial
   openState value supply := do
     let value ← fromJson? value
-    if (Model.errors (Model.Validation.validate (model := model) value)).any
-        (·.message == Model.duplicateIdsMessage) then
-      throw Model.duplicateIdsMessage
+    if let some duplicate := (Model.errors (Model.Validation.validate (model := model) value)).find?
+        (·.message.startsWith Model.duplicateIdsPrefix) then
+      throw duplicate.message
     let state := ModelForm.load form
       (ModelForm.openState (model := model) form value Model.Env.nil supply)
     pure (state, ModelForm.snapshot form state)
