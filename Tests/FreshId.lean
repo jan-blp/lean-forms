@@ -1,7 +1,7 @@
 module
 
 public import Forms.Model.Item
-public import Forms.Model.Supply
+public import Forms.Model.FreshId
 
 @[expose] public section
 namespace Tests

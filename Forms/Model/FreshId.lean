@@ -3,6 +3,26 @@ module
 public import Forms.Model.Scalar
 public import Mathlib.Data.List.SplitLengths
 
+/-!
+# Fresh item ids
+
+New collection items get their UUIDs from a `MonadFreshId`: `Supply` at runtime and `IdGen` in
+example data.
+
+The *only* requirement is that the generated UUIDs are unique. Nothing relies on them being
+unpredictable or statistically random.
+
+`Supply` is a xoshiro256** generator, following the reference implementation at
+<https://prng.di.unimi.it/xoshiro256starstar.c> (Blackman and Vigna,
+"Scrambled Linear Pseudorandom Number Generators", <https://doi.org/10.1145/3460772>).
+
+Notes:
+- Pure algorithm that depends on external seed.
+- It uses only `UInt64` arithmetic, which is fast in 32-bit Wasm.
+- Its 256-bit state uses the whole seed (32 bytes, sent as 64 hexadecimal digits).
+- It is *NOT* cryptographically secure.
+-/
+
 @[expose] public section
 namespace Forms.Model
 
@@ -69,20 +89,7 @@ instance : MonadFreshId IdGen where
 def IdGen.run {α : Type} (gen : IdGen α) : α :=
   (gen.toStateM.run' 0).run
 
-/--
-A xoshiro256** generator, following the reference implementation at
-<https://prng.di.unimi.it/xoshiro256starstar.c> (Blackman and Vigna,
-"Scrambled Linear Pseudorandom Number Generators", <https://doi.org/10.1145/3460772>).
-
-The *only* requirement is that the UUIDs it generates are unique. Nothing relies on them being
-unpredictable or statistically random.
-
-Notes:
-- Pure algorithm that depends on external seed.
-- It uses only `UInt64` arithmetic, which is fast in 32-bit Wasm.
-- Its 256-bit state uses the whole seed (32 bytes, sent as 64 hexadecimal digits).
-- It is *NOT* cryptographically secure.
--/
+/-- The xoshiro256** generator state; see the module docstring. -/
 structure Supply where
   first : UInt64
   second : UInt64

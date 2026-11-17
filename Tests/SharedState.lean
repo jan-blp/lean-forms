@@ -2,7 +2,7 @@ module
 
 public import Forms.ExampleForms.SharedState
 public import Forms.Runtime.ModelForm
-public import Tests.Supply
+public import Tests.FreshId
 
 public section
 namespace Tests.SharedState

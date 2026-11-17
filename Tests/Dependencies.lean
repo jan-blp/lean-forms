@@ -3,7 +3,7 @@ module
 public import Forms.Model.Computation
 public import Forms.Model.RowSelection
 public import Tests.FormModel
-public import Tests.Supply
+public import Tests.FreshId
 
 @[expose] public section
 namespace Tests.Dependencies

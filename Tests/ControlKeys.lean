@@ -1,7 +1,7 @@
 module
 
 import Forms.Runtime.ModelProtocol
-import Tests.Supply
+import Tests.FreshId
 
 public section
 namespace Tests.ControlKeys

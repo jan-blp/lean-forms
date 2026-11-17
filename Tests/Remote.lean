@@ -3,7 +3,7 @@ module
 public import Forms.ExampleForms.Registry
 meta import Forms.Model.Derive
 meta import Forms.Deriving.FinEnum
-public import Tests.Supply
+public import Tests.FreshId
 
 public section
 namespace Tests.Remote

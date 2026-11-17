@@ -2,7 +2,7 @@ module
 
 public import Forms.ExampleForms.Registry
 meta import Forms.Model.PartialPath.Theorems
-public import Tests.Supply
+public import Tests.FreshId
 
 public section
 namespace Tests.Focus

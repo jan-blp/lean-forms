@@ -3,7 +3,7 @@ module
 public import Forms.ExampleForms.Navigation
 public import Forms.ExampleForms.Expenses
 public import Forms.Runtime.ModelForm
-public import Tests.Supply
+public import Tests.FreshId
 
 public section
 namespace Tests.Navigation

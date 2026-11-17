@@ -1,7 +1,7 @@
 module
 
 public import Forms.ExampleForms.Registry
-public import Tests.Supply
+public import Tests.FreshId
 
 public section
 namespace Tests.LocalBind

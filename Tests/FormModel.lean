@@ -2,7 +2,7 @@ module
 
 public import Forms.Model.Derive
 public import Forms.Model.Item
-public import Forms.Model.Supply
+public import Forms.Model.FreshId
 meta import Forms.Model.Path.Theorems
 
 @[expose] public section

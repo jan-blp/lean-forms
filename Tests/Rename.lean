@@ -3,7 +3,7 @@ module
 public import Forms.ExampleForms.Registry
 public import Forms.ExampleForms.Presentation
 public import Forms.Model.Component.Rename
-public import Tests.Supply
+public import Tests.FreshId
 
 public section
 namespace Tests.Rename

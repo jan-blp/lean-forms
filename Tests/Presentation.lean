@@ -3,7 +3,7 @@ module
 public import Forms.ExampleForms.Presentation
 public import Forms.Runtime.ModelForm
 public import Forms.Runtime.ControlKeyProtocol
-public import Tests.Supply
+public import Tests.FreshId
 
 public section
 namespace Tests.Presentation
