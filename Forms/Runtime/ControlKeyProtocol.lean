@@ -8,7 +8,7 @@ public import Forms.Model.Format
 
 namespace Forms.Runtime.ControlKeyProtocol
 open Lean
-open Forms.Model (ErasedLocation Uuid)
+open Forms.Model (ErasedLocation)
 
 def stepToJson : ErasedLocation.Step → Json
   | .field name => toJson name
@@ -17,8 +17,8 @@ def stepToJson : ErasedLocation.Step → Json
 
 def stepFromJson : Json → Except String ErasedLocation.Step
   | .str name => .ok (.field name)
-  | json => match json.getObjValAs? Uuid "item" with
-    | .ok id => pure (.item id)
+  | json => match json.getObjVal? "item" with
+    | .ok id => .item <$> fromJson? id
     | .error _ => .constructor <$> json.getObjValAs? String "constructor"
 
 def toString (key : ControlKey) : String :=

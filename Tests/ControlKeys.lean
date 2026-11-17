@@ -35,6 +35,10 @@ def run : IO Unit := do
       "[\"press\",[],[],0]"] do
     check "Malformed key accepted" (!(ControlKeyProtocol.fromString malformed).isOk)
     check "Event accepted malformed key" (!(ModelForm.Event.fromWire (.apply malformed Json.null)).isOk)
+  check "Malformed item id not reported as a UUID error"
+    (match ControlKeyProtocol.fromString "[\"edit\",{\"item\":\"nope\"}]" with
+      | .error message => (message.splitOn "UUID").length > 1
+      | .ok _ => false)
   IO.println "PASS structured control keys and protocol boundary"
 
 end Tests.ControlKeys
