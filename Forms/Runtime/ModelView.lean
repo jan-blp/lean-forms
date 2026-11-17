@@ -201,23 +201,23 @@ def renderCollection
   (env : Env Γ)
   (items : List β)
   (label : String)
-  (rows : List (Vector Display.View views))
+  (rowViews : List (Vector Display.View views))
   (content : List Display.View)
   (messages : List String)
   : Display.View :=
   match display with
   | .list =>
-    .list label ((items.zipWith (fun item row => .keyed (HasUuid.id item) row[0]) rows) ++ content)
-      messages
+    let rows := items.zipWith (fun item row => .keyed (HasUuid.id item) row[0]) rowViews
+    .list label (rows ++ content) messages
   | .table headers rowLabel selected =>
-    let rows := (items.mapFinIdx fun index item bound =>
+    let rows := items.mapFinIdx fun index item bound (cells : Vector Display.View views) =>
       let rowEnv := Env.row items ⟨index, bound⟩ env
       ({ key := HasUuid.id item
          label := rowLabel.eval item rowEnv
          selected := selected.map (·.eval item rowEnv)
-         cells := [] } : Display.TableRow)).zipWith
-      (fun row cells => { row with cells := cells.toList }) rows
-    .table label (headers.eval value env).toList rows (.ofList content) messages
+         cells := cells.toList } : Display.TableRow)
+    .table label (headers.eval value env).toList (rows.zipWith (· ·) rowViews) (.ofList content)
+      messages
 
 mutual
 def evaluateNode
@@ -246,7 +246,7 @@ def evaluateNode
         | [] => do
           if disabled then throw (.invalid .disabled)
           let some input := argument | throw (.decode (.clientBug .missingArgument))
-          let updated ← ((Input.decode widget input).mapError .decode : Except ActionError _)
+          let updated ← MonadExcept.ofExcept ((Input.decode widget input).mapError .decode)
           return {
             value := path.set updated value
             state := env
@@ -367,7 +367,7 @@ def evaluateNode
         apply := fun route argument => do
           let updated ← body.apply route argument
           return updated.mapValue (fun focused => path.set focused value) }
-  | .within path body =>
+  | .zoom path body =>
     let body := evaluateNode body (path.get value) env ambient locals target
       (location ++ path.erase) disabled
     { body with

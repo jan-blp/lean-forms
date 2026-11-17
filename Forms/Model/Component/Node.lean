@@ -151,7 +151,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (body : ComponentNode Γ β state γ holes)
       : ComponentNode Γ α state (Option γ) holes
   /-- Shows `body` on the part of the value at `path`, which is always there. -/
-  | within {Γ : Context}
+  | zoom {Γ : Context}
       {α β γ state : Type}
       {holes : Nat}
       (path : Path α β)

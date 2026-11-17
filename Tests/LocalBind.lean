@@ -44,7 +44,7 @@ private def apply
 
 @[expose] def rows : Component [] (List (Item (List (Item Nat)))) :=
   Component.void <| .list .self "Rows" (.numbered "Row") "Add row" (Item.mkWithoutUuid [])
-    (.within path[Item.Field.value] row)
+    (.zoom path[Item.Field.value] row)
 
 private def rowSelection (state : ModelForm.State rows) (index : Nat) : RowSelection :=
   let locals := state.locals.producer.producer.map (·.producer)

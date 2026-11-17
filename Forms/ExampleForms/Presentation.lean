@@ -79,7 +79,7 @@ def notes : Component [] (List (Item String)) Nat :=
   .present <|
     .own (Component.void (.list .self "Notes" (.numbered "Note") "Add note"
         (Item.mkWithoutUuid "")
-        (.within path[Item.Field.value] noteTabs))) <|
+        (.zoom path[Item.Field.value] noteTabs))) <|
       .own (.computed "Note count" { inputs := inputs[path[]], run := fun notes => toString notes.length }) <|
         .layout { inputs := inputs[path[]], run := List.length }
           (.const (.group none [.place .here, .place (.there .here)]))

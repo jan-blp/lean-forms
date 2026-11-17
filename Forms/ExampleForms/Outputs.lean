@@ -45,7 +45,7 @@ def pair {Γ : Context} : Component Γ Nat Nat :=
 
 def rows : Component [] (List (Item Nat)) (List Nat) :=
   .list .self "Pairs" (.numbered "Pair") "Add pair"
-      (Item.mkWithoutUuid 0) (.within path[Item.Field.value] pair)
+      (Item.mkWithoutUuid 0) (.zoom path[Item.Field.value] pair)
 
 def nested : Component [] (List (Item Nat)) Nat :=
   .labeled "Nested outputs" <|
@@ -66,7 +66,7 @@ structure RowOutput where
   deriving BEq, Repr
 
 def descriptionCell {Γ : Context} : Component Γ (Item String) String :=
-  .within path[Item.Field.value] <|
+  .zoom path[Item.Field.value] <|
     .withOutput (.field .self "Description" .text) { inputs := inputs[path[]], run := id }
 
 def selectionCell {Γ : Context} : Component (⟨.readOnly, String⟩ :: Γ) (Item String) Bool :=

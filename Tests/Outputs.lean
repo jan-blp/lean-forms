@@ -164,7 +164,7 @@ def run : IO Unit := do
 
   let table : Component [] (List (Item Nat)) := Component.void <| .table .self "Rows"
       (.numbered "Row") "Add row" (Item.mkWithoutUuid 0) columns[
-    "Counters" => .within path[Item.Field.value] <| .observe pair
+    "Counters" => .zoom path[Item.Field.value] <| .observe pair
       (.computed "Cell total" { inputs := inputs[.ui (Ref.here : InputRef _ Nat)], run := toString })]
   let tableChanged ← press (model := List (Item Nat))
     (start (model := List (Item Nat)) table initial) "Increment" 1

@@ -121,14 +121,14 @@ def RowSelection.itemPath
   : Component Γ α (Option γ) holes :=
   ⟨body.LocalState, .focus target body.node⟩
 
-@[reducible] def Component.within
+@[reducible] def Component.zoom
   {Γ : Context}
   {α β γ : Type}
   {holes : Nat}
   (path : Path α β)
   (body : Component Γ β γ holes)
   : Component Γ α γ holes :=
-  ⟨body.LocalState, .within path body.node⟩
+  ⟨body.LocalState, .zoom path body.node⟩
 
 /-- Loaded subtree state persists while its resolved status is equal. -/
 @[reducible] def Component.load
