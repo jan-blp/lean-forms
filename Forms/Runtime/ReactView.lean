@@ -31,17 +31,25 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       kind := kind.toReact
       value
       disabled
-      errors := c.messages
+      errors := Model.Message.texts .error c.messages
+      reports := Model.Message.texts .report c.messages
       onCommit := .apply name }
-  | .checkbox checked => .checkbox
-      { name, label := c.label, checked, disabled, errors := c.messages, onChange := .apply name }
+  | .checkbox checked => .checkbox {
+      name
+      label := c.label
+      checked
+      disabled
+      errors := Model.Message.texts .error c.messages
+      reports := Model.Message.texts .report c.messages
+      onChange := .apply name }
   | .choice value options => .choice {
       name
       label := c.label
       value
       options := options.map fun option => { value := option.value, label := option.label }
       disabled
-      errors := c.messages
+      errors := Model.Message.texts .error c.messages
+      reports := Model.Message.texts .report c.messages
       onChange := .apply name }
   | .choices values options => .choices {
       name
@@ -49,7 +57,8 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       values
       options := options.map fun option => { value := option.value, label := option.label }
       disabled
-      errors := c.messages
+      errors := Model.Message.texts .error c.messages
+      reports := Model.Message.texts .report c.messages
       onChange := .apply name }
   | .action => .button { label := c.label, variant := .secondary, disabled, onClick := .press name }
   | .tabs active labels =>
@@ -60,7 +69,7 @@ def plainGroup
   (key : Option String)
   (children : List FormsReact.Component)
   : FormsReact.Component :=
-  .group { label := none, children, errors := [], key }
+  .group { label := none, children, errors := [], reports := [], key }
 
 mutual
 def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
@@ -70,11 +79,13 @@ def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
       label := label.filter (!·.isEmpty)
       children := children.filterMap (·.toReact pending)
       errors := []
+      reports := []
       key := none })
   | .list label children messages => some (.group {
       label := some label
       children := children.filterMap (·.toReact pending)
-      errors := messages
+      errors := Model.Message.texts .error messages
+      reports := Model.Message.texts .report messages
       key := none })
   | .keyed key body => (body.toReact pending).map fun component => match component with
     | .group group => .group { group with key := some key.value }
@@ -92,7 +103,8 @@ def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
       label, headers
       rows := tableRowsToReact pending rows
       footer := (footer.toReact pending).getD (plainGroup none [])
-      errors := messages })
+      errors := Model.Message.texts .error messages
+      reports := Model.Message.texts .report messages })
 
 def tableRowsToReact (pending : Bool) : List Display.TableRow → List FormsReact.TableRow
   | [] => []

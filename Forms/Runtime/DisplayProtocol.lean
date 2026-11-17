@@ -30,7 +30,9 @@ def controlToJson (control : Control) : Json :=
     ("key", toJson (ControlKeyProtocol.toString control.key)), ("target", toJson control.target.indices),
     ("label", toJson control.label), ("disabled", toJson control.disabled),
     ("kind", toJson "editor"), ("location", FeedbackProtocol.locationToJson control.location),
-    ("widget", toJson (widgetName control.input)), ("messages", toJson control.messages)])
+    ("widget", toJson (widgetName control.input)),
+    ("messages", toJson (Model.Message.texts .error control.messages)),
+    ("reports", toJson (Model.Message.texts .report control.messages))])
 
 end DisplayProtocol
 

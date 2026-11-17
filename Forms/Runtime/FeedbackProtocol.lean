@@ -41,7 +41,7 @@ def errorFromJson (json : Json) : Except String Model.Diagnostic := do
       let first :: rest := locations | throw "Empty locations"
       pure (.locations first rest)
     | _ => throw "Invalid validation target"
-  pure { message, targets }
+  pure { kind := .error, message, targets }
 
 /-- Decode once at the boundary; malformed responses never partially accept errors. -/
 def serverError (status : Nat) (body : String) : ServerError :=

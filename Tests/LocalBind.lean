@@ -27,6 +27,7 @@ private def apply
   {model : Type}
   [FormModel model]
   [Validation model]
+  [Reports model]
   (form : Component [] (Raw model))
   (state : ModelForm.State form)
   (label : String)

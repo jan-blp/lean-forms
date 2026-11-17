@@ -34,6 +34,7 @@ def FormDefinition.ofModel
   (model : Type)
   [FormModel model]
   [Model.Validation model]
+  [Model.Reports model]
   [ToJson (Model.Raw model)]
   [FromJson (Model.Raw model)]
   (form : Model.Component [] (Model.Raw model) β)

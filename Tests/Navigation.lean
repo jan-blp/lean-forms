@@ -79,8 +79,8 @@ def run : IO Unit := do
   let name : ErasedLocation := [.field "name"]
   let street : ErasedLocation := [.field "address", .field "street"]
   let diagnostics : List Diagnostic := [
-    { message := "Both", targets := .locations name [street] },
-    { message := "Global", targets := .global }]
+    { kind := .error, message := "Both", targets := .locations name [street] },
+    { kind := .error, message := "Global", targets := .global }]
   let root := Component.issues.evaluate Person.initial Env.nil (diagnostics := diagnostics)
   let address : Component [] Person.Raw (Option (List Issue)) :=
     .zoom? (.const (some (.ofPath path[Person.Field.address]))) .issues
@@ -94,7 +94,7 @@ def run : IO Unit := do
     .list .self "Addresses" (.numbered "Address") "Add" (Item.mkWithoutUuid ⟨""⟩) .issues
   let secondStreet : ErasedLocation := [.item secondId, .field "value", .field "street"]
   let rowIssues : List Diagnostic := [
-    { message := "Second address", targets := .locations secondStreet [] }]
+    { kind := .error, message := "Second address", targets := .locations secondStreet [] }]
   let collected := (rows.evaluate [⟨firstId, ⟨"Main"⟩⟩, ⟨secondId, ⟨""⟩⟩] Env.nil
     (diagnostics := rowIssues)).output
   check "CollectionsCollectIssueOutputs"
@@ -119,7 +119,10 @@ def run : IO Unit := do
   let rejected ← IO.ofExcept (ModelForm.execute (model := Person) form pending
     (.submitted (.rejected {
       message := "Rejected"
-      errors := [{ message := "Server street", targets := .locations street [] }] })))
+      errors := [{
+        kind := .error
+        message := "Server street"
+        targets := .locations street [] }] })))
   check "ServerFeedbackRefreshesIssueOutputs"
     (rejected.evaluation.output.map (·.message) == ["Server street"] &&
       rejected.evaluation.view.controls.any
@@ -178,12 +181,12 @@ def run : IO Unit := do
   check "ResolutionSkipsDisabledTargets"
     (view.resolve [name, [.field "age"]] == some (.edit [.field "age"]))
   let repeated : List Diagnostic := [
-    { message := "First", targets := .locations name [name] },
-    { message := "Second", targets := .locations name [] },
-    { message := "First", targets := .locations name [] }]
+    { kind := .error, message := "First", targets := .locations name [name] },
+    { kind := .error, message := "Second", targets := .locations name [] },
+    { kind := .error, message := "First", targets := .locations name [] }]
   let controls := (fields.evaluate Person.initial Env.nil (diagnostics := repeated)).view.controls
   check "InlineMessagesAreDistinctAndOrdered"
-    ((controls.find? (·.location == name)).map (·.messages) == some ["First", "Second"])
+    ((controls.find? (·.location == name)).map (·.errors) == some ["First", "Second"])
 
   let _ : Validation Person := {
     validate := fun _ => .error [{

@@ -43,8 +43,11 @@ structure Control where
   disabled : Bool
   location : ErasedLocation
   input : Editor
-  messages : List String
+  messages : List Model.Message
   deriving BEq
+
+def Control.errors (control : Control) : List String :=
+  Model.Message.texts .error control.messages
 
 mutual
 inductive View where
@@ -53,9 +56,9 @@ inductive View where
   | stack (label : Option String) (children : List View)
   | computed (label text : String)
   /-- `messages` are about the list as a whole. -/
-  | list (label : String) (children : List View) (messages : List String)
+  | list (label : String) (children : List View) (messages : List Model.Message)
   | table (label : String) (headers : List String) (rows : List TableRow)
-      (footer : View) (messages : List String)
+      (footer : View) (messages : List Model.Message)
   /-- A list row, kept apart from its siblings by its item id. -/
   | keyed (key : Model.Uuid) (body : View)
 
