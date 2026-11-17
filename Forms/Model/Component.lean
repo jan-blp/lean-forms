@@ -541,20 +541,19 @@ The first entry in `body`'s context is the producer's current output, available 
   let isSelected (selection : Var (Context.row β Γ) RowSelection)
       : Computation (Context.row β Γ) β Bool :=
     { inputs := inputs[.ui selection, .ui Ref.row]
-      run := fun current row => current == .row (HasUuid.id row.current) }
+      run := fun current row => current == .of row.current }
   let actions : Component (Context.row β Γ) β := match selection with
     | none => .button "Remove" removeRow
     | some selection =>
       let selection := Renaming.row selection
       .sequence
         (.button ((if · then "Selected" else "Select") <$> isSelected selection)
-          (.set selection
-            { inputs := inputs[.ui Ref.row], run := fun row => .row (HasUuid.id row.current) }))
+          (.set selection { inputs := inputs[.ui Ref.row], run := fun row => .of row.current }))
         (.button "Remove" <|
           .set selection
             { inputs := inputs[.ui selection, .ui Ref.row]
-              run := fun current row =>
-                if current == .row (HasUuid.id row.current) then .none else current } ++ removeRow)
+              run := fun current row => if current == .of row.current then .none else current }
+          ++ removeRow)
   let selected := selection.map (isSelected ∘ Renaming.row)
   let columns := (columns.rename Renaming.row).snoc "Actions" actions
   .withAddButton path addCaption initial <|

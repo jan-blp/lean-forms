@@ -20,7 +20,6 @@ structure Diagnostic where
   targets : Diagnostic.Targets
   deriving BEq, DecidableEq
 
-/-- Locations remain absolute across model focus. -/
 structure Destination where
   locations : List ErasedLocation
   deriving BEq, DecidableEq
@@ -54,12 +53,10 @@ def Diagnostic.summary (diagnostics : List Diagnostic) : String :=
 def Diagnostic.messageIndex
   (diagnostics : List Diagnostic)
   : Std.HashMap ErasedLocation (List String) :=
-  diagnostics.foldl (init := {}) fun index diagnostic => match diagnostic.targets with
-    | .global => index
-    | .locations first rest =>
-      (first :: rest).foldl (init := index) fun index location =>
-        let messages := index.getD location []
-        if messages.contains diagnostic.message then index
-        else index.insert location (messages ++ [diagnostic.message])
+  diagnostics.foldl (init := {}) fun index diagnostic =>
+    diagnostic.locations.foldl (init := index) fun index location =>
+      let messages := index.getD location []
+      if messages.contains diagnostic.message then index
+      else index.insert location (messages ++ [diagnostic.message])
 
 end Forms.Model
