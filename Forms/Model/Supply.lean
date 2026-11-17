@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.Scalar
+public import Mathlib.Data.List.SplitLengths
 
 @[expose] public section
 namespace Forms.Model
@@ -12,9 +13,9 @@ theorem Uuid.hexDigit_mem (digit : Fin 16) : Uuid.hexDigit digit ∈ Uuid.hexDig
   List.getElem_mem _
 
 theorem Uuid.canonicalFrom_hex
-  (digits : List (Fin 16))
-  (rest : List Char)
-  (position : Nat)
+  {digits : List (Fin 16)}
+  {rest : List Char}
+  {position : Nat}
   (apart : ∀ offset < digits.length, position + offset ∉ [8, 13, 18, 23])
   : Uuid.canonicalFrom (digits.map Uuid.hexDigit ++ rest) position =
     Uuid.canonicalFrom rest (position + digits.length) := by
@@ -22,33 +23,23 @@ theorem Uuid.canonicalFrom_hex
   | nil => simp
   | cons digit digits ih =>
     have here : position ∉ [8, 13, 18, 23] := by simpa using apart 0 (by simp)
-    have later : ∀ offset < digits.length, position + 1 + offset ∉ [8, 13, 18, 23] :=
-      fun offset bound => by
-        simpa [Nat.add_assoc, Nat.add_comm 1] using apart (offset + 1) (by simp; omega)
-    simp only [List.map_cons, List.cons_append, Uuid.canonicalFrom, here, ite_false,
-      Uuid.hexDigit_mem, decide_true, Bool.true_and, ih (position + 1) later]
-    simp [Nat.add_assoc, Nat.add_comm 1]
+    have later := ih (position := position + 1) fun offset bound => by
+      rw [show position + 1 + offset = position + (offset + 1) by omega]
+      exact apart (offset + 1) (by simpa using bound)
+    simp [Uuid.canonicalFrom, here, later, Uuid.hexDigit_mem, Nat.add_assoc, Nat.add_comm 1]
 
 /-- Prints 32 hexadecimal digits in the 8-4-4-4-12 form. -/
 def Uuid.ofDigits (digits : Vector (Fin 16) 32) : Uuid where
-  value := String.ofList <|
-    (digits.toList.take 8).map Uuid.hexDigit ++ '-' ::
-      (((digits.toList.drop 8).take 4).map Uuid.hexDigit ++ '-' ::
-        (((digits.toList.drop 12).take 4).map Uuid.hexDigit ++ '-' ::
-          (((digits.toList.drop 16).take 4).map Uuid.hexDigit ++ '-' ::
-            ((digits.toList.drop 20).map Uuid.hexDigit))))
+  value := String.ofList <| ['-'].intercalate <|
+    ([8, 4, 4, 4, 12].splitLengths digits.toList).map (·.map Uuid.hexDigit)
   canonical := by
-    simp only [Uuid.isCanonical, String.toList_ofList]
-    rw [Uuid.canonicalFrom_hex _ _ _ (by simp; decide)]
-    simp only [List.length_take, Vector.length_toList, Uuid.canonicalFrom]
-    rw [Uuid.canonicalFrom_hex _ _ _ (by simp; decide)]
-    simp only [List.length_take, List.length_drop, Vector.length_toList, Uuid.canonicalFrom]
-    rw [Uuid.canonicalFrom_hex _ _ _ (by simp; decide)]
-    simp only [List.length_take, List.length_drop, Vector.length_toList, Uuid.canonicalFrom]
-    rw [Uuid.canonicalFrom_hex _ _ _ (by simp; decide)]
-    simp only [List.length_take, List.length_drop, Vector.length_toList, Uuid.canonicalFrom]
-    rw [← List.append_nil (List.map _ _), Uuid.canonicalFrom_hex _ _ _ (by simp; decide)]
-    simp [Uuid.canonicalFrom]
+    simp only [Uuid.isCanonical, String.toList_ofList, List.splitLengths, List.splitAt_eq,
+      List.map, List.intercalate, List.intersperse, List.flatten, List.append_eq,
+      List.cons_append, List.nil_append]
+    repeat
+      rw [Uuid.canonicalFrom_hex (by simp; decide)]
+      simp only [List.length_take, List.length_drop, Vector.length_toList, Uuid.canonicalFrom]
+    decide
 
 /-- A fixed id ending in `n`, for example data. Real items get theirs from the server or a
 `Supply`. -/
