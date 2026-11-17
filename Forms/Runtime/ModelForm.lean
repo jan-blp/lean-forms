@@ -271,19 +271,18 @@ def event {Γ : Model.Context}
   | .apply key argument =>
     match apply (model := model) form state key argument with
     | .ok state => pure state
-    | .error (.clientBug error) => throw (toString error)
     | .error rejection =>
       let message := toString rejection
       let ui := if state.ui.pending then state.ui else state.ui.announce message true
-      let diagnostics := match rejection with
-        | .input _ => match state.evaluation.view.controls.find? (·.key == key) with
+      let diagnostics ← match rejection with
+        | .clientBug error => throw (toString error)
+        | .input _ => pure <| match state.evaluation.view.controls.find? (·.key == key) with
           | none => state.draftDiagnostics
           | some control =>
             { control := key
               diagnostic := { message, targets := .locations control.location [] } } ::
               state.draftDiagnostics.filter (·.control != key)
-        | .stale _ => state.draftDiagnostics
-        | .clientBug _ => state.draftDiagnostics
+        | .stale _ => pure state.draftDiagnostics
       pure (refresh form { state with
         draftDiagnostics := diagnostics
         ui := { ui with rejection := some message } })
