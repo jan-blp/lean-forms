@@ -3,6 +3,26 @@ module
 public import Forms.Model.Scalar
 public import Forms.Model.Lens
 
+/-!
+# Item UUIDs
+
+This module introduces the class `HasUuid`, a lawful lens on an item's UUID, used for addressing
+collection items by an id.
+
+Then we define `HasUuid.WithoutUuid β`, an item with its UUID forgotten, as a quotient of `β`.
+This is useful because new items, such as the one an add button inserts, must not choose their
+own UUID: `append` takes a `WithoutUuid` and gives it a fresh one, so a new item cannot repeat a
+UUID that is already in the list.
+
+We use a quotient rather than a separate structure because:
+- No code can read the UUID it forgets: `Quotient.lift` rejects any function that depends on it.
+- `append` always sets a fresh UUID, since `withUuid` is the only way back to `β`.
+- Forgetting a UUID is free: `Quotient.mk` compiles to the identity, so copying an item costs
+  one record update.
+- It is defined once for every `β`: there is no generated structure per record and no extra type
+  parameter on `HasUuid`.
+-/
+
 @[expose] public section
 namespace Forms.Model
 open LeanLens
