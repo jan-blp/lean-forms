@@ -110,7 +110,7 @@ def RowSelection.itemPath
   (row : Presentation [] (Context.row β Γ) β γ views)
   (display : CollectionDisplay Γ α β views)
   : Component Γ α (List γ) (holes := 1) :=
-  ⟨List row.LocalState, .collection path label row.node display⟩
+  ⟨Std.HashMap Uuid row.LocalState, .collection path label row.node display⟩
 
 @[reducible] def Component.zoom?
   {Γ : Context}

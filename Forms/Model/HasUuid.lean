@@ -60,7 +60,8 @@ def HasUuid.withoutUuid {β : Type} [HasUuid β] : β → HasUuid.WithoutUuid β
   Quotient.mk _
 
 def HasUuid.withUuid {β : Type} [HasUuid β] (uuid : Uuid) : HasUuid.WithoutUuid β → β :=
-  Quotient.lift (setUuid uuid) fun _ _ same => same uuid
+  Quotient.lift (setUuid uuid)
+    (fun (a b : β) (same : ∀ uuid, setUuid uuid a = setUuid uuid b) => same uuid)
 
 theorem HasUuid.id_withUuid
   {β : Type}

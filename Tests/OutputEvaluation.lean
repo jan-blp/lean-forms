@@ -110,6 +110,8 @@ def run : IO Unit := do
   let both := rows.evaluate other.value other.state {} other.locals
   check "EvaluationCollectsNestedRowOutputs"
     (both.output == [2, 1] && texts "Pair sum" both.view == ["2", "1"])
+  let swapped := rows.evaluate other.value.reverse other.state {} other.locals
+  check "EvaluationRowStateFollowsItsItem" (swapped.output == [1, 2])
   let removed ← press both "Remove"
   let survivor := rows.evaluate removed.value removed.state {} removed.locals
   check "EvaluationRemovalRetainsSurvivingPrivateState" (removed.value.map (·.value) == [10] && survivor.output == [1])

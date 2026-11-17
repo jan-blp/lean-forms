@@ -5,6 +5,7 @@ public import Forms.Model.Format
 public import Forms.Model.PartialPath
 public import Forms.Model.Component.State
 public import Forms.Model.Component.Layout
+public import Std.Data.HashMap
 
 @[expose] public section
 namespace Forms.Model
@@ -134,7 +135,8 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
   | issues {Γ : Context}
       {α : Type}
       : ComponentNode Γ α Unit (List Issue) 0
-  /-- Shows `row` for each item at `path` as `display` says, then the content of its hole. -/
+  /-- Shows `row` for each item at `path` as `display` says, then the content of its hole.
+  Row state is kept by item id. -/
   | collection {Γ : Context}
       {α β γ rowState : Type}
       {views : Nat}
@@ -143,7 +145,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (label : Computation Γ α String)
       (row : PresentationNode [] (Context.row β Γ) β rowState γ views)
       (display : CollectionDisplay Γ α β views)
-      : ComponentNode Γ α (List rowState) (List γ) 1
+      : ComponentNode Γ α (Std.HashMap Uuid rowState) (List γ) 1
   | zoom? {Γ : Context}
       {α β γ state : Type}
       {holes : Nat}

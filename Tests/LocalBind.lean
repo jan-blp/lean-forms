@@ -47,8 +47,8 @@ private def apply
     (.zoom path[Item.Field.value] row)
 
 private def rowSelection (state : ModelForm.State rows) (index : Nat) : RowSelection :=
-  let locals := state.locals.producer.producer.map (·.producer)
-  ((locals[index]?).getD row.initialState).value
+  let local? := state.value[index]?.bind (state.locals.producer.producer[·.id]?)
+  ((local?.map (·.producer)).getD row.initialState).value
 
 private def loadedBody : Status Bool → Component [] ExpenseReport.Raw
   | .ready true => .bind RowSelection.none (Component.void <| .table path[ExpenseReport.Field.expenses]

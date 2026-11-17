@@ -395,10 +395,11 @@ def evaluateNode
     let location := location ++ path.erase
     let rows := items.mapFinIdx fun index item bound =>
       evaluatePresentation row item (Env.row items ⟨index, bound⟩ env) ambient
-        (locals[index]?.getD row.initialState) (target.child index)
+        (locals.getD (HasUuid.id item) row.initialState) (target.child index)
         (location ++ [.item (HasUuid.id item)])
         disabled (nomatch ·)
-    let states := rows.map (·.locals)
+    let states := Std.HashMap.ofList <|
+      items.zipWith (fun item row => (HasUuid.id item, row.locals)) rows
     let render views (content : Vector (List Display.View) 1) :=
       renderCollection display value env items (label.eval value env) views content[0]
         (ambient.messagesAt location)
@@ -409,17 +410,18 @@ def evaluateNode
       apply := fun route argument => match route with
         | index :: rest => do
           let some row := rows[index]? | absent
+          let some item := items[index]? | absent
           let updated ← row.apply rest argument
           let env := updated.state.tail.tail
           if updated.state.tail.value then
             return {
               value := path.set (items.eraseIdx index) value
               state := env
-              locals := states.eraseIdx index }
+              locals := states.erase (HasUuid.id item) }
           return { updated with
             value := path.set (items.set index updated.value) value
             state := env
-            locals := states.set index updated.locals }
+            locals := states.insert (HasUuid.id item) updated.locals }
         | _ => absent }
 
 def evaluatePresentation

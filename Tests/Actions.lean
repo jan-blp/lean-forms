@@ -113,12 +113,12 @@ def run : IO Unit := do
     (ModelForm.openState (model := List (Item Nat)) (supply := supply) rows
       [⟨firstId, 10⟩, ⟨secondId, 20⟩] Env.nil) "Increment" 1
   let removed ← press (model := List (Item Nat)) rowUpdated "Remove"
-  let states : List (ObservationState (Binding Nat (ObservationState Unit Unit))
+  let states : Std.HashMap Uuid (ObservationState (Binding Nat (ObservationState Unit Unit))
       (ObservationState Unit Unit)) :=
     removed.locals.producer.producer
-  let remaining := states.map (·.producer.value)
   check "ActionRowStateFollowsRemoval"
-    (removed.value.map (·.value) == [20] && remaining[0]? == some 1)
+    (removed.value.map (·.value) == [20] && states.size == 1 &&
+      states[secondId]?.map (·.producer.value) == some 1)
   let adder : Component [] (List (Item Nat)) :=
     .button "Add" (.append .self (.const (Item.mkWithoutUuid 0)))
   let added ← press (model := List (Item Nat))
