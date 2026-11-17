@@ -182,7 +182,14 @@ macro "locations[" paths:sepBy1(locationPath, ", ") "]" : term => do
   let rest := locations.extract 1 locations.size
   `(Targets.locations (first := $(locations[0]!)) (rest := [$rest,*]))
 
+inductive Error.Kind where
+  /-- The input is invalid (e.g. an empty required field or a malformed email). -/
+  | invalid
+  /-- The data breaks an invariant the form relies on (e.g. duplicate UUID). -/
+  | corrupt
+
 structure Error {α : Type} (value : α) where
+  kind : Error.Kind
   message : String
   targets : Targets α value
 
@@ -193,6 +200,7 @@ def Error.mapLocations
   (step : Location value → Location outer)
   (error : Error value)
   : Error outer where
+  kind := error.kind
   message := error.message
   targets := match error.targets with
     | .global => .locations (step .self)
@@ -226,7 +234,7 @@ def Decision.errors
   {value : α}
   : Decision property value → List (Error value)
   | .valid _ => []
-  | .invalid _ message targets => [{ message, targets }]
+  | .invalid _ message targets => [{ kind := .invalid, message, targets }]
 
 def Decision.toExcept
   {property : Prop}
@@ -307,10 +315,8 @@ instance : Validation Uuid := ⟨fun value => .ok ⟨value, rfl⟩⟩
 @[reducible] instance {α : Type} [FormModel α] : FormModel (List α) :=
   ⟨List (Raw α), List.map FormModel.erase⟩
 
-def duplicateIdsPrefix : String := "These UUIDs are shared by more than one item:"
-
 def duplicateIdsMessage (ids : List Uuid) : String :=
-  s!"{duplicateIdsPrefix} {", ".intercalate (ids.map (·.value))}. " ++
+  s!"These UUIDs are shared by more than one item: {", ".intercalate (ids.map (·.value))}. " ++
     "This is a bug in the form data; please contact BLP."
 
 /-- The UUIDs that appear more than once. -/
@@ -325,7 +331,10 @@ instance {α : Type} [FormModel α] [Validation α] [HasUuid (Raw α)] : Validat
     let duplicates : List (Error raw) :=
       match duplicateIds raw with
       | ⟨[], _⟩ => []
-      | ids => [{ message := duplicateIdsMessage ids.val, targets := .locations .self }]
+      | ids => [{
+          kind := .corrupt
+          message := duplicateIdsMessage ids.val
+          targets := .locations .self }]
     if valid : (∀ position, (results position).isOk) ∧ duplicates.isEmpty then
       let values (position : Fin raw.length) : Validated α (raw.get position) :=
         match results position, valid.1 position with

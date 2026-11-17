@@ -62,10 +62,7 @@ def PartialPath.get?
   | .field (fields := _) f rest => rest.get? (Fields.get f value)
   | .constructor (constructors := _) (lawful := _) ctor rest =>
     (Constructors.project ctor value).bind rest.get?
-  | .item (hasUuid := _) id rest =>
-    match value.findIdx? (HasUuid.id · == id) with
-    | none => none
-    | some position => value[position]?.bind rest.get?
+  | .item (hasUuid := _) id rest => (value.find? (HasUuid.id · == id)).bind rest.get?
 
 def PartialPath.set
   {α β : Type}

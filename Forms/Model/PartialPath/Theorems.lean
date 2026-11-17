@@ -5,6 +5,20 @@ public import Forms.Model.PartialPath
 public section
 namespace Forms.Model
 
+private theorem modify_eq_self_of_fixed
+  {α : Type}
+  (value : List α)
+  (position : Nat)
+  (f : α → α)
+  (fixed : ∀ child, value[position]? = some child → f child = child)
+  : value.modify position f = value := by
+  apply List.ext_getElem?
+  intro index
+  rw [List.getElem?_modify]
+  split
+  · cases child : value[index]? <;> simp_all
+  · simp
+
 theorem PartialPath.set_get
   {α β : Type}
   (path : PartialPath α β)
@@ -20,17 +34,13 @@ theorem PartialPath.set_get
   | constructor ctor rest ih =>
     grind [get?, set, LawfulConstructors.inject_project]
   | item id rest ih =>
-    simp only [get?, set] at present ⊢
+    simp only [get?, set, List.find?_eq_bind_findIdx?_getElem?] at present ⊢
     cases found : value.findIdx? (HasUuid.id · == id) with
-    | none => simp
+    | none => rfl
     | some position =>
-      simp only [found] at present ⊢
-      apply List.ext_getElem?
-      intro index
-      rw [List.getElem?_modify]
-      split
-      · cases child : value[index]? <;> simp_all
-      · simp
+      simp only [found, Option.bind_some] at present ⊢
+      exact modify_eq_self_of_fixed _ _ _ fun child here =>
+        ih child old (by simpa [here] using present)
 
 theorem PartialPath.set_absent
   {α β : Type}
@@ -47,17 +57,13 @@ theorem PartialPath.set_absent
   | constructor ctor rest ih =>
     grind [get?, set, LawfulConstructors.inject_project]
   | item id rest ih =>
-    simp only [get?, set] at absent ⊢
+    simp only [get?, set, List.find?_eq_bind_findIdx?_getElem?] at absent ⊢
     cases found : value.findIdx? (HasUuid.id · == id) with
-    | none => simp
+    | none => rfl
     | some position =>
-      simp only [found] at absent ⊢
-      apply List.ext_getElem?
-      intro index
-      rw [List.getElem?_modify]
-      split
-      · cases child : value[index]? <;> simp_all
-      · simp
+      simp only [found, Option.bind_some] at absent ⊢
+      exact modify_eq_self_of_fixed _ _ _ fun child here =>
+        ih child new (by simpa [here] using absent)
 
 theorem PartialPath.erase_ofPath
   {α β : Type}

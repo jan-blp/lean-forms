@@ -187,6 +187,7 @@ def run : IO Unit := do
 
   let _ : Validation Person := {
     validate := fun _ => .error [{
+      kind := .invalid
       message := "Check the form and name"
       targets := .locations .self [.field Person.Field.name .self] }] }
   let resolution : Component [] Person.Raw := .observe .issues <|
@@ -207,9 +208,11 @@ def run : IO Unit := do
 
   let _ : Validation Person := {
     validate := fun _ => .error [
-      { message := "Check the age"
+      { kind := .invalid
+        message := "Check the age"
         targets := .locations (.field Person.Field.age .self) },
-      { message := "Check the address"
+      { kind := .invalid
+        message := "Check the address"
         targets := .locations (.field Person.Field.address .self) }] }
   let ordered : Component [] Person.Raw := .group "Ordered" [
     .field path[Person.Field.address, Address.Field.street] "Street" .text,
