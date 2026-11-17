@@ -24,3 +24,8 @@
 
 - Prefer to avoid default values. Default proofs are fine and encouraged when
   they make sense.
+
+# Theorems
+
+- When a property is simple enough to prove, prefer a theorem to a test.
+- Use tests for behaviour that is hard to state or prove as a theorem.
