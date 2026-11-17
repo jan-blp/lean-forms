@@ -347,7 +347,7 @@ def evaluateNode
       view := fun _ => .hidden
       requests := []
       apply := fun _ _ => absent }
-  | .focus computation body =>
+  | .zoom? computation body =>
     let path? := computation.eval value env
     match path?, path?.bind (·.get? value) with
     | none, _

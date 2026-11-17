@@ -175,12 +175,12 @@ def run : IO Unit := do
     (waitingConsumer.output == 1 && readyConsumer.output == 2 && changedConsumer.output == 3)
 
   let focused : Component [] (List (Item Nat)) (Option Nat) :=
-    .focus (.const (some (.item firstId (.field Item.Field.value .self)))) single
+    .zoom? (.const (some (.item firstId (.field Item.Field.value .self)))) single
   let focusedFirst := focused.evaluate [⟨firstId, 10⟩] Env.nil
   let increment ← press focusedFirst "Increment"
   let focusedUpdated := focused.evaluate increment.value increment.state {} increment.locals
   let missing := focused.evaluate [] Env.nil {} focusedUpdated.locals
-  check "EvaluationOutputsComposeUnderFocus"
+  check "EvaluationOutputsComposeUnderZoom"
     (focusedUpdated.output == some 1 && missing.output == none && missing.view.controls.isEmpty && missing.requests.isEmpty)
 
   let outer : Component [] Nat Nat := .bind (0 : Nat) <|

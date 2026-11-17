@@ -112,14 +112,14 @@ def RowSelection.itemPath
   : Component Γ α (List γ) (holes := 1) :=
   ⟨List row.LocalState, .collection path label row.node display⟩
 
-@[reducible] def Component.focus
+@[reducible] def Component.zoom?
   {Γ : Context}
   {α β γ : Type}
   {holes : Nat}
   (target : Computation Γ α (Option (PartialPath α β)))
   (body : Component Γ β γ holes)
   : Component Γ α (Option γ) holes :=
-  ⟨body.LocalState, .focus target body.node⟩
+  ⟨body.LocalState, .zoom? target body.node⟩
 
 @[reducible] def Component.zoom
   {Γ : Context}
@@ -599,8 +599,8 @@ def Component.choice
     keys_nodup := by simpa [List.map_map, Function.comp_def] using tags_nodup
     labels_nodup := by simpa [List.map_map, Function.comp_def] using labels_nodup }
   let bodies := branches.map fun branch =>
-    let focus := (PartialPath.ofPath path).trans (.constructor branch.constructor .self)
-    Component.focus (.const (some focus)) branch.body
+    let target := (PartialPath.ofPath path).trans (.constructor branch.constructor .self)
+    Component.zoom? (.const (some target)) branch.body
   .present <|
     .own (.select path label (.const options) Constructors.tag) <|
       Presentation.ownAll Renaming.shift { inputs := inputs[path], run := Constructors.tag }

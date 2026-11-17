@@ -133,7 +133,7 @@ def run : IO Unit := do
   let functionUpdated ← press (model := Nat)
     (ModelForm.openState (model := Nat) (supply := supply) functions 10 Env.nil) "Use successor"
   check "ActionsSupportValuesWithoutCodecs" (functionUpdated.locals.value 41 == 42)
-  let focused : Component [] (List (Item Nat)) := .bind firstId (Component.void <| .focus
+  let focused : Component [] (List (Item Nat)) := .bind firstId (Component.void <| .zoom?
     { inputs := inputs[.ui (Ref.here)], run := fun id => some (.item id .self) }
     (.button "Next item" (.set .here (.const secondId))))
   let first := ModelForm.openState (model := List (Item Nat)) (supply := supply) focused
@@ -143,7 +143,7 @@ def run : IO Unit := do
   let secondKey ← key second "Next item"
   let stale ← IO.ofExcept
     (ModelForm.execute (model := List (Item Nat)) focused second (.apply firstKey none))
-  check "ActionFocusRejectsStaleLocation"
+  check "ActionZoomRejectsStaleLocation"
     (firstKey != secondKey && stale.locals.value == secondId &&
       stale.ui.rejection == some (toString InvocationError.absent))
   check "ActionsUseDraftFlushingButtons" (match

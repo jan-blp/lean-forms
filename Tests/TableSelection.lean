@@ -78,7 +78,7 @@ def run : IO Unit := do
     (rejectedPending.ui.rejection == some "Submission is in progress." &&
       toJson rejectedPending.value == toJson opened.value)
   let request : HttpRequest := { method := .post, url := "/api/details", body := none }
-  let loading : Component [] ExpenseReport.Raw := .bind RowSelection.none (Component.void <| .focus
+  let loading : Component [] ExpenseReport.Raw := .bind RowSelection.none (Component.void <| .zoom?
     (target := {
       inputs := inputs[.ui (Ref.here : Var [⟨.writable, RowSelection⟩] RowSelection)]
       run := RowSelection.itemPath path[ExpenseReport.Field.expenses]
@@ -86,7 +86,7 @@ def run : IO Unit := do
     (body := .loadWith (.const (.fetch request (fromJson? (α := String))))
       (fun details => .computed "Details" (.const details))))
   let selectedLocals : loading.LocalState := { loading.initialState with value := .row secondId }
-  check "FocusLoadsOnlySelectedDetails"
+  check "ZoomLoadsOnlySelectedDetails"
     ((loading.requests {} opened.value Env.nil).isEmpty &&
       loading.requests {} selected.value Env.nil selectedLocals == [request])
   let table : Component [] ExpenseReport.Raw := .bind RowSelection.none (Component.void <| .table
@@ -103,7 +103,7 @@ def run : IO Unit := do
   check "SelectionChangesOnlyItsBinding"
     (independent.locals.producer.value == .none && independent.locals.consumers.producer.value == .row secondId &&
       toJson independent.value == toJson multiple.value)
-  let nested : Component [] ExpenseReport.Raw := Component.void <| .focus
+  let nested : Component [] ExpenseReport.Raw := Component.void <| .zoom?
     (.const (some (.ofPath path[ExpenseReport.Field.expenses])))
     (.bind RowSelection.none (Component.void <| .table .self "Nested"
         (.numbered "Expense") "Add expense" Expense.initial columns[]
@@ -114,7 +114,7 @@ def run : IO Unit := do
     | throw (IO.userError "FAIL missing nested selection")
   let nestedSelected ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) nested nestedOpened
     (.apply nestedSelect.key none))
-  check "FocusPreservesNestedUiUpdates"
+  check "ZoomPreservesNestedUiUpdates"
     (nestedSelected.locals.producer.value == .row firstId && toJson nestedSelected.value == toJson nestedOpened.value)
   let mixed : Component [⟨.readOnly, RowSelection⟩, ⟨.writable, RowSelection⟩] ExpenseReport.Raw :=
     .bind false (Component.void <| .table path[ExpenseReport.Field.expenses] "Expenses"

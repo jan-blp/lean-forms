@@ -144,13 +144,12 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (row : PresentationNode [] (Context.row β Γ) β rowState γ views)
       (display : CollectionDisplay Γ α β views)
       : ComponentNode Γ α (List rowState) (List γ) 1
-  | focus {Γ : Context}
+  | zoom? {Γ : Context}
       {α β γ state : Type}
       {holes : Nat}
       (target : Computation Γ α (Option (PartialPath α β)))
       (body : ComponentNode Γ β state γ holes)
       : ComponentNode Γ α state (Option γ) holes
-  /-- Shows `body` on the part of the value at `path`, which is always there. -/
   | zoom {Γ : Context}
       {α β γ state : Type}
       {holes : Nat}

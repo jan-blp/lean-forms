@@ -153,9 +153,9 @@ def run : IO Unit := do
     | _ => .computed "Status" (.const "Loading")
   let embedded := Component.group "Normal nesting" [
     loaded,
-    (Component.focus (.const (some .self)) single).void]
+    (Component.zoom? (.const (some .self)) single).void]
   let embeddedUpdated ← press (model := Nat) (start (model := Nat) embedded 10) "Increment" 1
-  check "ObservationsEmbedUnderLoadAndFocus" (texts embeddedUpdated "Observer one" == ["0", "1"])
+  check "ObservationsEmbedUnderLoadAndZoom" (texts embeddedUpdated "Observer one" == ["0", "1"])
   let disabled := Component.disabledWhen (.const true) single
   let disabledOpened := start (model := Nat) disabled 10
   let disabledResult ← press (model := Nat) disabledOpened "Increment"

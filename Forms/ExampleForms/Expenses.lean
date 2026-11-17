@@ -141,7 +141,7 @@ def ExpenseReport.focusForm : Component [] ExpenseReport.Raw :=
         "Receipt" => .computed "Receipt" {
           inputs := inputs[path[Expense.Field.receipt]], run := fun receipt => if receipt then "Yes" else "No" }])
       (selection := some .here),
-    Component.void <| .focus
+    Component.void <| .zoom?
       (target := {
         inputs := inputs[.ui .here]
         run := RowSelection.itemPath path[ExpenseReport.Field.expenses]

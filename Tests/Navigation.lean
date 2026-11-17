@@ -83,7 +83,7 @@ def run : IO Unit := do
     { message := "Global", targets := .global }]
   let root := Component.issues.evaluate Person.initial Env.nil (diagnostics := diagnostics)
   let address : Component [] Person.Raw (Option (List Issue)) :=
-    .focus (.const (some (.ofPath path[Person.Field.address]))) .issues
+    .zoom? (.const (some (.ofPath path[Person.Field.address]))) .issues
   let addressIssues :=
     (address.evaluate Person.initial Env.nil (diagnostics := diagnostics)).output.getD []
   check "IssuesAreOrdinaryScopedOutput"
