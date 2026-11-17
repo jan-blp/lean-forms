@@ -37,7 +37,8 @@ instance PlannerTask.hours_valid_rule : ConstraintRule PlannerTask.Constraint.ho
     else .invalid (proof := h) (message := "Estimate at least one hour.")
       (targets := locations[PlannerTask.Field.hours])
 
-instance PlannerTask.keyed : Keyed PlannerTask.Raw := ⟨(·.id)⟩
+instance PlannerTask.hasUuid : HasUuid PlannerTask.Raw where
+  id := (·.id)
 
 def PlannerTask.initial (id : Uuid) : PlannerTask.Raw := ⟨id, "New task", "Unassigned", 1, false, ""⟩
 
@@ -70,7 +71,8 @@ instance PlannerProject.name_valid_rule : ConstraintRule PlannerProject.Constrai
     else .invalid (proof := h) (message := "Give the project a name.")
       (targets := locations[PlannerProject.Field.name])
 
-instance PlannerProject.keyed : Keyed PlannerProject.Raw := ⟨(·.id)⟩
+instance PlannerProject.hasUuid : HasUuid PlannerProject.Raw where
+  id := (·.id)
 
 def PlannerProject.initial (id : Uuid) : PlannerProject.Raw := ⟨id, "New project", []⟩
 

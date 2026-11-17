@@ -2,7 +2,7 @@ module
 
 public import Forms.Model.Computation
 public import Forms.Model.Invocation
-public import Forms.Model.Keyed
+public import Forms.Model.HasUuid
 
 @[expose] public section
 namespace Forms.Model
@@ -18,7 +18,7 @@ inductive Action.Step (Γ : Context) (α : Type) where
       : Action.Step Γ α
   /-- Appends an item built from a fresh id. -/
   | appendFresh {β : Type}
-      [keyed : Keyed β]
+      [hasUuid : HasUuid β]
       (path : Path α (List β))
       (item : Computation Γ α (Uuid → β))
       : Action.Step Γ α
@@ -51,7 +51,7 @@ def append
 def appendFresh
   {Γ : Context}
   {α β : Type}
-  [Keyed β]
+  [HasUuid β]
   (path : Path α (List β))
   (item : Computation Γ α (Uuid → β))
   : Action Γ α :=
@@ -64,7 +64,7 @@ def Step.rename
   : Step Γ α → Step Δ α
   | .set ref value => .set (rename ref) (value.rename rename)
   | .append path item => .append path (item.rename rename)
-  | .appendFresh (keyed := _) path item => .appendFresh path (item.rename rename)
+  | .appendFresh (hasUuid := _) path item => .appendFresh path (item.rename rename)
   | .visit target => .visit (target.rename rename)
 
 def rename
@@ -93,7 +93,7 @@ def Step.run
       { value := path.set (path.get value ++ [item.eval value env]) value
         state := env
         locals := () }
-  | .appendFresh (keyed := _) path item => do
+  | .appendFresh (hasUuid := _) path item => do
     let id ← freshId
     return {
       value := path.set (path.get value ++ [item.eval value env id]) value

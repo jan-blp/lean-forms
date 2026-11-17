@@ -195,7 +195,7 @@ def renderCollection
   {Γ : Context}
   {α β : Type}
   {views : Nat}
-  [Keyed β]
+  [HasUuid β]
   (display : CollectionDisplay Γ α β views)
   (value : α)
   (env : Env Γ)
@@ -207,12 +207,12 @@ def renderCollection
   : Display.View :=
   match display with
   | .list =>
-    .list label ((items.zipWith (fun item row => .keyed (Keyed.id item) row[0]) rows) ++ content)
+    .list label ((items.zipWith (fun item row => .keyed (HasUuid.id item) row[0]) rows) ++ content)
       messages
   | .table headers rowLabel selected =>
     let rows := (items.mapFinIdx fun index item bound =>
       let rowEnv := Env.row items ⟨index, bound⟩ env
-      ({ key := Keyed.id item
+      ({ key := HasUuid.id item
          label := rowLabel.eval item rowEnv
          selected := selected.map (·.eval item rowEnv)
          cells := [] } : Display.TableRow)).zipWith
@@ -390,13 +390,13 @@ def evaluateNode
     (evaluatePresentation body value env ambient locals target location disabled
       (nomatch ·)).mapView
       fun views _ => views[0]
-  | .collection (keyed := _) path label row display =>
+  | .collection (hasUuid := _) path label row display =>
     let items := path.get value
     let location := location ++ path.erase
     let rows := items.mapFinIdx fun index item bound =>
       evaluatePresentation row item (Env.row items ⟨index, bound⟩ env) ambient
         (locals[index]?.getD row.initialState) (target.child index)
-        (location ++ [.item (Keyed.id item)])
+        (location ++ [.item (HasUuid.id item)])
         disabled (nomatch ·)
     let states := rows.map (·.locals)
     let render views (content : Vector (List Display.View) 1) :=

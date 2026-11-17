@@ -36,7 +36,7 @@ def ComponentNode.rename
     .select path (label.rename rename) (options.rename rename) selected
   | .output value => .output (value.rename rename)
   | .issues => .issues
-  | .collection (keyed := _) path label row display =>
+  | .collection (hasUuid := _) path label row display =>
     .collection path (label.rename rename) (row.rename rename.liftRow) (display.rename rename)
   | .focus target body => .focus (target.rename rename) (body.rename rename)
   | .within path body => .within path (body.rename rename)

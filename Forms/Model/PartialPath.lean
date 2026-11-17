@@ -24,7 +24,7 @@ inductive PartialPath : Type → Type → Type 1 where
       : PartialPath α γ
   | item
       {α β : Type}
-      [keyed : Keyed α]
+      [hasUuid : HasUuid α]
       (id : Uuid)
       (rest : PartialPath α β)
       : PartialPath (List α) β
@@ -43,14 +43,14 @@ def PartialPath.trans
   | .field (fields := _) f rest => .field f (rest.trans second)
   | .constructor (constructors := _) (lawful := _) ctor rest =>
     .constructor ctor (rest.trans second)
-  | .item (keyed := _) id rest => .item id (rest.trans second)
+  | .item (hasUuid := _) id rest => .item id (rest.trans second)
 
 def PartialPath.erase {α β : Type} : PartialPath α β → ErasedLocation
   | .self => []
   | .field (fields := _) f rest => .field (Fields.key f) :: rest.erase
   | .constructor (constructors := _) (lawful := _) ctor rest =>
     .constructor (Constructors.key ctor) :: rest.erase
-  | .item (keyed := _) id rest => .item id :: rest.erase
+  | .item (hasUuid := _) id rest => .item id :: rest.erase
 
 def PartialPath.get?
   {α β : Type}
@@ -62,8 +62,8 @@ def PartialPath.get?
   | .field (fields := _) f rest => rest.get? (Fields.get f value)
   | .constructor (constructors := _) (lawful := _) ctor rest =>
     (Constructors.project ctor value).bind rest.get?
-  | .item (keyed := _) id rest =>
-    match value.findIdx? (Keyed.id · == id) with
+  | .item (hasUuid := _) id rest =>
+    match value.findIdx? (HasUuid.id · == id) with
     | none => none
     | some position => value[position]?.bind rest.get?
 
@@ -80,8 +80,8 @@ def PartialPath.set
     match Constructors.project ctor value with
     | none => value
     | some child => Constructors.inject ctor (rest.set new child)
-  | .item (keyed := _) id rest =>
-    match value.findIdx? (Keyed.id · == id) with
+  | .item (hasUuid := _) id rest =>
+    match value.findIdx? (HasUuid.id · == id) with
     | none => value
     | some position => value.modify position (rest.set new)
 

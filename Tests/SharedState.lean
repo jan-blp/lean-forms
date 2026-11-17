@@ -94,10 +94,11 @@ def run : IO Unit := do
   -- Both tables use the same binding; it holds an item id, so removing another row keeps it.
   let tables : Component [] (List (Item Nat)) := .bind RowSelection.none <|
     .group "Two views" [
-      Component.void <| .table .self "First" (.numbered "Item") "Add item" (Item.fresh 0) columns[]
+      Component.void <| .table .self "First" (.numbered "Item") "Add item"
+          ({ id := ·, value := 0 }) columns[]
         (some .here),
       Component.void <| .table .self "Second" (.numbered "Item") "Add item"
-          (Item.fresh 0) columns[] (some .here),
+          ({ id := ·, value := 0 }) columns[] (some .here),
       .computed "Selection" {
         inputs := inputs[.ui (Ref.here : Var _ RowSelection)]
         run := fun selection => match selection with

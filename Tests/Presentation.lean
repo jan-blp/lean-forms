@@ -104,7 +104,7 @@ def request : HttpRequest := { method := .get, url := "/hidden-value", body := n
       .layout { inputs := inputs[.ui (Ref.here : InputRef _ Nat)], run := id } (.const (.group none []))
 
 def run : IO Unit := do
-  let initial := Item.numbered ["same", "same", "other"]
+  let initial := items ["same", "same", "other"]
   let opened := (tableSummary).evaluate initial Env.nil
   check "PresentationSummaryPrecedesItsProducer"
     (order opened.view == ["Selected descriptions", "Items"] && opened.output == "")
@@ -131,7 +131,7 @@ def run : IO Unit := do
   let summaryOnly := (tableSummary (.place .here)).evaluate edited.value Env.nil {} edited.locals
   check "PresentationUnplacedControlsRejectStaleActions"
     (summaryOnly.view.controls.isEmpty && !((summaryOnly.applyKey tableLast.key none).run' supply).toBool)
-  let refreshed := (tableSummary (.place .here)).evaluate (Item.numbered ["same", "Fresh", "other"]) Env.nil {}
+  let refreshed := (tableSummary (.place .here)).evaluate (items ["same", "Fresh", "other"]) Env.nil {}
     edited.locals
   check "PresentationUnplacedOwnersStillProduceFreshOutputs"
     (refreshed.output == "Fresh" && texts "Selected descriptions" refreshed.view == ["Fresh"])
@@ -184,7 +184,7 @@ def run : IO Unit := do
   let loaded := unplaced.evaluate 0 Env.nil cache pending.locals
   check "PresentationUnplacedLoadUpdatesItsOutput" (loaded.output == 7)
 
-  let opened := notes.evaluate (Item.numbered ["a", "b"]) Env.nil
+  let opened := notes.evaluate (items ["a", "b"]) Env.nil
   check "NestedPresentationsRenderInsideTheirOwner"
     (opened.output == 2 && order opened.view == ["Note count"] &&
       (opened.view.controls.filter (·.label == "Text")).length == 2)

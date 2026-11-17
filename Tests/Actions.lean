@@ -107,7 +107,8 @@ def run : IO Unit := do
     (siblingUpdated.locals.producer.value == 0 &&
       siblingUpdated.locals.consumers.producer.value == 1)
   let rows : Component [] (List (Item Nat)) := Component.void <| Component.list .self "Counters"
-      (.numbered "Counter") "Add counter" (Item.fresh 0) (.within path[Item.Field.value] next)
+      (.numbered "Counter") "Add counter"
+          ({ id := ·, value := 0 }) (.within path[Item.Field.value] next)
   let rowUpdated ← press (model := List (Item Nat))
     (ModelForm.openState (model := List (Item Nat)) (supply := supply) rows
       [⟨firstId, 10⟩, ⟨secondId, 20⟩] Env.nil) "Increment" 1
@@ -119,7 +120,7 @@ def run : IO Unit := do
   check "ActionRowStateFollowsRemoval"
     (removed.value.map (·.value) == [20] && remaining[0]? == some 1)
   let adder : Component [] (List (Item Nat)) :=
-    .button "Add" (.appendFresh .self (.const (Item.fresh 0)))
+    .button "Add" (.appendFresh .self (.const ({ id := ·, value := 0 })))
   let added ← press (model := List (Item Nat))
     (ModelForm.openState (model := List (Item Nat)) (supply := supply) adder [] Env.nil) "Add"
   let addedTwice ← press (model := List (Item Nat)) added "Add"

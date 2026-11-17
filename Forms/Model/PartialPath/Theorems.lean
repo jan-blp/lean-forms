@@ -21,7 +21,7 @@ theorem PartialPath.set_get
     grind [get?, set, LawfulConstructors.inject_project]
   | item id rest ih =>
     simp only [get?, set] at present ⊢
-    cases found : value.findIdx? (Keyed.id · == id) with
+    cases found : value.findIdx? (HasUuid.id · == id) with
     | none => simp
     | some position =>
       simp only [found] at present ⊢
@@ -48,7 +48,7 @@ theorem PartialPath.set_absent
     grind [get?, set, LawfulConstructors.inject_project]
   | item id rest ih =>
     simp only [get?, set] at absent ⊢
-    cases found : value.findIdx? (Keyed.id · == id) with
+    cases found : value.findIdx? (HasUuid.id · == id) with
     | none => simp
     | some position =>
       simp only [found] at absent ⊢

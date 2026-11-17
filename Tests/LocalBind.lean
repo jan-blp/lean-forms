@@ -37,12 +37,13 @@ private def apply
     (.apply (← control state label nth) argument))
 
 @[expose] def row : Component [] (List (Item Nat)) := .bind RowSelection.none
-  (Component.void <| .table .self "Choices" (.numbered "Choice") "Add choice" (Item.fresh 0)
+  (Component.void <| .table .self "Choices" (.numbered "Choice") "Add choice"
+      ({ id := ·, value := 0 })
     columns["Number" => .computed "Number" { inputs := inputs[path[Item.Field.value]], run := toString }]
     (some .here))
 
 @[expose] def rows : Component [] (List (Item (List (Item Nat)))) :=
-  Component.void <| .list .self "Rows" (.numbered "Row") "Add row" (Item.fresh [])
+  Component.void <| .list .self "Rows" (.numbered "Row") "Add row" ({ id := ·, value := [] })
     (.within path[Item.Field.value] row)
 
 private def rowSelection (state : ModelForm.State rows) (index : Nat) : RowSelection :=
@@ -84,7 +85,7 @@ def run : IO Unit := do
     (reset.value == opened.value && rowSelection reset 0 == .none && rowSelection reset 1 == .none)
   let nested : Component [] (List (Item Nat)) := .bind RowSelection.none (.bind RowSelection.none
     (Component.void <| .table .self "Nested" (.numbered "Number") "Add number"
-        (Item.fresh 0) columns[] (some (.there .here))))
+        ({ id := ·, value := 0 }) columns[] (some (.there .here))))
   let nestedOpened := ModelForm.openState (model := List (Item Nat)) (supply := supply) nested
     [⟨firstId, 10⟩, ⟨secondId, 20⟩] Env.nil
   let nestedSelected ← apply (model := List (Item Nat)) nested nestedOpened "Select"

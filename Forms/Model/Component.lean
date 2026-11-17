@@ -43,7 +43,7 @@ structure Branch (Γ : Context) (α : Type) [Constructors α] where
 
 def RowSelection.itemPath
   {α β : Type}
-  [Keyed β]
+  [HasUuid β]
   (items : Path α (List β))
   : RowSelection → Option (PartialPath α β)
   | .none => Option.none
@@ -104,7 +104,7 @@ def RowSelection.itemPath
   {Γ : Context}
   {α β γ : Type}
   {views : Nat}
-  [Keyed β]
+  [HasUuid β]
   (path : Path α (List β))
   (label : Computation Γ α String)
   (row : Presentation [] (Context.row β Γ) β γ views)
@@ -485,7 +485,7 @@ The first entry in `body`'s context is the producer's current output, available 
 @[reducible] def Component.withAddButton
   {Γ : Context}
   {α β γ : Type}
-  [Keyed β]
+  [HasUuid β]
   (path : Path α (List β))
   (caption : Computation Γ α String)
   (initial : Uuid → β)
@@ -508,7 +508,7 @@ The first entry in `body`'s context is the producer's current output, available 
 @[reducible] def Component.list
   {Γ : Context}
   {α β γ : Type}
-  [Keyed β]
+  [HasUuid β]
   (path : Path α (List β))
   (label : Computation Γ α String)
   (rowLabel : Computation (Context.row β Γ) β String)
@@ -528,7 +528,7 @@ The first entry in `body`'s context is the producer's current output, available 
 @[reducible] def Component.table
   {Γ : Context}
   {α β γ : Type}
-  [Keyed β]
+  [HasUuid β]
   (path : Path α (List β))
   (label : Computation Γ α String)
   (rowLabel : Computation (Context.row β Γ) β String)
@@ -541,7 +541,7 @@ The first entry in `body`'s context is the producer's current output, available 
   let isSelected (selection : Var (Context.row β Γ) RowSelection)
       : Computation (Context.row β Γ) β Bool :=
     { inputs := inputs[.ui selection, .ui Ref.row]
-      run := fun current row => current == .row (Keyed.id row.current) }
+      run := fun current row => current == .row (HasUuid.id row.current) }
   let actions : Component (Context.row β Γ) β := match selection with
     | none => .button "Remove" removeRow
     | some selection =>
@@ -549,12 +549,12 @@ The first entry in `body`'s context is the producer's current output, available 
       .sequence
         (.button ((if · then "Selected" else "Select") <$> isSelected selection)
           (.set selection
-            { inputs := inputs[.ui Ref.row], run := fun row => .row (Keyed.id row.current) }))
+            { inputs := inputs[.ui Ref.row], run := fun row => .row (HasUuid.id row.current) }))
         (.button "Remove" <|
           .set selection
             { inputs := inputs[.ui selection, .ui Ref.row]
               run := fun current row =>
-                if current == .row (Keyed.id row.current) then .none else current } ++ removeRow)
+                if current == .row (HasUuid.id row.current) then .none else current } ++ removeRow)
   let selected := selection.map (isSelected ∘ Renaming.row)
   let columns := (columns.rename Renaming.row).snoc "Actions" actions
   .withAddButton path addCaption initial <|

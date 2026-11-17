@@ -38,7 +38,8 @@ instance Expense.receipt_valid_rule : ConstraintRule Expense.Constraint.receipt_
     else .invalid (proof := h) (message := "Attach a receipt for CHF 100 or more.")
       (targets := locations[Expense.Field.receipt])
 
-instance Expense.keyed : Keyed Expense.Raw := ⟨(·.id)⟩
+instance Expense.hasUuid : HasUuid Expense.Raw where
+  id := (·.id)
 
 structure ExpenseReport where
   employee : String

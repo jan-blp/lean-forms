@@ -13,6 +13,7 @@
 - Always put each sum type constructor on a separate line.
 - Prefer to use named arguments when there are more than one wildcards in a pattern.
 - Prefer to use named fields over tuple syntax when there are multiple fields.
+- Define instances with named fields.
 
 # Pattern matching
 

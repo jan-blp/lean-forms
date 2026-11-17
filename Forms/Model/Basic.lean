@@ -2,7 +2,7 @@ module
 
 public import Lean.Data.Json
 public import Forms.Model.ErasedLocation
-public import Forms.Model.Keyed
+public import Forms.Model.HasUuid
 public import Forms.Model.LawfulJson
 public import LeanLens.Lawful
 public import Std.Data.HashMap
@@ -15,9 +15,9 @@ theorem lawfulMkLens
   {s a : Type}
   {get : s → a}
   {put : a → s → s}
-  (view_set : ∀ v src, get (put v src) = v)
-  (set_view : ∀ src, put (get src) src = src)
-  (set_set : ∀ v v' src, put v' (put v src) = put v' src)
+  (view_set : ∀ v src, get (put v src) = v := by intros; rfl)
+  (set_view : ∀ src, put (get src) src = src := by intros; rfl)
+  (set_set : ∀ v v' src, put v' (put v src) = put v' src := by intros; rfl)
   : LawfulLens (mkLens get put) :=
   ⟨view_set, set_view, set_set⟩
 
@@ -127,7 +127,7 @@ def Path.erase {α β : Type} : Path α β → ErasedLocation
 def Path.toLens {α β : Type} (path : Path α β) : Lens' α β :=
   LeanLens.mkLens path.get path.set
 
--- TODO: define as a `PartialPath` known to resolve in `value`, leaving two typed path types.
+-- TODO: define as a `PartialPath` known to resolve in `value`
 inductive Location : {α : Type} → α → Type 1 where
   | self {α : Type} {value : α} : Location value
   | field
@@ -144,27 +144,26 @@ inductive Location : {α : Type} → α → Type 1 where
       (constructor : Constructors.Constructor α β)
       (rest : Location value)
       : Location (Constructors.inject constructor value)
-  | index
+  | item
       {α : Type}
-      [keyed : Keyed α]
-      {value : List α}
-      (position : Fin value.length)
-      (rest : Location (value.get position))
-      : Location value
+      [hasUuid : HasUuid α]
+      {items : List α}
+      (item : α)
+      (member : item ∈ items)
+      (rest : Location item)
+      : Location items
 
 def Location.keys {α : Type} {value : α} : Location value → List String
   | .self => []
   | .field (fields := _) f rest => Fields.key f :: rest.keys
   | .constructor (constructors := _) c rest => Constructors.key c :: rest.keys
-  | .index (keyed := _) (value := items) position rest =>
-    (Keyed.id (items.get position)).value :: rest.keys
+  | .item (hasUuid := _) (items := items) entry _ rest => (HasUuid.id entry).value :: rest.keys
 
 def Location.erase {α : Type} {value : α} : Location value → ErasedLocation
   | .self => []
   | .field (fields := _) f rest => .field (Fields.key f) :: rest.erase
   | .constructor (constructors := _) c rest => .constructor (Constructors.key c) :: rest.erase
-  | .index (keyed := _) (value := items) position rest =>
-    .item (Keyed.id (items.get position)) :: rest.erase
+  | .item (hasUuid := _) (items := items) entry _ rest => .item (HasUuid.id entry) :: rest.erase
 
 inductive Targets (α : Type) (value : α) where
   | global
@@ -311,15 +310,24 @@ instance : Validation Uuid := ⟨fun value => .ok ⟨value, rfl⟩⟩
 class Unconstrained (α : Type) [FormModel α] where
   validated : (raw : Raw α) → Validated α raw
 
-instance : Unconstrained String := ⟨fun value => ⟨value, rfl⟩⟩
-instance : Unconstrained Bool := ⟨fun value => ⟨value, rfl⟩⟩
-instance : Unconstrained Nat := ⟨fun value => ⟨value, rfl⟩⟩
-instance : Unconstrained Int := ⟨fun value => ⟨value, rfl⟩⟩
-instance : Unconstrained Int32 := ⟨fun value => ⟨value, rfl⟩⟩
-instance : Unconstrained Int64 := ⟨fun value => ⟨value, rfl⟩⟩
-instance : Unconstrained Decimal := ⟨fun value => ⟨value, rfl⟩⟩
-instance : Unconstrained Std.Time.PlainDate := ⟨fun value => ⟨value, rfl⟩⟩
-instance : Unconstrained Uuid := ⟨fun value => ⟨value, rfl⟩⟩
+instance : Unconstrained String where
+  validated value := ⟨value, rfl⟩
+instance : Unconstrained Bool where
+  validated value := ⟨value, rfl⟩
+instance : Unconstrained Nat where
+  validated value := ⟨value, rfl⟩
+instance : Unconstrained Int where
+  validated value := ⟨value, rfl⟩
+instance : Unconstrained Int32 where
+  validated value := ⟨value, rfl⟩
+instance : Unconstrained Int64 where
+  validated value := ⟨value, rfl⟩
+instance : Unconstrained Decimal where
+  validated value := ⟨value, rfl⟩
+instance : Unconstrained Std.Time.PlainDate where
+  validated value := ⟨value, rfl⟩
+instance : Unconstrained Uuid where
+  validated value := ⟨value, rfl⟩
 
 instance {α : Type} [FormModel α] [Unconstrained α] : Validation (List α) where
   validate raw := .ok ⟨raw.map fun item => (Unconstrained.validated item).val, by
@@ -327,12 +335,12 @@ instance {α : Type} [FormModel α] [Unconstrained α] : Validation (List α) wh
 
 def duplicateIdsMessage : String := "Two items share an id."
 
-def duplicateIds {β : Type} [Keyed β] (items : List β) : Bool :=
-  let ids := items.map Keyed.id
+def duplicateIds {β : Type} [HasUuid β] (items : List β) : Bool :=
+  let ids := items.map HasUuid.id
   ids.eraseDups.length != ids.length
 
 /-- Validates every item; errors point at their item's id. Repeated ids are an error. -/
-instance {α : Type} [FormModel α] [Validation α] [Keyed (Raw α)] : Validation (List α) where
+instance {α : Type} [FormModel α] [Validation α] [HasUuid (Raw α)] : Validation (List α) where
   validate raw :=
     let results (position : Fin raw.length) := Validation.validate (model := α) (raw.get position)
     let duplicates : List (Error raw) :=
@@ -347,7 +355,8 @@ instance {α : Type} [FormModel α] [Validation α] [Keyed (Raw α)] : Validatio
         simp [FormModel.erase, Function.comp_def, (values _).property]⟩
     else
       .error (duplicates ++ (List.finRange raw.length).flatMap fun position =>
-        (errors (results position)).map (Error.mapLocations (.index position)))
+        (errors (results position)).map
+          (Error.mapLocations (.item (raw.get position) (List.get_mem raw position))))
 
 /-- A model whose raw values are all valid. -/
 class AlwaysValid (α : Type) [FormModel α] where

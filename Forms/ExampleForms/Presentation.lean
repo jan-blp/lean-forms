@@ -77,12 +77,13 @@ def noteTabs {Γ : Context} : Component Γ String :=
 /-- An outer presentation that owns rows with their own presentations. -/
 def notes : Component [] (List (Item String)) Nat :=
   .present <|
-    .own (Component.void (.list .self "Notes" (.numbered "Note") "Add note" (Item.fresh "")
+    .own (Component.void (.list .self "Notes" (.numbered "Note") "Add note"
+        ({ id := ·, value := "" })
         (.within path[Item.Field.value] noteTabs))) <|
       .own (.computed "Note count" { inputs := inputs[path[]], run := fun notes => toString notes.length }) <|
         .layout { inputs := inputs[path[]], run := List.length }
           (.const (.group none [.place .here, .place (.there .here)]))
 
-def initialNotes : List (Item String) := Item.numbered ["First note", "Second note"]
+def initialNotes : List (Item String) := IdGen.run (["First note", "Second note"].mapM Item.fresh)
 
 end Forms.ExampleForms.Presentation

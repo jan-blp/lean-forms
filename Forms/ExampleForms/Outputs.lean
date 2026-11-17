@@ -44,7 +44,8 @@ def pair {Γ : Context} : Component Γ Nat Nat :=
       .withOutput (.computed "Pair sum" (toString <$> total)) total
 
 def rows : Component [] (List (Item Nat)) (List Nat) :=
-  .list .self "Pairs" (.numbered "Pair") "Add pair" (Item.fresh 0) (.within path[Item.Field.value] pair)
+  .list .self "Pairs" (.numbered "Pair") "Add pair"
+      ({ id := ·, value := 0 }) (.within path[Item.Field.value] pair)
 
 def nested : Component [] (List (Item Nat)) Nat :=
   .labeled "Nested outputs" <|
@@ -57,7 +58,7 @@ def nested : Component [] (List (Item Nat)) Nat :=
         run := fun values => String.intercalate ", " (values.map toString) },
       .computed "Overall sum" (toString <$> total)]) total
 
-def initial : List (Item Nat) := Item.numbered [10, 20]
+def initial : List (Item Nat) := IdGen.run ([10, 20].mapM Item.fresh)
 
 structure RowOutput where
   description : String
@@ -92,10 +93,11 @@ def selectionColumns {Γ : Context} : Columns Γ (Item String) RowOutput :=
           (.const #v[.place (.there .here), .place .here])⟩
 
 def selectionTable : Component [] (List (Item String)) (List RowOutput) :=
-  .table .self "Items" (.numbered "Item") "Add item" (Item.fresh "New item") selectionColumns
+  .table .self "Items" (.numbered "Item") "Add item"
+      ({ id := ·, value := "New item" }) selectionColumns
 
 /-- Two rows share a description, so selection must follow rows, not text. -/
 def descriptions : List (Item String) :=
-  Item.numbered ["Same description", "Same description", "Another item"]
+  IdGen.run (["Same description", "Same description", "Another item"].mapM Item.fresh)
 
 end Forms.ExampleForms.Outputs

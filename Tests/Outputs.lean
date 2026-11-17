@@ -163,7 +163,7 @@ def run : IO Unit := do
     (disabledResult.ui.rejection == some (toString InvocationError.disabled) && texts disabledResult "Observer one" == ["0"])
 
   let table : Component [] (List (Item Nat)) := Component.void <| .table .self "Rows"
-      (.numbered "Row") "Add row" (Item.fresh 0) columns[
+      (.numbered "Row") "Add row" ({ id := ·, value := 0 }) columns[
     "Counters" => .within path[Item.Field.value] <| .observe pair
       (.computed "Cell total" { inputs := inputs[.ui (Ref.here : InputRef _ Nat)], run := toString })]
   let tableChanged ← press (model := List (Item Nat))

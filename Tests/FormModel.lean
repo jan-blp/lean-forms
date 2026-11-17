@@ -87,7 +87,8 @@ instance : ConstraintRule Line.Constraint.amount_valid where
     else .invalid (proof := h) (message := "Enter an amount.")
       (targets := locations[Line.Field.amount])
 
-instance : Keyed Line.Raw := ⟨(·.id)⟩
+instance : HasUuid Line.Raw where
+  id := (·.id)
 
 structure Basket where
   lines : List Line

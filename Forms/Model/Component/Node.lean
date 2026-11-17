@@ -138,7 +138,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
   | collection {Γ : Context}
       {α β γ rowState : Type}
       {views : Nat}
-      [keyed : Keyed β]
+      [hasUuid : HasUuid β]
       (path : Path α (List β))
       (label : Computation Γ α String)
       (row : PresentationNode [] (Context.row β Γ) β rowState γ views)
