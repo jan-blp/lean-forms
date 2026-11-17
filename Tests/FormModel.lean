@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.Derive
+public import Forms.Model.Item
 public import Forms.Model.Supply
 meta import Forms.Model.Path.Theorems
 
@@ -401,8 +402,18 @@ inductive Recursive where
 deriving instance FormModel for Recursive
 
 structure Container where
-  values : List String
+  values : List (Item String)
   deriving FormModel
+
+structure PlainList where
+  values : List String
+
+/--
+error: deriving FormModel for `Tests.FormModel.PlainList`: validation: Validation List
+  String is missing: declare its constraint rules before deriving Tests.FormModel.PlainList
+-/
+#guard_msgs in
+deriving instance FormModel for PlainList
 
 structure OptionalField where
   value : Option String

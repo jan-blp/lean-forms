@@ -306,33 +306,6 @@ instance : Validation Uuid := ⟨fun value => .ok ⟨value, rfl⟩⟩
 @[reducible] instance {α : Type} [FormModel α] : FormModel (List α) :=
   ⟨List (Raw α), List.map FormModel.erase⟩
 
-/-- Scalars whose raw values are always valid; lists of them need no item ids. -/
-class Unconstrained (α : Type) [FormModel α] where
-  validated : (raw : Raw α) → Validated α raw
-
-instance : Unconstrained String where
-  validated value := ⟨value, rfl⟩
-instance : Unconstrained Bool where
-  validated value := ⟨value, rfl⟩
-instance : Unconstrained Nat where
-  validated value := ⟨value, rfl⟩
-instance : Unconstrained Int where
-  validated value := ⟨value, rfl⟩
-instance : Unconstrained Int32 where
-  validated value := ⟨value, rfl⟩
-instance : Unconstrained Int64 where
-  validated value := ⟨value, rfl⟩
-instance : Unconstrained Decimal where
-  validated value := ⟨value, rfl⟩
-instance : Unconstrained Std.Time.PlainDate where
-  validated value := ⟨value, rfl⟩
-instance : Unconstrained Uuid where
-  validated value := ⟨value, rfl⟩
-
-instance {α : Type} [FormModel α] [Unconstrained α] : Validation (List α) where
-  validate raw := .ok ⟨raw.map fun item => (Unconstrained.validated item).val, by
-    simp [FormModel.erase, Function.comp_def, (Unconstrained.validated _).property]⟩
-
 def duplicateIdsMessage : String := "Two items share an id."
 
 def duplicateIds {β : Type} [HasUuid β] (items : List β) : Bool :=
