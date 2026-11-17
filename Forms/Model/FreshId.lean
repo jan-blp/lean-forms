@@ -121,15 +121,26 @@ def Supply.word (supply : Supply) : Supply.Word :=
       third := third ^^^ (supply.second <<< 17)
       fourth := rotateLeft fourth 45 } }
 
-def Supply.nibble (word : UInt64) (index : Nat) : Fin 16 :=
-  Fin.ofNat 16 ((word >>> (4 * (15 - index)).toUInt64) &&& 15).toNat
+/-- The first outputs of the reference implementation, seeded with `1, 2, 3, 4`. -/
+theorem Supply.word_reference :
+    let first := Supply.word { first := 1, second := 2, third := 3, fourth := 4 }
+    let second := first.supply.word
+    let third := second.supply.word
+    let fourth := third.supply.word
+    [first.value, second.value, third.value, fourth.value] =
+      [11520, 0, 1509978240, 1215971899390074240] := by
+  decide
+
+def Supply.nibble (word : UInt64) (index : Fin 16) : Fin 16 :=
+  Fin.ofNat 16 ((word >>> (4 * (15 - index.val)).toUInt64) &&& 15).toNat
 
 /-- A random version 4 UUID. -/
 def Supply.next (supply : Supply) : Supply.Drawn :=
   let high := supply.word
   let low := high.supply.word
   let raw (index : Fin 32) : Fin 16 :=
-    if index.val < 16 then nibble high.value index.val else nibble low.value (index.val - 16)
+    if early : index.val < 16 then nibble high.value ⟨index.val, early⟩
+    else nibble low.value ⟨index.val - 16, by omega⟩
   let digit (index : Fin 32) : Fin 16 :=
     if index.val = 12 then 4
     else if index.val = 16 then 8 + raw index % 4
@@ -156,10 +167,5 @@ def Supply.ofSeed? (seed : String) : Option Supply := do
     second := wordOf ((digits.drop 16).take 16)
     third := wordOf ((digits.drop 32).take 16)
     fourth := wordOf (digits.drop 48) }
-
-def Supply.seedOf (bytes : ByteArray) : String :=
-  String.join (bytes.toList.map fun byte =>
-    String.ofList [Uuid.hexDigit (Fin.ofNat 16 (byte.toNat / 16)),
-      Uuid.hexDigit (Fin.ofNat 16 byte.toNat)])
 
 end Forms.Model

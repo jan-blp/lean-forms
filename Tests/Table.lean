@@ -107,7 +107,6 @@ def run : IO Unit := do
   let seed := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
   check "SeedsAreSixtyFourHexDigits"
     ((Supply.ofSeed? seed).isSome && (Supply.ofSeed? (seed.drop 2).toString).isNone &&
-      (Supply.ofSeed? (String.ofList (List.replicate 64 '0'))).isNone &&
-      (Supply.ofSeed? (Supply.seedOf (ByteArray.mk (Array.replicate 32 7)))).isSome)
+      (Supply.ofSeed? (String.ofList (List.replicate 64 '0'))).isNone)
 
 end Tests.Table
