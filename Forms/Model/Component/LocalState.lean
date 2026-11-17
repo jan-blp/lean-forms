@@ -21,7 +21,7 @@ def ComponentNode.initialState
   | .issues => ()
   | .withAvailability _ body => body.initialState
   | .select (decidableEq := _) (key := _) .. => ()
-  | .collection (hasUuid := _) .. => []
+  | .collection (hasUuid := _) .. => {}
   | .zoom? _ body => body.initialState
   | .zoom _ body => body.initialState
   | .load (inst := _inst) (body := body) .. => ⟨.loading, (body .loading).initialState⟩
