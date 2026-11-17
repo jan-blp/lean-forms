@@ -22,6 +22,7 @@ private def start
   {model β : Type}
   [FormModel model]
   [Validation model]
+  [Reports model]
   (component : Component [] (Raw model) β)
   (value : Raw model)
   : ModelForm.State component :=
@@ -43,6 +44,7 @@ private def press
   {model β : Type}
   [FormModel model]
   [Validation model]
+  [Reports model]
   {component : Component [] (Raw model) β}
   (state : ModelForm.State component)
   (label : String)

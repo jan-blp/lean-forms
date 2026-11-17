@@ -183,6 +183,15 @@ structure Error {α : Type} (value : α) where
   message : String
   targets : Targets α value
 
+def Targets.mapLocations
+  {α β : Type}
+  {a : α}
+  {b : β}
+  (move : Location a → Location b)
+  : Targets α a → Targets β b
+  | .global => .locations (move .self)
+  | .locations first rest => .locations (move first) (rest.map move)
+
 def Error.mapLocations
   {α β : Type}
   {value : α}
@@ -192,9 +201,7 @@ def Error.mapLocations
   : Error outer where
   kind := error.kind
   message := error.message
-  targets := match error.targets with
-    | .global => .locations (step .self)
-    | .locations first rest => .locations (step first) (rest.map step)
+  targets := error.targets.mapLocations step
 
 def Error.lift
   {α β : Type}

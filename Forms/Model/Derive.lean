@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.Basic
+public import Forms.Model.Report
 public meta import Lean.Elab.Deriving.Basic
 public meta import Lean.Elab.Command
 public meta import Lean.Elab.Term
@@ -10,6 +11,10 @@ public meta import Lean.PrettyPrinter.Delaborator
 public meta section
 namespace Forms.Model.Deriving
 open Lean Meta Elab Command
+
+initialize reportRuleAttribute : TagAttribute ←
+  registerTagAttribute `report_rule
+    "Marks a model with its own `ReportRule`; its derived `Reports` instance requires the rule."
 
 private abbrev TermSyntax := TSyntax `term
 private abbrev Alternative := TSyntax ``Parser.Term.matchAltExpr
@@ -95,7 +100,8 @@ private def inspect (name : Name) : MetaM (Bool × Array Constructor) := do
           let some fn := decl.type.getAppFn.constName?
             | throwError "unsupported field type: {decl.type}"
           unless [``String, ``Bool, ``Nat].contains fn do
-            unless decl.type.getAppArgs.isEmpty || [``List, ``Subtype, ``Option].contains fn do
+            let formers := [``List, ``Subtype, ``Option, ``ReadOnly]
+            unless decl.type.getAppArgs.isEmpty || formers.contains fn do
               throwError "unsupported field type: {decl.type}"
             unless (← synthInstance? (mkApp (mkConst ``FormModel) decl.type)).isSome do
               throwError "field type must derive FormModel first: {decl.type}"
@@ -277,6 +283,15 @@ private def ModelInfo.liftError
   if model.record then return error
   let constructor := global (model.name ++ `Constructor ++ Name.mkSimple ctor.name.getString!)
   `(Forms.Model.Error.inConstructor (α := $(global model.raw)) $constructor $error)
+
+private def ModelInfo.liftReport
+  (model : ModelInfo)
+  (ctor : Constructor)
+  (report : TermSyntax)
+  : CommandElabM TermSyntax := do
+  if model.record then return report
+  let constructor := global (model.name ++ `Constructor ++ Name.mkSimple ctor.name.getString!)
+  `(Forms.Model.Report.inConstructor (α := $(global model.raw)) $constructor $report)
 
 private def emitShapes (model : ModelInfo) : CommandElabM Unit := do
   for ctor in model.constructors do emitting m!"constructor `{ctor.name}`" do
@@ -556,6 +571,56 @@ private def emitValidation (model : ModelInfo) : CommandElabM Unit := do
   emit (← `(command| @[expose] instance $(global (model.name ++ `validation)):ident $params:instBinder* :
     Forms.Model.Validation $name := ⟨$validate⟩))
 
+/-- The reports of `ctor`'s fields in `payload`, each lifted to where it sits. -/
+private def reportsBranch
+  (model : ModelInfo)
+  (ctor : Constructor)
+  (payload : TermSyntax)
+  : CommandElabM TermSyntax := do
+  let parts ← ctor.data.mapM fun field => do
+    let report ← fresh `report
+    let field' := global (model.localNS ctor ++ `Field ++ field.name)
+    let lifted ← model.liftReport ctor
+      (← `(Forms.Model.Report.lift (value := $payload) $field' $report))
+    `((Forms.Model.Reports.reports (model := $(← fieldType ctor field))
+        ($(global (model.payload ctor ++ field.name)) $payload)).map fun $report:ident => $lifted)
+  parts.foldlM (init := ← `([])) fun reports part => `($reports ++ $part)
+
+private def emitReports (model : ModelInfo) : CommandElabM Unit := do
+  for ctor in model.constructors do
+    for field in ctor.data do
+      let missing ← liftTermElabM do
+        let reports ← mkAppOptM ``Forms.Model.Reports #[some field.type, none]
+        return (← synthInstance? reports).isNone
+      if missing then
+        throwError "Reports {field.type} is missing: declare its report rule before deriving \
+          {model.name}"
+  let value ← fresh `raw
+  let parts ← match model.record, model.constructors with
+    | true, #[ctor] => reportsBranch model ctor value
+    | _, constructors => do
+      let alternatives ← constructors.mapM fun ctor => do
+        let payload : TermSyntax ← if ctor.data.isEmpty
+          then pure (global (model.payload ctor ++ `mk))
+          else fresh `payload
+        alternative #[← model.wrap ctor payload] (← reportsBranch model ctor payload)
+      matchOn #[value] alternatives
+  let name := global model.name
+  let reporting := global (model.name ++ `reporting)
+  let raw := global model.raw
+  -- A separate definition, so parents call it instead of inlining the instance's body.
+  let collect ← fresh `collectReports
+  let result ← `(List (Forms.Model.Report $value))
+  if reportRuleAttribute.hasTag (← getEnv) model.name then
+    emit (← `(command| @[expose] def $collect:ident [Forms.Model.ReportRule $name]
+      ($value:ident : $raw) : $result :=
+      Forms.Model.ReportRule.reports (model := $name) $value ++ $parts))
+    emit (← `(command| instance $reporting:ident [Forms.Model.ReportRule $name] :
+      Forms.Model.Reports $name := ⟨$collect⟩))
+  else
+    emit (← `(command| @[expose] def $collect:ident ($value:ident : $raw) : $result := $parts))
+    emit (← `(command| instance $reporting:ident : Forms.Model.Reports $name := ⟨$collect⟩))
+
 private def deriveOne (name : Name) : CommandElabM Unit := do
   let saved ← get
   let generate : CommandElabM Unit :=
@@ -570,6 +635,7 @@ private def deriveOne (name : Name) : CommandElabM Unit := do
         emitting "always valid" (emitAlwaysValid model)
         emitting "constraints" (emitConstraints model)
         emitting "validation" (emitValidation model)
+        emitting "reports" (emitReports model)
       catch error =>
         let message ← addMessageContext error.toMessageData
         throwError "deriving FormModel for `{privateToUserName name}`: {message}"

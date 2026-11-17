@@ -30,11 +30,20 @@ def editor
   { key := .edit location, target, label, disabled, location, messages
     input := editorInput widget value }
 
+def _root_.Forms.Model.Targets.erase
+  {α : Type}
+  {value : α}
+  : Model.Targets α value → Diagnostic.Targets
+  | .global => .global
+  | .locations first rest => .locations first.erase (rest.map (·.erase))
+
 def error {α : Type} {value : α} (error : Model.Error value) : Diagnostic where
   message := error.message
-  targets := match error.targets with
-    | .global => .global
-    | .locations first rest => .locations first.erase (rest.map (·.erase))
+  targets := error.targets.erase
+
+def report {α : Type} {value : α} (report : Model.Report value) : Diagnostic where
+  message := report.message
+  targets := report.targets.erase
 
 def button
   (key : ControlKey)

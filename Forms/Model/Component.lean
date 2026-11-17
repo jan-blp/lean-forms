@@ -2,6 +2,7 @@ module
 
 public import Forms.Model.RowSelection
 public import Forms.Model.Item
+public import Forms.Model.Report
 public import Forms.Model.Component.Rename
 
 @[expose] public section

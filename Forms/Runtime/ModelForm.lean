@@ -36,6 +36,7 @@ structure State {Γ : Model.Context} {α β : Type} (form : Model.Component Γ �
   serverFeedback : Option Feedback.ServerError
   outbox : List Effect
   validationDiagnostics : List Model.Diagnostic
+  reportDiagnostics : List Model.Diagnostic
   supply : Model.Supply
   draftDiagnostics : List DraftDiagnostic := []
 
@@ -54,11 +55,20 @@ def validationErrors
   : List Model.Diagnostic :=
   (Model.errors (Model.Validation.validate (model := model) value)).map ModelView.error
 
+def reports
+  {model : Type}
+  [FormModel model]
+  [Model.Reports model]
+  (value : Model.Raw model)
+  : List Model.Diagnostic :=
+  (Model.Reports.reports (model := model) value).map ModelView.report
+
 def openState
   {Γ : Model.Context}
   {model β : Type}
   [FormModel model]
   [Model.Validation model]
+  [Model.Reports model]
   (form : Model.Component Γ (Model.Raw model) β)
   (value : Model.Raw model)
   (env : Model.Env Γ)
@@ -66,14 +76,16 @@ def openState
   (cache : Model.HttpRequest.Cache := {})
   : State form :=
   let validationDiagnostics := validationErrors (model := model) value
+  let reportDiagnostics := reports (model := model) value
   { evaluation := ModelView.evaluate form value cache env form.initialState
-      validationDiagnostics
+      (validationDiagnostics ++ reportDiagnostics)
     initial := value
     initialEnv := env
     ui := .initial
     serverFeedback := none
     outbox := []
     validationDiagnostics
+    reportDiagnostics
     supply }
 
 def refresh
@@ -83,7 +95,8 @@ def refresh
   (state : State form)
   : State form :=
   let diagnostics := state.draftDiagnostics.map (·.diagnostic) ++
-    (state.serverFeedback.map (·.errors)).getD state.validationDiagnostics
+    (state.serverFeedback.map (·.errors)).getD state.validationDiagnostics ++
+    state.reportDiagnostics
   if diagnostics == state.evaluation.diagnostics then state else
     { state with
       evaluation := ModelView.evaluate form state.value state.cache state.env state.locals
@@ -112,6 +125,7 @@ def restart
   {model β : Type}
   [FormModel model]
   [Model.Validation model]
+  [Model.Reports model]
   {form : Model.Component Γ (Model.Raw model) β}
   (state : State form)
   : State form :=
@@ -204,18 +218,22 @@ def applyUpdate
   {model β : Type}
   [FormModel model]
   [Model.Validation model]
+  [Model.Reports model]
   (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
   (updated : Model.ComponentUpdate Γ (Model.Raw model) form.LocalState)
   : State form :=
   let validationDiagnostics := validationErrors (model := model) updated.value
-  let diagnostics := state.draftDiagnostics.map (·.diagnostic) ++ validationDiagnostics
+  let reportDiagnostics := reports (model := model) updated.value
+  let diagnostics := state.draftDiagnostics.map (·.diagnostic) ++ validationDiagnostics ++
+    reportDiagnostics
   let evaluation := ModelView.evaluate form updated.value state.cache updated.state updated.locals
     diagnostics
   let focus := updated.visit.bind (evaluation.view.resolve ·.locations)
   { state with
     evaluation
     validationDiagnostics
+    reportDiagnostics
     serverFeedback := none
     outbox := state.outbox ++ focus.toList.map .focus
     ui := { state.ui with notice := .info "", resultVisible := false } }
@@ -225,6 +243,7 @@ def apply
   {model β : Type}
   [FormModel model]
   [Model.Validation model]
+  [Model.Reports model]
   (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
   (key : ControlKey)
@@ -263,6 +282,7 @@ def event {Γ : Model.Context}
   {model β : Type}
   [FormModel model]
   [Model.Validation model]
+  [Model.Reports model]
   (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
   : Event → Except String (State form) := fun event => do
@@ -328,6 +348,7 @@ def execute {Γ : Model.Context}
   {model β : Type}
   [FormModel model]
   [Model.Validation model]
+  [Model.Reports model]
   (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
   (input : Event)
