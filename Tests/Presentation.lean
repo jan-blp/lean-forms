@@ -142,12 +142,14 @@ def run : IO Unit := do
     (duplicated.view.controls.length == edited.view.controls.length)
   let some reviewed := initial[1]? | throw (IO.userError "Missing second item")
   let errors : List Diagnostic := [
-    { message := "Review this item", targets := .locations [.item reviewed.id, .field "value"] [] }]
+    { kind := .error
+      message := "Review this item"
+      targets := .locations [.item reviewed.id, .field "value"] [] }]
   let feedback := (regroupedForm.evaluate edited.value Env.nil {} edited.locals errors).view
   let some described := (feedback.controls.filter (·.label == "Description"))[1]?
     | throw (IO.userError "Missing described control")
   check "PresentationValidationFollowsTheOwner"
-    (described.messages == ["Review this item"] && described.target == field.target)
+    (described.errors == ["Review this item"] && described.target == field.target)
 
   let tabs := sharedTabs.evaluate 0 Env.nil
   check "PresentationTabsOwnAllPanes" (texts "Shared count" tabs.view == ["0"])

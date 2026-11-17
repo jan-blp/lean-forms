@@ -39,13 +39,13 @@ example : (ModelForm.reports (model := Payments) nested).map (·.targets) = [
 
 private def label : String := "Expense Payment Method"
 
-private def messages (state : ModelForm.State PaymentMethod.form) : List String :=
+private def messages (state : ModelForm.State PaymentMethod.form) : List Message :=
   ((state.evaluation.view.controls.find? (·.label == label)).map (·.messages)).getD []
 
 def run : IO Unit := do
   let opened := ModelForm.openState (model := PaymentMethod) (supply := supply) PaymentMethod.form
     PaymentMethod.initial Env.nil
-  let failing := ["The payment method does not match the receipt."]
+  let failing := [{ kind := .report, text := "The payment method does not match the receipt." }]
   check "ReportsShowFailingChecksOnTheirTarget" (messages opened == failing)
   let some control := opened.evaluation.view.controls.find? (·.label == label)
     | throw (IO.userError s!"Missing control: {label}")

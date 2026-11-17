@@ -14,6 +14,8 @@
   --disabled-text: #bbb;
   --disabled-background: #f2f2f2;
   --error: #d11616;
+  /* web3 status.warning */
+  --warning: #ff6e0d;
   --space-xs: 8px;
   --space-s: 12px;
   --space-m: 16px;
@@ -79,7 +81,7 @@ input:hover:not(:disabled), select:hover:not(:disabled) { border-color: var(--pr
 label:has(> input[type="checkbox"]) { display: flex; flex-direction: row-reverse; justify-content: flex-end; align-items: center; gap: var(--space-xs); }
 .choice { display: flex; flex-wrap: wrap; gap: var(--space-xs) var(--space-m); margin: var(--space-m) 0; padding: 0; border: 0; }
 .choice > legend { flex-basis: 100%; }
-.choice > .validation-error { flex-basis: 100%; }
+.choice > .feedback { flex-basis: 100%; }
 label:has(> input[type="radio"]) { display: flex; align-items: center; gap: var(--space-xs); }
 input[type="radio"] { width: 16px; height: 16px; min-height: 0; margin: 0; accent-color: var(--primary); }
 input[type="checkbox"] { flex-shrink: 0; display: inline-block; width: 16px; height: 16px; min-height: 0; margin: 0; vertical-align: middle; accent-color: var(--primary); }
@@ -120,7 +122,9 @@ caption { text-align: left; font-size: 16px; font-weight: 500; padding-bottom: v
 
 .empty { color: var(--text-secondary); margin: var(--space-m) 0; }
 
-.validation-error { color: var(--error); white-space: pre-line; margin: 8px 0 0; }
-.validation-error > p { margin: 0; }
-.editor .validation-error { flex-basis: 100%; }
+.feedback { white-space: pre-line; margin: 8px 0 0; }
+.feedback > p { margin: 0; }
+.validation-error { color: var(--error); }
+.report { color: var(--warning); }
+.editor .feedback { flex-basis: 100%; }
 [aria-invalid="true"] { border-color: var(--error); }

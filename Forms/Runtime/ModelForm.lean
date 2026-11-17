@@ -300,7 +300,8 @@ def event {Γ : Model.Context}
           | none => state.draftDiagnostics
           | some control =>
             { control := key
-              diagnostic := { message, targets := .locations control.location [] } } ::
+              diagnostic :=
+                { kind := .error, message, targets := .locations control.location [] } } ::
               state.draftDiagnostics.filter (·.control != key)
         | .stale _ => pure state.draftDiagnostics
       pure (refresh form { state with
@@ -315,7 +316,8 @@ def event {Γ : Model.Context}
       | none => diagnostics
       | some message =>
         { control := key
-          diagnostic := { message, targets := .locations control.location [] } } :: diagnostics
+          diagnostic := { kind := .error, message, targets := .locations control.location [] } } ::
+          diagnostics
     pure (refresh form { state with draftDiagnostics := diagnostics })
   | .submit => pure (submit state)
   | .reset => pure (if state.ui.pending then state else

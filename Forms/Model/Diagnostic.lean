@@ -8,6 +8,12 @@ namespace Forms.Model
 
 namespace Diagnostic
 
+inductive Kind where
+  | error
+  /-- Never blocks submit, such as a failing server check. -/
+  | report
+  deriving BEq, DecidableEq
+
 inductive Targets where
   | global
   | locations (first : ErasedLocation) (rest : List ErasedLocation)
@@ -16,9 +22,19 @@ inductive Targets where
 end Diagnostic
 
 structure Diagnostic where
+  kind : Diagnostic.Kind
   message : String
   targets : Diagnostic.Targets
   deriving BEq, DecidableEq
+
+/-- A diagnostic's message as shown at one of its locations. -/
+structure Message where
+  kind : Diagnostic.Kind
+  text : String
+  deriving BEq, DecidableEq
+
+def Message.texts (kind : Diagnostic.Kind) (messages : List Message) : List String :=
+  (messages.filter (·.kind == kind)).map (·.text)
 
 structure Destination where
   locations : List ErasedLocation
@@ -52,11 +68,12 @@ def Diagnostic.summary (diagnostics : List Diagnostic) : String :=
 /-- Each location's distinct messages, in diagnostic order. -/
 def Diagnostic.messageIndex
   (diagnostics : List Diagnostic)
-  : Std.HashMap ErasedLocation (List String) :=
+  : Std.HashMap ErasedLocation (List Message) :=
   diagnostics.foldl (init := {}) fun index diagnostic =>
+    let message := { kind := diagnostic.kind, text := diagnostic.message }
     diagnostic.locations.foldl (init := index) fun index location =>
       let messages := index.getD location []
-      if messages.contains diagnostic.message then index
-      else index.insert location (messages ++ [diagnostic.message])
+      if messages.contains message then index
+      else index.insert location (messages ++ [message])
 
 end Forms.Model

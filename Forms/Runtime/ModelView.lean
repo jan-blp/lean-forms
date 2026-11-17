@@ -25,7 +25,7 @@ def editor
   (location : ErasedLocation)
   (label : String)
   (disabled : Bool)
-  (messages : List String)
+  (messages : List Message)
   : Display.Control :=
   { key := .edit location, target, label, disabled, location, messages
     input := editorInput widget value }
@@ -38,10 +38,12 @@ def _root_.Forms.Model.Targets.erase
   | .locations first rest => .locations first.erase (rest.map (·.erase))
 
 def error {α : Type} {value : α} (error : Model.Error value) : Diagnostic where
+  kind := .error
   message := error.message
   targets := error.targets.erase
 
 def report {α : Type} {value : α} (report : Model.Report value) : Diagnostic where
+  kind := .report
   message := report.message
   targets := report.targets.erase
 
@@ -90,7 +92,7 @@ Build with `Ambient.of`, which derives `messages` from `diagnostics`. -/
 structure Ambient where
   cache : HttpRequest.Cache
   diagnostics : List Diagnostic
-  messages : Std.HashMap ErasedLocation (List String)
+  messages : Std.HashMap ErasedLocation (List Message)
 
 def Ambient.of
   (cache : HttpRequest.Cache)
@@ -98,7 +100,7 @@ def Ambient.of
   : Ambient :=
   { cache, diagnostics, messages := Diagnostic.messageIndex diagnostics }
 
-def Ambient.messagesAt (ambient : Ambient) (location : ErasedLocation) : List String :=
+def Ambient.messagesAt (ambient : Ambient) (location : ErasedLocation) : List Message :=
   ambient.messages.getD location []
 
 structure Evaluated (Γ : Context) (α state β : Type)
@@ -212,7 +214,7 @@ def renderCollection
   (label : String)
   (rowViews : List (Vector Display.View views))
   (content : List Display.View)
-  (messages : List String)
+  (messages : List Message)
   : Display.View :=
   match display with
   | .list =>

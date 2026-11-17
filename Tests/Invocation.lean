@@ -94,12 +94,12 @@ def run : IO Unit := do
     { Person.initial with age := 150 } Env.nil
   let initialSnapshot := ModelForm.snapshot Person.form initiallyInvalid
   check "ValidationVisibleOnOpen"
-    ((initialSnapshot.controls.find? (·.label == "Age")).map (·.messages) == some ["Age must be at most 120."] &&
+    ((initialSnapshot.controls.find? (·.label == "Age")).map (·.errors) == some ["Age must be at most 120."] &&
       initiallyInvalid.outbox.isEmpty)
   let edited ← IO.ofExcept (ModelForm.execute (model := Person) Person.form opened (.apply age (some (.text "150"))))
   let editedSnapshot := ModelForm.snapshot Person.form edited
   check "ValidationVisibleBeforeSubmit"
-    ((editedSnapshot.controls.find? (·.label == "Age")).map (·.messages) == some ["Age must be at most 120."] &&
+    ((editedSnapshot.controls.find? (·.label == "Age")).map (·.errors) == some ["Age must be at most 120."] &&
       edited.outbox.isEmpty && !edited.ui.pending)
   let corrected ← IO.ofExcept (ModelForm.execute (model := Person) Person.form initiallyInvalid (.apply age (some (.text "21"))))
   let correctedSnapshot := ModelForm.snapshot Person.form corrected
@@ -107,7 +107,7 @@ def run : IO Unit := do
     correctedSnapshot.errors.isEmpty
   let reset ← IO.ofExcept (ModelForm.execute (model := Person) Person.form corrected .reset)
   check "ResetKeepsInitialValidationVisible"
-    (((ModelForm.snapshot Person.form reset).controls.find? (·.label == "Age")).map (·.messages)
+    (((ModelForm.snapshot Person.form reset).controls.find? (·.label == "Age")).map (·.errors)
       == some ["Age must be at most 120."])
   check "EventInputRejects"
     ((ModelForm.event (model := Person) Person.form opened (.apply age (some (.text "abc")))).toOption.bind

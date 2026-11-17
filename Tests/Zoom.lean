@@ -88,7 +88,7 @@ def run : IO Unit := do
   let invalid := ModelForm.openState (model := Shipping) (supply := supply) phone express Env.nil
   let snapshot := ModelForm.snapshot phone invalid
   check "ZoomMatchesValidationMessages"
-    (snapshot.controls.head?.map (·.messages) == some ["Enter a phone number for the courier."])
+    (snapshot.controls.head?.map (·.errors) == some ["Enter a phone number for the courier."])
   -- A selected-item zoom works by itself, with no table in the component tree.
   let details : Component [⟨.writable, RowSelection⟩] ExpenseReport.Raw := Component.void <| .zoom?
     { inputs := inputs[.ui (Ref.here : Var [⟨.writable, RowSelection⟩] RowSelection)]
@@ -106,7 +106,7 @@ def run : IO Unit := do
   let invalidState := ModelForm.openState (model := ExpenseReport) (supply := supply) details invalidValue selectedUi
   let invalidDetails := ModelForm.snapshot details invalidState
   check "ZoomListValidationLocation"
-    (invalidDetails.controls.head?.map (·.messages) == some ["Describe the expense."] &&
+    (invalidDetails.controls.head?.map (·.errors) == some ["Describe the expense."] &&
       detail.location == [.field "expenses", .item secondId, .field "description"])
   let moved : Component [⟨.writable, RowSelection⟩] ExpenseReport.Raw := .group "Elsewhere" [
     .computed "Summary" (.const "Summary"), .group "Details" [details]]
