@@ -11,6 +11,7 @@ public import Forms.ExampleForms.Scalars
 public import Forms.ExampleForms.Selections
 public import Forms.ExampleForms.Navigation
 public import Forms.ExampleForms.PaymentMethod
+public import Forms.ExampleForms.Receipts
 public import Forms.Runtime.FormDefinition
 public import Std.Data.HashMap
 
@@ -20,6 +21,10 @@ open Forms.Runtime Forms.Model
 
 def paymentMethod : RegisteredForm where
   definition := .ofModel PaymentMethod PaymentMethod.form PaymentMethod.initial
+  submitUrl := "/api/submit"
+
+def receipts : RegisteredForm where
+  definition := .ofModel Receipts Receipts.form Receipts.initial
   submitUrl := "/api/submit"
 
 /-- The first is the default. -/
@@ -65,7 +70,8 @@ def forms : List (String × RegisteredForm) := [
   ("selections", {
     definition := .ofModel Preferences Preferences.form Preferences.initial
     submitUrl := "/api/submit" }),
-  ("payment-method", paymentMethod)]
+  ("payment-method", paymentMethod),
+  ("receipts", receipts)]
 
 def api : Model.HttpRequest → Option Lean.Json :=
   fun _ => none

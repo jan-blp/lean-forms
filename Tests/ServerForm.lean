@@ -2,14 +2,19 @@ module
 
 public import Forms.ExampleForms.Person
 public import Forms.Runtime.ServerForm
+public import Forms.ExampleForms.Receipts.Server
+public import Tests.FreshId
 
 public section
 namespace Tests.ServerForm
-open Lean Forms.Runtime Forms.ExampleForms
+open Lean Forms.Runtime Forms.ExampleForms Forms.Model
 
 private def check (name : String) (ok : Bool) : IO Unit := do
   unless ok do throw (IO.userError s!"FAIL {name}")
   IO.println s!"PASS {name}"
+
+private def duplicates (raw : Receipts.Raw) : List Bool :=
+  raw.receipts.map (·.duplicate.value)
 
 private def submission (fingerprint : String) (value : Person.Raw) : Json :=
   toJson ({ form := "person", fingerprint, value } : Submission Person.Raw)
@@ -32,5 +37,14 @@ def run : IO Unit := do
   check "SubmitAnswersWithTheStoredDocument"
     ((stored.toOption.bind fun saved => (saved.getObjValAs? Person.Raw "value").toOption).map
       (·.name) == some "Stored" && (← stores.get) == 1)
+
+  let claims ← IO.mkRef {}
+  let first : Receipt.Raw := ⟨firstId, "R-1", ⟨false⟩⟩
+  let submitted ← Receipts.serverCheck claims ⟨[first]⟩
+  let resubmitted ← Receipts.serverCheck claims ⟨[first]⟩
+  let copied ← Receipts.serverCheck claims ⟨[first, { first with id := secondId }]⟩
+  check "DuplicateOnlyWhenAnotherReceiptClaimedTheNumber"
+    (duplicates submitted == [false] && duplicates resubmitted == [false] &&
+      duplicates copied == [false, true])
 
 end Tests.ServerForm
