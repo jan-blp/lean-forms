@@ -22,6 +22,7 @@ import Tests.Presentation
 import Tests.Rename
 import Tests.Navigation
 import Tests.Reports
+import Tests.ServerForm
 
 meta import Forms.Model.Computation.Theorems
 meta import Forms.Runtime.ModelView.Theorems
@@ -48,3 +49,4 @@ public def main : IO Unit := do
   Tests.Rename.run
   Tests.Navigation.run
   Tests.Reports.run
+  Tests.ServerForm.run

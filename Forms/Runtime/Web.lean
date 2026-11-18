@@ -12,7 +12,7 @@ namespace Forms.Runtime.Web
 open Std Http Async
 
 structure ComponentEndpoint where
-  submit : Lean.Json → Except Feedback.ServerError Lean.Json
+  submit : Lean.Json → ExceptT Feedback.ServerError IO Lean.Json
 
 inductive GetRoute where
   | index
@@ -156,9 +156,12 @@ def Application.submit
   match Lean.Json.parse body with
   | .error error => respond .badRequest (.json (requestErrorJson error))
   | .ok submission =>
-      match app.form.submit submission with
-      | .error error => respond .unprocessableEntity (.json (Lean.toJson error))
-      | .ok saved => respond .ok (.json saved)
+      match ← (app.form.submit submission).run.toBaseIO with
+      | .error error =>
+        IO.eprintln s!"Storing the submission failed: {error}"
+        respond .internalServerError (.text "The submission could not be stored.")
+      | .ok (.error error) => respond .unprocessableEntity (.json (Lean.toJson error))
+      | .ok (.ok saved) => respond .ok (.json saved)
 
 instance : Server.Handler Application where
   ResponseBody := Body.Full
