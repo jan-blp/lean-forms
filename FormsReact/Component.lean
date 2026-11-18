@@ -48,6 +48,7 @@ structure Checks where
   outdated : List String
   resolved : List String
   optional : List String
+  outdatedOptional : List String
   deriving ToJson, FromJson, BEq, DecidableEq, Repr
 
 /-- A text input whose draft React owns; `onCommit` receives the draft text.

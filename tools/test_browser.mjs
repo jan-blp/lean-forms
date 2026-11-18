@@ -465,6 +465,15 @@ try {
     [...document.querySelectorAll('label')].find(label => label.textContent === 'BLP credit card')
       .querySelector('input').click();
     await wait(() => marker().classList.contains('outdated'));
+    marker().click();
+    await tick();
+    const changed = [...document.getElementById(marker().getAttribute('popovertarget'))
+      .querySelectorAll('.checks-section')].find(section =>
+        section.querySelector('.checks-title').textContent.startsWith('Changed since the last check'));
+    check([...changed.querySelectorAll('.check')].some(item =>
+      item.textContent.includes('Attach the original receipt.') && item.querySelector('.tag')),
+      'An outdated optional check was not marked outdated and optional');
+    document.getElementById(marker().getAttribute('popovertarget')).hidePopover();
   `, evaluate => evaluate(`
     ${marker}
     await wait(() => marker().classList.contains('resolved'));

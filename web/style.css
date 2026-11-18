@@ -172,6 +172,7 @@ legend > .status-marker { display: inline-block; margin: 0 0 0 4px; vertical-ali
 .checks-section + .checks-section { margin-top: var(--space-s); }
 .checks-title { font-weight: 500; }
 .check { margin-top: var(--space-xs); padding-left: var(--space-m); text-indent: calc(-1 * var(--space-m)); }
+.check .tag { margin-left: var(--space-xs); padding: 0 6px; border-radius: var(--radius-rounded); background: var(--primary-tint); color: var(--primary-hover); font-size: 12px; }
 .check::before { content: "•"; display: inline-block; width: var(--space-m); text-indent: 0; }
 .editor .feedback { flex-basis: 100%; }
 [aria-invalid="true"] { border-color: var(--error); }

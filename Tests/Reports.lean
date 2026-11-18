@@ -81,7 +81,20 @@ example : FormsReact.Checks.of [
         unresolved := []
         outdated := []
         resolved := ["resolved"]
-        optional := ["optional"] } := by
+        optional := ["optional"]
+        outdatedOptional := [] } := by
+  decide
+
+example : FormsReact.Checks.of [
+    { kind := optional .unresolved true, text := "optional" },
+    { kind := mandatory .unresolved true, text := "mandatory" }] =
+    some
+      { tone := .outdated
+        unresolved := []
+        outdated := ["mandatory"]
+        resolved := []
+        optional := []
+        outdatedOptional := ["optional"] } := by
   decide
 
 example : (FormsReact.Checks.of [{ kind := optional .unresolved false, text := "optional" }]).map

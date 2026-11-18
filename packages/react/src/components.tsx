@@ -31,7 +31,7 @@ const summaries: Record<FormsReact.Tone, (checks: FormsReact.Checks) => string> 
   attention: ({ unresolved }) => `${unresolved.length} open`,
   outdated: () => 'changed since the last check',
   resolved: () => 'all resolved',
-  optional: ({ optional }) => `${optional.length} optional`,
+  optional: ({ optional, outdatedOptional }) => `${optional.length + outdatedOptional.length} optional`,
 };
 
 /** Only phrasing content, so it can sit in a legend. */
@@ -39,11 +39,13 @@ function StatusMarker({ checks }: { checks: FormsReact.Checks | null }) {
   const popover = useId();
   const marker = useRef<HTMLButtonElement>(null);
   if (checks === null) return null;
+  const items = (texts: string[], optional: boolean) => texts.map(text => ({ text, optional }));
   const sections = [
-    { title: 'Open', items: checks.unresolved },
-    { title: 'Changed since the last check. Submit to re-check.', items: checks.outdated },
-    { title: 'Resolved automatically', items: checks.resolved },
-    { title: 'Optional', items: checks.optional },
+    { title: 'Open', items: items(checks.unresolved, false) },
+    { title: 'Changed since the last check. Submit to re-check.',
+      items: [...items(checks.outdated, false), ...items(checks.outdatedOptional, true)] },
+    { title: 'Resolved automatically', items: items(checks.resolved, false) },
+    { title: 'Optional', items: items(checks.optional, false) },
   ].filter(section => section.items.length > 0);
   // Top-layer popovers aren't anchored; measure at the left edge, where it doesn't shrink.
   const place = (panel: HTMLElement) => {
@@ -61,8 +63,10 @@ function StatusMarker({ checks }: { checks: FormsReact.Checks | null }) {
         onToggle={event => { if (event.newState === 'open') place(event.currentTarget); }}>
         {sections.map(({ title, items }) => <span key={title} className="checks-section">
           <span className="checks-title">{title}</span>
-          <span role="list">{items.map((item, index) =>
-            <span key={index} role="listitem" className="check">{item}</span>)}</span>
+          <span role="list">{items.map(({ text, optional }, index) =>
+            <span key={index} role="listitem" className="check">
+              {text}{optional && <span className="tag">Optional</span>}
+            </span>)}</span>
         </span>)}
       </span>
     </>

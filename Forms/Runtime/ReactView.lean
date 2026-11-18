@@ -27,14 +27,22 @@ def _root_.FormsReact.Checks.of (messages : List Model.Message) : Option FormsRe
   let unresolved := mandatory fun kind => kind.state == .unresolved && !kind.outdated
   let outdated := mandatory (·.outdated)
   let resolved := mandatory fun kind => kind.state == .resolved && !kind.outdated
-  let optional := Model.Message.reports (·.requirement == .optional) messages
+  let optional (outdated : Bool) := Model.Message.reports
+    (fun kind => kind.requirement == .optional && kind.outdated == outdated) messages
   let tone : FormsReact.Tone :=
     if !unresolved.isEmpty then .attention
     else if !outdated.isEmpty then .outdated
     else if !resolved.isEmpty then .resolved
     else .optional
-  if unresolved.isEmpty && outdated.isEmpty && resolved.isEmpty && optional.isEmpty then none
-  else some { tone, unresolved, outdated, resolved, optional }
+  if unresolved.isEmpty && outdated.isEmpty && resolved.isEmpty && (optional false).isEmpty &&
+    (optional true).isEmpty then none
+  else some
+    { tone
+      unresolved
+      outdated
+      resolved
+      optional := optional false
+      outdatedOptional := optional true }
 
 theorem _root_.FormsReact.Checks.of_attention
   {messages : List Model.Message}
