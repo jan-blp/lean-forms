@@ -2,6 +2,7 @@ module
 
 public import Forms.Model.ErasedLocation
 public import Std.Data.HashMap
+public import Lean.Data.Json
 
 @[expose] public section
 namespace Forms.Model
@@ -12,7 +13,7 @@ inductive Kind where
   | error
   /-- Never blocks submit, such as a failing server check. -/
   | report
-  deriving BEq, DecidableEq
+  deriving BEq, DecidableEq, Lean.ToJson, Lean.FromJson
 
 inductive Targets where
   | global

@@ -24,35 +24,32 @@ def locationFromJson (json : Json) : Except String ErasedLocation := do
     | "item" => pure (.item (← step.getObjValAs? Uuid "id"))
     | _ => throw "Invalid location step"
 
-def errorToJson (error : Model.Diagnostic) : Json :=
-  let targets := match error.targets with
-    | .global => Json.mkObj [("kind", toJson "global")]
-    | .locations first rest => Json.mkObj [("kind", toJson "locations"),
-        ("locations", toJson ((first :: rest).map locationToJson))]
-  Json.mkObj [("message", toJson error.message), ("targets", targets)]
+def targetsToJson : Model.Diagnostic.Targets → Json
+  | .global => Json.mkObj [("kind", toJson "global")]
+  | .locations first rest => Json.mkObj [("kind", toJson "locations"),
+      ("locations", toJson ((first :: rest).map locationToJson))]
 
-def errorFromJson (json : Json) : Except String Model.Diagnostic := do
-  let message ← json.getObjValAs? String "message"
-  let targets ← json.getObjVal? "targets"
-  let targets ← match ← targets.getObjValAs? String "kind" with
-    | "global" => pure Model.Diagnostic.Targets.global
-    | "locations" => do
-      let locations ← (← (← targets.getObjVal? "locations").getArr?).toList.mapM locationFromJson
-      let first :: rest := locations | throw "Empty locations"
-      pure (.locations first rest)
-    | _ => throw "Invalid validation target"
-  pure { kind := .error, message, targets }
+def targetsFromJson (json : Json) : Except String Model.Diagnostic.Targets := do
+  match ← json.getObjValAs? String "kind" with
+  | "global" => pure .global
+  | "locations" => do
+    let locations ← (← (← json.getObjVal? "locations").getArr?).toList.mapM locationFromJson
+    let first :: rest := locations | throw "Empty locations"
+    pure (.locations first rest)
+  | _ => throw "Invalid validation target"
+
+instance : ToJson Model.Diagnostic.Targets := ⟨targetsToJson⟩
+instance : FromJson Model.Diagnostic.Targets := ⟨targetsFromJson⟩
+
+deriving instance ToJson, FromJson for ValidationError, ServerError
+
+def errorToJson (error : Model.Diagnostic) : Json :=
+  toJson ({ message := error.message, targets := error.targets } : ValidationError)
 
 /-- Decode once at the boundary; malformed responses never partially accept errors. -/
-def serverError (status : Nat) (body : String) : ServerError :=
-  let parsed : Except String ServerError := do
-    let error ← (← Json.parse body).getObjVal? "error"
-    let message ← error.getObjValAs? String "message"
-    if message.isEmpty then throw "Empty message"
-    match ← error.getObjValAs? String "kind" with
-    | "request" => pure { message }
-    | "validation" => pure { message, errors := ← (← (← error.getObjVal? "errors").getArr?).toList.mapM errorFromJson }
-    | _ => throw "Unknown error kind"
-  parsed.toOption.getD { message := s!"Submission failed (HTTP {status})." }
+def serverError? (body : String) : Option ServerError :=
+  match Json.parse body >>= fromJson? (α := ServerError) with
+  | .ok error => if error.message.isEmpty then none else some error
+  | .error _ => none
 
 end Forms.Runtime.FeedbackProtocol

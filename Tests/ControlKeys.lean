@@ -21,7 +21,7 @@ def run : IO Unit := do
   for (key, encoded) in examples do
     check "Control key wire encoding changed" (ControlKeyProtocol.toString key == encoded)
     check "Control key roundtrip failed" ((ControlKeyProtocol.fromString encoded).toOption == some key)
-    let event ← IO.ofExcept (ModelForm.Event.fromWire (.apply encoded (toJson "21")))
+    let event ← IO.ofExcept (ModelForm.Event.fromWire (α := Unit) (.apply encoded (toJson "21")))
     check "Event lost structured control key" (match event with
       | .apply decoded (some (.text "21")) => decoded == key
       | _ => false)
@@ -34,7 +34,8 @@ def run : IO Unit := do
       "[\"selectRow\",\"0\"]", "[\"press\",[0]]", "[\"press\",[-1],[]]",
       "[\"press\",[],[],0]"] do
     check "Malformed key accepted" (!(ControlKeyProtocol.fromString malformed).isOk)
-    check "Event accepted malformed key" (!(ModelForm.Event.fromWire (.apply malformed Json.null)).isOk)
+    check "Event accepted malformed key"
+      (!(ModelForm.Event.fromWire (α := Unit) (.apply malformed Json.null)).isOk)
   check "Malformed item id not reported as a UUID error"
     (match ControlKeyProtocol.fromString "[\"edit\",{\"item\":\"nope\"}]" with
       | .error message => (message.splitOn "UUID").length > 1

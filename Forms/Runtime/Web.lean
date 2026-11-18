@@ -11,7 +11,7 @@ namespace Forms.Runtime.Web
 open Std Http Async
 
 structure ComponentEndpoint where
-  submit : Lean.Json → Except Lean.Json Unit
+  submit : Lean.Json → Except Feedback.ServerError Lean.Json
 
 inductive GetRoute where
   | index
@@ -71,8 +71,7 @@ def ResponseBody.bytes : ResponseBody → ByteArray
   | .wasm content => content
 
 def requestErrorJson (message : String) : Lean.Json :=
-  Lean.Json.mkObj [("error", Lean.Json.mkObj [
-    ("kind", Lean.toJson "request"), ("message", Lean.toJson message)])]
+  Lean.toJson (Feedback.ServerError.invalidRequest message)
 
 def respond
   (logger : TrafficLog.Logger)
@@ -157,8 +156,8 @@ def Application.submit
   | .error error => respond .badRequest (.json (requestErrorJson error))
   | .ok submission =>
       match app.form.submit submission with
-      | .error error => respond .unprocessableEntity (.json (Lean.Json.mkObj [("error", error)]))
-      | .ok () => respond .noContent .empty
+      | .error error => respond .unprocessableEntity (.json (Lean.toJson error))
+      | .ok saved => respond .ok (.json saved)
 
 instance : Server.Handler Application where
   ResponseBody := Body.Full
@@ -217,7 +216,7 @@ def run
   let app : Application := {
     formStart := Lean.toJson (form.start name ExampleForms.formFingerprint)
     logger := ← TrafficLog.Logger.create
-    form := { submit := form.definition.verify name ExampleForms.formFingerprint }
+    form := { submit := form.submit name ExampleForms.formFingerprint }
     html := ← IO.FS.readFile "web/index.html"
     script := ← IO.FS.readFile "web/dist/app.js"
     wasmLoader := ← if ← System.FilePath.pathExists "web/dist/wasm/forms.mjs"

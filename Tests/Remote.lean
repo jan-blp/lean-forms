@@ -70,7 +70,7 @@ private def Lookup.form : Component [] Lookup.Raw :=
 
 private abbrev State := ModelForm.State Lookup.form
 
-private def execute (state : State) (input : ModelForm.Event) : IO State :=
+private def execute (state : State) (input : ModelForm.Event Lookup.Raw) : IO State :=
   IO.ofExcept (ModelForm.execute (model := Lookup) Lookup.form state input)
 
 private def snapshot (state : State) : ModelForm.Snapshot Lookup.Raw :=
@@ -165,9 +165,8 @@ def run : IO Unit := do
     | .fetch id _ => (fetchedRequest id).toOption == some (supplier "acme")
     | .submit _ => false
     | .focus _ => false)
-  let (opened, _) ← IO.ofExcept
-    ((FormDefinition.ofModel Lookup Lookup.form Lookup.initial).openState (toJson Lookup.initial)
-      supply)
+  let definition := FormDefinition.ofModel Lookup Lookup.form Lookup.initial (store := id)
+  let (opened, _) ← IO.ofExcept (definition.openState (toJson Lookup.initial) supply)
   let opened : State := opened
   check "RemoteOpenFetches" (fetches opened == [supplier "acme"])
   check "RemoteDetailsLoading" (control? opened "Purchase order").isNone

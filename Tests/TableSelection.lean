@@ -15,7 +15,10 @@ private abbrev form := ExpenseReport.focusForm
 private abbrev BrowserState := ModelForm.State form
 private def selection (state : BrowserState) : RowSelection := state.locals.value
 
-private def browse (state : BrowserState) (input : ModelForm.Event) : IO BrowserState :=
+private def browse
+  (state : BrowserState)
+  (input : ModelForm.Event ExpenseReport.Raw)
+  : IO BrowserState :=
   IO.ofExcept (ModelForm.execute (model := ExpenseReport) form state input)
 
 private def browserKey

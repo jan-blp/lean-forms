@@ -13,7 +13,7 @@ private def check (message : String) (ok : Bool) : IO Unit := do
 
 private abbrev State := ModelForm.State (ExpenseReport.form (Γ := []))
 
-private def execute (state : State) (input : ModelForm.Event) : IO State :=
+private def execute (state : State) (input : ModelForm.Event ExpenseReport.Raw) : IO State :=
   IO.ofExcept (ModelForm.execute (model := ExpenseReport) ExpenseReport.form state input)
 
 private def rendered (state : State) : ModelView.Rendered :=
@@ -100,7 +100,8 @@ def run : IO Unit := do
   check "TableRequestsEveryRow" (loading.requests {} opened.value Env.nil == [request 58, request 180])
   let duplicated : ExpenseReport.Raw := { ExpenseReport.initial with
     expenses := [⟨firstId, "Train to Bern", 58, false⟩, ⟨firstId, "Hotel", 180, true⟩] }
-  let definition := FormDefinition.ofModel ExpenseReport ExpenseReport.form ExpenseReport.initial
+  let definition :=
+    FormDefinition.ofModel ExpenseReport ExpenseReport.form ExpenseReport.initial (store := id)
   check "OpeningRejectsDuplicateItemIds"
     ((match definition.openState (toJson duplicated) supply with
       | .error message => message == duplicateIdsMessage [firstId]

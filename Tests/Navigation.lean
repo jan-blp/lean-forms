@@ -117,12 +117,8 @@ def run : IO Unit := do
       (fun control => control.label == "Go to address problem" && control.disabled))
   let pending ← IO.ofExcept (ModelForm.execute (model := Person) form edited .submit)
   let rejected ← IO.ofExcept (ModelForm.execute (model := Person) form pending
-    (.submitted (.rejected {
-      message := "Rejected"
-      errors := [{
-        kind := .error
-        message := "Server street"
-        targets := .locations street [] }] })))
+    (.submitted (.rejected
+      (.validation { message := "Server street", targets := .locations street [] } []))))
   check "ServerFeedbackRefreshesIssueOutputs"
     (rejected.evaluation.output.map (·.message) == ["Server street"] &&
       rejected.evaluation.view.controls.any
@@ -160,7 +156,7 @@ def run : IO Unit := do
   check "SavedDestinationsStayValid"
     (focuses later == [.edit name] && focuses fresh == [.edit name])
   let acknowledged ← IO.ofExcept
-    (ModelForm.execute (model := Person) remembered fresh (.submitted .accepted))
+    (ModelForm.execute (model := Person) remembered fresh (.submitted (.accepted fresh.value)))
   check "FocusIsAnEventEffect" (focuses acknowledged).isEmpty
 
   let report : ExpenseReport.Raw := { ExpenseReport.initial with

@@ -11,10 +11,11 @@ structure FormDefinition where
   State : Type
   Raw : Type
   [encode : ToJson Raw]
+  [decode : FromJson Raw]
   initial : Json
   openState (value : Json) (supply : Model.Supply) : Except String (State × ModelForm.Snapshot Raw)
-  execute : State → ModelForm.Event → Except String (State × ModelForm.Snapshot Raw)
-  verify (name fingerprint : String) (submission : Json) : Except Json Unit
+  execute : State → ModelForm.Event Raw → Except String (State × ModelForm.Snapshot Raw)
+  save : Raw → Except Feedback.ServerError (Saved Raw)
 
 /-- Checked first, so a stale client gets a reload hint instead of a decode error. -/
 def decodeSubmission
@@ -39,6 +40,7 @@ def FormDefinition.ofModel
   [FromJson (Model.Raw model)]
   (form : Model.Component [] (Model.Raw model) β)
   (initial : Model.Raw model)
+  (store : Model.Raw model → Model.Raw model)
   : FormDefinition where
   State := ModelForm.State form
   Raw := Model.Raw model
@@ -54,21 +56,33 @@ def FormDefinition.ofModel
   execute state input := do
     let state ← ModelForm.execute (model := model) form state input
     pure (state, ModelForm.snapshot form state)
-  verify name fingerprint json := do
-    let value ← (decodeSubmission (Model.Raw model) name fingerprint json).mapError fun message =>
-      Json.mkObj [("kind", toJson "request"), ("message", toJson message)]
+  save value :=
     match Model.Validation.validate (model := model) value with
-    | .ok _ => pure ()
+    | .ok _ => .ok { value := store value }
     | .error errors =>
-      let errors := errors.map ModelView.error
-      throw (.mkObj [
-        ("kind", toJson "validation"),
-        ("message", toJson (Model.Diagnostic.summary errors)),
-        ("errors", toJson (errors.map FeedbackProtocol.errorToJson))])
+      let errors := errors.map fun error =>
+        ({ message := error.message, targets := error.targets.erase } : Feedback.ValidationError)
+      match errors with
+      | first :: rest => .error (.validation first rest)
+      -- `Validation` may fail without errors.
+      | [] => .error (.invalidRequest "The submission is invalid.")
 
 structure RegisteredForm where
   definition : FormDefinition
   submitUrl : String
+
+/-- Decodes a submission to this form and answers with the stored document. -/
+def RegisteredForm.submit
+  (form : RegisteredForm)
+  (name fingerprint : String)
+  (submission : Json)
+  : Except Feedback.ServerError Json :=
+  letI := form.definition.encode
+  letI := form.definition.decode
+  do
+    let value ← (decodeSubmission form.definition.Raw name fingerprint submission).mapError
+      .invalidRequest
+    return toJson (← form.definition.save value)
 
 structure FormInstance where
   execute : Wire.Event → Except String (FormInstance × Wire.Snapshot)
@@ -91,6 +105,7 @@ partial def RegisteredForm.instance
   (name fingerprint : String)
   (state : form.definition.State)
   : FormInstance :=
+  letI := form.definition.decode
   .mk fun message => do
     let input ← ModelForm.Event.fromWire message
     let (state, snapshot) ← form.definition.execute state input
