@@ -109,6 +109,25 @@ def payment_method_session():
         assert [check['isFailing'] for check in checks] == [False], checks
 
 
+def receipts_session():
+    with serve('receipts') as (request, start, _):
+        value = start['value']
+        first = value['receipts'][0]
+        copy = {**first, 'id': '00000000-0000-4000-8000-000000000099'}
+        submission = {'form': 'receipts', 'fingerprint': start['fingerprint']}
+
+        def already_submitted(receipts):
+            value = {'receipts': receipts}
+            status, _, body = request('/api/submit', {**submission, 'value': value})
+            assert status == 200, (status, body)
+            stored = json.loads(body)['value']['receipts']
+            return [receipt['alreadySubmitted'] for receipt in stored]
+
+        assert already_submitted([first]) == [False]
+        assert already_submitted([first, copy]) == [False, False]
+        assert already_submitted([copy]) == [True]
+
+
 def expenses_session():
     with serve('expenses') as (request, start, _):
         initial = {'form': 'expenses', 'fingerprint': start['fingerprint'], 'value': start['value']}
@@ -311,7 +330,8 @@ session('person')
 order_session()
 expenses_session()
 payment_method_session()
+receipts_session()
 terminal_colors()
 terminal_colors(no_color=True)
 terminal_colors(term='dumb')
-print('PASS: HTTP traffic, person, order and expenses validation, saved payment method, request errors, terminal colors, NO_COLOR, and --open')
+print('PASS: HTTP traffic, person, order and expenses validation, saved payment method, duplicate receipts, request errors, terminal colors, NO_COLOR, and --open')
