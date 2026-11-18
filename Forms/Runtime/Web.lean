@@ -3,6 +3,7 @@ module
 public import Std.Http
 public import Forms.Runtime.TrafficLog
 public import Forms.ExampleForms.FormFingerprint
+public import Forms.Runtime.ServerForm
 public meta import Forms.Deriving.FinEnum
 
 @[expose] public section
@@ -205,7 +206,7 @@ def checkWasmFingerprint (binary : ByteArray) : IO Unit :=
 
 def run
   (name : String)
-  (form : RegisteredForm)
+  (form : ServerForm)
   (api : Model.HttpRequest → Option Lean.Json)
   (port : UInt16 := 8080)
   (openBrowser : Bool := false)
@@ -214,7 +215,7 @@ def run
     then some <$> IO.FS.readBinFile "web/dist/wasm/forms.wasm" else pure none
   if let some binary := wasmBinary then checkWasmFingerprint binary
   let app : Application := {
-    formStart := Lean.toJson (form.start name ExampleForms.formFingerprint)
+    formStart := Lean.toJson (form.form.start name ExampleForms.formFingerprint)
     logger := ← TrafficLog.Logger.create
     form := { submit := form.submit name ExampleForms.formFingerprint }
     html := ← IO.FS.readFile "web/index.html"
