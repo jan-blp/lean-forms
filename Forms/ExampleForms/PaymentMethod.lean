@@ -30,8 +30,7 @@ instance : ReportRule PaymentMethod where
   reports raw := raw.checks.value.filter (fun check => check.isMandatory || check.isFailing)
     |>.map fun check =>
     { status := if check.isFailing then .unresolved else .resolved
-      requirement := if check.isMandatory then .mandatory else .optional
-      origin := .server
+      severity := if check.isMandatory then .warning else .info
       message := check.message
       targets := .locations (.field PaymentMethod.Field.value .self) }
 

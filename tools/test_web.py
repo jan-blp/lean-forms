@@ -124,7 +124,9 @@ def receipts_session():
             return [receipt['alreadySubmitted'] for receipt in stored]
 
         assert already_submitted([first]) == [False]
-        assert already_submitted([first, copy]) == [False, False]
+        assert already_submitted([first]) == [False]
+        status, _, body = request('/api/submit', {**submission, 'value': {'receipts': [first, copy]}})
+        assert status == 422 and 'Another receipt in this form has the same number.' in body, (status, body)
         assert already_submitted([copy]) == [True]
 
 

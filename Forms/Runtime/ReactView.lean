@@ -22,27 +22,27 @@ def _root_.Forms.Model.TextKind.toReact : Model.TextKind → FormsReact.TextKind
   | .uuid => .uuid
 
 def _root_.FormsReact.Checks.of (messages : List Model.Message) : Option FormsReact.Checks :=
-  let mandatory (keep : Model.Diagnostic.ReportKind → Bool) :=
-    Model.Message.reports (fun kind => kind.requirement == .mandatory && keep kind) messages
-  let unresolved := mandatory fun kind => kind.state == .unresolved && !kind.outdated
-  let outdated := mandatory (·.outdated)
-  let resolved := mandatory fun kind => kind.state == .resolved && !kind.outdated
-  let optional (outdated : Bool) := Model.Message.reports
-    (fun kind => kind.requirement == .optional && kind.outdated == outdated) messages
+  let warnings (keep : Model.Diagnostic.ReportKind → Bool) :=
+    Model.Message.reports (fun kind => kind.severity == .warning && keep kind) messages
+  let unresolved := warnings fun kind => kind.state == .unresolved && !kind.outdated
+  let outdated := warnings (·.outdated)
+  let resolved := warnings fun kind => kind.state == .resolved && !kind.outdated
+  let infos (outdated : Bool) := Model.Message.reports
+    (fun kind => kind.severity == .info && kind.outdated == outdated) messages
   let tone : FormsReact.Tone :=
     if !unresolved.isEmpty then .attention
     else if !outdated.isEmpty then .outdated
     else if !resolved.isEmpty then .resolved
     else .optional
-  if unresolved.isEmpty && outdated.isEmpty && resolved.isEmpty && (optional false).isEmpty &&
-    (optional true).isEmpty then none
+  if unresolved.isEmpty && outdated.isEmpty && resolved.isEmpty && (infos false).isEmpty &&
+    (infos true).isEmpty then none
   else some
     { tone
       unresolved
       outdated
       resolved
-      optional := optional false
-      outdatedOptional := optional true }
+      optional := infos false
+      outdatedOptional := infos true }
 
 theorem _root_.FormsReact.Checks.of_attention
   {messages : List Model.Message}

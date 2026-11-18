@@ -7,18 +7,10 @@ public import Forms.Model.ReadOnly
 @[expose] public section
 namespace Forms.Model
 
-inductive Report.Origin where
-  /-- Computed from the current value, so it is always current. -/
-  | form
-  /-- Read from data the server computed for the last saved document. -/
-  | server
-  deriving BEq, DecidableEq, Repr
-
-/-- A message about a raw value that never blocks submit, such as a server check. -/
+/-- A message about server data in a raw value; it never blocks submit. -/
 structure Report {α : Type} (value : α) where
   status : Diagnostic.ReportState
-  requirement : Diagnostic.Requirement
-  origin : Report.Origin
+  severity : Diagnostic.Severity
   message : String
   targets : Targets α value
 
@@ -30,8 +22,7 @@ def Report.mapLocations
   (report : Report value)
   : Report outer where
   status := report.status
-  requirement := report.requirement
-  origin := report.origin
+  severity := report.severity
   message := report.message
   targets := report.targets.mapLocations step
 

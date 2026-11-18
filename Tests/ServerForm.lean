@@ -19,9 +19,9 @@ private def alreadySubmitted (raw : Receipts.Raw) : List Bool :=
 private def repeated : Receipts.Raw :=
   ⟨[⟨firstId, "R-1", ⟨false⟩⟩, ⟨secondId, "R-2", ⟨false⟩⟩, ⟨thirdId, "R-1", ⟨false⟩⟩]⟩
 
-example : (ModelForm.reports (model := Receipts) repeated true).map (·.targets) = [
-    .locations [.field "receipts", .item firstId, .field "number"] [],
-    .locations [.field "receipts", .item thirdId, .field "number"] []] := by
+example : (ModelForm.validationErrors (model := Receipts) repeated).map (·.targets) = [
+    .locations [.field "receipts", .item firstId, .field "number"]
+      [[.field "receipts", .item thirdId, .field "number"]]] := by
   decide
 
 private def submission (fingerprint : String) (value : Person.Raw) : Json :=
@@ -52,10 +52,10 @@ def run : IO Unit := do
   let first : Receipt.Raw := ⟨firstId, "R-1", ⟨false⟩⟩
   let copy := { first with id := secondId }
   let submitted ← Receipts.serverCheck state ⟨[first]⟩
-  let resubmitted ← Receipts.serverCheck state ⟨[first, copy]⟩
+  let resubmitted ← Receipts.serverCheck state ⟨[first]⟩
   let replaced ← Receipts.serverCheck state ⟨[copy]⟩
   check "OnlyNumbersClaimedOutsideTheSubmissionWereAlreadySubmitted"
-    (alreadySubmitted submitted == [false] && alreadySubmitted resubmitted == [false, false] &&
+    (alreadySubmitted submitted == [false] && alreadySubmitted resubmitted == [false] &&
       alreadySubmitted replaced == [true])
 
 end Tests.ServerForm

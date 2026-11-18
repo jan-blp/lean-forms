@@ -24,29 +24,33 @@ instance : ReportRule Receipt where
   reports raw :=
     if raw.alreadySubmitted.value then
       [{ status := .unresolved
-         requirement := .mandatory
-         origin := .server
+         severity := .warning
          message := "This receipt was already submitted."
          targets := .locations (.field Receipt.Field.number .self) }]
     else []
 
 deriving instance HasUuid for Receipt.Raw
 
-@[report_rule] structure Receipts where
+structure Receipts where
   receipts : List Receipt
+  numbers_distinct : (receipts.map (·.number)).Nodup
   deriving FormModel
 
-instance : ReportRule Receipts where
-  reports raw := raw.receipts.attach.filterMap fun ⟨receipt, member⟩ =>
-    if (raw.receipts.filter (·.number == receipt.number)).length > 1 then
-      some
-        { status := .unresolved
-          requirement := .mandatory
-          origin := .form
-          message := "Another receipt in this form has the same number."
-          targets := .locations (.field Receipts.Field.receipts
-            (.item receipt member (.field Receipt.Field.number .self))) }
-    else none
+instance Receipts.numbers_distinct_rule : ConstraintRule Receipts.Constraint.numbers_distinct where
+  check parts :=
+    if h : (parts.receipts.map (fun receipt : Receipt => receipt.number)).Nodup then .valid h
+    else
+      let raw := Receipts.Parts.toRaw parts
+      let repeated := raw.receipts.attach.filterMap fun ⟨receipt, member⟩ =>
+        if (raw.receipts.filter (·.number == receipt.number)).length > 1 then
+          some (.field Receipts.Field.receipts
+            (.item receipt member (.field Receipt.Field.number .self)))
+        else none
+      let message := "Another receipt in this form has the same number."
+      match repeated with
+      | [] => .invalid (proof := h) (message := message) (targets := .global)
+      | first :: rest =>
+        .invalid (proof := h) (message := message) (targets := .locations first rest)
 
 def Receipts.form : Component [] Receipts.Raw :=
   Component.void <| .list

@@ -14,14 +14,14 @@ inductive ReportState where
   | resolved
   deriving BEq, DecidableEq, Repr, Lean.ToJson, Lean.FromJson
 
-inductive Requirement where
-  | mandatory
-  | optional
+inductive Severity where
+  | warning
+  | info
   deriving BEq, DecidableEq, Repr, Lean.ToJson, Lean.FromJson
 
 structure ReportKind where
   state : ReportState
-  requirement : Requirement
+  severity : Severity
   /-- Reads server data older than the current value. -/
   outdated : Bool
   deriving BEq, DecidableEq, Repr, Lean.ToJson, Lean.FromJson
@@ -61,7 +61,7 @@ def Message.reports (keep : Diagnostic.ReportKind → Bool) (messages : List Mes
 
 def Diagnostic.Kind.actionable : Diagnostic.Kind → Bool
   | .error => true
-  | .report kind => kind.requirement == .mandatory && kind.state == .unresolved
+  | .report kind => kind.severity == .warning && kind.state == .unresolved
 
 structure Destination where
   locations : List ErasedLocation

@@ -45,10 +45,8 @@ def error {α : Type} {value : α} (error : Model.Error value) : Diagnostic wher
 def report {α : Type} {value : α} (checked : Bool) (report : Model.Report value) : Diagnostic where
   kind := .report
     { state := report.status
-      requirement := report.requirement
-      outdated := match report.origin with
-        | .form => false
-        | .server => !checked }
+      severity := report.severity
+      outdated := !checked }
   message := report.message
   targets := report.targets.erase
 
