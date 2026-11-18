@@ -33,21 +33,23 @@ def _root_.FormsReact.Checks.of (reports : List Model.ReportMessage) : Option Fo
     texts fun kind => kind.severity == .warning && keep kind
   let unresolved := warnings fun kind => kind.state == .unresolved && !kind.outdated
   let outdated := warnings (·.outdated)
-  let resolved := warnings fun kind => kind.state == .resolved && !kind.outdated
+  let resolved (how : Model.Diagnostic.Resolution) :=
+    warnings fun kind => kind.state == .resolved how && !kind.outdated
   let infos (outdated : Bool) :=
     texts fun kind => kind.severity == .info && kind.outdated == outdated
   let tone : FormsReact.Tone :=
     if !unresolved.isEmpty then .attention
     else if !outdated.isEmpty then .outdated
-    else if !resolved.isEmpty then .resolved
+    else if !(resolved .passed).isEmpty || !(resolved .approved).isEmpty then .resolved
     else .info
-  if unresolved.isEmpty && outdated.isEmpty && resolved.isEmpty && (infos false).isEmpty &&
-    (infos true).isEmpty then none
+  if unresolved.isEmpty && outdated.isEmpty && (resolved .passed).isEmpty &&
+    (resolved .approved).isEmpty && (infos false).isEmpty && (infos true).isEmpty then none
   else some
     { tone
       unresolved
       outdated
-      resolved
+      resolved := resolved .passed
+      approved := resolved .approved
       info := infos false
       outdatedInfo := infos true }
 
@@ -68,7 +70,8 @@ theorem _root_.FormsReact.Checks.of_resolved
   {grouped : FormsReact.Checks}
   (built : FormsReact.Checks.of reports = some grouped)
   : grouped.tone = .resolved ↔
-    grouped.unresolved = [] ∧ grouped.outdated = [] ∧ grouped.resolved ≠ [] := by
+    grouped.unresolved = [] ∧ grouped.outdated = [] ∧
+      (grouped.resolved ≠ [] ∨ grouped.approved ≠ []) := by
   simp only [FormsReact.Checks.of] at built
   split at built
   · cases built
@@ -81,13 +84,14 @@ theorem _root_.FormsReact.Checks.of_info
   {grouped : FormsReact.Checks}
   (built : FormsReact.Checks.of reports = some grouped)
   : grouped.tone = .info ↔
-    grouped.unresolved = [] ∧ grouped.outdated = [] ∧ grouped.resolved = [] := by
+    grouped.unresolved = [] ∧ grouped.outdated = [] ∧ grouped.resolved = [] ∧
+      grouped.approved = [] := by
   simp only [FormsReact.Checks.of] at built
   split at built
   · cases built
   · cases built
     repeat' split
-    all_goals simp_all
+    all_goals simp_all [Decidable.or_iff_not_imp_left]
 
 def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Component :=
   let name := ControlKeyProtocol.toString c.key

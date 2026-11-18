@@ -47,6 +47,7 @@ structure Checks where
   unresolved : List String
   outdated : List String
   resolved : List String
+  approved : List String
   info : List String
   outdatedInfo : List String
   deriving ToJson, FromJson, BEq, DecidableEq, Repr

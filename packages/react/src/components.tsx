@@ -43,6 +43,7 @@ export function StatusMarker(checks: FormsReact.Checks) {
     { title: 'Changed since the last check. Submit to re-check.',
       items: [...items(checks.outdated, false), ...items(checks.outdatedInfo, true)] },
     { title: 'Resolved automatically', items: items(checks.resolved, false) },
+    { title: 'Approved', items: items(checks.approved, false) },
     { title: 'Optional', items: items(checks.info, false) },
   ].filter(section => section.items.length > 0);
   // Top-layer popovers aren't anchored; measure at the left edge, where it doesn't shrink.

@@ -11,17 +11,21 @@ def PaymentMethod.serverCheck (raw : PaymentMethod.Raw) : PaymentMethod.Raw :=
       { message := "Choose a payment method."
         isFailing := true
         isMandatory := true
-        canBeResolvedWithApproving := false }
+        canBeResolvedWithApproving := false
+        isResolvedWithApproving := false }
     | some .privatelyPaid =>
+      let approved := raw.approved == some .privatelyPaid
       { message := "The payment method does not match the receipt."
-        isFailing := true
+        isFailing := !approved
         isMandatory := true
-        canBeResolvedWithApproving := true }
+        canBeResolvedWithApproving := !approved
+        isResolvedWithApproving := approved }
     | some .blpCreditCard =>
       { message := "The payment method matches the receipt."
         isFailing := false
         isMandatory := true
-        canBeResolvedWithApproving := false }
+        canBeResolvedWithApproving := false
+        isResolvedWithApproving := false }
   { raw with checks := ⟨[check, PaymentMethod.receiptCheck]⟩ }
 
 end Forms.ExampleForms

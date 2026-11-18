@@ -63,11 +63,18 @@ example : (ModelForm.reports (model := Receipts) claimed true).map (·.kind) =
   decide
 
 example : (Diagnostic.issues [
-    { kind := .report (warning .resolved false), message := "resolved", targets := .global },
-    { kind := .report (warning .resolved true), message := "passed before", targets := .global },
+    { kind := .report (warning (.resolved .passed) false)
+      message := "resolved"
+      targets := .global },
+    { kind := .report (warning (.resolved .passed) true)
+      message := "passed before"
+      targets := .global },
     { kind := .report (warning .unresolved true), message := "failed before", targets := .global },
     { kind := .report (warning .unresolved false), message := "unresolved", targets := .global },
     { kind := .report (info .unresolved false), message := "optional", targets := .global },
+    { kind := .report (warning (.resolved .approved) false)
+      message := "approved"
+      targets := .global },
     { kind := .error, message := "error", targets := .global }] []).map (·.message) =
     ["failed before", "unresolved", "error"] := by
   decide
@@ -80,12 +87,13 @@ example : Message.reports [
 
 example : FormsReact.Checks.of [
     { kind := info .unresolved false, text := "optional" },
-    { kind := warning .resolved false, text := "resolved" }] =
+    { kind := warning (.resolved .passed) false, text := "resolved" }] =
     some
       { tone := .resolved
         unresolved := []
         outdated := []
         resolved := ["resolved"]
+        approved := []
         info := ["optional"]
         outdatedInfo := [] } := by
   decide
@@ -98,8 +106,27 @@ example : FormsReact.Checks.of [
         unresolved := []
         outdated := ["warning"]
         resolved := []
+        approved := []
         info := []
         outdatedInfo := ["optional"] } := by
+  decide
+
+example : FormsReact.Checks.of [
+    { kind := warning (.resolved .approved) false, text := "approved" },
+    { kind := warning (.resolved .approved) true, text := "approved before" }] =
+    some
+      { tone := .outdated
+        unresolved := []
+        outdated := ["approved before"]
+        resolved := []
+        approved := ["approved"]
+        info := []
+        outdatedInfo := [] } := by
+  decide
+
+example : (FormsReact.Checks.of
+    [{ kind := warning (.resolved .approved) false, text := "approved" }]).map (·.tone) =
+    some .resolved := by
   decide
 
 example : (FormsReact.Checks.of [{ kind := info .unresolved false, text := "optional" }]).map
@@ -118,6 +145,21 @@ private partial def markersOf : Display.View → List (List ReportMessage)
   | .control _ => []
   | .computed .. => []
   | .hidden => []
+
+private def press
+  (state : ModelForm.State PaymentMethod.form)
+  (label : String)
+  : IO (ModelForm.State PaymentMethod.form) := do
+  let some control := state.evaluation.view.controls.find? (·.label == label)
+    | throw (IO.userError s!"Missing control: {label}")
+  IO.ofExcept (ModelForm.execute (model := PaymentMethod) PaymentMethod.form state
+    (.apply control.key none))
+
+private def offers (state : ModelForm.State PaymentMethod.form) (label : String) : Bool :=
+  state.evaluation.view.controls.any (·.label == label)
+
+private def issues (state : ModelForm.State PaymentMethod.form) : List String :=
+  (Diagnostic.issues state.evaluation.diagnostics []).map (·.message)
 
 private def markers (state : ModelForm.State PaymentMethod.form) : List (List ReportMessage) :=
   markersOf state.evaluation.view
@@ -150,7 +192,8 @@ def run : IO Unit := do
     PaymentMethod.form (PaymentMethod.serverCheck { PaymentMethod.initial with
       value := some .blpCreditCard }) Env.nil
   check "PassingChecksAreResolved" (markers matching ==
-    [[{ kind := warning .resolved false, text := "The payment method matches the receipt." },
+    [[{ kind := warning (.resolved .passed) false
+        text := "The payment method matches the receipt." },
       receipt]])
   let some control := opened.evaluation.view.controls.find? (·.label == label)
     | throw (IO.userError s!"Missing control: {label}")
@@ -175,5 +218,27 @@ def run : IO Unit := do
     (ModelForm.execute (model := PaymentMethod) PaymentMethod.form saved .reset)
   check "ResetReturnsToSavedDocument"
     (reset.value.value == none && markers reset == markers saved)
+  let approving ← press opened "Approve"
+  check "ApprovalOutdatesChecks"
+    (approving.value.approved == some .privatelyPaid &&
+      markers approving == [[{ kind := warning .unresolved true, text := mismatch },
+        { receipt with kind := info .unresolved true }]] &&
+      issues approving == [mismatch] && offers approving "Withdraw approval")
+  let submitting ← IO.ofExcept (ModelForm.execute (model := PaymentMethod) PaymentMethod.form
+    approving .submit)
+  let approved ← IO.ofExcept (ModelForm.execute (model := PaymentMethod) PaymentMethod.form
+    submitting (.submitted (.accepted (PaymentMethod.serverCheck submitting.value))))
+  check "ServerConfirmsApproval"
+    (markers approved == [[{ kind := warning (.resolved .approved) false, text := mismatch },
+      receipt]] && issues approved == [])
+  let some approvedControl := approved.evaluation.view.controls.find? (·.label == label)
+    | throw (IO.userError s!"Missing control: {label}")
+  let edited ← IO.ofExcept (ModelForm.execute (model := PaymentMethod) PaymentMethod.form approved
+    (.apply approvedControl.key (some (.text "none"))))
+  check "EditWithdrawsApproval"
+    (edited.value.approved == some .privatelyPaid && edited.value.value == none &&
+      !offers edited "Withdraw approval")
+  let withdrawn ← press approved "Withdraw approval"
+  check "WithdrawClearsApproval" (withdrawn.value.approved == none && offers withdrawn "Approve")
 
 end Tests.Reports

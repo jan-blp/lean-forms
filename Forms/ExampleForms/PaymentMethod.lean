@@ -12,7 +12,12 @@ structure FailingCheck where
   isFailing : Bool
   isMandatory : Bool
   canBeResolvedWithApproving : Bool
+  isResolvedWithApproving : Bool
   deriving BEq, DecidableEq, Repr, Lean.ToJson, Lean.FromJson
+
+/-- Approving would resolve it, or already did. -/
+def FailingCheck.approvable (check : FailingCheck) : Bool :=
+  check.isResolvedWithApproving || check.isFailing && check.canBeResolvedWithApproving
 
 inductive ExpensePaymentMethod where
   | blpCreditCard
@@ -21,6 +26,8 @@ inductive ExpensePaymentMethod where
 
 @[report_rule] structure PaymentMethod where
   value : Option ExpensePaymentMethod
+  /-- The value the user approved; the approval holds while it equals `value`. -/
+  approved : Option ExpensePaymentMethod
   checks : ReadOnly (List FailingCheck)
   disabled : ReadOnly Bool
   visible : ReadOnly Bool
@@ -29,7 +36,10 @@ inductive ExpensePaymentMethod where
 instance : ReportRule PaymentMethod where
   reports raw := raw.checks.value.filter (fun check => check.isMandatory || check.isFailing)
     |>.map fun check =>
-    { status := if check.isFailing then .unresolved else .resolved
+    { status :=
+        if check.isResolvedWithApproving then .resolved .approved
+        else if check.isFailing then .unresolved
+        else .resolved .passed
       severity := if check.isMandatory then .warning else .info
       message := check.message
       targets := .locations (.field PaymentMethod.Field.value .self) }
@@ -48,6 +58,19 @@ def PaymentMethod.form : Component [] PaymentMethod.Raw :=
     .group "Payment" [
       .statusMarkerAt path[PaymentMethod.Field.value],
       PaymentMethod.field,
+      .visibleWhen {
+          inputs := inputs[
+            path[PaymentMethod.Field.value],
+            path[PaymentMethod.Field.approved],
+            path[PaymentMethod.Field.checks]]
+          run := fun value approved checks =>
+            value.isSome && approved != value && checks.value.any (·.approvable) } <|
+        .button "Approve" (.write path[PaymentMethod.Field.approved]
+          { inputs := inputs[path[PaymentMethod.Field.value]], run := id }),
+      .visibleWhen {
+          inputs := inputs[path[PaymentMethod.Field.value], path[PaymentMethod.Field.approved]]
+          run := fun value approved => value.isSome && approved == value } <|
+        .button "Withdraw approval" (.write path[PaymentMethod.Field.approved] (.const none)),
       .computed "Current issues" ((fun issues =>
         String.intercalate "\n" (issues.map (·.message))) <$> issues),
       .disabledWhen (List.isEmpty <$> issues) <|
@@ -59,14 +82,17 @@ def PaymentMethod.receiptCheck : FailingCheck where
   isFailing := true
   isMandatory := false
   canBeResolvedWithApproving := false
+  isResolvedWithApproving := false
 
 def PaymentMethod.initial : PaymentMethod.Raw where
   value := some .privatelyPaid
+  approved := none
   checks := ⟨[
     { message := "The payment method does not match the receipt."
       isFailing := true
       isMandatory := true
-      canBeResolvedWithApproving := true },
+      canBeResolvedWithApproving := true
+      isResolvedWithApproving := false },
     PaymentMethod.receiptCheck]⟩
   disabled := ⟨false⟩
   visible := ⟨true⟩
