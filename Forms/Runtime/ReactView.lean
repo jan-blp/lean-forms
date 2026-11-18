@@ -40,16 +40,16 @@ def _root_.FormsReact.Checks.of (reports : List Model.ReportMessage) : Option Fo
   let tone : FormsReact.Tone :=
     if !unresolved.isEmpty then .attention
     else if !outdated.isEmpty then .outdated
-    else if !(resolved .automatic).isEmpty || !(resolved .approval).isEmpty then .resolved
+    else if !(resolved .passed).isEmpty || !(resolved .approved).isEmpty then .resolved
     else .info
-  if unresolved.isEmpty && outdated.isEmpty && (resolved .automatic).isEmpty &&
-    (resolved .approval).isEmpty && (infos false).isEmpty && (infos true).isEmpty then none
+  if unresolved.isEmpty && outdated.isEmpty && (resolved .passed).isEmpty &&
+    (resolved .approved).isEmpty && (infos false).isEmpty && (infos true).isEmpty then none
   else some
     { tone
       unresolved
       outdated
-      resolved := resolved .automatic
-      approved := resolved .approval
+      resolved := resolved .passed
+      approved := resolved .approved
       info := infos false
       outdatedInfo := infos true }
 

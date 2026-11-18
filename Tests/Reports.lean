@@ -63,16 +63,16 @@ example : (ModelForm.reports (model := Receipts) claimed true).map (·.kind) =
   decide
 
 example : (Diagnostic.issues [
-    { kind := .report (warning (.resolved .automatic) false)
+    { kind := .report (warning (.resolved .passed) false)
       message := "resolved"
       targets := .global },
-    { kind := .report (warning (.resolved .automatic) true)
+    { kind := .report (warning (.resolved .passed) true)
       message := "passed before"
       targets := .global },
     { kind := .report (warning .unresolved true), message := "failed before", targets := .global },
     { kind := .report (warning .unresolved false), message := "unresolved", targets := .global },
     { kind := .report (info .unresolved false), message := "optional", targets := .global },
-    { kind := .report (warning (.resolved .approval) false)
+    { kind := .report (warning (.resolved .approved) false)
       message := "approved"
       targets := .global },
     { kind := .error, message := "error", targets := .global }] []).map (·.message) =
@@ -87,7 +87,7 @@ example : Message.reports [
 
 example : FormsReact.Checks.of [
     { kind := info .unresolved false, text := "optional" },
-    { kind := warning (.resolved .automatic) false, text := "resolved" }] =
+    { kind := warning (.resolved .passed) false, text := "resolved" }] =
     some
       { tone := .resolved
         unresolved := []
@@ -112,8 +112,8 @@ example : FormsReact.Checks.of [
   decide
 
 example : FormsReact.Checks.of [
-    { kind := warning (.resolved .approval) false, text := "approved" },
-    { kind := warning (.resolved .approval) true, text := "approved before" }] =
+    { kind := warning (.resolved .approved) false, text := "approved" },
+    { kind := warning (.resolved .approved) true, text := "approved before" }] =
     some
       { tone := .outdated
         unresolved := []
@@ -125,7 +125,7 @@ example : FormsReact.Checks.of [
   decide
 
 example : (FormsReact.Checks.of
-    [{ kind := warning (.resolved .approval) false, text := "approved" }]).map (·.tone) =
+    [{ kind := warning (.resolved .approved) false, text := "approved" }]).map (·.tone) =
     some .resolved := by
   decide
 
@@ -192,7 +192,7 @@ def run : IO Unit := do
     PaymentMethod.form (PaymentMethod.serverCheck { PaymentMethod.initial with
       value := some .blpCreditCard }) Env.nil
   check "PassingChecksAreResolved" (markers matching ==
-    [[{ kind := warning (.resolved .automatic) false
+    [[{ kind := warning (.resolved .passed) false
         text := "The payment method matches the receipt." },
       receipt]])
   let some control := opened.evaluation.view.controls.find? (·.label == label)
@@ -229,7 +229,7 @@ def run : IO Unit := do
   let approved ← IO.ofExcept (ModelForm.execute (model := PaymentMethod) PaymentMethod.form
     submitting (.submitted (.accepted (PaymentMethod.serverCheck submitting.value))))
   check "ServerConfirmsApproval"
-    (markers approved == [[{ kind := warning (.resolved .approval) false, text := mismatch },
+    (markers approved == [[{ kind := warning (.resolved .approved) false, text := mismatch },
       receipt]] && issues approved == [])
   let some approvedControl := approved.evaluation.view.controls.find? (·.label == label)
     | throw (IO.userError s!"Missing control: {label}")

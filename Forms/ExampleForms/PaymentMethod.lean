@@ -37,9 +37,9 @@ instance : ReportRule PaymentMethod where
   reports raw := raw.checks.value.filter (fun check => check.isMandatory || check.isFailing)
     |>.map fun check =>
     { status :=
-        if check.isResolvedWithApproving then .resolved .approval
+        if check.isResolvedWithApproving then .resolved .approved
         else if check.isFailing then .unresolved
-        else .resolved .automatic
+        else .resolved .passed
       severity := if check.isMandatory then .warning else .info
       message := check.message
       targets := .locations (.field PaymentMethod.Field.value .self) }

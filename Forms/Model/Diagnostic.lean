@@ -9,9 +9,12 @@ namespace Forms.Model
 
 namespace Diagnostic
 
+/-- Why a check no longer fails. -/
 inductive Resolution where
-  | automatic
-  | approval
+  /-- The value now passes the check. -/
+  | passed
+  /-- A user explicitly approved the value. -/
+  | approved
   deriving BEq, DecidableEq, Repr, Lean.ToJson, Lean.FromJson
 
 inductive ReportState where
