@@ -42,6 +42,40 @@ theorem Key.encode_injective {κ : Type} [Key κ] : Function.Injective (Key.enco
   intro first second h
   simpa [Key.decode_encode] using congrArg (Key.decode (κ := κ)) h
 
+theorem Key.find?_encode
+  {κ : Type}
+  (encode : κ → String)
+  : ∀ (all : List κ) (key : κ), key ∈ all → (all.map encode).Nodup →
+    all.find? (encode · == encode key) = some key
+  | [], _, member, _ => nomatch member
+  | head :: rest, key, member, nodup => by
+    rw [List.map_cons, List.nodup_cons] at nodup
+    rcases List.mem_cons.mp member with same | later
+    · subst same
+      simp
+    · by_cases clash : encode head = encode key
+      · exact absurd (clash ▸ List.mem_map_of_mem later) nodup.1
+      · simp [clash, Key.find?_encode encode rest key later nodup.2]
+
+/-- Decodes by looking names up in `all`. Its names strictly increase, so checking them takes
+one comparison per key rather than one per pair. -/
+@[instance_reducible] def Key.ofSorted
+  {κ : Type}
+  (all : List κ)
+  (encode : κ → String)
+  (complete : ∀ key, key ∈ all)
+  (sorted : (all.map encode).IsChain (· < ·))
+  (named : ∀ name ∈ all.map encode, name ≠ "")
+  : Key κ where
+  encode
+  decode name := all.find? (encode · == name)
+  decode_encode key :=
+    haveI : Trans (α := String) (· < ·) (· < ·) (· < ·) := ⟨String.lt_trans⟩
+    Key.find?_encode encode all key (complete key)
+      (sorted.pairwise.imp (S := (· ≠ ·)) fun {first second} (less : first < second) same =>
+        String.lt_irrefl second (same ▸ less))
+  encode_ne_empty key := named (encode key) (List.mem_map_of_mem (complete key))
+
 class Constructors (α : Type) where
   Constructor : Type → Type
   /-- Names a constructor regardless of its payload. -/

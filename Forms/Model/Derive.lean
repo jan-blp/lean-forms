@@ -253,15 +253,19 @@ private structure ModelInfo where
   constructors : Array Constructor
 
 private def ModelInfo.raw (model : ModelInfo) := model.name ++ `Raw
+private def ModelInfo.enum (model : ModelInfo) :=
+  !model.record && model.constructors.all (·.fields.isEmpty)
+/-- An enum's constructors share one empty payload. -/
 private def ModelInfo.localNS (model : ModelInfo) (ctor : Constructor) :=
-  if model.record then model.name else ctor.name
+  if model.record then model.name else if model.enum then model.name ++ `Payload else ctor.name
+/-- An enum's raw values are its tags. -/
+private def ModelInfo.tagType (model : ModelInfo) :=
+  if model.enum then model.raw else model.name ++ `Tag
 private def ModelInfo.payload (model : ModelInfo) (ctor : Constructor) := model.localNS ctor ++ `Raw
 private def ModelInfo.parts (model : ModelInfo) (ctor : Constructor) := model.localNS ctor ++ `Parts
 private def ModelInfo.constraint (model : ModelInfo) (ctor : Constructor) (field : FieldInfo) :=
   model.name ++ `Constraint ++ if model.record then field.name else
     Name.mkSimple (ctor.name.getString! ++ "_" ++ field.name.getString!)
-private def ModelInfo.enum (model : ModelInfo) :=
-  !model.record && model.constructors.all (·.fields.isEmpty)
 private def ModelInfo.rules (model : ModelInfo) :=
   model.constructors.flatMap fun ctor => ctor.proofs.map (ctor, ·)
 
@@ -294,7 +298,8 @@ private def ModelInfo.liftReport
   `(Forms.Model.Report.inConstructor (α := $(global model.raw)) $constructor $report)
 
 private def emitShapes (model : ModelInfo) : CommandElabM Unit := do
-  for ctor in model.constructors do emitting m!"constructor `{ctor.name}`" do
+  let shapes := if model.enum then model.constructors.extract 0 1 else model.constructors
+  for ctor in shapes do emitting m!"constructor `{ctor.name}`" do
     let fields ← ctor.data.mapM fun f => return (f, ← fieldType ctor f)
     let rawFields ← fields.mapM fun (f, type) => return (f.name, ← `(FormModel.Raw $type))
     emitRecord (model.payload ctor) rawFields true
@@ -307,6 +312,69 @@ private def emitShapes (model : ModelInfo) : CommandElabM Unit := do
     emit (← `(command| @[expose] def $(global (model.parts ctor ++ `toRaw)):ident
       ($parts:ident : $(global (model.parts ctor))) : $(global (model.payload ctor)) := $body))
 
+/-- Names are checked in sorted order and each tag at its known position, so the proofs stay
+linear in constructors. -/
+private def emitKey (model : ModelInfo) (tagType : Ident) : CommandElabM Unit := do
+  let tag (ctor : Constructor) : TermSyntax :=
+    global (model.tagType ++ Name.mkSimple ctor.name.getString!)
+  let selected ← fresh `selected
+  let names ← model.constructors.mapM fun ctor =>
+    alternative #[tag ctor] (Syntax.mkStrLit ctor.name.getString!)
+  let encode ← fresh `encode
+  emit (← `(command| @[expose] def $encode:ident ($selected:ident : $tagType) : String :=
+    $(← matchOn #[selected] names)))
+  let sorted := model.constructors.qsort (·.name.getString! < ·.name.getString!)
+  let all ← fresh `all
+  emit (← `(command| @[expose] def $all:ident : List $tagType := [$(sorted.map tag),*]))
+  let members ← sorted.mapIdxM fun position ctor => do
+    alternative #[tag ctor] (← `(List.mem_of_getElem? (l := $all) (i := $(Syntax.mkNumLit
+      (toString position))) (by decide +kernel)))
+  emitIn model.tagType (← `(command| instance : Forms.Model.Key $tagType :=
+    Forms.Model.Key.ofSorted $all $encode (fun $selected:ident => $(← matchOn #[selected] members))
+      (by decide +kernel) (by decide +kernel)))
+
+/-- An enum's raw values are its tags, so projection compares tags and stays linear in
+constructors. -/
+private def emitEnumHelpers
+  (model : ModelInfo)
+  (raw constructor inject project unit tagOf : Ident)
+  : CommandElabM Unit := do
+  let units ← model.constructors.mapM fun ctor => do
+    alternative #[global (model.name ++ `Constructor ++ Name.mkSimple ctor.name.getString!)]
+      (global (model.payload ctor ++ `mk))
+  let selected ← fresh `selected
+  let value ← fresh `value
+  emit (← `(command| @[expose] def $inject:ident {α : Type}
+    ($selected:ident : $constructor α) (_ : α) : $raw := $tagOf $selected))
+  emit (← `(command| @[expose] def $unit:ident {α : Type}
+    ($selected:ident : $constructor α) : α := $(← matchOn #[selected] units)))
+  emit (← `(command| @[expose] def $project:ident {α : Type}
+    ($selected:ident : $constructor α) ($value:ident : $raw) : Option α :=
+    if $value = $tagOf $selected then some ($unit $selected) else none))
+
+private def emitEnumLawful
+  (model : ModelInfo)
+  (raw constructor unit tagOf : Ident)
+  : CommandElabM Unit := do
+  let unitEq ← fresh `unit_eq
+  emit (← `(command| theorem $unitEq:ident {α : Type} (selected : $constructor α) (value : α) :
+      $unit selected = value := by
+    cases selected <;> rfl))
+  emit (← `(command| instance $(global (model.name ++ `lawfulConstructors)):ident :
+      Forms.Model.LawfulConstructors $raw where
+    project_inject := by
+      intro payload selected value
+      show (if $tagOf selected = $tagOf selected then some ($unit selected) else none) = some value
+      rw [ite_eq_left_of_eq_true _ _ (eq_self _), $unitEq:ident selected value]
+    inject_project := by
+      intro payload selected source value h
+      change $tagOf selected = source
+      change (if source = $tagOf selected then some ($unit selected) else none) = some value at h
+      split at h
+      next same => exact same.symm
+      next => cases h
+    tag_inject := fun _ _ => rfl))
+
 private def emitConstructors (model : ModelInfo) : CommandElabM Unit := do
   if model.record then return
   let raw := global model.raw
@@ -316,45 +384,38 @@ private def emitConstructors (model : ModelInfo) : CommandElabM Unit := do
     else `(Parser.Command.ctor| | $name:ident (payload : $(global (model.payload ctor))))
   emitIn model.raw <| ← if model.enum
     then `(command| inductive $raw:ident where $ctors:ctor*
-      deriving DecidableEq, Lean.ToJson, Lean.FromJson)
+      deriving DecidableEq, Repr, Lean.ToJson, Lean.FromJson)
     else `(command| inductive $raw:ident where $ctors:ctor* deriving Lean.ToJson, Lean.FromJson)
   let constructor := global (model.name ++ `Constructor)
   let ctors ← model.constructors.mapM fun ctor =>
     `(Parser.Command.ctor| | $(ident (Name.mkSimple ctor.name.getString!)):ident :
       $(ident `Constructor) $(global (model.payload ctor)))
   emit (← `(command| inductive $constructor:ident : Type → Type where $ctors:ctor*))
-  let tagType := global (model.name ++ `Tag)
-  let tags ← model.constructors.mapM fun ctor =>
-    `(Parser.Command.ctor| | $(ident (Name.mkSimple ctor.name.getString!)):ident)
-  emitIn (model.name ++ `Tag)
-    (← `(command| inductive $tagType:ident where $tags:ctor* deriving DecidableEq, Repr))
+  let tagType := global model.tagType
+  unless model.enum do
+    let tags ← model.constructors.mapM fun ctor =>
+      `(Parser.Command.ctor| | $(ident (Name.mkSimple ctor.name.getString!)):ident)
+    emitIn model.tagType
+      (← `(command| inductive $tagType:ident where $tags:ctor* deriving DecidableEq, Repr))
   let selected ← fresh `selected
   let value ← fresh `value
   let payload ← fresh `payload
   let mut injections := #[]
   let mut projections := #[]
-  let mut keys := #[]
-  let mut decodings := #[]
   let mut tagsOf := #[]
   let mut valueTags := #[]
   for ctor in model.constructors do
     let pattern : TermSyntax := global (model.name ++ `Constructor ++ Name.mkSimple ctor.name.getString!)
-    let tag : TermSyntax := global (model.name ++ `Tag ++ Name.mkSimple ctor.name.getString!)
+    let tag : TermSyntax := global (model.tagType ++ Name.mkSimple ctor.name.getString!)
     injections := injections.push (← alternative #[pattern] (← model.wrap ctor value))
     let found ← if ctor.data.isEmpty then `(some $(global (model.payload ctor ++ `mk))) else `(some $payload)
     let mut cases := #[← alternative #[← model.wrap ctor payload] found]
     if model.constructors.size > 1 then cases := cases.push (← alternative #[← `(_)] (← `(none)))
     projections := projections.push (← alternative #[pattern] (← matchOn #[value] cases))
-    keys := keys.push (← alternative #[tag] (Syntax.mkStrLit ctor.name.getString!))
-    decodings := decodings.push
-      (← alternative #[Syntax.mkStrLit ctor.name.getString!] (← `(some $tag)))
     tagsOf := tagsOf.push (← alternative #[pattern] tag)
     valueTags := valueTags.push (← alternative #[← model.wrap ctor (← `(_))] tag)
   let injection ← matchOn #[selected] injections
   let projection ← matchOn #[selected] projections
-  let key ← matchOn #[selected] keys
-  let encoded ← fresh `encoded
-  let decoding ← matchOn #[encoded] (decodings.push (← alternative #[← `(_)] (← `(none))))
   let tagOf ← matchOn #[selected] tagsOf
   let valueTag ← matchOn #[value] valueTags
   -- Fresh names, so constructors such as `inject` or `tag` cannot collide with the helpers.
@@ -362,22 +423,19 @@ private def emitConstructors (model : ModelInfo) : CommandElabM Unit := do
   let project ← fresh `project
   let tagOfName ← fresh `tagOf
   let tagName ← fresh `tag
-  emitIn (model.name ++ `Tag) (← `(command| instance : Forms.Model.Key $tagType where
-    encode $selected:ident := $key
-    decode $encoded:ident := $decoding
-    decode_encode := by
-      intro $selected:ident
-      cases $selected:ident <;> rfl
-    encode_ne_empty := by
-      intro $selected:ident
-      cases $selected:ident <;> decide))
-  emit (← `(command| @[expose] def $inject:ident {α : Type}
-    ($selected:ident : $constructor α) ($value:ident : α) : $raw := $injection))
-  emit (← `(command| @[expose] def $project:ident {α : Type}
-    ($selected:ident : $constructor α) ($value:ident : $raw) : Option α := $projection))
+  let unit ← fresh `unit
+  emitKey model tagType
   emit (← `(command| @[expose] def $tagOfName:ident {α : Type}
     ($selected:ident : $constructor α) : $tagType := $tagOf))
-  emit (← `(command| @[expose] def $tagName:ident ($value:ident : $raw) : $tagType := $valueTag))
+  if model.enum then
+    emit (← `(command| @[expose] def $tagName:ident ($value:ident : $raw) : $tagType := $value))
+    emitEnumHelpers model raw constructor inject project unit tagOfName
+  else
+    emit (← `(command| @[expose] def $tagName:ident ($value:ident : $raw) : $tagType := $valueTag))
+    emit (← `(command| @[expose] def $inject:ident {α : Type}
+      ($selected:ident : $constructor α) ($value:ident : α) : $raw := $injection))
+    emit (← `(command| @[expose] def $project:ident {α : Type}
+      ($selected:ident : $constructor α) ($value:ident : $raw) : Option α := $projection))
   emit (← `(command| @[expose, reducible] instance $(global (model.name ++ `constructors)):ident :
       Forms.Model.Constructors $raw where
     Constructor := $constructor
@@ -386,6 +444,9 @@ private def emitConstructors (model : ModelInfo) : CommandElabM Unit := do
     project := $project
     tagOf := $tagOfName
     tag := $tagName))
+  if model.enum then
+    emitEnumLawful model raw constructor unit tagOfName
+    return
   -- `split` stays linear in constructors; a single-constructor match reduces, so case on `source`.
   emit (← `(command| instance $(global (model.name ++ `lawfulConstructors)):ident :
       Forms.Model.LawfulConstructors $raw where
@@ -551,9 +612,12 @@ private def emitValidation (model : ModelInfo) : CommandElabM Unit := do
     params := params.push (← `(Parser.Term.instBinder|
       [Forms.Model.ConstraintRule $(global (model.constraint ctor field))]))
   let value ← fresh `raw
-  let body ← match model.record, model.constructors with
-    | true, #[ctor] => validationBranch model ctor value
-    | _, constructors => do
+  let name := global model.name
+  let body ← match model.enum, model.record, model.constructors with
+    | true, _, _ => `(.ok ⟨Forms.Model.AlwaysValid.restore (α := $name) $value,
+        Forms.Model.AlwaysValid.erase_restore (α := $name) $value⟩)
+    | false, true, #[ctor] => validationBranch model ctor value
+    | false, _, constructors => do
       let alternatives ← constructors.mapM fun ctor => do
         let payload : TermSyntax ← if ctor.data.isEmpty
           then pure (global (model.payload ctor ++ `mk))
@@ -562,7 +626,6 @@ private def emitValidation (model : ModelInfo) : CommandElabM Unit := do
       matchOn #[value] alternatives
   let validate := global (model.name ++ `validate)
   let raw := global model.raw
-  let name := global model.name
   let fields := model.constructors.foldl (fun size ctor => max size ctor.fields.size) 0
   let depth := Syntax.mkNumLit (toString (512 + 8 * fields))
   emit (← `(command| set_option maxRecDepth $depth in
