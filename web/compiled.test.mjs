@@ -190,17 +190,17 @@ test('Lean shows validation before submission and handles server feedback and re
       model.send('submit');
       model.send({ submitted: { outcome: { response: { status, body } } } });
     };
-    reject(422, JSON.stringify({ error: { kind: 'validation', message: 'Server rejected',
-      errors: [error, error, { message: 'Global', targets: { kind: 'global' } }] } }));
+    reject(422, JSON.stringify({ validation: {
+      first: error, rest: [error, { message: 'Global', targets: { kind: 'global' } }] } }));
     assert.deepEqual(messages(model.snapshot().view), ['<b>Literal 🌍</b>']);
-    assert.equal(status(model), 'Server rejected');
+    assert.equal(status(model), '<b>Literal 🌍</b>\n<b>Literal 🌍</b>\nGlobal');
     assert.ok(model.send({ apply: { key: JSON.stringify(['edit', 'missing']), argument: null } }).rejection);
     assert.deepEqual(messages(model.snapshot().view), ['<b>Literal 🌍</b>']);
     model.send({ apply: { key: quantity.key, argument: '3' } });
     assert.deepEqual(messages(model.snapshot().view), []);
     assert.equal(status(model), '');
-    for (const body of ['not json', '{}', JSON.stringify({ error: { kind: 'validation', message: 'Bad',
-      errors: [error, { message: 'Broken', targets: { kind: 'locations', locations: [[{kind: 'item', index: '-1'}]] } }] } })]) {
+    const broken = { message: 'Broken', targets: { kind: 'locations', locations: [[{ kind: 'item', index: '-1' }]] } };
+    for (const body of ['not json', '{}', JSON.stringify({ validation: { first: error, rest: [broken] } })]) {
       reject(503, body);
       assert.equal(status(model), 'Submission failed (HTTP 503).');
       assert.deepEqual(messages(model.snapshot().view), []);

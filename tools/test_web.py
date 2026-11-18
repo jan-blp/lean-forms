@@ -69,12 +69,11 @@ def validation_error(request, submission, message, steps):
     """`steps` are field names, `('constructor', tag)` for a sum's branch, or `('item', id)` for a list item."""
     status, _, body = request('/api/submit', submission)
     assert status == 422, (status, body)
-    error = json.loads(body)['error']
-    assert error['kind'] == 'validation' and error['message'] == message, error
+    error = json.loads(body)['validation']
     names = {'constructor': 'tag', 'item': 'id'}
     location = [{'kind': s[0], names[s[0]]: s[1]} if isinstance(s, tuple) else {'kind': 'field', 'name': s}
                 for s in steps]
-    assert error['errors'] == [{'message': message, 'targets': {
+    assert [error['first'], *error['rest']] == [{'message': message, 'targets': {
         'kind': 'locations', 'locations': [location]}}], error
 
 
@@ -97,7 +96,7 @@ def order_session():
         ]:
             validation_error(request, {**initial, 'value': {**value, **changes}}, message, fields)
         status, _, body = request('/api/submit', {**initial, 'form': 'person'})
-        assert status == 422 and json.loads(body)['error']['kind'] == 'request'
+        assert status == 422 and 'invalidRequest' in json.loads(body), body
 
 
 def payment_method_session():
@@ -180,12 +179,12 @@ model.dispose();
         assert submission['fingerprint'] == start['fingerprint']
         for stale in [{'form': example, 'value': start['value']}, {**initial, 'fingerprint': 'compiled-2-0'}]:
             status, _, body = request('/api/submit', stale)
-            assert status == 422 and json.loads(body)['error'] == {
-                'kind': 'request', 'message': 'This form is out of date. Reload the page.'}
+            assert status == 422 and json.loads(body) == {
+                'invalidRequest': {'message': 'This form is out of date. Reload the page.'}}, body
         for invalid in [{}, {**initial, 'form': 'missing'}, {**initial, 'value': False},
                         {**initial, 'value': {**start['value'], 'age': '20'}}]:
             status, _, body = request('/api/submit', invalid)
-            assert status == 422 and json.loads(body)['error']['kind'] == 'request'
+            assert status == 422 and 'invalidRequest' in json.loads(body), body
         for changes, message, fields in [
             ({'age': 150}, 'Age must be at most 120.', ['age']),
             ({'address': {'street': ''}}, 'Enter your delivery street.', ['address', 'street']),

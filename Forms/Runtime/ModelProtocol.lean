@@ -30,6 +30,15 @@ def ModelForm.SubmitOutcome.ofSuccess
   | .ok saved => .accepted saved.value
   | .error message => .unreachable s!"Could not read the saved form: {message}"
 
+def ModelForm.SubmitOutcome.ofFailure
+  {α : Type}
+  (status : Nat)
+  (body : String)
+  : ModelForm.SubmitOutcome α :=
+  match FeedbackProtocol.serverError? body with
+  | some error => .rejected error
+  | none => .unreachable s!"Submission failed (HTTP {status})."
+
 def fetchEffect (request : Model.HttpRequest) : Wire.Effect :=
   .fetch (toJson request).compress {
     url := request.url
@@ -79,7 +88,7 @@ def ModelForm.Event.fromWire
   | .reset => .ok .reset
   | .submitted (.response status body) =>
     .ok (.submitted (if 200 ≤ status && status < 300 then .ofSuccess body
-      else .rejected (FeedbackProtocol.serverError status body)))
+      else .ofFailure status body))
   | .submitted (.unreachable message) => .ok (.submitted (.unreachable message))
   | .fetched id outcome => do
     let response := match outcome with

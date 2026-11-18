@@ -56,6 +56,10 @@ def run : IO Unit := do
     (savedField? body == some (Lean.toJson PaymentMethod.initial.value))
   check "EmptySuccessIsReported" (savedField? "" == none)
   check "UnreadableSuccessIsReported" (savedField? "{" == none)
+  let rejected : Feedback.ServerError := .validation
+    { message := "Choose a payment method.", targets := .locations [.field "value"] [] } []
+  let decoded := FeedbackProtocol.serverError? (Lean.toJson rejected).compress
+  check "ServerErrorsRoundTrip" (decoded.map (·.errors) == some rejected.errors)
   let opened := ModelForm.openState (model := PaymentMethod) (supply := supply) PaymentMethod.form
     PaymentMethod.initial Env.nil
   let failing := [{ kind := .report, text := "The payment method does not match the receipt." }]
@@ -69,7 +73,7 @@ def run : IO Unit := do
     .submit)
   check "ReportsDoNotBlockSubmit" (pending.outbox.contains .submit)
   let saved ← IO.ofExcept (ModelForm.execute (model := PaymentMethod) PaymentMethod.form pending
-    (.submitted (.accepted (PaymentMethod.recheck pending.value))))
+    (.submitted (.accepted (PaymentMethod.serverCheck pending.value))))
   check "SavedDocumentReplacesChecks"
     (messages saved == [{ kind := .report, text := "Choose a payment method." }] &&
       !saved.ui.pending)

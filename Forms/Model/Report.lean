@@ -69,7 +69,6 @@ instance {α : Type} [FormModel α] [Reports α] [HasUuid (Raw α)] : Reports (L
   reports raw := raw.attach.flatMap fun ⟨item, member⟩ =>
     (Reports.reports (model := α) item).map (Report.mapLocations (.item item member))
 
-/-- Items of a set have no ids to point at. -/
 instance {α : Type} [FormModel α] [AlwaysValid α] : Reports { items : List α // items.Nodup } :=
   ⟨fun _ => []⟩
 
