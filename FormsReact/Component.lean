@@ -38,6 +38,7 @@ inductive Tone where
   | attention
   | outdated
   | resolved
+  | optional
   deriving ToJson, FromJson, BEq, DecidableEq, Repr
 
 /-- A control's checks, grouped for its status marker. -/
@@ -46,7 +47,8 @@ structure Checks where
   unresolved : List String
   outdated : List String
   resolved : List String
-  deriving ToJson, FromJson, BEq, Repr
+  optional : List String
+  deriving ToJson, FromJson, BEq, DecidableEq, Repr
 
 /-- A text input whose draft React owns; `onCommit` receives the draft text.
 Values travel as text, so numbers beyond 2^53 survive JavaScript. -/

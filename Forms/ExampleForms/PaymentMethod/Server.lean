@@ -22,6 +22,6 @@ def PaymentMethod.serverCheck (raw : PaymentMethod.Raw) : PaymentMethod.Raw :=
         isFailing := false
         isMandatory := true
         canBeResolvedWithApproving := false }
-  { raw with checks := ⟨[check]⟩ }
+  { raw with checks := ⟨[check, PaymentMethod.receiptCheck]⟩ }
 
 end Forms.ExampleForms

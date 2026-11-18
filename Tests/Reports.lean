@@ -4,6 +4,7 @@ public import Forms.ExampleForms.PaymentMethod.Server
 public import Forms.ExampleForms.Receipts
 public import Forms.Runtime.ModelForm
 public import Forms.Runtime.ModelProtocol
+public import Forms.Runtime.ReactView
 public import Tests.FreshId
 meta import Forms.Model.Derive
 
@@ -34,31 +35,57 @@ private def nested : Payments.Raw where
   primary := some PaymentMethod.initial
   others := [⟨firstId, PaymentMethod.initial⟩]
 
-example : (ModelForm.reports (model := Payments) nested true).map (·.targets) = [
-    .locations [.field "primary", .constructor "some", .field "value"] [],
-    .locations [.field "others", .item firstId, .field "value", .field "value"] []] := by
+private def primary : Diagnostic.Targets :=
+  .locations [.field "primary", .constructor "some", .field "value"] []
+
+private def other : Diagnostic.Targets :=
+  .locations [.field "others", .item firstId, .field "value", .field "value"] []
+
+example : (ModelForm.reports (model := Payments) nested true).map (·.targets) =
+    [primary, primary, other, other] := by
   decide
+
+private def mandatory (state : Diagnostic.ReportState) (outdated : Bool) : Diagnostic.Kind :=
+  .report { state, requirement := .mandatory, outdated }
+
+private def optional (state : Diagnostic.ReportState) (outdated : Bool) : Diagnostic.Kind :=
+  .report { state, requirement := .optional, outdated }
 
 private def claimed : Receipts.Raw :=
   ⟨[⟨firstId, "R-1", ⟨true⟩⟩, ⟨secondId, "R-1", ⟨false⟩⟩]⟩
 
 /-- Once the value changes, the server's report is outdated; the form's own reports are not. -/
 example : (ModelForm.reports (model := Receipts) claimed false).map (·.kind) = [
-    .report .unresolved false, .report .unresolved false, .report .unresolved true] := by
+    mandatory .unresolved false, mandatory .unresolved false, mandatory .unresolved true] := by
   decide
 
 example : (ModelForm.reports (model := Receipts) claimed true).map (·.kind) = [
-    .report .unresolved false, .report .unresolved false, .report .unresolved false] := by
+    mandatory .unresolved false, mandatory .unresolved false, mandatory .unresolved false] := by
   decide
 
-/-- Outdated checks stay issues if they failed last time. -/
 example : (Diagnostic.issues [
-    { kind := .report .resolved false, message := "resolved", targets := .global },
-    { kind := .report .resolved true, message := "passed before", targets := .global },
-    { kind := .report .unresolved true, message := "failed before", targets := .global },
-    { kind := .report .unresolved false, message := "unresolved", targets := .global },
+    { kind := mandatory .resolved false, message := "resolved", targets := .global },
+    { kind := mandatory .resolved true, message := "passed before", targets := .global },
+    { kind := mandatory .unresolved true, message := "failed before", targets := .global },
+    { kind := mandatory .unresolved false, message := "unresolved", targets := .global },
+    { kind := optional .unresolved false, message := "optional", targets := .global },
     { kind := .error, message := "error", targets := .global }] []).map (·.message) =
     ["failed before", "unresolved", "error"] := by
+  decide
+
+example : FormsReact.Checks.of [
+    { kind := optional .unresolved false, text := "optional" },
+    { kind := mandatory .resolved false, text := "resolved" }] =
+    some
+      { tone := .resolved
+        unresolved := []
+        outdated := []
+        resolved := ["resolved"]
+        optional := ["optional"] } := by
+  decide
+
+example : (FormsReact.Checks.of [{ kind := optional .unresolved false, text := "optional" }]).map
+    (·.tone) = some .optional := by
   decide
 
 private def label : String := "Expense Payment Method"
@@ -86,18 +113,22 @@ def run : IO Unit := do
   let opened := ModelForm.openState (model := PaymentMethod) (supply := supply) PaymentMethod.form
     PaymentMethod.initial Env.nil
   let mismatch := "The payment method does not match the receipt."
-  check "ReportsShowMandatoryChecksOnTheirTarget"
-    (messages opened == [{ kind := .report .unresolved false, text := mismatch }])
+  let receipt : Message :=
+    { kind := optional .unresolved false, text := PaymentMethod.receiptCheck.message }
+  check "ReportsShowChecksOnTheirTarget"
+    (messages opened == [{ kind := mandatory .unresolved false, text := mismatch }, receipt])
   let matching := ModelForm.openState (model := PaymentMethod) (supply := supply)
     PaymentMethod.form (PaymentMethod.serverCheck { PaymentMethod.initial with
       value := some .blpCreditCard }) Env.nil
   check "PassingChecksAreResolved" (messages matching ==
-    [{ kind := .report .resolved false, text := "The payment method matches the receipt." }])
+    [{ kind := mandatory .resolved false, text := "The payment method matches the receipt." },
+      receipt])
   let some control := opened.evaluation.view.controls.find? (·.label == label)
     | throw (IO.userError s!"Missing control: {label}")
   let cleared ← IO.ofExcept (ModelForm.execute (model := PaymentMethod) PaymentMethod.form opened
     (.apply control.key (some (.text "none"))))
-  let outdated := [{ kind := .report .unresolved true, text := mismatch }]
+  let outdated := [{ kind := mandatory .unresolved true, text := mismatch },
+    { receipt with kind := optional .unresolved true }]
   check "EditsOutdateServerChecks" (cleared.value.value == none && messages cleared == outdated)
   let pending ← IO.ofExcept (ModelForm.execute (model := PaymentMethod) PaymentMethod.form cleared
     .submit)
@@ -109,7 +140,8 @@ def run : IO Unit := do
   let saved ← IO.ofExcept (ModelForm.execute (model := PaymentMethod) PaymentMethod.form pending
     (.submitted (.accepted (PaymentMethod.serverCheck pending.value))))
   check "SavedDocumentReplacesChecks"
-    (messages saved == [{ kind := .report .unresolved false, text := "Choose a payment method." }] &&
+    (messages saved ==
+        [{ kind := mandatory .unresolved false, text := "Choose a payment method." }, receipt] &&
       !saved.ui.pending)
   let reset ← IO.ofExcept
     (ModelForm.execute (model := PaymentMethod) PaymentMethod.form saved .reset)

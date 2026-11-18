@@ -1,15 +1,11 @@
 module
 
+public import Forms.Model.Diagnostic
 public import Forms.Model.Item
 public import Forms.Model.ReadOnly
 
 @[expose] public section
 namespace Forms.Model
-
-inductive Report.Status where
-  | unresolved
-  | resolved
-  deriving BEq, DecidableEq, Repr
 
 inductive Report.Origin where
   /-- Computed from the current value, so it is always current. -/
@@ -20,7 +16,8 @@ inductive Report.Origin where
 
 /-- A message about a raw value that never blocks submit, such as a server check. -/
 structure Report {α : Type} (value : α) where
-  status : Report.Status
+  status : Diagnostic.ReportState
+  requirement : Diagnostic.Requirement
   origin : Report.Origin
   message : String
   targets : Targets α value
@@ -33,6 +30,7 @@ def Report.mapLocations
   (report : Report value)
   : Report outer where
   status := report.status
+  requirement := report.requirement
   origin := report.origin
   message := report.message
   targets := report.targets.mapLocations step

@@ -22,14 +22,19 @@ def _root_.Forms.Model.TextKind.toReact : Model.TextKind → FormsReact.TextKind
   | .uuid => .uuid
 
 def _root_.FormsReact.Checks.of (messages : List Model.Message) : Option FormsReact.Checks :=
-  let unresolved := Model.Message.reports .unresolved false messages
-  let outdated := Model.Message.reports .unresolved true messages ++
-    Model.Message.reports .resolved true messages
-  let resolved := Model.Message.reports .resolved false messages
+  let mandatory (keep : Model.Diagnostic.ReportKind → Bool) :=
+    Model.Message.reports (fun kind => kind.requirement == .mandatory && keep kind) messages
+  let unresolved := mandatory fun kind => kind.state == .unresolved && !kind.outdated
+  let outdated := mandatory (·.outdated)
+  let resolved := mandatory fun kind => kind.state == .resolved && !kind.outdated
+  let optional := Model.Message.reports (·.requirement == .optional) messages
   let tone : FormsReact.Tone :=
-    if !unresolved.isEmpty then .attention else if !outdated.isEmpty then .outdated else .resolved
-  if unresolved.isEmpty && outdated.isEmpty && resolved.isEmpty then none
-  else some { tone, unresolved, outdated, resolved }
+    if !unresolved.isEmpty then .attention
+    else if !outdated.isEmpty then .outdated
+    else if !resolved.isEmpty then .resolved
+    else .optional
+  if unresolved.isEmpty && outdated.isEmpty && resolved.isEmpty && optional.isEmpty then none
+  else some { tone, unresolved, outdated, resolved, optional }
 
 theorem _root_.FormsReact.Checks.of_attention
   {messages : List Model.Message}
@@ -47,7 +52,21 @@ theorem _root_.FormsReact.Checks.of_resolved
   {messages : List Model.Message}
   {checks : FormsReact.Checks}
   (built : FormsReact.Checks.of messages = some checks)
-  : checks.tone = .resolved ↔ checks.unresolved = [] ∧ checks.outdated = [] := by
+  : checks.tone = .resolved ↔
+    checks.unresolved = [] ∧ checks.outdated = [] ∧ checks.resolved ≠ [] := by
+  simp only [FormsReact.Checks.of] at built
+  split at built
+  · cases built
+  · cases built
+    repeat' split
+    all_goals simp_all
+
+theorem _root_.FormsReact.Checks.of_optional
+  {messages : List Model.Message}
+  {checks : FormsReact.Checks}
+  (built : FormsReact.Checks.of messages = some checks)
+  : checks.tone = .optional ↔
+    checks.unresolved = [] ∧ checks.outdated = [] ∧ checks.resolved = [] := by
   simp only [FormsReact.Checks.of] at built
   split at built
   · cases built

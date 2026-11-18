@@ -31,6 +31,7 @@ const summaries: Record<FormsReact.Tone, (checks: FormsReact.Checks) => string> 
   attention: ({ unresolved }) => `${unresolved.length} open`,
   outdated: () => 'changed since the last check',
   resolved: () => 'all resolved',
+  optional: ({ optional }) => `${optional.length} optional`,
 };
 
 /** Only phrasing content, so it can sit in a legend. */
@@ -42,6 +43,7 @@ function StatusMarker({ checks }: { checks: FormsReact.Checks | null }) {
     { title: 'Open', items: checks.unresolved },
     { title: 'Changed since the last check. Submit to re-check.', items: checks.outdated },
     { title: 'Resolved automatically', items: checks.resolved },
+    { title: 'Optional', items: checks.optional },
   ].filter(section => section.items.length > 0);
   // Top-layer popovers aren't anchored; measure at the left edge, where it doesn't shrink.
   const place = (panel: HTMLElement) => {

@@ -150,6 +150,7 @@ caption { text-align: left; font-size: 16px; font-weight: 500; padding-bottom: v
 .status-marker.attention { --marker: var(--warning); }
 .status-marker.outdated { --marker: var(--text-secondary); }
 .status-marker.resolved { --marker: var(--success); }
+.status-marker.optional { --marker: var(--primary); }
 legend > .status-marker { display: inline-block; margin: 0 0 0 4px; vertical-align: top; }
 .stack > .status-marker, .table-component > .status-marker { display: block; margin: var(--space-xs) 0 0; }
 .checks {

@@ -27,8 +27,10 @@ inductive ExpensePaymentMethod where
   deriving FormModel
 
 instance : ReportRule PaymentMethod where
-  reports raw := raw.checks.value.filter (·.isMandatory) |>.map fun check =>
+  reports raw := raw.checks.value.filter (fun check => check.isMandatory || check.isFailing)
+    |>.map fun check =>
     { status := if check.isFailing then .unresolved else .resolved
+      requirement := if check.isMandatory then .mandatory else .optional
       origin := .server
       message := check.message
       targets := .locations (.field PaymentMethod.Field.value .self) }
@@ -39,6 +41,12 @@ def PaymentMethod.form : Component [] PaymentMethod.Raw :=
   .optional path[PaymentMethod.Field.value] "Expense Payment Method" "Not set" "Set" .blpCreditCard
     (.enum .self "Method" [⟨.blpCreditCard, "BLP credit card"⟩, ⟨.privatelyPaid, "Privately paid"⟩])
 
+def PaymentMethod.receiptCheck : FailingCheck where
+  message := "Attach the original receipt."
+  isFailing := true
+  isMandatory := false
+  canBeResolvedWithApproving := false
+
 def PaymentMethod.initial : PaymentMethod.Raw where
   value := some .privatelyPaid
   checks := ⟨[
@@ -46,10 +54,7 @@ def PaymentMethod.initial : PaymentMethod.Raw where
       isFailing := true
       isMandatory := true
       canBeResolvedWithApproving := true },
-    { message := "This optional check is not shown."
-      isFailing := false
-      isMandatory := false
-      canBeResolvedWithApproving := false }]⟩
+    PaymentMethod.receiptCheck]⟩
   disabled := ⟨false⟩
   visible := ⟨true⟩
 

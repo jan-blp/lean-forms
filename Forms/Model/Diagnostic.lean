@@ -14,10 +14,22 @@ inductive ReportState where
   | resolved
   deriving BEq, DecidableEq, Repr, Lean.ToJson, Lean.FromJson
 
+inductive Requirement where
+  | mandatory
+  | optional
+  deriving BEq, DecidableEq, Repr, Lean.ToJson, Lean.FromJson
+
+structure ReportKind where
+  state : ReportState
+  requirement : Requirement
+  /-- Reads server data older than the current value. -/
+  outdated : Bool
+  deriving BEq, DecidableEq, Repr, Lean.ToJson, Lean.FromJson
+
 inductive Kind where
   | error
-  /-- Never blocks submit. `outdated` when it reads server data older than the current value. -/
-  | report (state : ReportState) (outdated : Bool)
+  /-- Never blocks submit. -/
+  | report (kind : ReportKind)
   deriving BEq, DecidableEq, Lean.ToJson, Lean.FromJson
 
 inductive Targets where
@@ -42,17 +54,14 @@ structure Message where
 def Message.errors (messages : List Message) : List String :=
   (messages.filter (·.kind == .error)).map (·.text)
 
-def Message.reports
-  (state : Diagnostic.ReportState)
-  (outdated : Bool)
-  (messages : List Message)
-  : List String :=
-  (messages.filter (·.kind == .report state outdated)).map (·.text)
+def Message.reports (keep : Diagnostic.ReportKind → Bool) (messages : List Message) : List String :=
+  messages.filterMap fun message => match message.kind with
+    | .error => none
+    | .report kind => if keep kind then some message.text else none
 
 def Diagnostic.Kind.actionable : Diagnostic.Kind → Bool
   | .error => true
-  | .report .unresolved _ => true
-  | .report .resolved _ => false
+  | .report kind => kind.requirement == .mandatory && kind.state == .unresolved
 
 structure Destination where
   locations : List ErasedLocation

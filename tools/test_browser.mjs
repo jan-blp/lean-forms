@@ -458,6 +458,9 @@ try {
     const checks = document.getElementById(marker().getAttribute('popovertarget'));
     check(checks.matches(':popover-open') && checks.textContent.includes('does not match the receipt'),
       'The marker did not list its checks');
+    check([...checks.querySelectorAll('.checks-section')].some(section =>
+      section.querySelector('.checks-title').textContent === 'Optional' &&
+      section.textContent.includes('Attach the original receipt.')), 'The optional check was not marked optional');
     checks.hidePopover();
     [...document.querySelectorAll('label')].find(label => label.textContent === 'BLP credit card')
       .querySelector('input').click();

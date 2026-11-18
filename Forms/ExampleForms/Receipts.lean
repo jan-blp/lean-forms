@@ -24,6 +24,7 @@ instance : ReportRule Receipt where
   reports raw :=
     if raw.alreadySubmitted.value then
       [{ status := .unresolved
+         requirement := .mandatory
          origin := .server
          message := "This receipt was already submitted."
          targets := .locations (.field Receipt.Field.number .self) }]
@@ -40,6 +41,7 @@ instance : ReportRule Receipts where
     if (raw.receipts.filter (·.number == receipt.number)).length > 1 then
       some
         { status := .unresolved
+          requirement := .mandatory
           origin := .form
           message := "Another receipt in this form has the same number."
           targets := .locations (.field Receipts.Field.receipts

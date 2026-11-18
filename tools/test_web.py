@@ -106,7 +106,7 @@ def payment_method_session():
         status, headers, body = request('/api/submit', submission)
         assert status == 200 and headers['Content-Type'] == 'application/json', (status, headers)
         checks = json.loads(body)['value']['checks']
-        assert [check['isFailing'] for check in checks] == [False], checks
+        assert [check['isFailing'] for check in checks if check['isMandatory']] == [False], checks
 
 
 def receipts_session():

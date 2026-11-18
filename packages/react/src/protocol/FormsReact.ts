@@ -2,8 +2,8 @@
 export type Component = { "textField": TextField } | { "checkbox": Checkbox } | { "choice": Choice } | { "choices": Choices } | { "output": Output } | { "button": Button } | { "tabBar": TabBar } | { "group": Group } | { "table": Table } | { "page": Page };
 export type TextField = { "name": string; "label": string; "kind": TextKind; "value": string; "disabled": boolean; "errors": string[]; "checks": Checks | null; "onCommit": Action };
 export type TextKind = "plain" | "natural" | "integer" | "decimal" | "date" | "uuid";
-export type Checks = { "tone": Tone; "unresolved": string[]; "outdated": string[]; "resolved": string[] };
-export type Tone = "attention" | "outdated" | "resolved";
+export type Checks = { "tone": Tone; "unresolved": string[]; "outdated": string[]; "resolved": string[]; "optional": string[] };
+export type Tone = "attention" | "outdated" | "resolved" | "optional";
 export type Action = { "apply": { "name": string } } | { "press": { "name": string } } | "submit" | "reset";
 export type Checkbox = { "name": string; "label": string; "checked": boolean; "disabled": boolean; "errors": string[]; "checks": Checks | null; "onChange": Action };
 export type Choice = { "name": string; "label": string; "value": string; "options": ChoiceOption[]; "disabled": boolean; "errors": string[]; "checks": Checks | null; "onChange": Action };
