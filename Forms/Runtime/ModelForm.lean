@@ -330,8 +330,8 @@ def event {Γ : Model.Context}
       { state with ui := { (state.ui.announce message true) with pending := false } }
     match outcome with
     | .accepted saved =>
-      if let some corrupt := Model.corruption? model saved
-      then return unreachable corrupt.message
+      if (Model.corruption? model saved).isSome
+      then return unreachable "Your form was saved, but an internal error occurred. Please contact BLP."
       -- The saved document becomes the new starting point; UI state is kept.
       let state := { applyUpdate (model := model) form state
         { value := saved, state := state.env, locals := state.locals } with initial := saved }

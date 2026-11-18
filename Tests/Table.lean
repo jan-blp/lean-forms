@@ -116,7 +116,8 @@ def run : IO Unit := do
       corrupt.initial.expenses.map (·.id) == ExpenseReport.initial.expenses.map (·.id) &&
       !corrupt.ui.pending &&
       (match corrupt.ui.notice with
-        | .error message => message == duplicateIdsMessage [firstId]
+        | .error message =>
+          message == "Your form was saved, but an internal error occurred. Please contact BLP."
         | .info _ => false))
 
 end Tests.Table
