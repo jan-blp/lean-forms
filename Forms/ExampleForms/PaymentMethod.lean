@@ -27,8 +27,10 @@ inductive ExpensePaymentMethod where
   deriving FormModel
 
 instance : ReportRule PaymentMethod where
-  reports raw := raw.checks.value.filter (·.isFailing) |>.map fun check =>
-    { message := check.message
+  reports raw := raw.checks.value.filter (·.isMandatory) |>.map fun check =>
+    { status := if check.isFailing then .unresolved else .resolved
+      origin := .server
+      message := check.message
       targets := .locations (.field PaymentMethod.Field.value .self) }
 
 def PaymentMethod.form : Component [] PaymentMethod.Raw :=
@@ -44,7 +46,7 @@ def PaymentMethod.initial : PaymentMethod.Raw where
       isFailing := true
       isMandatory := true
       canBeResolvedWithApproving := true },
-    { message := "This check passed and is not shown."
+    { message := "This optional check is not shown."
       isFailing := false
       isMandatory := false
       canBeResolvedWithApproving := false }]⟩

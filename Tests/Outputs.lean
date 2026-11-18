@@ -45,6 +45,7 @@ private def press
   [FormModel model]
   [Validation model]
   [Reports model]
+  [Lean.ToJson (Raw model)]
   {component : Component [] (Raw model) β}
   (state : ModelForm.State component)
   (label : String)

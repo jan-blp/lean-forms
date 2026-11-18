@@ -448,6 +448,24 @@ try {
     await click('[data-action=reset]');
     check(output() === '', 'Reset did not clear row-local selections');
   `);
+  const marker = `const marker = () => [...document.querySelectorAll('legend')].find(legend =>
+    legend.firstChild.textContent === 'Expense Payment Method').querySelector('.status-marker');`;
+  await example('payment-method', `
+    ${marker}
+    check(marker().classList.contains('attention'), 'A failing check did not ask for attention');
+    marker().click();
+    await tick();
+    const checks = document.getElementById(marker().getAttribute('popovertarget'));
+    check(checks.matches(':popover-open') && checks.textContent.includes('does not match the receipt'),
+      'The marker did not list its checks');
+    checks.hidePopover();
+    [...document.querySelectorAll('label')].find(label => label.textContent === 'BLP credit card')
+      .querySelector('input').click();
+    await wait(() => marker().classList.contains('outdated'));
+  `, evaluate => evaluate(`
+    ${marker}
+    await wait(() => marker().classList.contains('resolved'));
+  `));
 
 } finally {
   socket?.close();

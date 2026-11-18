@@ -9,10 +9,16 @@ namespace Forms.Model
 
 namespace Diagnostic
 
+inductive ReportState where
+  | unresolved
+  | resolved
+  | outdated
+  deriving BEq, DecidableEq, Repr, Lean.ToJson, Lean.FromJson
+
 inductive Kind where
   | error
-  /-- Never blocks submit, such as a failing server check. -/
-  | report
+  /-- Never blocks submit, such as a server check. -/
+  | report (state : ReportState)
   deriving BEq, DecidableEq, Lean.ToJson, Lean.FromJson
 
 inductive Targets where
@@ -34,8 +40,17 @@ structure Message where
   text : String
   deriving BEq, DecidableEq
 
-def Message.texts (kind : Diagnostic.Kind) (messages : List Message) : List String :=
-  (messages.filter (·.kind == kind)).map (·.text)
+def Message.errors (messages : List Message) : List String :=
+  (messages.filter (·.kind == .error)).map (·.text)
+
+def Message.reports (state : Diagnostic.ReportState) (messages : List Message) : List String :=
+  (messages.filter (·.kind == .report state)).map (·.text)
+
+def Diagnostic.Kind.actionable : Diagnostic.Kind → Bool
+  | .error => true
+  | .report .unresolved => true
+  | .report .resolved => false
+  | .report .outdated => false
 
 structure Destination where
   locations : List ErasedLocation
@@ -55,7 +70,7 @@ def Diagnostic.issues
   (diagnostics : List Diagnostic)
   (scope : ErasedLocation)
   : List Issue :=
-  diagnostics.filterMap fun diagnostic => match diagnostic.targets with
+  (diagnostics.filter (·.kind.actionable)).filterMap fun diagnostic => match diagnostic.targets with
     | .global =>
       if scope.isEmpty then some { message := diagnostic.message, destination? := none } else none
     | .locations first rest =>

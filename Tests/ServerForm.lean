@@ -19,7 +19,7 @@ private def alreadySubmitted (raw : Receipts.Raw) : List Bool :=
 private def repeated : Receipts.Raw :=
   ⟨[⟨firstId, "R-1", ⟨false⟩⟩, ⟨secondId, "R-2", ⟨false⟩⟩, ⟨thirdId, "R-1", ⟨false⟩⟩]⟩
 
-example : (ModelForm.reports (model := Receipts) repeated).map (·.targets) = [
+example : (ModelForm.reports (model := Receipts) repeated true).map (·.targets) = [
     .locations [.field "receipts", .item firstId, .field "number"] [],
     .locations [.field "receipts", .item thirdId, .field "number"] []] := by
   decide

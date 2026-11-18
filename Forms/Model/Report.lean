@@ -6,8 +6,22 @@ public import Forms.Model.ReadOnly
 @[expose] public section
 namespace Forms.Model
 
-/-- A message about a raw value that doesn't blocks submit, such as a failing server check. -/
+inductive Report.Status where
+  | unresolved
+  | resolved
+  deriving BEq, DecidableEq, Repr
+
+inductive Report.Origin where
+  /-- Computed from the current value, so it is always current. -/
+  | form
+  /-- Read from data the server computed for the last saved document. -/
+  | server
+  deriving BEq, DecidableEq, Repr
+
+/-- A message about a raw value that never blocks submit, such as a server check. -/
 structure Report {α : Type} (value : α) where
+  status : Report.Status
+  origin : Report.Origin
   message : String
   targets : Targets α value
 
@@ -18,6 +32,8 @@ def Report.mapLocations
   (step : Location value → Location outer)
   (report : Report value)
   : Report outer where
+  status := report.status
+  origin := report.origin
   message := report.message
   targets := report.targets.mapLocations step
 

@@ -23,7 +23,9 @@ instance Receipt.number_valid_rule : ConstraintRule Receipt.Constraint.number_va
 instance : ReportRule Receipt where
   reports raw :=
     if raw.alreadySubmitted.value then
-      [{ message := "This receipt was already submitted."
+      [{ status := .unresolved
+         origin := .server
+         message := "This receipt was already submitted."
          targets := .locations (.field Receipt.Field.number .self) }]
     else []
 
@@ -37,7 +39,9 @@ instance : ReportRule Receipts where
   reports raw := raw.receipts.attach.filterMap fun ⟨receipt, member⟩ =>
     if (raw.receipts.filter (·.number == receipt.number)).length > 1 then
       some
-        { message := "Another receipt in this form has the same number."
+        { status := .unresolved
+          origin := .form
+          message := "Another receipt in this form has the same number."
           targets := .locations (.field Receipts.Field.receipts
             (.item receipt member (.field Receipt.Field.number .self))) }
     else none

@@ -28,6 +28,7 @@ private def apply
   [FormModel model]
   [Validation model]
   [Reports model]
+  [Lean.ToJson (Raw model)]
   (form : Component [] (Raw model))
   (state : ModelForm.State form)
   (label : String)

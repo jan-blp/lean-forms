@@ -14,30 +14,61 @@ const inputs = {
   },
 } as const satisfies Record<FormsReact.TextKind, InputHTMLAttributes<HTMLInputElement>>;
 
-type Messages = { errors: readonly string[]; reports: readonly string[] };
-
-/** Points an element at its `Feedback`; only errors mark it invalid. */
-function described({ errors, reports }: Messages, feedback: string) {
-  return {
-    ...(errors.length === 0 ? {} : { 'aria-invalid': true } as const),
-    ...(errors.length === 0 && reports.length === 0 ? {} : { 'aria-describedby': feedback }),
-  };
+function described(errors: readonly string[], feedback: string) {
+  return errors.length === 0 ? {} : { 'aria-invalid': true, 'aria-describedby': feedback } as const;
 }
 
-/** Errors, then reports: messages that never block submit, such as failing server checks. */
-function Feedback({ id, errors, reports }: Messages & { id: string }) {
-  if (errors.length === 0 && reports.length === 0) return null;
+function Feedback({ id, errors }: { id: string; errors: readonly string[] }) {
+  if (errors.length === 0) return null;
   return (
     <div className="feedback" id={id}>
-      {errors.map((error, index) =>
-        <p key={`error-${index}`} className="validation-error">{error}</p>)}
-      {reports.map((report, index) => <p key={`report-${index}`} className="report">{report}</p>)}
+      {errors.map((error, index) => <p key={index} className="validation-error">{error}</p>)}
     </div>
   );
 }
 
+const summaries: Record<FormsReact.Tone, (checks: FormsReact.Checks) => string> = {
+  attention: ({ unresolved }) => `${unresolved.length} open`,
+  outdated: () => 'changed since the last check',
+  resolved: () => 'all resolved',
+};
+
+/** Only phrasing content, so it can sit in a legend. */
+function StatusMarker({ checks }: { checks: FormsReact.Checks | null }) {
+  const popover = useId();
+  const marker = useRef<HTMLButtonElement>(null);
+  if (checks === null) return null;
+  const sections = [
+    { title: 'Open', items: checks.unresolved },
+    { title: 'Changed since the last check. Submit to re-check.', items: checks.outdated },
+    { title: 'Resolved automatically', items: checks.resolved },
+  ].filter(section => section.items.length > 0);
+  // Top-layer popovers aren't anchored; measure at the left edge, where it doesn't shrink.
+  const place = (panel: HTMLElement) => {
+    const { left, bottom } = marker.current!.getBoundingClientRect();
+    panel.style.left = '0px';
+    panel.style.top = `${bottom + 4}px`;
+    const width = document.documentElement.clientWidth;
+    panel.style.left = `${Math.max(16, Math.min(left, width - panel.offsetWidth - 16))}px`;
+  };
+  return (
+    <>
+      <button ref={marker} type="button" className={`status-marker ${checks.tone}`}
+        popoverTarget={popover} aria-label={`Checks: ${summaries[checks.tone](checks)}`} />
+      <span id={popover} popover="auto" className="checks"
+        onToggle={event => { if (event.newState === 'open') place(event.currentTarget); }}>
+        {sections.map(({ title, items }) => <span key={title} className="checks-section">
+          <span className="checks-title">{title}</span>
+          <span role="list">{items.map((item, index) =>
+            <span key={index} role="listitem" className="check">{item}</span>)}</span>
+        </span>)}
+      </span>
+    </>
+  );
+}
+
 export function TextField(
-    { name, label, kind, value, disabled, errors, reports, onCommit }: FormsReact.TextField) {
+    { name, label, kind, value, disabled, errors, checks, onCommit }: FormsReact.TextField) {
   const form = useLeanForm();
   const input = useRef<HTMLInputElement>(null);
   const feedback = useId();
@@ -69,7 +100,7 @@ export function TextField(
         form.registerTarget(name, element);
       }} {...inputs[kind]} value={draft ?? value}
         disabled={disabled}
-        {...described({ errors: shown, reports }, feedback)}
+        {...described(shown, feedback)}
         onInput={kind === 'date' ? event => change(event.currentTarget) : undefined}
         onChange={kind === 'date' ? undefined : event => change(event.currentTarget)}
         onKeyUp={kind === 'date' ? event => {
@@ -78,46 +109,48 @@ export function TextField(
           }
         } : undefined}
         onBlur={() => { if (form.draft(name) !== undefined) commit(); }} /></label>
-      <Feedback id={feedback} errors={shown} reports={reports} />
+      <StatusMarker checks={checks} />
+      <Feedback id={feedback} errors={shown} />
     </form>
   );
 }
 
 export function Checkbox(
-    { name, label, checked, disabled, errors, reports, onChange }: FormsReact.Checkbox) {
+    { name, label, checked, disabled, errors, checks, onChange }: FormsReact.Checkbox) {
   const form = useLeanForm();
   const feedback = useId();
   return (
     <form className="editor" noValidate onSubmit={event => event.preventDefault()}>
       <label>{label}<input ref={element => form.registerTarget(name, element)}
         type="checkbox" checked={checked} disabled={disabled}
-        {...described({ errors, reports }, feedback)}
+        {...described(errors, feedback)}
         onChange={event => form.run(onChange, event.target.checked)} /></label>
-      <Feedback id={feedback} errors={errors} reports={reports} />
+      <StatusMarker checks={checks} />
+      <Feedback id={feedback} errors={errors} />
     </form>
   );
 }
 
 export function Choice(
-    { name, label, value, options, disabled, errors, reports, onChange }: FormsReact.Choice) {
+    { name, label, value, options, disabled, errors, checks, onChange }: FormsReact.Choice) {
   const form = useLeanForm();
   const feedback = useId();
   return (
     <fieldset ref={element => form.registerTarget(name,
       element?.querySelector<HTMLInputElement>('input:checked') ?? element?.querySelector('input') ?? null)}
-      className="choice" {...described({ errors, reports }, feedback)}>
-      <legend>{label}</legend>
+      className="choice" {...described(errors, feedback)}>
+      <legend>{label}<StatusMarker checks={checks} /></legend>
       {options.map(option =>
         <label key={option.value}><input type="radio" name={name} value={option.value}
           checked={option.value === value} disabled={disabled}
           onChange={() => form.run(onChange, option.value)} />{option.label}</label>)}
-      <Feedback id={feedback} errors={errors} reports={reports} />
+      <Feedback id={feedback} errors={errors} />
     </fieldset>
   );
 }
 
 export function Choices(
-    { name, label, values, options, disabled, errors, reports, onChange }: FormsReact.Choices) {
+    { name, label, values, options, disabled, errors, checks, onChange }: FormsReact.Choices) {
   const form = useLeanForm();
   const feedback = useId();
   const toggle = (value: string, checked: boolean) => form.run(onChange,
@@ -126,13 +159,13 @@ export function Choices(
   return (
     <fieldset ref={element => form.registerTarget(name,
       element?.querySelector<HTMLInputElement>('input:checked') ?? element?.querySelector('input') ?? null)}
-      className="choice" {...described({ errors, reports }, feedback)}>
-      <legend>{label}</legend>
+      className="choice" {...described(errors, feedback)}>
+      <legend>{label}<StatusMarker checks={checks} /></legend>
       {options.map(option =>
         <label key={option.value}><input type="checkbox" value={option.value}
           checked={values.includes(option.value)} disabled={disabled}
           onChange={event => toggle(option.value, event.target.checked)} />{option.label}</label>)}
-      <Feedback id={feedback} errors={errors} reports={reports} />
+      <Feedback id={feedback} errors={errors} />
     </fieldset>
   );
 }
@@ -160,21 +193,24 @@ export function TabBar({ label, active, labels, disabled, onChange }: FormsReact
   );
 }
 
-export function Group({ label, children, errors, reports }: FormsReact.Group) {
+export function Group({ label, children, errors, checks }: FormsReact.Group) {
   const feedback = useId();
-  const message = <Feedback id={feedback} errors={errors} reports={reports} />;
-  if (label === null) return <div className="stack"><Children components={children} />{message}</div>;
+  const message = <Feedback id={feedback} errors={errors} />;
+  const marker = <StatusMarker checks={checks} />;
+  if (label === null) {
+    return <div className="stack">{marker}<Children components={children} />{message}</div>;
+  }
   return (
-    <fieldset className="component" {...described({ errors, reports }, feedback)}>
-      <legend>{label}</legend><Children components={children} />{message}
+    <fieldset className="component" {...described(errors, feedback)}>
+      <legend>{label}{marker}</legend><Children components={children} />{message}
     </fieldset>
   );
 }
 
-export function Table({ label, headers, rows, footer, errors, reports }: FormsReact.Table) {
+export function Table({ label, headers, rows, footer, errors, checks }: FormsReact.Table) {
   const feedback = useId();
   return (
-    <div className="table-component" {...described({ errors, reports }, feedback)}>
+    <div className="table-component" {...described(errors, feedback)}>
       <div className="table-scroll" tabIndex={0} role="region" aria-label={label}>
         <table>
           <caption>{label}</caption>
@@ -186,7 +222,8 @@ export function Table({ label, headers, rows, footer, errors, reports }: FormsRe
         </table>
       </div>
       {rows.length === 0 && <p className="empty">No items.</p>}
-      <Feedback id={feedback} errors={errors} reports={reports} />
+      <StatusMarker checks={checks} />
+      <Feedback id={feedback} errors={errors} />
       <Render component={footer} />
     </div>
   );

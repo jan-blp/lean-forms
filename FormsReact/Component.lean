@@ -33,6 +33,20 @@ inductive TextKind where
   | date
   | uuid
   deriving ToJson, FromJson, BEq, Repr
+/-- The colour of a status marker. -/
+inductive Tone where
+  | attention
+  | outdated
+  | resolved
+  deriving ToJson, FromJson, BEq, DecidableEq, Repr
+
+/-- A control's checks, grouped for its status marker. -/
+structure Checks where
+  tone : Tone
+  unresolved : List String
+  outdated : List String
+  resolved : List String
+  deriving ToJson, FromJson, BEq, Repr
 
 /-- A text input whose draft React owns; `onCommit` receives the draft text.
 Values travel as text, so numbers beyond 2^53 survive JavaScript. -/
@@ -43,8 +57,7 @@ structure TextField where
   value : String
   disabled : Bool
   errors : List String
-  /-- Messages that never block submit, such as failing server checks. -/
-  reports : List String
+  checks : Option Checks
   onCommit : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -55,8 +68,7 @@ structure Checkbox where
   checked : Bool
   disabled : Bool
   errors : List String
-  /-- Messages that never block submit, such as failing server checks. -/
-  reports : List String
+  checks : Option Checks
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -73,8 +85,7 @@ structure Choice where
   options : List ChoiceOption
   disabled : Bool
   errors : List String
-  /-- Messages that never block submit, such as failing server checks. -/
-  reports : List String
+  checks : Option Checks
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -86,8 +97,7 @@ structure Choices where
   options : List ChoiceOption
   disabled : Bool
   errors : List String
-  /-- Messages that never block submit, such as failing server checks. -/
-  reports : List String
+  checks : Option Checks
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -114,14 +124,13 @@ structure TabBar where
   deriving ToJson, FromJson, BEq, Repr
 
 mutual
-/-- Children grouped under an optional legend; `errors` and `reports` are about the group as a
+/-- Children grouped under an optional legend; `errors` and `checks` are about the group as a
 whole. -/
 structure Group where
   label : Option String
   children : List Component
   errors : List String
-  /-- Messages that never block submit, such as failing server checks. -/
-  reports : List String
+  checks : Option Checks
   /-- The item id of a list row; React keeps the row's state when siblings move. -/
   key : Option String
 
@@ -137,8 +146,7 @@ structure Table where
   rows : List TableRow
   footer : Component
   errors : List String
-  /-- Messages that never block submit, such as failing server checks. -/
-  reports : List String
+  checks : Option Checks
 
 structure Page where
   title : String

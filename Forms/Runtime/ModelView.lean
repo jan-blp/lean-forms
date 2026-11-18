@@ -42,8 +42,16 @@ def error {α : Type} {value : α} (error : Model.Error value) : Diagnostic wher
   message := error.message
   targets := error.targets.erase
 
-def report {α : Type} {value : α} (report : Model.Report value) : Diagnostic where
-  kind := .report
+def report {α : Type} {value : α} (checked : Bool) (report : Model.Report value) : Diagnostic where
+  kind :=
+    let current : Diagnostic.ReportState := match report.status with
+      | .unresolved => .unresolved
+      | .resolved => .resolved
+    .report <| match report.origin, checked with
+      | .form, true => current
+      | .form, false => current
+      | .server, true => current
+      | .server, false => .outdated
   message := report.message
   targets := report.targets.erase
 

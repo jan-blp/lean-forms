@@ -47,7 +47,7 @@ structure Control where
   deriving BEq
 
 def Control.errors (control : Control) : List String :=
-  Model.Message.texts .error control.messages
+  Model.Message.errors control.messages
 
 mutual
 inductive View where

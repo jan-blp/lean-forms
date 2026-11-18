@@ -31,8 +31,11 @@ def controlToJson (control : Control) : Json :=
     ("label", toJson control.label), ("disabled", toJson control.disabled),
     ("kind", toJson "editor"), ("location", FeedbackProtocol.locationToJson control.location),
     ("widget", toJson (widgetName control.input)),
-    ("messages", toJson (Model.Message.texts .error control.messages)),
-    ("reports", toJson (Model.Message.texts .report control.messages))])
+    ("messages", toJson (Model.Message.errors control.messages)),
+    ("reports", toJson (control.messages.filterMap fun message => match message.kind with
+      | .error => none
+      | .report state =>
+        some (Json.mkObj [("message", toJson message.text), ("state", toJson state)])))])
 
 end DisplayProtocol
 
