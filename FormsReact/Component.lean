@@ -38,7 +38,7 @@ inductive Tone where
   | attention
   | outdated
   | resolved
-  | optional
+  | info
   deriving ToJson, FromJson, BEq, DecidableEq, Repr
 
 /-- Checks grouped for a status marker. -/
@@ -47,8 +47,8 @@ structure Checks where
   unresolved : List String
   outdated : List String
   resolved : List String
-  optional : List String
-  outdatedOptional : List String
+  info : List String
+  outdatedInfo : List String
   deriving ToJson, FromJson, BEq, DecidableEq, Repr
 
 /-- A text input whose draft React owns; `onCommit` receives the draft text.

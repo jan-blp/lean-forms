@@ -72,7 +72,7 @@ example : (Diagnostic.issues [
     ["failed before", "unresolved", "error"] := by
   decide
 
-example : Message.checks [
+example : Message.reports [
     { kind := .error, text := "error" },
     { kind := .report (warning .unresolved false), text := "open" }] =
     [{ kind := warning .unresolved false, text := "open" }] := by
@@ -86,8 +86,8 @@ example : FormsReact.Checks.of [
         unresolved := []
         outdated := []
         resolved := ["resolved"]
-        optional := ["optional"]
-        outdatedOptional := [] } := by
+        info := ["optional"]
+        outdatedInfo := [] } := by
   decide
 
 example : FormsReact.Checks.of [
@@ -98,18 +98,18 @@ example : FormsReact.Checks.of [
         unresolved := []
         outdated := ["warning"]
         resolved := []
-        optional := []
-        outdatedOptional := ["optional"] } := by
+        info := []
+        outdatedInfo := ["optional"] } := by
   decide
 
 example : (FormsReact.Checks.of [{ kind := info .unresolved false, text := "optional" }]).map
-    (·.tone) = some .optional := by
+    (·.tone) = some .info := by
   decide
 
 private def label : String := "Expense Payment Method"
 
-private partial def markersOf : Display.View → List (List Check)
-  | .marker checks => [checks]
+private partial def markersOf : Display.View → List (List ReportMessage)
+  | .marker reports => [reports]
   | .stack _ children => children.flatMap markersOf
   | .list (children := children) .. => children.flatMap markersOf
   | .table (rows := rows) (footer := footer) .. =>
@@ -119,7 +119,7 @@ private partial def markersOf : Display.View → List (List Check)
   | .computed .. => []
   | .hidden => []
 
-private def markers (state : ModelForm.State PaymentMethod.form) : List (List Check) :=
+private def markers (state : ModelForm.State PaymentMethod.form) : List (List ReportMessage) :=
   markersOf state.evaluation.view
 
 /-- The saved `value` field's JSON, `none` when the response is not a success. -/
@@ -142,7 +142,7 @@ def run : IO Unit := do
   let opened := ModelForm.openState (model := PaymentMethod) (supply := supply) PaymentMethod.form
     PaymentMethod.initial Env.nil
   let mismatch := "The payment method does not match the receipt."
-  let receipt : Check :=
+  let receipt : ReportMessage :=
     { kind := info .unresolved false, text := PaymentMethod.receiptCheck.message }
   check "MarkerShowsTheFieldChecks"
     (markers opened == [[{ kind := warning .unresolved false, text := mismatch }, receipt]])

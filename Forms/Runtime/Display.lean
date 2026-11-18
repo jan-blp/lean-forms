@@ -55,7 +55,7 @@ inductive View where
   | control (control : Control)
   | stack (label : Option String) (children : List View)
   | computed (label text : String)
-  | marker (checks : List Model.Check)
+  | marker (reports : List Model.ReportMessage)
   /-- `messages` are about the list as a whole. -/
   | list (label : String) (children : List View) (messages : List Model.Message)
   | table (label : String) (headers : List String) (rows : List TableRow)
@@ -125,7 +125,7 @@ def View.dedupeFrom (seen : List ControlKey) : View → DedupeResult View
     { deduped := .keyed key result.deduped, seen := result.seen }
   | .hidden => { deduped := .hidden, seen }
   | .computed label text => { deduped := .computed label text, seen }
-  | .marker checks => { deduped := .marker checks, seen }
+  | .marker reports => { deduped := .marker reports, seen }
 
 def View.dedupeAll (seen : List ControlKey) : List View → DedupeResult (List View)
   | [] => { deduped := [], seen }

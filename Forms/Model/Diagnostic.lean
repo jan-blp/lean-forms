@@ -55,12 +55,12 @@ def Message.errors (messages : List Message) : List String :=
   (messages.filter (·.kind == .error)).map (·.text)
 
 /-- A report's message as shown at one of its locations. -/
-structure Check where
+structure ReportMessage where
   kind : Diagnostic.ReportKind
   text : String
   deriving BEq, DecidableEq, Repr
 
-def Message.checks (messages : List Message) : List Check :=
+def Message.reports (messages : List Message) : List ReportMessage :=
   messages.filterMap fun message => match message.kind with
     | .error => none
     | .report kind => some { kind, text := message.text }

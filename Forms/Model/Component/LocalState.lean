@@ -19,7 +19,7 @@ def ComponentNode.initialState
   | .tabBar .. => ()
   | .output .. => ()
   | .issues => ()
-  | .checks .. => ()
+  | .reports .. => ()
   | .statusMarker .. => ()
   | .withAvailability _ body => body.initialState
   | .select (decidableEq := _) (key := _) .. => ()

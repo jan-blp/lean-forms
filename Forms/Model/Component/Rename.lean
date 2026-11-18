@@ -36,8 +36,8 @@ def ComponentNode.rename
     .select path (label.rename rename) (options.rename rename) selected
   | .output value => .output (value.rename rename)
   | .issues => .issues
-  | .checks path => .checks path
-  | .statusMarker checks => .statusMarker (checks.rename rename)
+  | .reports path => .reports path
+  | .statusMarker reports => .statusMarker (reports.rename rename)
   | .collection (hasUuid := _) path label row display =>
     .collection path (label.rename rename) (row.rename rename.liftRow) (display.rename rename)
   | .zoom? target body => .zoom? (target.rename rename) (body.rename rename)
