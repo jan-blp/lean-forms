@@ -448,8 +448,7 @@ try {
     await click('[data-action=reset]');
     check(output() === '', 'Reset did not clear row-local selections');
   `);
-  const marker = `const marker = () => [...document.querySelectorAll('legend')].find(legend =>
-    legend.firstChild.textContent === 'Expense Payment Method').querySelector('.status-marker');
+  const marker = `const marker = () => document.querySelector('.status-marker');
     const issues = () => [...document.querySelectorAll('output')].find(output =>
       output.parentElement.firstChild.textContent === 'Current issues').textContent;
     const visit = () => [...document.querySelectorAll('button')].find(button =>

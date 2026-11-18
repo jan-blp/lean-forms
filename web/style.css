@@ -127,23 +127,23 @@ caption { text-align: left; font-size: 16px; font-weight: 500; padding-bottom: v
 .feedback { white-space: pre-line; margin: 8px 0 0; }
 .feedback > p { margin: 0; }
 .validation-error { color: var(--error); }
+.status { margin: 0 0 var(--space-xs); }
 .status-marker {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  min-height: 0;
-  margin: 0 0 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 24px;
   padding: 0;
   border: 0;
-  border-radius: 50%;
   background: transparent;
+  color: var(--text-secondary);
 }
-.status-marker::after {
+.status-marker:hover { background: transparent; color: var(--text); }
+.status-marker::before {
   content: "";
-  display: block;
+  flex: none;
   width: 12px;
   height: 12px;
-  margin: auto;
   border-radius: 50%;
   background: var(--marker);
 }
@@ -151,8 +151,6 @@ caption { text-align: left; font-size: 16px; font-weight: 500; padding-bottom: v
 .status-marker.outdated { --marker: var(--text-secondary); }
 .status-marker.resolved { --marker: var(--success); }
 .status-marker.optional { --marker: var(--primary); }
-legend > .status-marker { display: inline-block; margin: 0 0 0 4px; vertical-align: top; }
-.stack > .status-marker, .table-component > .status-marker { display: block; margin: var(--space-xs) 0 0; }
 .checks {
   position: fixed;
   inset: auto;

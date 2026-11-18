@@ -59,7 +59,9 @@ def Receipts.form : Component [] Receipts.Raw :=
     (rowLabel := .numbered "Receipt")
     (addCaption := "Add receipt")
     (initial := Receipt.Raw.mkWithoutUuid (number := "") (alreadySubmitted := ⟨false⟩))
-    (body := .field path[Receipt.Field.number] "Receipt number" .text)
+    (body := .group "" [
+      .statusMarkerAt path[Receipt.Field.number],
+      .field path[Receipt.Field.number] "Receipt number" .text])
 
 def Receipts.initial : Receipts.Raw :=
   IdGen.run do

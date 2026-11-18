@@ -42,6 +42,20 @@ structure Branch (Γ : Context) (α : Type) [Constructors α] where
   : Component Γ α (List Issue) :=
   { LocalState := Unit, node := .issues }
 
+@[reducible] def Component.checks
+  {Γ : Context}
+  {α β : Type}
+  (path : Path α β)
+  : Component Γ α (List Check) :=
+  ⟨Unit, .checks path⟩
+
+@[reducible] def Component.statusMarker
+  {Γ : Context}
+  {α : Type}
+  (checks : Computation Γ α (List Check))
+  : Component Γ α :=
+  ⟨Unit, .statusMarker checks⟩
+
 def RowSelection.itemPath
   {α β : Type}
   [HasUuid β]
@@ -459,6 +473,14 @@ The first entry in `body`'s context is the producer's current output, available 
       .own body <|
         .layout { inputs := inputs[.ui .here], run := id }
           (.const (.group none [.place (.there .here), .place .here]))
+
+/-- A status marker for the checks at `path`. -/
+@[reducible] def Component.statusMarkerAt
+  {Γ : Context}
+  {α β : Type}
+  (path : Path α β)
+  : Component Γ α :=
+  .observe (.checks path) (.statusMarker { inputs := inputs[.ui .here], run := id })
 
 @[reducible] def Component.sequence
   {Γ : Context}

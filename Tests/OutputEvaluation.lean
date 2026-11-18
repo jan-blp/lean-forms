@@ -34,6 +34,7 @@ private def texts (label : String) : Display.View → List String
   | .table (rows := rows) (footer := footer) .. => textsRows label rows ++ texts label footer
   | .keyed _ body => texts label body
   | .control _ => []
+  | .marker _ => []
   | .hidden => []
 
 private def textsAll (label : String) : List Display.View → List String

@@ -19,6 +19,8 @@ def ComponentNode.initialState
   | .tabBar .. => ()
   | .output .. => ()
   | .issues => ()
+  | .checks .. => ()
+  | .statusMarker .. => ()
   | .withAvailability _ body => body.initialState
   | .select (decidableEq := _) (key := _) .. => ()
   | .collection (hasUuid := _) .. => {}

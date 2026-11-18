@@ -135,6 +135,16 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
   | issues {Γ : Context}
       {α : Type}
       : ComponentNode Γ α Unit (List Issue) 0
+  /-- Outputs the checks a control at `path` would show. -/
+  | checks {Γ : Context}
+      {α β : Type}
+      (path : Path α β)
+      : ComponentNode Γ α Unit (List Check) 0
+  /-- Shows `checks` as a status marker, or nothing when there are none. -/
+  | statusMarker {Γ : Context}
+      {α : Type}
+      (checks : Computation Γ α (List Check))
+      : ComponentNode Γ α Unit Unit 0
   /-- Shows `row` for each item at `path` as `display` says, then the content of its hole.
   Row state is kept by item id. -/
   | collection {Γ : Context}

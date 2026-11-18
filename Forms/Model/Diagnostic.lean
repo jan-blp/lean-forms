@@ -54,10 +54,16 @@ structure Message where
 def Message.errors (messages : List Message) : List String :=
   (messages.filter (·.kind == .error)).map (·.text)
 
-def Message.reports (keep : Diagnostic.ReportKind → Bool) (messages : List Message) : List String :=
+/-- A report's message as shown at one of its locations. -/
+structure Check where
+  kind : Diagnostic.ReportKind
+  text : String
+  deriving BEq, DecidableEq, Repr
+
+def Message.checks (messages : List Message) : List Check :=
   messages.filterMap fun message => match message.kind with
     | .error => none
-    | .report kind => if keep kind then some message.text else none
+    | .report kind => some { kind, text := message.text }
 
 /-- Listed by the `issues` node. -/
 def Diagnostic.Kind.actionable : Diagnostic.Kind → Bool

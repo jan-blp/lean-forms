@@ -361,6 +361,18 @@ def evaluateNode
       view := fun _ => .hidden
       requests := []
       apply := fun _ _ => absent }
+  | .checks path =>
+    { output := Message.checks (ambient.messagesAt (location ++ path.erase))
+      locals := ()
+      view := fun _ => .hidden
+      requests := []
+      apply := fun _ _ => absent }
+  | .statusMarker checks =>
+    { output := ()
+      locals := ()
+      view := fun _ => .marker (checks.eval value env)
+      requests := []
+      apply := fun _ _ => absent }
   | .zoom? computation body =>
     let path? := computation.eval value env
     match path?, path?.bind (·.get? value) with

@@ -41,7 +41,7 @@ inductive Tone where
   | optional
   deriving ToJson, FromJson, BEq, DecidableEq, Repr
 
-/-- A control's checks, grouped for its status marker. -/
+/-- Checks grouped for a status marker. -/
 structure Checks where
   tone : Tone
   unresolved : List String
@@ -60,7 +60,6 @@ structure TextField where
   value : String
   disabled : Bool
   errors : List String
-  checks : Option Checks
   onCommit : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -71,7 +70,6 @@ structure Checkbox where
   checked : Bool
   disabled : Bool
   errors : List String
-  checks : Option Checks
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -88,7 +86,6 @@ structure Choice where
   options : List ChoiceOption
   disabled : Bool
   errors : List String
-  checks : Option Checks
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -100,7 +97,6 @@ structure Choices where
   options : List ChoiceOption
   disabled : Bool
   errors : List String
-  checks : Option Checks
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -127,13 +123,11 @@ structure TabBar where
   deriving ToJson, FromJson, BEq, Repr
 
 mutual
-/-- Children grouped under an optional legend; `errors` and `checks` are about the group as a
-whole. -/
+/-- Children grouped under an optional legend; `errors` are about the group as a whole. -/
 structure Group where
   label : Option String
   children : List Component
   errors : List String
-  checks : Option Checks
   /-- The item id of a list row; React keeps the row's state when siblings move. -/
   key : Option String
 
@@ -149,7 +143,6 @@ structure Table where
   rows : List TableRow
   footer : Component
   errors : List String
-  checks : Option Checks
 
 structure Page where
   title : String
@@ -170,6 +163,7 @@ inductive Component where
   | group : Group → Component
   | table : Table → Component
   | page : Page → Component
+  | statusMarker : Checks → Component
 end
 
 deriving instance ToJson, FromJson, BEq, Repr for Group, TableRow, Table, Page, Component
@@ -187,6 +181,7 @@ def Component.draftFields : Component → List String
   | .group { children, .. } => draftFieldsOf children
   | .table { rows, footer, .. } => draftFieldsOfRows rows ++ footer.draftFields
   | .page { body, toolbar, .. } => draftFieldsOf body ++ draftFieldsOf toolbar
+  | .statusMarker _ => []
 
 def draftFieldsOf : List Component → List String
   | [] => []

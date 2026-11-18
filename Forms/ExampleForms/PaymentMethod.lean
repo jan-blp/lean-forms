@@ -46,6 +46,7 @@ def PaymentMethod.form : Component [] PaymentMethod.Raw :=
       inputs := inputs[.ui (Ref.here : InputRef _ (List Issue))]
       run := id }
     .group "Payment" [
+      .statusMarkerAt path[PaymentMethod.Field.value],
       PaymentMethod.field,
       .computed "Current issues" ((fun issues =>
         String.intercalate "\n" (issues.map (·.message))) <$> issues),

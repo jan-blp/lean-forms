@@ -72,6 +72,7 @@ private def texts (label : String) : Display.View → List String
   | .table (rows := rows) (footer := footer) .. => textsRows label rows ++ texts label footer
   | .keyed _ body => texts label body
   | .control _ => []
+  | .marker _ => []
   | .hidden => []
 
 private def textsAll (label : String) : List Display.View → List String
@@ -90,6 +91,7 @@ private partial def order : Display.View → List String
   | .list (children := children) .. => children.flatMap order
   | .keyed _ body => order body
   | .control _ => []
+  | .marker _ => []
   | .hidden => []
 
 def request : HttpRequest := { method := .get, url := "/hidden-value", body := none }

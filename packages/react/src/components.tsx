@@ -34,11 +34,9 @@ const summaries: Record<FormsReact.Tone, (checks: FormsReact.Checks) => string> 
   optional: ({ optional, outdatedOptional }) => `${optional.length + outdatedOptional.length} optional`,
 };
 
-/** Only phrasing content, so it can sit in a legend. */
-function StatusMarker({ checks }: { checks: FormsReact.Checks | null }) {
+export function StatusMarker(checks: FormsReact.Checks) {
   const popover = useId();
   const marker = useRef<HTMLButtonElement>(null);
-  if (checks === null) return null;
   const items = (texts: string[], optional: boolean) => texts.map(text => ({ text, optional }));
   const sections = [
     { title: 'Open', items: items(checks.unresolved, false) },
@@ -56,9 +54,9 @@ function StatusMarker({ checks }: { checks: FormsReact.Checks | null }) {
     panel.style.left = `${Math.max(16, Math.min(left, width - panel.offsetWidth - 16))}px`;
   };
   return (
-    <>
+    <div className="status">
       <button ref={marker} type="button" className={`status-marker ${checks.tone}`}
-        popoverTarget={popover} aria-label={`Checks: ${summaries[checks.tone](checks)}`} />
+        popoverTarget={popover}>Checks: {summaries[checks.tone](checks)}</button>
       <span id={popover} popover="auto" className="checks"
         onToggle={event => { if (event.newState === 'open') place(event.currentTarget); }}>
         {sections.map(({ title, items }) => <span key={title} className="checks-section">
@@ -69,12 +67,12 @@ function StatusMarker({ checks }: { checks: FormsReact.Checks | null }) {
             </span>)}</span>
         </span>)}
       </span>
-    </>
+    </div>
   );
 }
 
 export function TextField(
-    { name, label, kind, value, disabled, errors, checks, onCommit }: FormsReact.TextField) {
+    { name, label, kind, value, disabled, errors, onCommit }: FormsReact.TextField) {
   const form = useLeanForm();
   const input = useRef<HTMLInputElement>(null);
   const feedback = useId();
@@ -115,14 +113,13 @@ export function TextField(
           }
         } : undefined}
         onBlur={() => { if (form.draft(name) !== undefined) commit(); }} /></label>
-      <StatusMarker checks={checks} />
       <Feedback id={feedback} errors={shown} />
     </form>
   );
 }
 
 export function Checkbox(
-    { name, label, checked, disabled, errors, checks, onChange }: FormsReact.Checkbox) {
+    { name, label, checked, disabled, errors, onChange }: FormsReact.Checkbox) {
   const form = useLeanForm();
   const feedback = useId();
   return (
@@ -131,21 +128,20 @@ export function Checkbox(
         type="checkbox" checked={checked} disabled={disabled}
         {...described(errors, feedback)}
         onChange={event => form.run(onChange, event.target.checked)} /></label>
-      <StatusMarker checks={checks} />
       <Feedback id={feedback} errors={errors} />
     </form>
   );
 }
 
 export function Choice(
-    { name, label, value, options, disabled, errors, checks, onChange }: FormsReact.Choice) {
+    { name, label, value, options, disabled, errors, onChange }: FormsReact.Choice) {
   const form = useLeanForm();
   const feedback = useId();
   return (
     <fieldset ref={element => form.registerTarget(name,
       element?.querySelector<HTMLInputElement>('input:checked') ?? element?.querySelector('input') ?? null)}
       className="choice" {...described(errors, feedback)}>
-      <legend>{label}<StatusMarker checks={checks} /></legend>
+      <legend>{label}</legend>
       {options.map(option =>
         <label key={option.value}><input type="radio" name={name} value={option.value}
           checked={option.value === value} disabled={disabled}
@@ -156,7 +152,7 @@ export function Choice(
 }
 
 export function Choices(
-    { name, label, values, options, disabled, errors, checks, onChange }: FormsReact.Choices) {
+    { name, label, values, options, disabled, errors, onChange }: FormsReact.Choices) {
   const form = useLeanForm();
   const feedback = useId();
   const toggle = (value: string, checked: boolean) => form.run(onChange,
@@ -166,7 +162,7 @@ export function Choices(
     <fieldset ref={element => form.registerTarget(name,
       element?.querySelector<HTMLInputElement>('input:checked') ?? element?.querySelector('input') ?? null)}
       className="choice" {...described(errors, feedback)}>
-      <legend>{label}<StatusMarker checks={checks} /></legend>
+      <legend>{label}</legend>
       {options.map(option =>
         <label key={option.value}><input type="checkbox" value={option.value}
           checked={values.includes(option.value)} disabled={disabled}
@@ -199,21 +195,20 @@ export function TabBar({ label, active, labels, disabled, onChange }: FormsReact
   );
 }
 
-export function Group({ label, children, errors, checks }: FormsReact.Group) {
+export function Group({ label, children, errors }: FormsReact.Group) {
   const feedback = useId();
   const message = <Feedback id={feedback} errors={errors} />;
-  const marker = <StatusMarker checks={checks} />;
   if (label === null) {
-    return <div className="stack">{marker}<Children components={children} />{message}</div>;
+    return <div className="stack"><Children components={children} />{message}</div>;
   }
   return (
     <fieldset className="component" {...described(errors, feedback)}>
-      <legend>{label}{marker}</legend><Children components={children} />{message}
+      <legend>{label}</legend><Children components={children} />{message}
     </fieldset>
   );
 }
 
-export function Table({ label, headers, rows, footer, errors, checks }: FormsReact.Table) {
+export function Table({ label, headers, rows, footer, errors }: FormsReact.Table) {
   const feedback = useId();
   return (
     <div className="table-component" {...described(errors, feedback)}>
@@ -228,7 +223,6 @@ export function Table({ label, headers, rows, footer, errors, checks }: FormsRea
         </table>
       </div>
       {rows.length === 0 && <p className="empty">No items.</p>}
-      <StatusMarker checks={checks} />
       <Feedback id={feedback} errors={errors} />
       <Render component={footer} />
     </div>
@@ -262,4 +256,5 @@ export const defaultComponents: Components = {
   group: Group,
   table: Table,
   page: Page,
+  statusMarker: StatusMarker,
 };

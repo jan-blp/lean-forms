@@ -21,14 +21,21 @@ def _root_.Forms.Model.TextKind.toReact : Model.TextKind → FormsReact.TextKind
   | .date => .date
   | .uuid => .uuid
 
-def _root_.FormsReact.Checks.of (messages : List Model.Message) : Option FormsReact.Checks :=
+def _root_.Forms.Model.Check.texts
+  (keep : Model.Diagnostic.ReportKind → Bool)
+  (checks : List Model.Check)
+  : List String :=
+  (checks.filter (keep ·.kind)).map (·.text)
+
+def _root_.FormsReact.Checks.of (checks : List Model.Check) : Option FormsReact.Checks :=
+  let texts (keep : Model.Diagnostic.ReportKind → Bool) := Model.Check.texts keep checks
   let warnings (keep : Model.Diagnostic.ReportKind → Bool) :=
-    Model.Message.reports (fun kind => kind.severity == .warning && keep kind) messages
+    texts fun kind => kind.severity == .warning && keep kind
   let unresolved := warnings fun kind => kind.state == .unresolved && !kind.outdated
   let outdated := warnings (·.outdated)
   let resolved := warnings fun kind => kind.state == .resolved && !kind.outdated
-  let infos (outdated : Bool) := Model.Message.reports
-    (fun kind => kind.severity == .info && kind.outdated == outdated) messages
+  let infos (outdated : Bool) :=
+    texts fun kind => kind.severity == .info && kind.outdated == outdated
   let tone : FormsReact.Tone :=
     if !unresolved.isEmpty then .attention
     else if !outdated.isEmpty then .outdated
@@ -45,10 +52,10 @@ def _root_.FormsReact.Checks.of (messages : List Model.Message) : Option FormsRe
       outdatedOptional := infos true }
 
 theorem _root_.FormsReact.Checks.of_attention
-  {messages : List Model.Message}
-  {checks : FormsReact.Checks}
-  (built : FormsReact.Checks.of messages = some checks)
-  : checks.tone = .attention ↔ checks.unresolved ≠ [] := by
+  {checks : List Model.Check}
+  {grouped : FormsReact.Checks}
+  (built : FormsReact.Checks.of checks = some grouped)
+  : grouped.tone = .attention ↔ grouped.unresolved ≠ [] := by
   simp only [FormsReact.Checks.of] at built
   split at built
   · cases built
@@ -57,11 +64,11 @@ theorem _root_.FormsReact.Checks.of_attention
     all_goals simp_all
 
 theorem _root_.FormsReact.Checks.of_resolved
-  {messages : List Model.Message}
-  {checks : FormsReact.Checks}
-  (built : FormsReact.Checks.of messages = some checks)
-  : checks.tone = .resolved ↔
-    checks.unresolved = [] ∧ checks.outdated = [] ∧ checks.resolved ≠ [] := by
+  {checks : List Model.Check}
+  {grouped : FormsReact.Checks}
+  (built : FormsReact.Checks.of checks = some grouped)
+  : grouped.tone = .resolved ↔
+    grouped.unresolved = [] ∧ grouped.outdated = [] ∧ grouped.resolved ≠ [] := by
   simp only [FormsReact.Checks.of] at built
   split at built
   · cases built
@@ -70,11 +77,11 @@ theorem _root_.FormsReact.Checks.of_resolved
     all_goals simp_all
 
 theorem _root_.FormsReact.Checks.of_optional
-  {messages : List Model.Message}
-  {checks : FormsReact.Checks}
-  (built : FormsReact.Checks.of messages = some checks)
-  : checks.tone = .optional ↔
-    checks.unresolved = [] ∧ checks.outdated = [] ∧ checks.resolved = [] := by
+  {checks : List Model.Check}
+  {grouped : FormsReact.Checks}
+  (built : FormsReact.Checks.of checks = some grouped)
+  : grouped.tone = .optional ↔
+    grouped.unresolved = [] ∧ grouped.outdated = [] ∧ grouped.resolved = [] := by
   simp only [FormsReact.Checks.of] at built
   split at built
   · cases built
@@ -93,7 +100,6 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       value
       disabled
       errors := Model.Message.errors c.messages
-      checks := FormsReact.Checks.of c.messages
       onCommit := .apply name }
   | .checkbox checked => .checkbox {
       name
@@ -101,7 +107,6 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       checked
       disabled
       errors := Model.Message.errors c.messages
-      checks := FormsReact.Checks.of c.messages
       onChange := .apply name }
   | .choice value options => .choice {
       name
@@ -110,7 +115,6 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       options := options.map fun option => { value := option.value, label := option.label }
       disabled
       errors := Model.Message.errors c.messages
-      checks := FormsReact.Checks.of c.messages
       onChange := .apply name }
   | .choices values options => .choices {
       name
@@ -119,7 +123,6 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       options := options.map fun option => { value := option.value, label := option.label }
       disabled
       errors := Model.Message.errors c.messages
-      checks := FormsReact.Checks.of c.messages
       onChange := .apply name }
   | .action => .button { label := c.label, variant := .secondary, disabled, onClick := .press name }
   | .tabs active labels =>
@@ -130,7 +133,7 @@ def plainGroup
   (key : Option String)
   (children : List FormsReact.Component)
   : FormsReact.Component :=
-  .group { label := none, children, errors := [], checks := none, key }
+  .group { label := none, children, errors := [], key }
 
 mutual
 def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
@@ -140,13 +143,11 @@ def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
       label := label.filter (!·.isEmpty)
       children := children.filterMap (·.toReact pending)
       errors := []
-      checks := none
       key := none })
   | .list label children messages => some (.group {
       label := some label
       children := children.filterMap (·.toReact pending)
       errors := Model.Message.errors messages
-      checks := FormsReact.Checks.of messages
       key := none })
   | .keyed key body => (body.toReact pending).map fun component => match component with
     | .group group => .group { group with key := some key.value }
@@ -158,14 +159,15 @@ def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
     | .button _
     | .tabBar _
     | .table _
-    | .page _ => plainGroup (some key.value) [component]
+    | .page _
+    | .statusMarker _ => plainGroup (some key.value) [component]
   | .computed label value => some (.output { label, value })
+  | .marker checks => (FormsReact.Checks.of checks).map .statusMarker
   | .table label headers rows footer messages => some (.table {
       label, headers
       rows := tableRowsToReact pending rows
       footer := (footer.toReact pending).getD (plainGroup none [])
-      errors := Model.Message.errors messages
-      checks := FormsReact.Checks.of messages })
+      errors := Model.Message.errors messages })
 
 def tableRowsToReact (pending : Bool) : List Display.TableRow → List FormsReact.TableRow
   | [] => []
