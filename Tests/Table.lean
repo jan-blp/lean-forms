@@ -100,8 +100,7 @@ def run : IO Unit := do
   check "TableRequestsEveryRow" (loading.requests {} opened.value Env.nil == [request 58, request 180])
   let duplicated : ExpenseReport.Raw := { ExpenseReport.initial with
     expenses := [⟨firstId, "Train to Bern", 58, false⟩, ⟨firstId, "Hotel", 180, true⟩] }
-  let definition :=
-    FormDefinition.ofModel ExpenseReport ExpenseReport.form ExpenseReport.initial (store := id)
+  let definition := FormDefinition.ofModel ExpenseReport ExpenseReport.form ExpenseReport.initial
   check "OpeningRejectsDuplicateItemIds"
     ((match definition.openState (toJson duplicated) supply with
       | .error message => message == duplicateIdsMessage [firstId]

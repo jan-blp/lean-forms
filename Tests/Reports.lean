@@ -1,6 +1,6 @@
 module
 
-public import Forms.ExampleForms.PaymentMethod
+public import Forms.ExampleForms.PaymentMethod.Server
 public import Forms.Runtime.ModelForm
 public import Forms.Runtime.ModelProtocol
 public import Tests.FreshId

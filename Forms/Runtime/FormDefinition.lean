@@ -15,20 +15,7 @@ structure FormDefinition where
   initial : Json
   openState (value : Json) (supply : Model.Supply) : Except String (State × ModelForm.Snapshot Raw)
   execute : State → ModelForm.Event Raw → Except String (State × ModelForm.Snapshot Raw)
-  save : Raw → Except Feedback.ServerError (Saved Raw)
-
-/-- Checked first, so a stale client gets a reload hint instead of a decode error. -/
-def decodeSubmission
-  (α : Type)
-  [FromJson α]
-  (name fingerprint : String)
-  (json : Json)
-  : Except String α := do
-  unless (json.getObjValAs? String "fingerprint").toOption == some fingerprint do
-    throw "This form is out of date. Reload the page."
-  let submission ← fromJson? (α := Submission α) json
-  unless submission.form == name do throw "Wrong form."
-  pure submission.value
+  validate : Raw → Except Feedback.ServerError Unit
 
 def FormDefinition.ofModel
   {β : Type}
@@ -40,7 +27,6 @@ def FormDefinition.ofModel
   [FromJson (Model.Raw model)]
   (form : Model.Component [] (Model.Raw model) β)
   (initial : Model.Raw model)
-  (store : Model.Raw model → Model.Raw model)
   : FormDefinition where
   State := ModelForm.State form
   Raw := Model.Raw model
@@ -56,9 +42,9 @@ def FormDefinition.ofModel
   execute state input := do
     let state ← ModelForm.execute (model := model) form state input
     pure (state, ModelForm.snapshot form state)
-  save value :=
+  validate value :=
     match Model.Validation.validate (model := model) value with
-    | .ok _ => .ok { value := store value }
+    | .ok _ => .ok ()
     | .error errors =>
       let errors := errors.map fun error =>
         ({ message := error.message, targets := error.targets.erase } : Feedback.ValidationError)
@@ -70,19 +56,6 @@ def FormDefinition.ofModel
 structure RegisteredForm where
   definition : FormDefinition
   submitUrl : String
-
-/-- Decodes a submission to this form and answers with the stored document. -/
-def RegisteredForm.submit
-  (form : RegisteredForm)
-  (name fingerprint : String)
-  (submission : Json)
-  : Except Feedback.ServerError Json :=
-  letI := form.definition.encode
-  letI := form.definition.decode
-  do
-    let value ← (decodeSubmission form.definition.Raw name fingerprint submission).mapError
-      .invalidRequest
-    return toJson (← form.definition.save value)
 
 structure FormInstance where
   execute : Wire.Event → Except String (FormInstance × Wire.Snapshot)

@@ -1,6 +1,7 @@
 module
 
 import Forms.Runtime.Web
+import Forms.ExampleForms.ServerRegistry
 
 open Forms Forms.Runtime Forms.ExampleForms
 
@@ -55,6 +56,6 @@ public def main (args : List String) : IO Unit := do
     IO.println usage
     return
   let options ← IO.ofExcept (parseOptions args)
-  let some (name, form) := forms.find? (·.1 == options.form.getD (names.headD ""))
+  let some (name, form) := serverForms.find? (·.1 == options.form.getD (names.headD ""))
     | throw (IO.userError usage)
   Web.run name form api options.port options.openBrowser
