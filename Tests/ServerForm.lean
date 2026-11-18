@@ -13,8 +13,16 @@ private def check (name : String) (ok : Bool) : IO Unit := do
   unless ok do throw (IO.userError s!"FAIL {name}")
   IO.println s!"PASS {name}"
 
-private def duplicates (raw : Receipts.Raw) : List Bool :=
-  raw.receipts.map (·.duplicate.value)
+private def alreadySubmitted (raw : Receipts.Raw) : List Bool :=
+  raw.receipts.map (·.alreadySubmitted.value)
+
+private def repeated : Receipts.Raw :=
+  ⟨[⟨firstId, "R-1", ⟨false⟩⟩, ⟨secondId, "R-2", ⟨false⟩⟩, ⟨thirdId, "R-1", ⟨false⟩⟩]⟩
+
+example : (ModelForm.reports (model := Receipts) repeated).map (·.targets) = [
+    .locations [.field "receipts", .item firstId, .field "number"] [],
+    .locations [.field "receipts", .item thirdId, .field "number"] []] := by
+  decide
 
 private def submission (fingerprint : String) (value : Person.Raw) : Json :=
   toJson ({ form := "person", fingerprint, value } : Submission Person.Raw)
@@ -40,11 +48,12 @@ def run : IO Unit := do
 
   let claims ← IO.mkRef {}
   let first : Receipt.Raw := ⟨firstId, "R-1", ⟨false⟩⟩
+  let copy := { first with id := secondId }
   let submitted ← Receipts.serverCheck claims ⟨[first]⟩
-  let resubmitted ← Receipts.serverCheck claims ⟨[first]⟩
-  let copied ← Receipts.serverCheck claims ⟨[first, { first with id := secondId }]⟩
-  check "DuplicateOnlyWhenAnotherReceiptClaimedTheNumber"
-    (duplicates submitted == [false] && duplicates resubmitted == [false] &&
-      duplicates copied == [false, true])
+  let resubmitted ← Receipts.serverCheck claims ⟨[first, copy]⟩
+  let replaced ← Receipts.serverCheck claims ⟨[copy]⟩
+  check "OnlyNumbersClaimedOutsideTheSubmissionWereAlreadySubmitted"
+    (alreadySubmitted submitted == [false] && alreadySubmitted resubmitted == [false, false] &&
+      alreadySubmitted replaced == [true])
 
 end Tests.ServerForm

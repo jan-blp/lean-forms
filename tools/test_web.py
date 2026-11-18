@@ -116,15 +116,16 @@ def receipts_session():
         copy = {**first, 'id': '00000000-0000-4000-8000-000000000099'}
         submission = {'form': 'receipts', 'fingerprint': start['fingerprint']}
 
-        def duplicates(receipts):
+        def already_submitted(receipts):
             value = {'receipts': receipts}
             status, _, body = request('/api/submit', {**submission, 'value': value})
             assert status == 200, (status, body)
-            return [receipt['duplicate'] for receipt in json.loads(body)['value']['receipts']]
+            stored = json.loads(body)['value']['receipts']
+            return [receipt['alreadySubmitted'] for receipt in stored]
 
-        assert duplicates([first]) == [False]
-        assert duplicates([first]) == [False]
-        assert duplicates([first, copy]) == [False, True]
+        assert already_submitted([first]) == [False]
+        assert already_submitted([first, copy]) == [False, False]
+        assert already_submitted([copy]) == [True]
 
 
 def expenses_session():
