@@ -21,6 +21,74 @@ def _root_.Forms.Model.TextKind.toReact : Model.TextKind → FormsReact.TextKind
   | .date => .date
   | .uuid => .uuid
 
+def _root_.Forms.Model.ReportMessage.texts
+  (keep : Model.Diagnostic.ReportKind → Bool)
+  (reports : List Model.ReportMessage)
+  : List String :=
+  (reports.filter (keep ·.kind)).map (·.text)
+
+def _root_.FormsReact.Checks.of (reports : List Model.ReportMessage) : Option FormsReact.Checks :=
+  let texts (keep : Model.Diagnostic.ReportKind → Bool) := Model.ReportMessage.texts keep reports
+  let warnings (keep : Model.Diagnostic.ReportKind → Bool) :=
+    texts fun kind => kind.severity == .warning && keep kind
+  let unresolved := warnings fun kind => kind.state == .unresolved && !kind.outdated
+  let outdated := warnings (·.outdated)
+  let resolved := warnings fun kind => kind.state == .resolved && !kind.outdated
+  let infos (outdated : Bool) :=
+    texts fun kind => kind.severity == .info && kind.outdated == outdated
+  let tone : FormsReact.Tone :=
+    if !unresolved.isEmpty then .attention
+    else if !outdated.isEmpty then .outdated
+    else if !resolved.isEmpty then .resolved
+    else .info
+  if unresolved.isEmpty && outdated.isEmpty && resolved.isEmpty && (infos false).isEmpty &&
+    (infos true).isEmpty then none
+  else some
+    { tone
+      unresolved
+      outdated
+      resolved
+      info := infos false
+      outdatedInfo := infos true }
+
+theorem _root_.FormsReact.Checks.of_attention
+  {reports : List Model.ReportMessage}
+  {grouped : FormsReact.Checks}
+  (built : FormsReact.Checks.of reports = some grouped)
+  : grouped.tone = .attention ↔ grouped.unresolved ≠ [] := by
+  simp only [FormsReact.Checks.of] at built
+  split at built
+  · cases built
+  · cases built
+    repeat' split
+    all_goals simp_all
+
+theorem _root_.FormsReact.Checks.of_resolved
+  {reports : List Model.ReportMessage}
+  {grouped : FormsReact.Checks}
+  (built : FormsReact.Checks.of reports = some grouped)
+  : grouped.tone = .resolved ↔
+    grouped.unresolved = [] ∧ grouped.outdated = [] ∧ grouped.resolved ≠ [] := by
+  simp only [FormsReact.Checks.of] at built
+  split at built
+  · cases built
+  · cases built
+    repeat' split
+    all_goals simp_all
+
+theorem _root_.FormsReact.Checks.of_info
+  {reports : List Model.ReportMessage}
+  {grouped : FormsReact.Checks}
+  (built : FormsReact.Checks.of reports = some grouped)
+  : grouped.tone = .info ↔
+    grouped.unresolved = [] ∧ grouped.outdated = [] ∧ grouped.resolved = [] := by
+  simp only [FormsReact.Checks.of] at built
+  split at built
+  · cases built
+  · cases built
+    repeat' split
+    all_goals simp_all
+
 def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Component :=
   let name := ControlKeyProtocol.toString c.key
   let disabled := pending || c.disabled
@@ -31,16 +99,14 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       kind := kind.toReact
       value
       disabled
-      errors := Model.Message.texts .error c.messages
-      reports := Model.Message.texts .report c.messages
+      errors := Model.Message.errors c.messages
       onCommit := .apply name }
   | .checkbox checked => .checkbox {
       name
       label := c.label
       checked
       disabled
-      errors := Model.Message.texts .error c.messages
-      reports := Model.Message.texts .report c.messages
+      errors := Model.Message.errors c.messages
       onChange := .apply name }
   | .choice value options => .choice {
       name
@@ -48,8 +114,7 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       value
       options := options.map fun option => { value := option.value, label := option.label }
       disabled
-      errors := Model.Message.texts .error c.messages
-      reports := Model.Message.texts .report c.messages
+      errors := Model.Message.errors c.messages
       onChange := .apply name }
   | .choices values options => .choices {
       name
@@ -57,8 +122,7 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       values
       options := options.map fun option => { value := option.value, label := option.label }
       disabled
-      errors := Model.Message.texts .error c.messages
-      reports := Model.Message.texts .report c.messages
+      errors := Model.Message.errors c.messages
       onChange := .apply name }
   | .action => .button { label := c.label, variant := .secondary, disabled, onClick := .press name }
   | .tabs active labels =>
@@ -69,7 +133,7 @@ def plainGroup
   (key : Option String)
   (children : List FormsReact.Component)
   : FormsReact.Component :=
-  .group { label := none, children, errors := [], reports := [], key }
+  .group { label := none, children, errors := [], key }
 
 mutual
 def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
@@ -79,13 +143,11 @@ def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
       label := label.filter (!·.isEmpty)
       children := children.filterMap (·.toReact pending)
       errors := []
-      reports := []
       key := none })
   | .list label children messages => some (.group {
       label := some label
       children := children.filterMap (·.toReact pending)
-      errors := Model.Message.texts .error messages
-      reports := Model.Message.texts .report messages
+      errors := Model.Message.errors messages
       key := none })
   | .keyed key body => (body.toReact pending).map fun component => match component with
     | .group group => .group { group with key := some key.value }
@@ -97,14 +159,15 @@ def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
     | .button _
     | .tabBar _
     | .table _
-    | .page _ => plainGroup (some key.value) [component]
+    | .page _
+    | .statusMarker _ => plainGroup (some key.value) [component]
   | .computed label value => some (.output { label, value })
+  | .marker reports => (FormsReact.Checks.of reports).map .statusMarker
   | .table label headers rows footer messages => some (.table {
       label, headers
       rows := tableRowsToReact pending rows
       footer := (footer.toReact pending).getD (plainGroup none [])
-      errors := Model.Message.texts .error messages
-      reports := Model.Message.texts .report messages })
+      errors := Model.Message.errors messages })
 
 def tableRowsToReact (pending : Bool) : List Display.TableRow → List FormsReact.TableRow
   | [] => []

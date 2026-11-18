@@ -60,8 +60,18 @@ def reports
   [FormModel model]
   [Model.Reports model]
   (value : Model.Raw model)
+  (checked : Bool)
   : List Model.Diagnostic :=
-  (Model.Reports.reports (model := model) value).map ModelView.report
+  (Model.Reports.reports (model := model) value).map (ModelView.report checked)
+
+/-- The server's checks describe the document last opened or saved. -/
+def checked
+  {model : Type}
+  [FormModel model]
+  [Lean.ToJson (Model.Raw model)]
+  (initial value : Model.Raw model)
+  : Bool :=
+  Lean.toJson value == Lean.toJson initial
 
 def openState
   {Γ : Model.Context}
@@ -76,7 +86,7 @@ def openState
   (cache : Model.HttpRequest.Cache := {})
   : State form :=
   let validationDiagnostics := validationErrors (model := model) value
-  let reportDiagnostics := reports (model := model) value
+  let reportDiagnostics := reports (model := model) value true
   { evaluation := ModelView.evaluate form value cache env form.initialState
       (validationDiagnostics ++ reportDiagnostics)
     initial := value
@@ -220,12 +230,14 @@ def applyUpdate
   [FormModel model]
   [Model.Validation model]
   [Model.Reports model]
+  [Lean.ToJson (Model.Raw model)]
   (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
   (updated : Model.ComponentUpdate Γ (Model.Raw model) form.LocalState)
   : State form :=
   let validationDiagnostics := validationErrors (model := model) updated.value
-  let reportDiagnostics := reports (model := model) updated.value
+  let reportDiagnostics :=
+    reports (model := model) updated.value (checked (model := model) state.initial updated.value)
   let diagnostics := state.draftDiagnostics.map (·.diagnostic) ++ validationDiagnostics ++
     reportDiagnostics
   let evaluation := ModelView.evaluate form updated.value state.cache updated.state updated.locals
@@ -245,6 +257,7 @@ def apply
   [FormModel model]
   [Model.Validation model]
   [Model.Reports model]
+  [Lean.ToJson (Model.Raw model)]
   (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
   (key : ControlKey)
@@ -284,6 +297,7 @@ def event {Γ : Model.Context}
   [FormModel model]
   [Model.Validation model]
   [Model.Reports model]
+  [Lean.ToJson (Model.Raw model)]
   (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
   : Event (Model.Raw model) → Except String (State form) := fun event => do
@@ -333,8 +347,8 @@ def event {Γ : Model.Context}
       if (Model.corruption? model saved).isSome
       then return unreachable "Your form was saved, but an internal error occurred. Please contact BLP."
       -- The saved document becomes the new starting point; UI state is kept.
-      let state := { applyUpdate (model := model) form state
-        { value := saved, state := state.env, locals := state.locals } with initial := saved }
+      let state := applyUpdate (model := model) form { state with initial := saved }
+        { value := saved, state := state.env, locals := state.locals }
       pure { state with ui := { state.ui with
         pending := false, resultVisible := true, notice := .info "Submitted successfully." } }
     | .rejected feedback => pure (refresh form { state with
@@ -359,6 +373,7 @@ def execute {Γ : Model.Context}
   [FormModel model]
   [Model.Validation model]
   [Model.Reports model]
+  [Lean.ToJson (Model.Raw model)]
   (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
   (input : Event (Model.Raw model))

@@ -1,13 +1,16 @@
 module
 
+public import Forms.Model.Diagnostic
 public import Forms.Model.Item
 public import Forms.Model.ReadOnly
 
 @[expose] public section
 namespace Forms.Model
 
-/-- A message about a raw value that doesn't blocks submit, such as a failing server check. -/
+/-- A message about server data in a raw value; it never blocks submit. -/
 structure Report {α : Type} (value : α) where
+  status : Diagnostic.ReportState
+  severity : Diagnostic.Severity
   message : String
   targets : Targets α value
 
@@ -18,6 +21,8 @@ def Report.mapLocations
   (step : Location value → Location outer)
   (report : Report value)
   : Report outer where
+  status := report.status
+  severity := report.severity
   message := report.message
   targets := report.targets.mapLocations step
 

@@ -46,7 +46,6 @@ def run : IO Unit := do
           label := none
           children := []
           errors := []
-          reports := []
           key := none }) &&
         first.key == firstId.value &&
         (match first.cells[3]? with | some (FormsReact.Component.button _) => true | _ => false) &&

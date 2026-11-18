@@ -39,7 +39,6 @@ def expected : FormsReact.Component :=
         value := "Ada"
         disabled := false
         errors := ["Enter your name."]
-        reports := []
         onCommit := .apply "[\"edit\",\"name\"]" },
       .textField {
         name := "[\"edit\",\"age\"]"
@@ -48,7 +47,6 @@ def expected : FormsReact.Component :=
         value := "36"
         disabled := false
         errors := []
-        reports := []
         onCommit := .apply "[\"edit\",\"age\"]" },
       .group {
         label := none
@@ -59,14 +57,11 @@ def expected : FormsReact.Component :=
             checked := true
             disabled := false
             errors := []
-            reports := []
             onChange := .apply "[\"edit\",\"delivery\"]" }]
         errors := []
-        reports := []
         key := none },
       .output { label := "Summary", value := "Ada, 36" }]
     errors := []
-    reports := []
     key := none }
 
 def run : IO Unit := do

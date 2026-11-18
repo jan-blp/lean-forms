@@ -42,8 +42,11 @@ def error {α : Type} {value : α} (error : Model.Error value) : Diagnostic wher
   message := error.message
   targets := error.targets.erase
 
-def report {α : Type} {value : α} (report : Model.Report value) : Diagnostic where
+def report {α : Type} {value : α} (checked : Bool) (report : Model.Report value) : Diagnostic where
   kind := .report
+    { state := report.status
+      severity := report.severity
+      outdated := !checked }
   message := report.message
   targets := report.targets.erase
 
@@ -356,6 +359,18 @@ def evaluateNode
     { output := Diagnostic.issues ambient.diagnostics location
       locals := ()
       view := fun _ => .hidden
+      requests := []
+      apply := fun _ _ => absent }
+  | .reports path =>
+    { output := Message.reports (ambient.messagesAt (location ++ path.erase))
+      locals := ()
+      view := fun _ => .hidden
+      requests := []
+      apply := fun _ _ => absent }
+  | .statusMarker reports =>
+    { output := ()
+      locals := ()
+      view := fun _ => .marker (reports.eval value env)
       requests := []
       apply := fun _ _ => absent }
   | .zoom? computation body =>

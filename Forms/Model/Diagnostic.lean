@@ -9,10 +9,27 @@ namespace Forms.Model
 
 namespace Diagnostic
 
+inductive ReportState where
+  | unresolved
+  | resolved
+  deriving BEq, DecidableEq, Repr, Lean.ToJson, Lean.FromJson
+
+inductive Severity where
+  | warning
+  | info
+  deriving BEq, DecidableEq, Repr, Lean.ToJson, Lean.FromJson
+
+structure ReportKind where
+  state : ReportState
+  severity : Severity
+  /-- Reads server data older than the current value. -/
+  outdated : Bool
+  deriving BEq, DecidableEq, Repr, Lean.ToJson, Lean.FromJson
+
 inductive Kind where
   | error
-  /-- Never blocks submit, such as a failing server check. -/
-  | report
+  /-- Never blocks submit. -/
+  | report (kind : ReportKind)
   deriving BEq, DecidableEq, Lean.ToJson, Lean.FromJson
 
 inductive Targets where
@@ -34,8 +51,24 @@ structure Message where
   text : String
   deriving BEq, DecidableEq
 
-def Message.texts (kind : Diagnostic.Kind) (messages : List Message) : List String :=
-  (messages.filter (·.kind == kind)).map (·.text)
+def Message.errors (messages : List Message) : List String :=
+  (messages.filter (·.kind == .error)).map (·.text)
+
+/-- A report's message as shown at one of its locations. -/
+structure ReportMessage where
+  kind : Diagnostic.ReportKind
+  text : String
+  deriving BEq, DecidableEq, Repr
+
+def Message.reports (messages : List Message) : List ReportMessage :=
+  messages.filterMap fun message => match message.kind with
+    | .error => none
+    | .report kind => some { kind, text := message.text }
+
+/-- Listed by the `issues` node. -/
+def Diagnostic.Kind.actionable : Diagnostic.Kind → Bool
+  | .error => true
+  | .report kind => kind.severity == .warning && kind.state == .unresolved
 
 structure Destination where
   locations : List ErasedLocation
@@ -55,7 +88,7 @@ def Diagnostic.issues
   (diagnostics : List Diagnostic)
   (scope : ErasedLocation)
   : List Issue :=
-  diagnostics.filterMap fun diagnostic => match diagnostic.targets with
+  (diagnostics.filter (·.kind.actionable)).filterMap fun diagnostic => match diagnostic.targets with
     | .global =>
       if scope.isEmpty then some { message := diagnostic.message, destination? := none } else none
     | .locations first rest =>

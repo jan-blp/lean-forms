@@ -37,6 +37,7 @@ theorem View.dedupeFrom_spec
     simpa [View.dedupeFrom, View.controls] using this
   | .hidden => simp [View.dedupeFrom, View.controls, nodup]
   | .computed .. => simp [View.dedupeFrom, View.controls, nodup]
+  | .marker _ => simp [View.dedupeFrom, View.controls, nodup]
 
 theorem View.dedupeAll_spec
   (seen : List ControlKey)

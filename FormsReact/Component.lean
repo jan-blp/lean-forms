@@ -33,6 +33,23 @@ inductive TextKind where
   | date
   | uuid
   deriving ToJson, FromJson, BEq, Repr
+/-- The colour of a status marker. -/
+inductive Tone where
+  | attention
+  | outdated
+  | resolved
+  | info
+  deriving ToJson, FromJson, BEq, DecidableEq, Repr
+
+/-- Checks grouped for a status marker. -/
+structure Checks where
+  tone : Tone
+  unresolved : List String
+  outdated : List String
+  resolved : List String
+  info : List String
+  outdatedInfo : List String
+  deriving ToJson, FromJson, BEq, DecidableEq, Repr
 
 /-- A text input whose draft React owns; `onCommit` receives the draft text.
 Values travel as text, so numbers beyond 2^53 survive JavaScript. -/
@@ -43,8 +60,6 @@ structure TextField where
   value : String
   disabled : Bool
   errors : List String
-  /-- Messages that never block submit, such as failing server checks. -/
-  reports : List String
   onCommit : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -55,8 +70,6 @@ structure Checkbox where
   checked : Bool
   disabled : Bool
   errors : List String
-  /-- Messages that never block submit, such as failing server checks. -/
-  reports : List String
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -73,8 +86,6 @@ structure Choice where
   options : List ChoiceOption
   disabled : Bool
   errors : List String
-  /-- Messages that never block submit, such as failing server checks. -/
-  reports : List String
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -86,8 +97,6 @@ structure Choices where
   options : List ChoiceOption
   disabled : Bool
   errors : List String
-  /-- Messages that never block submit, such as failing server checks. -/
-  reports : List String
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -114,14 +123,11 @@ structure TabBar where
   deriving ToJson, FromJson, BEq, Repr
 
 mutual
-/-- Children grouped under an optional legend; `errors` and `reports` are about the group as a
-whole. -/
+/-- Children grouped under an optional legend; `errors` are about the group as a whole. -/
 structure Group where
   label : Option String
   children : List Component
   errors : List String
-  /-- Messages that never block submit, such as failing server checks. -/
-  reports : List String
   /-- The item id of a list row; React keeps the row's state when siblings move. -/
   key : Option String
 
@@ -137,8 +143,6 @@ structure Table where
   rows : List TableRow
   footer : Component
   errors : List String
-  /-- Messages that never block submit, such as failing server checks. -/
-  reports : List String
 
 structure Page where
   title : String
@@ -159,6 +163,7 @@ inductive Component where
   | group : Group → Component
   | table : Table → Component
   | page : Page → Component
+  | statusMarker : Checks → Component
 end
 
 deriving instance ToJson, FromJson, BEq, Repr for Group, TableRow, Table, Page, Component
@@ -176,6 +181,7 @@ def Component.draftFields : Component → List String
   | .group { children, .. } => draftFieldsOf children
   | .table { rows, footer, .. } => draftFieldsOfRows rows ++ footer.draftFields
   | .page { body, toolbar, .. } => draftFieldsOf body ++ draftFieldsOf toolbar
+  | .statusMarker _ => []
 
 def draftFieldsOf : List Component → List String
   | [] => []

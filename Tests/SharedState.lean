@@ -40,6 +40,7 @@ private def outputs (label : String) : Display.View → List String
   | .table (rows := rows) (footer := footer) .. => outputsRows label rows ++ outputs label footer
   | .keyed _ body => outputs label body
   | .control _ => []
+  | .marker _ => []
   | .hidden => []
 
 private def outputsAll (label : String) : List Display.View → List String

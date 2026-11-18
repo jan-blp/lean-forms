@@ -29,6 +29,7 @@ const named = {
   group: false,
   table: false,
   page: false,
+  statusMarker: false,
 } as const satisfies { [K in Kind]: Props<K> extends { name: string } ? true : false };
 
 /** Fields and list rows keep their identity, and focus, when siblings appear or disappear. */

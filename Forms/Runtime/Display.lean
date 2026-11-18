@@ -47,7 +47,7 @@ structure Control where
   deriving BEq
 
 def Control.errors (control : Control) : List String :=
-  Model.Message.texts .error control.messages
+  Model.Message.errors control.messages
 
 mutual
 inductive View where
@@ -55,6 +55,7 @@ inductive View where
   | control (control : Control)
   | stack (label : Option String) (children : List View)
   | computed (label text : String)
+  | marker (reports : List Model.ReportMessage)
   /-- `messages` are about the list as a whole. -/
   | list (label : String) (children : List View) (messages : List Model.Message)
   | table (label : String) (headers : List String) (rows : List TableRow)
@@ -85,6 +86,7 @@ def View.controls : View → List Control
   | .keyed _ body => body.controls
   | .hidden => []
   | .computed .. => []
+  | .marker _ => []
 
 def View.controlsAll : List View → List Control
   | [] => []
@@ -123,6 +125,7 @@ def View.dedupeFrom (seen : List ControlKey) : View → DedupeResult View
     { deduped := .keyed key result.deduped, seen := result.seen }
   | .hidden => { deduped := .hidden, seen }
   | .computed label text => { deduped := .computed label text, seen }
+  | .marker reports => { deduped := .marker reports, seen }
 
 def View.dedupeAll (seen : List ControlKey) : List View → DedupeResult (List View)
   | [] => { deduped := [], seen }
@@ -150,6 +153,7 @@ def View.title (view : View) : String :=
     | .list label .. => label
     | .table label .. => label
     | .computed label .. => label
+    | .marker _ => ""
     | .keyed _ body => labelOf body
     | .hidden => ""
   let title := labelOf view

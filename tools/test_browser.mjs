@@ -448,6 +448,81 @@ try {
     await click('[data-action=reset]');
     check(output() === '', 'Reset did not clear row-local selections');
   `);
+  const marker = `const marker = () => document.querySelector('.status-marker');
+    const issues = () => [...document.querySelectorAll('output')].find(output =>
+      output.parentElement.firstChild.textContent === 'Current issues').textContent;
+    const visit = () => [...document.querySelectorAll('button')].find(button =>
+      button.textContent === 'Go to issue');`;
+  await example('payment-method', `
+    ${marker}
+    check(marker().classList.contains('attention'), 'A failing check did not ask for attention');
+    check(issues() === 'The payment method does not match the receipt.',
+      'Issues did not list exactly the failing warning');
+    visit().click();
+    await wait(() => document.activeElement?.closest('fieldset')?.querySelector('legend')
+      ?.firstChild.textContent === 'Expense Payment Method');
+    marker().click();
+    await tick();
+    const checks = document.getElementById(marker().getAttribute('popovertarget'));
+    check(checks.matches(':popover-open') && checks.textContent.includes('does not match the receipt'),
+      'The marker did not list its checks');
+    check([...checks.querySelectorAll('.checks-section')].some(section =>
+      section.querySelector('.checks-title').textContent === 'Optional' &&
+      section.textContent.includes('Attach the original receipt.')), 'The optional check was not marked optional');
+    checks.hidePopover();
+    [...document.querySelectorAll('label')].find(label => label.textContent === 'BLP credit card')
+      .querySelector('input').click();
+    await wait(() => marker().classList.contains('outdated'));
+    check(issues() === 'The payment method does not match the receipt.',
+      'An outdated failing check left the issues');
+    marker().click();
+    await tick();
+    const changed = [...document.getElementById(marker().getAttribute('popovertarget'))
+      .querySelectorAll('.checks-section')].find(section =>
+        section.querySelector('.checks-title').textContent.startsWith('Changed since the last check'));
+    check([...changed.querySelectorAll('.check')].some(item =>
+      item.textContent.includes('Attach the original receipt.') && item.querySelector('.tag')),
+      'An outdated optional check was not marked outdated and optional');
+    document.getElementById(marker().getAttribute('popovertarget')).hidePopover();
+  `, async evaluate => {
+    await evaluate(`
+      ${marker}
+      await wait(() => marker().classList.contains('resolved'));
+      check(issues() === '' && visit().disabled, 'A resolved check stayed an issue');
+    `);
+    await call('browsingContext.setViewport', { context, viewport: { width: 375, height: 300 } });
+    await evaluate(`
+      ${marker}
+      window.scrollTo(0, 0);
+      const panel = document.getElementById(marker().getAttribute('popovertarget'));
+      const toggle = () => new Promise(resolve => {
+        panel.addEventListener('toggle', resolve, { once: true });
+        marker().click();
+      });
+      const fits = () => {
+        const bounds = panel.getBoundingClientRect();
+        return bounds.top >= 16 && bounds.bottom <= innerHeight - 16 &&
+          bounds.left >= 16 && bounds.right <= innerWidth - 16;
+      };
+      await toggle();
+      check(fits(), 'Checks overflowed a short viewport');
+      check(panel.getBoundingClientRect().bottom <= marker().getBoundingClientRect().top,
+        'Checks did not open above the marker when space below was limited');
+      await toggle();
+      const item = panel.querySelector('.check');
+      const text = item.textContent;
+      item.textContent = text.repeat(50);
+      await toggle();
+      check(fits() && panel.scrollHeight > panel.clientHeight,
+        'Long checks did not fit in a scrollable popover');
+      panel.scrollTop = panel.scrollHeight;
+      const last = [...panel.querySelectorAll('.check')].at(-1);
+      check(last.getBoundingClientRect().bottom <= panel.getBoundingClientRect().bottom,
+        'The final check could not be scrolled into view');
+      await toggle();
+      item.textContent = text;
+    `);
+  });
 
 } finally {
   socket?.close();

@@ -38,6 +38,7 @@ private def press
   [FormModel model]
   [Validation model]
   [Reports model]
+  [Lean.ToJson (Raw model)]
   {form : Component Γ (Raw model)}
   (state : ModelForm.State form)
   (label : String)

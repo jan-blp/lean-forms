@@ -106,7 +106,7 @@ def payment_method_session():
         status, headers, body = request('/api/submit', submission)
         assert status == 200 and headers['Content-Type'] == 'application/json', (status, headers)
         checks = json.loads(body)['value']['checks']
-        assert [check['isFailing'] for check in checks] == [False], checks
+        assert [check['isFailing'] for check in checks if check['isMandatory']] == [False], checks
 
 
 def receipts_session():
@@ -124,7 +124,9 @@ def receipts_session():
             return [receipt['alreadySubmitted'] for receipt in stored]
 
         assert already_submitted([first]) == [False]
-        assert already_submitted([first, copy]) == [False, False]
+        assert already_submitted([first]) == [False]
+        status, _, body = request('/api/submit', {**submission, 'value': {'receipts': [first, copy]}})
+        assert status == 422 and 'Another receipt in this form has the same number.' in body, (status, body)
         assert already_submitted([copy]) == [True]
 
 
