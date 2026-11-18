@@ -489,6 +489,26 @@ try {
       ${marker}
       await wait(() => marker().classList.contains('resolved'));
       check(issues() === '' && visit().disabled, 'A resolved check stayed an issue');
+      const button = caption => [...document.querySelectorAll('button')]
+        .find(button => button.textContent === caption);
+      check(!button('Approve'), 'A passing check offered approval');
+      [...document.querySelectorAll('label')].find(label => label.textContent === 'Privately paid')
+        .querySelector('input').click();
+      await submit();
+      await wait(() => marker().classList.contains('attention') && button('Approve'));
+      button('Approve').click();
+      await wait(() => marker().classList.contains('outdated') && button('Withdraw approval'));
+      check(issues() === 'The payment method does not match the receipt.',
+        'An approval resolved a check before the server confirmed it');
+      await submit();
+      await wait(() => marker().classList.contains('resolved'));
+      check(issues() === '' && submitted().approved === 'privatelyPaid',
+        'The server did not confirm the approval');
+      check([...document.getElementById(marker().getAttribute('popovertarget'))
+        .querySelectorAll('.checks-section')].some(section =>
+          section.querySelector('.checks-title').textContent === 'Approved' &&
+          section.textContent.includes('does not match the receipt')),
+        'The approved check was not listed as approved');
     `);
     await call('browsingContext.setViewport', { context, viewport: { width: 375, height: 300 } });
     await evaluate(`

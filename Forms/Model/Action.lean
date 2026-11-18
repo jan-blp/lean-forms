@@ -18,6 +18,10 @@ inductive Action.Step (Γ : Context) (α : Type) where
       (path : Path α (List β))
       (item : Computation Γ α (HasUuid.WithoutUuid β))
       : Action.Step Γ α
+  | write {β : Type}
+      (path : Path α β)
+      (value : Computation Γ α β)
+      : Action.Step Γ α
   | visit (target : Computation Γ α (Option Destination))
       : Action.Step Γ α
 
@@ -45,6 +49,14 @@ def append
   : Action Γ α :=
   FreeMonoid.of (.append path item)
 
+def write
+  {Γ : Context}
+  {α β : Type}
+  (path : Path α β)
+  (value : Computation Γ α β)
+  : Action Γ α :=
+  FreeMonoid.of (.write path value)
+
 def Step.rename
   {Γ Δ : Context}
   {α : Type}
@@ -52,6 +64,7 @@ def Step.rename
   : Step Γ α → Step Δ α
   | .set ref value => .set (rename ref) (value.rename rename)
   | .append (hasUuid := _) path item => .append path (item.rename rename)
+  | .write path value => .write path (value.rename rename)
   | .visit target => .visit (target.rename rename)
 
 def rename
@@ -81,6 +94,8 @@ def Step.run
       value := path.set (path.get value ++ [HasUuid.withUuid id (item.eval value env)]) value
       state := env
       locals := () }
+  | .write path computed =>
+    pure { value := path.set (computed.eval value env) value, state := env, locals := () }
   | .visit target =>
     pure { value, state := env, locals := (), visit := target.eval value env }
 

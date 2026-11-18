@@ -16,5 +16,5 @@ export type Table = { "label": string; "headers": string[]; "rows": TableRow[]; 
 export type TableRow = { "key": string; "label": string; "cells": Component[]; "selected": boolean | null };
 export type Page = { "title": string; "busy": boolean; "body": Component[]; "toolbar": Component[]; "notice": Notice; "result": string | null };
 export type Notice = { "info": { "message": string } } | { "error": { "message": string } };
-export type Checks = { "tone": Tone; "unresolved": string[]; "outdated": string[]; "resolved": string[]; "info": string[]; "outdatedInfo": string[] };
+export type Checks = { "tone": Tone; "unresolved": string[]; "outdated": string[]; "resolved": string[]; "approved": string[]; "info": string[]; "outdatedInfo": string[] };
 export type Tone = "attention" | "outdated" | "resolved" | "info";

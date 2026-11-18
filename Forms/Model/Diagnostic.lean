@@ -9,9 +9,14 @@ namespace Forms.Model
 
 namespace Diagnostic
 
+inductive Resolution where
+  | automatic
+  | approval
+  deriving BEq, DecidableEq, Repr, Lean.ToJson, Lean.FromJson
+
 inductive ReportState where
   | unresolved
-  | resolved
+  | resolved (how : Resolution)
   deriving BEq, DecidableEq, Repr, Lean.ToJson, Lean.FromJson
 
 inductive Severity where
