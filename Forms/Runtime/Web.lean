@@ -217,10 +217,11 @@ def run
   let wasmBinary ← if ← System.FilePath.pathExists "web/dist/wasm/forms.wasm"
     then some <$> IO.FS.readBinFile "web/dist/wasm/forms.wasm" else pure none
   if let some binary := wasmBinary then checkWasmFingerprint binary
+  let state ← form.init
   let app : Application := {
     formStart := Lean.toJson (form.form.start name ExampleForms.formFingerprint)
     logger := ← TrafficLog.Logger.create
-    form := { submit := form.submit name ExampleForms.formFingerprint }
+    form := { submit := form.submit state name ExampleForms.formFingerprint }
     html := ← IO.FS.readFile "web/index.html"
     script := ← IO.FS.readFile "web/dist/app.js"
     wasmLoader := ← if ← System.FilePath.pathExists "web/dist/wasm/forms.mjs"

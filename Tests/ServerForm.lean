@@ -28,14 +28,16 @@ private def submission (fingerprint : String) (value : Person.Raw) : Json :=
   toJson ({ form := "person", fingerprint, value } : Submission Person.Raw)
 
 def run : IO Unit := do
-  let stores ← IO.mkRef 0
   let server : ServerForm := {
     form := { definition := .ofModel Person Person.form Person.initial, submitUrl := "/api/submit" }
-    store := fun (value : Person.Raw) => do
+    State := IO.Ref Nat
+    init := IO.mkRef 0
+    store := fun stores (value : Person.Raw) => do
       stores.modify (· + 1)
       pure { value with name := "Stored" } }
+  let stores : IO.Ref Nat ← server.init
   let submit fingerprint value :=
-    (server.submit "person" "current" (submission fingerprint value)).run
+    (server.submit stores "person" "current" (submission fingerprint value)).run
   let stale ← submit "old" Person.initial
   let invalid ← submit "current" { Person.initial with name := "" }
   check "RejectedSubmissionsAreNotStored"
@@ -46,12 +48,12 @@ def run : IO Unit := do
     ((stored.toOption.bind fun saved => (saved.getObjValAs? Person.Raw "value").toOption).map
       (·.name) == some "Stored" && (← stores.get) == 1)
 
-  let claims ← IO.mkRef {}
+  let state ← Receipts.ServerState.init
   let first : Receipt.Raw := ⟨firstId, "R-1", ⟨false⟩⟩
   let copy := { first with id := secondId }
-  let submitted ← Receipts.serverCheck claims ⟨[first]⟩
-  let resubmitted ← Receipts.serverCheck claims ⟨[first, copy]⟩
-  let replaced ← Receipts.serverCheck claims ⟨[copy]⟩
+  let submitted ← Receipts.serverCheck state ⟨[first]⟩
+  let resubmitted ← Receipts.serverCheck state ⟨[first, copy]⟩
+  let replaced ← Receipts.serverCheck state ⟨[copy]⟩
   check "OnlyNumbersClaimedOutsideTheSubmissionWereAlreadySubmitted"
     (alreadySubmitted submitted == [false] && alreadySubmitted resubmitted == [false, false] &&
       alreadySubmitted replaced == [true])

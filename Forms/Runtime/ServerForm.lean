@@ -6,13 +6,14 @@ public import Forms.Runtime.FormDefinition
 namespace Forms.Runtime
 open Lean
 
-/-- Kept out of the browser build. -/
 structure ServerForm where
   form : RegisteredForm
-  store : form.definition.Raw → IO form.definition.Raw
+  State : Type
+  init : IO State
+  store : State → form.definition.Raw → IO form.definition.Raw
 
 def ServerForm.plain (form : RegisteredForm) : ServerForm :=
-  { form, store := pure }
+  { form, State := Unit, init := pure (), store := fun () => pure }
 
 def decodeSubmission
   (α : Type)
@@ -28,6 +29,7 @@ def decodeSubmission
 
 def ServerForm.submit
   (server : ServerForm)
+  (state : server.State)
   (name fingerprint : String)
   (submission : Json)
   : ExceptT Feedback.ServerError IO Json :=
@@ -38,6 +40,6 @@ def ServerForm.submit
       (decodeSubmission server.form.definition.Raw name fingerprint submission).mapError
         Feedback.ServerError.invalidRequest
     MonadExcept.ofExcept (server.form.definition.validate value)
-    return toJson ({ value := ← server.store value } : Saved server.form.definition.Raw)
+    return toJson ({ value := ← server.store state value } : Saved server.form.definition.Raw)
 
 end Forms.Runtime
