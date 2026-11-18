@@ -484,11 +484,45 @@ try {
       item.textContent.includes('Attach the original receipt.') && item.querySelector('.tag')),
       'An outdated optional check was not marked outdated and optional');
     document.getElementById(marker().getAttribute('popovertarget')).hidePopover();
-  `, evaluate => evaluate(`
-    ${marker}
-    await wait(() => marker().classList.contains('resolved'));
-    check(issues() === '' && visit().disabled, 'A resolved check stayed an issue');
-  `));
+  `, async evaluate => {
+    await evaluate(`
+      ${marker}
+      await wait(() => marker().classList.contains('resolved'));
+      check(issues() === '' && visit().disabled, 'A resolved check stayed an issue');
+    `);
+    await call('browsingContext.setViewport', { context, viewport: { width: 375, height: 300 } });
+    await evaluate(`
+      ${marker}
+      window.scrollTo(0, 0);
+      const panel = document.getElementById(marker().getAttribute('popovertarget'));
+      const toggle = () => new Promise(resolve => {
+        panel.addEventListener('toggle', resolve, { once: true });
+        marker().click();
+      });
+      const fits = () => {
+        const bounds = panel.getBoundingClientRect();
+        return bounds.top >= 16 && bounds.bottom <= innerHeight - 16 &&
+          bounds.left >= 16 && bounds.right <= innerWidth - 16;
+      };
+      await toggle();
+      check(fits(), 'Checks overflowed a short viewport');
+      check(panel.getBoundingClientRect().bottom <= marker().getBoundingClientRect().top,
+        'Checks did not open above the marker when space below was limited');
+      await toggle();
+      const item = panel.querySelector('.check');
+      const text = item.textContent;
+      item.textContent = text.repeat(50);
+      await toggle();
+      check(fits() && panel.scrollHeight > panel.clientHeight,
+        'Long checks did not fit in a scrollable popover');
+      panel.scrollTop = panel.scrollHeight;
+      const last = [...panel.querySelectorAll('.check')].at(-1);
+      check(last.getBoundingClientRect().bottom <= panel.getBoundingClientRect().bottom,
+        'The final check could not be scrolled into view');
+      await toggle();
+      item.textContent = text;
+    `);
+  });
 
 } finally {
   socket?.close();

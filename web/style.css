@@ -156,6 +156,8 @@ caption { text-align: left; font-size: 16px; font-weight: 500; padding-bottom: v
   inset: auto;
   margin: 0;
   max-width: min(24rem, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
   padding: var(--space-s) var(--space-m);
   border: 1px solid var(--border);
   border-radius: var(--radius-s);

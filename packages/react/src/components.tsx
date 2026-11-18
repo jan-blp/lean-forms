@@ -47,11 +47,15 @@ export function StatusMarker(checks: FormsReact.Checks) {
   ].filter(section => section.items.length > 0);
   // Top-layer popovers aren't anchored; measure at the left edge, where it doesn't shrink.
   const place = (panel: HTMLElement) => {
-    const { left, bottom } = marker.current!.getBoundingClientRect();
+    const { left, top, bottom } = marker.current!.getBoundingClientRect();
     panel.style.left = '0px';
-    panel.style.top = `${bottom + 4}px`;
-    const width = document.documentElement.clientWidth;
+    panel.style.top = '16px';
+    const { clientWidth: width, clientHeight: height } = document.documentElement;
     panel.style.left = `${Math.max(16, Math.min(left, width - panel.offsetWidth - 16))}px`;
+    const panelHeight = panel.offsetHeight;
+    const preferredTop = bottom + 4 + panelHeight <= height - 16
+      ? bottom + 4 : top - 4 - panelHeight;
+    panel.style.top = `${Math.max(16, Math.min(preferredTop, height - panelHeight - 16))}px`;
   };
   return (
     <div className="status">
