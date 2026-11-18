@@ -44,19 +44,21 @@ private def claimed : Receipts.Raw :=
 
 /-- Once the value changes, the server's report is outdated; the form's own reports are not. -/
 example : (ModelForm.reports (model := Receipts) claimed false).map (·.kind) = [
-    .report .unresolved, .report .unresolved, .report .outdated] := by
+    .report .unresolved false, .report .unresolved false, .report .unresolved true] := by
   decide
 
 example : (ModelForm.reports (model := Receipts) claimed true).map (·.kind) = [
-    .report .unresolved, .report .unresolved, .report .unresolved] := by
+    .report .unresolved false, .report .unresolved false, .report .unresolved false] := by
   decide
 
+/-- Outdated checks stay issues if they failed last time. -/
 example : (Diagnostic.issues [
-    { kind := .report .resolved, message := "resolved", targets := .global },
-    { kind := .report .outdated, message := "outdated", targets := .global },
-    { kind := .report .unresolved, message := "unresolved", targets := .global },
+    { kind := .report .resolved false, message := "resolved", targets := .global },
+    { kind := .report .resolved true, message := "passed before", targets := .global },
+    { kind := .report .unresolved true, message := "failed before", targets := .global },
+    { kind := .report .unresolved false, message := "unresolved", targets := .global },
     { kind := .error, message := "error", targets := .global }] []).map (·.message) =
-    ["unresolved", "error"] := by
+    ["failed before", "unresolved", "error"] := by
   decide
 
 private def label : String := "Expense Payment Method"
@@ -85,17 +87,17 @@ def run : IO Unit := do
     PaymentMethod.initial Env.nil
   let mismatch := "The payment method does not match the receipt."
   check "ReportsShowMandatoryChecksOnTheirTarget"
-    (messages opened == [{ kind := .report .unresolved, text := mismatch }])
+    (messages opened == [{ kind := .report .unresolved false, text := mismatch }])
   let matching := ModelForm.openState (model := PaymentMethod) (supply := supply)
     PaymentMethod.form (PaymentMethod.serverCheck { PaymentMethod.initial with
       value := some .blpCreditCard }) Env.nil
   check "PassingChecksAreResolved" (messages matching ==
-    [{ kind := .report .resolved, text := "The payment method matches the receipt." }])
+    [{ kind := .report .resolved false, text := "The payment method matches the receipt." }])
   let some control := opened.evaluation.view.controls.find? (·.label == label)
     | throw (IO.userError s!"Missing control: {label}")
   let cleared ← IO.ofExcept (ModelForm.execute (model := PaymentMethod) PaymentMethod.form opened
     (.apply control.key (some (.text "none"))))
-  let outdated := [{ kind := .report .outdated, text := mismatch }]
+  let outdated := [{ kind := .report .unresolved true, text := mismatch }]
   check "EditsOutdateServerChecks" (cleared.value.value == none && messages cleared == outdated)
   let pending ← IO.ofExcept (ModelForm.execute (model := PaymentMethod) PaymentMethod.form cleared
     .submit)
@@ -107,7 +109,7 @@ def run : IO Unit := do
   let saved ← IO.ofExcept (ModelForm.execute (model := PaymentMethod) PaymentMethod.form pending
     (.submitted (.accepted (PaymentMethod.serverCheck pending.value))))
   check "SavedDocumentReplacesChecks"
-    (messages saved == [{ kind := .report .unresolved, text := "Choose a payment method." }] &&
+    (messages saved == [{ kind := .report .unresolved false, text := "Choose a payment method." }] &&
       !saved.ui.pending)
   let reset ← IO.ofExcept
     (ModelForm.execute (model := PaymentMethod) PaymentMethod.form saved .reset)

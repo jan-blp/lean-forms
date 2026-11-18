@@ -22,9 +22,10 @@ def _root_.Forms.Model.TextKind.toReact : Model.TextKind → FormsReact.TextKind
   | .uuid => .uuid
 
 def _root_.FormsReact.Checks.of (messages : List Model.Message) : Option FormsReact.Checks :=
-  let unresolved := Model.Message.reports .unresolved messages
-  let outdated := Model.Message.reports .outdated messages
-  let resolved := Model.Message.reports .resolved messages
+  let unresolved := Model.Message.reports .unresolved false messages
+  let outdated := Model.Message.reports .unresolved true messages ++
+    Model.Message.reports .resolved true messages
+  let resolved := Model.Message.reports .resolved false messages
   let tone : FormsReact.Tone :=
     if !unresolved.isEmpty then .attention else if !outdated.isEmpty then .outdated else .resolved
   if unresolved.isEmpty && outdated.isEmpty && resolved.isEmpty then none

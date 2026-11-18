@@ -34,8 +34,8 @@ def controlToJson (control : Control) : Json :=
     ("messages", toJson (Model.Message.errors control.messages)),
     ("reports", toJson (control.messages.filterMap fun message => match message.kind with
       | .error => none
-      | .report state =>
-        some (Json.mkObj [("message", toJson message.text), ("state", toJson state)])))])
+      | .report state outdated => some (Json.mkObj [
+        ("message", toJson message.text), ("state", toJson state), ("outdated", toJson outdated)])))])
 
 end DisplayProtocol
 

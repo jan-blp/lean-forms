@@ -12,13 +12,12 @@ namespace Diagnostic
 inductive ReportState where
   | unresolved
   | resolved
-  | outdated
   deriving BEq, DecidableEq, Repr, Lean.ToJson, Lean.FromJson
 
 inductive Kind where
   | error
-  /-- Never blocks submit, such as a server check. -/
-  | report (state : ReportState)
+  /-- Never blocks submit. `outdated` when it reads server data older than the current value. -/
+  | report (state : ReportState) (outdated : Bool)
   deriving BEq, DecidableEq, Lean.ToJson, Lean.FromJson
 
 inductive Targets where
@@ -43,14 +42,17 @@ structure Message where
 def Message.errors (messages : List Message) : List String :=
   (messages.filter (·.kind == .error)).map (·.text)
 
-def Message.reports (state : Diagnostic.ReportState) (messages : List Message) : List String :=
-  (messages.filter (·.kind == .report state)).map (·.text)
+def Message.reports
+  (state : Diagnostic.ReportState)
+  (outdated : Bool)
+  (messages : List Message)
+  : List String :=
+  (messages.filter (·.kind == .report state outdated)).map (·.text)
 
 def Diagnostic.Kind.actionable : Diagnostic.Kind → Bool
   | .error => true
-  | .report .unresolved => true
-  | .report .resolved => false
-  | .report .outdated => false
+  | .report .unresolved _ => true
+  | .report .resolved _ => false
 
 structure Destination where
   locations : List ErasedLocation
