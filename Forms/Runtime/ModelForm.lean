@@ -326,8 +326,12 @@ def event {Γ : Model.Context}
         ui := { Interaction.State.initial with notice := .info "Started over." } })
   | .submitted outcome =>
     if !state.ui.pending then return state
+    let unreachable (message : String) :=
+      { state with ui := { (state.ui.announce message true) with pending := false } }
     match outcome with
     | .accepted saved =>
+      if (Model.corruption? model saved).isSome
+      then return unreachable "Your form was saved, but an internal error occurred. Please contact BLP."
       -- The saved document becomes the new starting point; UI state is kept.
       let state := { applyUpdate (model := model) form state
         { value := saved, state := state.env, locals := state.locals } with initial := saved }
@@ -336,8 +340,7 @@ def event {Γ : Model.Context}
     | .rejected feedback => pure (refresh form { state with
         serverFeedback := some feedback
         ui := { (state.ui.announce feedback.message true) with pending := false } })
-    | .unreachable message =>
-      pure { state with ui := { (state.ui.announce message true) with pending := false } }
+    | .unreachable message => pure (unreachable message)
   | .loaded request response =>
     match state.cache[request]? with
     | some .loading =>
