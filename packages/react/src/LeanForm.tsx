@@ -57,7 +57,7 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
   useEffect(() => performAll(model.snapshot()), [model]);
   useEffect(() => {
     for (const effect of snapshot.effects) {
-      if ('focus' in effect) targets.current.get(effect.focus.key)?.focus();
+      if ('focus' in effect) targets.current.get(effect.focus.key)?.focus({ focusVisible: true });
     }
   }, [snapshot]);
 

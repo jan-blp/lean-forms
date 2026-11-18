@@ -34,11 +34,24 @@ instance : ReportRule PaymentMethod where
       message := check.message
       targets := .locations (.field PaymentMethod.Field.value .self) }
 
-def PaymentMethod.form : Component [] PaymentMethod.Raw :=
+def PaymentMethod.field {Γ : Context} : Component Γ PaymentMethod.Raw :=
   .visibleWhen { inputs := inputs[path[PaymentMethod.Field.visible]], run := (·.value) } <|
   .disabledWhen { inputs := inputs[path[PaymentMethod.Field.disabled]], run := (·.value) } <|
   .optional path[PaymentMethod.Field.value] "Expense Payment Method" "Not set" "Set" .blpCreditCard
     (.enum .self "Method" [⟨.blpCreditCard, "BLP credit card"⟩, ⟨.privatelyPaid, "Privately paid"⟩])
+
+def PaymentMethod.form : Component [] PaymentMethod.Raw :=
+  .observe .issues <|
+    let issues : Computation _ PaymentMethod.Raw (List Issue) := {
+      inputs := inputs[.ui (Ref.here : InputRef _ (List Issue))]
+      run := id }
+    .group "Payment" [
+      PaymentMethod.field,
+      .computed "Current issues" ((fun issues =>
+        String.intercalate "\n" (issues.map (·.message))) <$> issues),
+      .disabledWhen (List.isEmpty <$> issues) <|
+        .button "Go to issue"
+          (.visit ((fun issues => issues.head?.bind (·.destination?)) <$> issues))]
 
 def PaymentMethod.receiptCheck : FailingCheck where
   message := "Attach the original receipt."

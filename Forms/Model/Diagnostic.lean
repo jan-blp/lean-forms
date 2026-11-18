@@ -59,6 +59,7 @@ def Message.reports (keep : Diagnostic.ReportKind → Bool) (messages : List Mes
     | .error => none
     | .report kind => if keep kind then some message.text else none
 
+/-- Listed by the `issues` node. -/
 def Diagnostic.Kind.actionable : Diagnostic.Kind → Bool
   | .error => true
   | .report kind => kind.severity == .warning && kind.state == .unresolved

@@ -449,10 +449,19 @@ try {
     check(output() === '', 'Reset did not clear row-local selections');
   `);
   const marker = `const marker = () => [...document.querySelectorAll('legend')].find(legend =>
-    legend.firstChild.textContent === 'Expense Payment Method').querySelector('.status-marker');`;
+    legend.firstChild.textContent === 'Expense Payment Method').querySelector('.status-marker');
+    const issues = () => [...document.querySelectorAll('output')].find(output =>
+      output.parentElement.firstChild.textContent === 'Current issues').textContent;
+    const visit = () => [...document.querySelectorAll('button')].find(button =>
+      button.textContent === 'Go to issue');`;
   await example('payment-method', `
     ${marker}
     check(marker().classList.contains('attention'), 'A failing check did not ask for attention');
+    check(issues() === 'The payment method does not match the receipt.',
+      'Issues did not list exactly the failing warning');
+    visit().click();
+    await wait(() => document.activeElement?.closest('fieldset')?.querySelector('legend')
+      ?.firstChild.textContent === 'Expense Payment Method');
     marker().click();
     await tick();
     const checks = document.getElementById(marker().getAttribute('popovertarget'));
@@ -465,6 +474,8 @@ try {
     [...document.querySelectorAll('label')].find(label => label.textContent === 'BLP credit card')
       .querySelector('input').click();
     await wait(() => marker().classList.contains('outdated'));
+    check(issues() === 'The payment method does not match the receipt.',
+      'An outdated failing check left the issues');
     marker().click();
     await tick();
     const changed = [...document.getElementById(marker().getAttribute('popovertarget'))
@@ -477,6 +488,7 @@ try {
   `, evaluate => evaluate(`
     ${marker}
     await wait(() => marker().classList.contains('resolved'));
+    check(issues() === '' && visit().disabled, 'A resolved check stayed an issue');
   `));
 
 } finally {
