@@ -106,5 +106,17 @@ def run : IO Unit := do
       | .error message => message == duplicateIdsMessage [firstId]
       | .ok _ => false) &&
       (definition.openState (toJson ExpenseReport.initial) supply).toOption.isSome)
+  let pending := ModelForm.submit
+    (ModelForm.openState (model := ExpenseReport) (supply := supply) ExpenseReport.form
+      ExpenseReport.initial Env.nil)
+  let corrupt ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) ExpenseReport.form pending
+    (.submitted (.accepted duplicated)))
+  check "CorruptSavedDocumentIsNotAdopted"
+    (corrupt.value.expenses.map (·.id) == ExpenseReport.initial.expenses.map (·.id) &&
+      corrupt.initial.expenses.map (·.id) == ExpenseReport.initial.expenses.map (·.id) &&
+      !corrupt.ui.pending &&
+      (match corrupt.ui.notice with
+        | .error message => message == duplicateIdsMessage [firstId]
+        | .info _ => false))
 
 end Tests.Table

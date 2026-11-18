@@ -33,9 +33,7 @@ def FormDefinition.ofModel
   initial := toJson initial
   openState value supply := do
     let value ← fromJson? value
-    if let some corrupt := (Model.errors (Model.Validation.validate (model := model) value)).find?
-        (·.kind matches .corrupt) then
-      throw corrupt.message
+    if let some corrupt := Model.corruption? model value then throw corrupt.message
     let state := ModelForm.load form
       (ModelForm.openState (model := model) form value Model.Env.nil supply)
     pure (state, ModelForm.snapshot form state)

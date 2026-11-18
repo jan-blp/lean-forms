@@ -279,6 +279,14 @@ def errors {α β : Type _} : Except (List α) β → List α
   | .ok _ => []
   | .error errors => errors
 
+def corruption?
+  (model : Type)
+  [FormModel model]
+  [Validation model]
+  (raw : Raw model)
+  : Option (Error raw) :=
+  (errors (Validation.validate (model := model) raw)).find? (·.kind matches .corrupt)
+
 /-- Applies `f` to `x` if both succeed, else collects the errors of both. -/
 def accumulate
   {ε : Type _}
