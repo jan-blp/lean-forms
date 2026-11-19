@@ -4,12 +4,22 @@ public import Forms
 public import Forms.ExampleForms.SharedState
 public import Forms.ExampleForms.Presentation
 import Tests.Sugar.Diagnostics
+import Tests.Sugar.Computation
 import Tests.Sugar.Parsing
 import Tests.Sugar.TabInference
 
 @[expose] public section
 namespace Tests.Sugar
 open Forms.Model Forms.Model.Sugar Forms.Runtime
+
+example :
+    (named%
+      state% count := (0 : Nat);
+      .output (compute% (count : Nat) ← .ui ref[count] => count + 1)
+      : Component [] Nat Nat) =
+    .bind (0 : Nat) (.output {
+      inputs := inputs[.ui .here]
+      run := fun count => count + 1 }) := rfl
 
 def counter {Γ : Context} : Component Γ Nat Nat := named%
   state% count := (0 : Nat);

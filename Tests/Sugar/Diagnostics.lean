@@ -1,6 +1,6 @@
 module
 
-import Forms.Model.Sugar
+import Forms.Model.Sugar.Named
 
 open Forms.Model Forms.Model.Sugar
 
