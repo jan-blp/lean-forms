@@ -147,21 +147,34 @@ end Internal
 open Internal
 
 private structure Binding where
+  /-- Name written by the user, used for lookup. -/
   name : Ident
+  /-- Lean identifier emitted before applying shifts. -/
   reference : Ident
   shifts : Nat
 
-private inductive Mode where
-  | component
-  | presentation
-
-private structure Bindings where
-  refs : List Binding
-  slots : List Binding
-  mode : Mode
+private inductive Bindings where
+  | component (refs : List Binding)
+  | presentation (refs : List Binding) (slots : List Binding)
 
 private def Bindings.empty : Bindings :=
-  { refs := [], slots := [], mode := .component }
+  .component []
+
+private def Bindings.refs : Bindings → List Binding
+  | .component refs => refs
+  | .presentation refs _ => refs
+
+private def Bindings.slots : Bindings → List Binding
+  | .component _ => []
+  | .presentation (slots := slots) .. => slots
+
+private def Bindings.withRefs
+  (bindings : Bindings)
+  (refs : List Binding)
+  : Bindings :=
+  match bindings with
+  | .component _ => .component refs
+  | .presentation (slots := slots) .. => .presentation refs slots
 
 private def ensureFresh
   (name : Ident)
@@ -175,8 +188,7 @@ private def importRefs (names : Array Ident) : MacroM Bindings := do
   let mut bindings := Bindings.empty
   for name in names do
     ensureFresh name bindings
-    bindings := { bindings with
-      refs := { name, reference := name, shifts := 0 } :: bindings.refs }
+    bindings := bindings.withRefs ({ name, reference := name, shifts := 0 } :: bindings.refs)
   return bindings
 
 private def lookup
@@ -204,10 +216,10 @@ private def freshIdent (name : Ident) : MacroM Ident := withFreshMacroScope do
 private def requirePresentation
   (form : String)
   (bindings : Bindings)
-  : MacroM Unit := do
-  match bindings.mode with
-  | .component => Macro.throwError s!"{form} requires a presentation; use present%"
-  | .presentation => pure ()
+  : MacroM (List Binding) := do
+  match bindings with
+  | .component _ => Macro.throwError s!"{form} requires a presentation; use present%"
+  | .presentation (slots := slots) .. => return slots
 
 private theorem sizeOf_getArg_lt
   (info : SourceInfo)
@@ -245,40 +257,40 @@ private def expand
     let initial : TSyntax `term := ⟨← expand initial bindings⟩
     let localName ← freshIdent name
     let refs := { name, reference := localName, shifts := 0 } :: shift bindings.refs 1
-    let body : TSyntax `term := ⟨← expand body { bindings with refs }⟩
-    match bindings.mode with
-    | .component => return ← `(bindComponent $initial (fun $localName => $body))
-    | .presentation => return ← `(bindPresentation $initial (fun $localName => $body))
+    let body : TSyntax `term := ⟨← expand body (bindings.withRefs refs)⟩
+    match bindings with
+    | .component _ => return ← `(bindComponent $initial (fun $localName => $body))
+    | .presentation .. => return ← `(bindPresentation $initial (fun $localName => $body))
   if let `(own% $name := $component; $body) := stx then
-    requirePresentation "own%" bindings
+    let slots ← requirePresentation "own%" bindings
     ensureFresh name bindings
     let component : TSyntax `term := ⟨← expand component
-      { bindings with slots := [], mode := .component }⟩
+      (.component bindings.refs)⟩
     let outputName ← freshIdent name
     let slotName ← freshIdent name
     let refs := { name, reference := outputName, shifts := 0 } :: shift bindings.refs 1
-    let slots := { name, reference := slotName, shifts := 0 } :: shift bindings.slots 1
-    let body : TSyntax `term := ⟨← expand body { refs, slots, mode := .presentation }⟩
+    let slots := { name, reference := slotName, shifts := 0 } :: shift slots 1
+    let body : TSyntax `term := ⟨← expand body (.presentation refs slots)⟩
     return ← `(ownComponent $component (fun $outputName $slotName => $body))
   if let `(present% $body) := stx then
-    let body : TSyntax `term := ⟨← expand body { bindings with slots := [], mode := .presentation }⟩
+    let body : TSyntax `term := ⟨← expand body (.presentation bindings.refs [])⟩
     return ← `(Component.present $body)
   if let `(tabs% $active, $strip := $label, $labels; $body) := stx then
-    requirePresentation "tabs%" bindings
+    let slots ← requirePresentation "tabs%" bindings
     ensureFresh active bindings
     let activeName ← freshIdent active
     let refs := { name := active, reference := activeName, shifts := 0 } :: shift bindings.refs 1
-    ensureFresh strip { bindings with refs }
-    let label : TSyntax `term := ⟨← expand label { bindings with refs }⟩
-    let labels : TSyntax `term := ⟨← expand labels { bindings with refs }⟩
+    ensureFresh strip (bindings.withRefs refs)
+    let label : TSyntax `term := ⟨← expand label (bindings.withRefs refs)⟩
+    let labels : TSyntax `term := ⟨← expand labels (bindings.withRefs refs)⟩
     let bodyActiveName ← freshIdent active
     let outputName ← freshIdent strip
     let slotName ← freshIdent strip
     let refs :=
       { name := strip, reference := outputName, shifts := 0 } ::
       { name := active, reference := bodyActiveName, shifts := 0 } :: shift bindings.refs 2
-    let slots := { name := strip, reference := slotName, shifts := 0 } :: shift bindings.slots 1
-    let body : TSyntax `term := ⟨← expand body { refs, slots, mode := .presentation }⟩
+    let slots := { name := strip, reference := slotName, shifts := 0 } :: shift slots 1
+    let body : TSyntax `term := ⟨← expand body (.presentation refs slots)⟩
     return ← `(tabsPresentation
       (fun $activeName => $label)
       (fun $activeName => named_tab_labels% $labels)
@@ -288,9 +300,9 @@ private def expand
     let currentName ← freshIdent current
     let removedName ← freshIdent removed
     let refs := { name := current, reference := currentName, shifts := 0 } :: shift bindings.refs 2
-    ensureFresh removed { bindings with refs }
+    ensureFresh removed (bindings.withRefs refs)
     let refs := { name := removed, reference := removedName, shifts := 0 } :: refs
-    let body : TSyntax `term := ⟨← expand body { refs, slots := [], mode := .component }⟩
+    let body : TSyntax `term := ⟨← expand body (.component refs)⟩
     return ← `(rowComputation (fun $currentName $removedName => $body))
   if let `(.bind) := stx then
     Macro.throwError "Use state% for bindings inside named%"
