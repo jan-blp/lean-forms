@@ -16,6 +16,13 @@ example : firstSlot #[8] = 8 := by decide
 section
 open Forms.Model.Sugar
 
+def indexedRef (ref : Array Nat) : Nat := (ref)[0]!
+
+def indexedSlot (slot : Array Nat) : Nat := (slot)[0]!
+
+example : indexedRef #[7] = 7 := by decide
+example : indexedSlot #[8] = 8 := by decide
+
 def namedCounter : Component [] Nat Nat := named%
   state% count := (1 : Nat);
   .output { inputs := inputs[.ui ref[count]], run := id }

@@ -163,13 +163,13 @@ example : Component [] Nat := tabs% active, strip := "Tabs", #v["One"]; .compute
 #guard_msgs in
 example : Computation (Context.row Nat []) Nat String := row% current, removed => (.const "row")
 
-/-- error: own% requires a presentation; use present% -/
+/-- error: own% requires a presentation; use present%, or presentation% for a Presentation -/
 #guard_msgs in
 example : Component [] Nat := named%
   own% x := .computed "X" "0";
   .arrange (.const (.place slot[x]))
 
-/-- error: tabs% requires a presentation; use present% -/
+/-- error: tabs% requires a presentation; use present%, or presentation% for a Presentation -/
 #guard_msgs in
 example : Component [] Nat := named%
   tabs% active, strip := "Tabs", #v["One"];
@@ -187,24 +187,6 @@ example : Component [] Nat := named% .present (.arrange (.const (.group none [])
 #guard_msgs in
 example : Component [] Nat := named%
   present% Presentation.tabs "Tabs" #v["One"] (.arrange (.const (.group none [])))
-
-/--
-@ +4:31...37
-error: Application type mismatch: The argument
-  shared✝
-has type
-  Var [{ access := Access.writable, type := ℕ }] ℕ
-but is expected to have type
-  Ref (Context.row (Item ℕ) [{ access := Access.writable, type := ℕ }]) (?_ shared✝) (?_ shared✝)
-in the application
-  Inputs.ui shared✝
--/
-#guard_msgs (positions := true) in
-example : Component [] (List (Item Nat)) (List Unit) := named%
-  state% shared := (0 : Nat);
-  .list .self "Rows"
-    { inputs := inputs[.ui ref[shared]], run := toString }
-    "Add" (Item.mkWithoutUuid 0) (.computed "Row" "value")
 
 /--
 @ +5:31...37
@@ -226,3 +208,15 @@ example : Component [] (List (Item Nat)) (List Unit) := named%
   .list .self "Rows"
     { inputs := inputs[.ui ref[shared]], run := toString }
     "Add" (Item.mkWithoutUuid 0) (.computed "Row" "value")
+
+/-- error: presentation% is only valid inside named% -/
+#guard_msgs in
+example : Presentation [] [] Nat := presentation% .arrange (.const (.group none []))
+
+/-- error: Unknown slot 'child' in this scope -/
+#guard_msgs in
+example : Component [] Nat := named%
+  present%
+    own% child := .computed "Child" "value";
+    tabs% active, strip := "Tabs", slot[child];
+    .arrange (.const (.place slot[strip]))

@@ -143,6 +143,48 @@ def explicitRows : Component [] (List (Item Nat)) (List Nat) :=
 
 example : rows = explicitRows := rfl
 
+def standalonePresentation
+  {Γ : Context}
+  (shared : Var Γ Nat)
+  : Presentation [] Γ Nat Nat := named%[shared]
+  presentation%
+    state% count := (2 : Nat);
+    own% child := .output {
+      inputs := inputs[.ui ref[shared], .ui ref[count]]
+      run := Nat.add };
+    .layout { inputs := inputs[.ui ref[child]], run := id } (.const (.place slot[child]))
+
+example {Γ : Context} (shared : Var Γ Nat) :
+    standalonePresentation shared =
+      (.bind (2 : Nat) <|
+        .own (.output { inputs := inputs[.ui (.there shared), .ui .here], run := Nat.add }) <|
+          .layout { inputs := inputs[.ui (.here : InputRef _ Nat)], run := id }
+            (.const (.place .here))) := rfl
+
+def collectionRows
+  {Γ : Context}
+  (shared : Var Γ Nat)
+  : Component Γ (List (Item Nat)) (List Nat) 1 := named%[shared]
+  .collection .self "Rows"
+    (presentation% row% current, removed =>
+      own% value := .output {
+        inputs := inputs[.ui ref[shared], .ui ref[current]]
+        run := fun shared (row : PointedList (Item Nat)) => shared + row.current.value };
+      own% remove := .button "Remove" (.set ref[removed] (.const true));
+      .layout { inputs := inputs[.ui ref[value]], run := id }
+        (.const (.group none [.place slot[value], .place slot[remove]])))
+    .list
+
+example {Γ : Context} (shared : Var Γ Nat) : collectionRows shared =
+    (.collection .self "Rows"
+      (.own (.output {
+        inputs := inputs[.ui (.there (.there shared)), .ui Ref.row]
+        run := fun shared (row : PointedList (Item Nat)) => shared + row.current.value }) <|
+        .own (.button "Remove" (.set (.there Ref.rowRemoved) (.const true))) <|
+          .layout { inputs := inputs[.ui (.there .here : InputRef _ Nat)], run := id }
+            (.const (.group none [.place (.there .here), .place .here])))
+      .list) := rfl
+
 def independentNames : Component [] Nat Nat := named%
   let first : Component [] Nat Nat := named%
     state% count := (10 : Nat);

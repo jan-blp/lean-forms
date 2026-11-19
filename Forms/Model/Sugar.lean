@@ -13,8 +13,6 @@ Enable the syntax with:
 import Forms
 open Forms.Model.Sugar
 ```
-
-Names must be unique within a block. References adjust automatically as bindings are added.
 -/
 
 public section
@@ -56,6 +54,15 @@ abbrev rowComputation
   (body : InputRef (Context.row α Γ) (PointedList α) → Var (Context.row α Γ) Bool →
     Computation (Context.row α Γ) α β)
   : Computation (Context.row α Γ) α β :=
+  body Ref.row Ref.rowRemoved
+
+abbrev rowPresentation
+  {Γ : Context}
+  {α β : Type}
+  {views : Nat}
+  (body : InputRef (Context.row α Γ) (PointedList α) → Var (Context.row α Γ) Bool →
+    Presentation [] (Context.row α Γ) α β views)
+  : Presentation [] (Context.row α Γ) α β views :=
   body Ref.row Ref.rowRemoved
 
 abbrev tabsPresentation
@@ -100,6 +107,9 @@ scoped syntax "own% " ident " := " term " ; " term : term
 /-- Build a component from a presentation with `present% body`. Starts a fresh slot scope. -/
 scoped syntax "present% " term : term
 
+/-- Build a `Presentation` directly, keeping variables and starting a fresh slot scope. -/
+scoped syntax "presentation% " term : term
+
 /--
 Add tabs with `tabs% active, bar := title, labels; body`. Supply at least one label.
 For `N` labels, `ref[active] : Var _ (Fin N)` starts at zero. Place the bar with `slot[bar]`.
@@ -108,8 +118,9 @@ Own panes separately and choose one in the layout using the active index.
 scoped syntax "tabs% " ident ", " ident " := " term ", " term " ; " term : term
 
 /--
-Use `row% current, removed => computation` in a collection's row-label computation.
-Read the supplied `PointedList` with `ref[current]`; read or set the `Bool` with `ref[removed]`.
+Use `row% current, removed => body` whenever a row label contains `ref[...]`.
+`current` reads the `PointedList`; `removed` reads or sets its removal flag.
+For a collection row presentation, use `presentation% row% current, removed => body`.
 -/
 scoped syntax "row% " ident ", " ident " => " term : term
 
@@ -210,6 +221,12 @@ private def shift
   : List Binding :=
   bindings.map fun binding => { binding with shifts := binding.shifts + count }
 
+private def extend
+  (existing : List Binding)
+  (introduced : List Binding)
+  : List Binding :=
+  introduced ++ shift existing introduced.length
+
 private def freshIdent (name : Ident) : MacroM Ident := withFreshMacroScope do
   return mkIdentFrom name (← MonadQuotation.addMacroScope name.getId)
 
@@ -218,8 +235,94 @@ private def requirePresentation
   (bindings : Bindings)
   : MacroM (List Binding) := do
   match bindings with
-  | .component _ => Macro.throwError s!"{form} requires a presentation; use present%"
+  | .component _ =>
+    Macro.throwError
+      s!"{form} requires a presentation; use present%, or presentation% for a Presentation"
   | .presentation (slots := slots) .. => return slots
+
+private abbrev ExpandTerm := Bindings → MacroM (TSyntax `term)
+
+private def expandState
+  (name : Ident)
+  (bindings : Bindings)
+  (initial : ExpandTerm)
+  (body : ExpandTerm)
+  : MacroM Syntax := do
+  ensureFresh name bindings
+  let initial ← initial bindings
+  let localName ← freshIdent name
+  let refs := extend bindings.refs [{ name, reference := localName, shifts := 0 }]
+  let body ← body (bindings.withRefs refs)
+  match bindings with
+  | .component _ => return ← `(bindComponent $initial (fun $localName => $body))
+  | .presentation .. => return ← `(bindPresentation $initial (fun $localName => $body))
+
+private def expandOwn
+  (name : Ident)
+  (bindings : Bindings)
+  (component : ExpandTerm)
+  (body : ExpandTerm)
+  : MacroM Syntax := do
+  let slots ← requirePresentation "own%" bindings
+  ensureFresh name bindings
+  let component ← component (.component bindings.refs)
+  let outputName ← freshIdent name
+  let slotName ← freshIdent name
+  let refs := extend bindings.refs [{ name, reference := outputName, shifts := 0 }]
+  let slots := extend slots [{ name, reference := slotName, shifts := 0 }]
+  let body ← body (.presentation refs slots)
+  return ← `(ownComponent $component (fun $outputName $slotName => $body))
+
+private def expandTabs
+  (active : Ident)
+  (strip : Ident)
+  (bindings : Bindings)
+  (label : ExpandTerm)
+  (labels : ExpandTerm)
+  (body : ExpandTerm)
+  : MacroM Syntax := do
+  let slots ← requirePresentation "tabs%" bindings
+  ensureFresh active bindings
+  let activeName ← freshIdent active
+  let refs := extend bindings.refs [{ name := active, reference := activeName, shifts := 0 }]
+  ensureFresh strip (bindings.withRefs refs)
+  let labelBindings := Bindings.component refs
+  let label ← label labelBindings
+  let labels ← labels labelBindings
+  let bodyActiveName ← freshIdent active
+  let outputName ← freshIdent strip
+  let slotName ← freshIdent strip
+  let refs := extend bindings.refs [
+    { name := strip, reference := outputName, shifts := 0 },
+    { name := active, reference := bodyActiveName, shifts := 0 }]
+  let slots := extend slots [{ name := strip, reference := slotName, shifts := 0 }]
+  let body ← body (.presentation refs slots)
+  return ← `(tabsPresentation
+    (fun $activeName => $label)
+    (fun $activeName => named_tab_labels% $labels)
+    (fun $bodyActiveName $outputName $slotName => $body))
+
+private def expandRow
+  (current : Ident)
+  (removed : Ident)
+  (bindings : Bindings)
+  (body : ExpandTerm)
+  : MacroM Syntax := do
+  ensureFresh current bindings
+  let currentName ← freshIdent current
+  let removedName ← freshIdent removed
+  let currentBinding : Binding := { name := current, reference := currentName, shifts := 0 }
+  ensureFresh removed (bindings.withRefs (extend bindings.refs [currentBinding]))
+  let refs := extend bindings.refs [
+    { name := removed, reference := removedName, shifts := 0 },
+    currentBinding]
+  match bindings with
+  | .component _ =>
+    let body ← body (.component refs)
+    return ← `(rowComputation (fun $currentName $removedName => $body))
+  | .presentation .. =>
+    let body ← body (.presentation refs [])
+    return ← `(rowPresentation (fun $currentName $removedName => $body))
 
 private def rejectRawBinders (stx : Syntax) : MacroM Unit := do
   match stx with
@@ -274,57 +377,26 @@ private def expand
     | `(slot[$name]) =>
       return (← lookup "slot" name bindings.slots).raw
     | `(state% $name := $initial; $body) =>
-      ensureFresh name bindings
-      let initial : TSyntax `term := ⟨← expand initial bindings⟩
-      let localName ← freshIdent name
-      let refs := { name, reference := localName, shifts := 0 } :: shift bindings.refs 1
-      let body : TSyntax `term := ⟨← expand body (bindings.withRefs refs)⟩
-      match bindings with
-      | .component _ => return ← `(bindComponent $initial (fun $localName => $body))
-      | .presentation .. => return ← `(bindPresentation $initial (fun $localName => $body))
+      expandState name bindings
+        (fun bindings => return ⟨← expand initial bindings⟩)
+        (fun bindings => return ⟨← expand body bindings⟩)
     | `(own% $name := $component; $body) =>
-      let slots ← requirePresentation "own%" bindings
-      ensureFresh name bindings
-      let component : TSyntax `term := ⟨← expand component (.component bindings.refs)⟩
-      let outputName ← freshIdent name
-      let slotName ← freshIdent name
-      let refs := { name, reference := outputName, shifts := 0 } :: shift bindings.refs 1
-      let slots := { name, reference := slotName, shifts := 0 } :: shift slots 1
-      let body : TSyntax `term := ⟨← expand body (.presentation refs slots)⟩
-      return ← `(ownComponent $component (fun $outputName $slotName => $body))
+      expandOwn name bindings
+        (fun bindings => return ⟨← expand component bindings⟩)
+        (fun bindings => return ⟨← expand body bindings⟩)
     | `(present% $body) =>
       let body : TSyntax `term := ⟨← expand body (.presentation bindings.refs [])⟩
       return ← `(Component.present $body)
+    | `(presentation% $body) =>
+      expand body (.presentation bindings.refs [])
     | `(tabs% $active, $strip := $label, $labels; $body) =>
-      let slots ← requirePresentation "tabs%" bindings
-      ensureFresh active bindings
-      let activeName ← freshIdent active
-      let refs := { name := active, reference := activeName, shifts := 0 } :: shift bindings.refs 1
-      let labelBindings := bindings.withRefs refs
-      ensureFresh strip labelBindings
-      let label : TSyntax `term := ⟨← expand label labelBindings⟩
-      let labels : TSyntax `term := ⟨← expand labels labelBindings⟩
-      let bodyActiveName ← freshIdent active
-      let outputName ← freshIdent strip
-      let slotName ← freshIdent strip
-      let refs :=
-        { name := strip, reference := outputName, shifts := 0 } ::
-        { name := active, reference := bodyActiveName, shifts := 0 } :: shift bindings.refs 2
-      let slots := { name := strip, reference := slotName, shifts := 0 } :: shift slots 1
-      let body : TSyntax `term := ⟨← expand body (.presentation refs slots)⟩
-      return ← `(tabsPresentation
-        (fun $activeName => $label)
-        (fun $activeName => named_tab_labels% $labels)
-        (fun $bodyActiveName $outputName $slotName => $body))
+      expandTabs active strip bindings
+        (fun bindings => return ⟨← expand label bindings⟩)
+        (fun bindings => return ⟨← expand labels bindings⟩)
+        (fun bindings => return ⟨← expand body bindings⟩)
     | `(row% $current, $removed => $body) =>
-      ensureFresh current bindings
-      let currentName ← freshIdent current
-      let removedName ← freshIdent removed
-      let refs := { name := current, reference := currentName, shifts := 0 } :: shift bindings.refs 2
-      ensureFresh removed (bindings.withRefs refs)
-      let refs := { name := removed, reference := removedName, shifts := 0 } :: refs
-      let body : TSyntax `term := ⟨← expand body (.component refs)⟩
-      return ← `(rowComputation (fun $currentName $removedName => $body))
+      expandRow current removed bindings
+        (fun bindings => return ⟨← expand body bindings⟩)
     | _ => return .node info kind (← args.mapM (expand · bindings))
   | .missing => return stx
   | .atom .. => return stx
@@ -335,17 +407,21 @@ decreasing_by
     | exact sizeOf_getArg_lt ..
     | decreasing_trivial
 
+private def outsideNamed (form : String) : MacroM Syntax :=
+  Macro.throwError s!"{form} is only valid inside named%"
+
 macro_rules
   | `(named% $body) => expand body .empty
   | `(named%[$names,*] $body) => do
     expand body (← importRefs names.getElems)
-  | `(ref[$_name]) => Macro.throwError "ref[...] is only valid inside named%"
-  | `(slot[$_name]) => Macro.throwError "slot[...] is only valid inside named%"
-  | `(state% $_name := $_initial; $_body) => Macro.throwError "state% is only valid inside named%"
-  | `(own% $_name := $_component; $_body) => Macro.throwError "own% is only valid inside named%"
-  | `(present% $_body) => Macro.throwError "present% is only valid inside named%"
+  | `(ref[$_name]) => outsideNamed "ref[...]"
+  | `(slot[$_name]) => outsideNamed "slot[...]"
+  | `(state% $_name := $_initial; $_body) => outsideNamed "state%"
+  | `(own% $_name := $_component; $_body) => outsideNamed "own%"
+  | `(present% $_body) => outsideNamed "present%"
+  | `(presentation% $_body) => outsideNamed "presentation%"
   | `(tabs% $_active, $_strip := $_label, $_labels; $_body) =>
-    Macro.throwError "tabs% is only valid inside named%"
-  | `(row% $_current, $_removed => $_body) => Macro.throwError "row% is only valid inside named%"
+    outsideNamed "tabs%"
+  | `(row% $_current, $_removed => $_body) => outsideNamed "row%"
 
 end Forms.Model.Sugar
