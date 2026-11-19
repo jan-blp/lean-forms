@@ -4,6 +4,7 @@ import Tests.FormModel
 import Tests.DerivingNames
 import Tests.LocalBind
 import Tests.Context
+import Tests.Sugar
 import Tests.Actions
 import Tests.Dependencies
 import Tests.InputProtocol
