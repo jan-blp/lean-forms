@@ -1,0 +1,928 @@
+#+title: Typed forms using dependent types
+#+subtitle: Session 5: State, context, outputs and holes
+#+author: Jan Mas Rovira
+#+date: \formatdate{20}{11}{2026}
+#+options: toc:nil num:nil H:1
+#+latex_class: beamer
+#+latex_class_options: [aspectratio=169]
+#+latex_compiler: xelatex
+#+latex_header: \usepackage{fontspec}
+#+latex_header: \usepackage[nodayofweek]{datetime}
+#+latex_header: \usepackage{listings}
+#+latex_header: \usepackage{tikz}
+#+latex_header: \usepackage{newunicodechar}
+#+latex_header: \usepackage{mathtools}
+#+latex_header: \newunicodechar{≔}{\ensuremath{\coloneqq}}
+#+latex_header: \newunicodechar{←}{\ensuremath{\leftarrow}}
+#+latex_header: \newunicodechar{⇒}{\ensuremath{\Rightarrow}}
+#+latex_header: \newunicodechar{→}{\ensuremath{\rightarrow}}
+#+latex_header: \newunicodechar{⟨}{\ensuremath{\langle}}
+#+latex_header: \newunicodechar{⟩}{\ensuremath{\rangle}}
+#+latex_header: \newunicodechar{≤}{\ensuremath{\leq}}
+#+latex_header: \newunicodechar{≠}{\ensuremath{\neq}}
+#+latex_header: \newunicodechar{¬}{\ensuremath{\neg}}
+#+latex_header: \newunicodechar{Γ}{\ensuremath{\Gamma}}
+#+latex_header: \newunicodechar{Δ}{\ensuremath{\Delta}}
+#+latex_header: \newunicodechar{≈}{\ensuremath{\approx}}
+#+latex_header: \newunicodechar{α}{\ensuremath{\alpha}}
+#+latex_header: \newunicodechar{β}{\ensuremath{\beta}}
+#+latex_header: \newunicodechar{γ}{\ensuremath{\gamma}}
+#+latex_header: \newunicodechar{∀}{\ensuremath{\forall}}
+#+latex_header: \newunicodechar{∈}{\ensuremath{\in}}
+#+latex_header: \newunicodechar{∧}{\ensuremath{\land}}
+#+latex_header: \newunicodechar{λ}{\ensuremath{\lambda}}
+#+latex_header: \newunicodechar{⊢}{\ensuremath{\vdash}}
+#+latex_header: \newunicodechar{⟼}{\ensuremath{\longmapsto}}
+#+latex_header: \newunicodechar{∅}{\ensuremath{\varnothing}}
+#+latex_header: \lstset{literate={λ}{{$\lambda$}}1 {⊢}{{$\vdash$}}1 {⟼}{{$\longmapsto$}}1 {∅}{{$\varnothing$}}1 {≔}{{$\coloneqq$}}1 {←}{{$\leftarrow$}}1 {⇒}{{$\Rightarrow$}}1 {→}{{$\rightarrow$}}1 {⟨}{{$\langle$}}1 {⟩}{{$\rangle$}}1 {≤}{{$\leq$}}1 {≠}{{$\neq$}}1 {¬}{{$\neg$}}1 {Γ}{{$\Gamma$}}1 {Δ}{{$\Delta$}}1 {≈}{{$\approx$}}1 {α}{{$\alpha$}}1 {β}{{$\beta$}}1 {γ}{{$\gamma$}}1 {∀}{{$\forall$}}1 {∈}{{$\in$}}1 {∧}{{$\land$}}1 {·}{{$\cdot$}}1 {×}{{$\times$}}1}
+#+latex_header: \definecolor{codeBackground}{HTML}{F5F7FA}
+#+latex_header: \definecolor{codeBorder}{HTML}{CDD5DF}
+#+latex_header: \definecolor{leanKeyword}{HTML}{3454A5}
+#+latex_header: \definecolor{leanType}{HTML}{137C80}
+#+latex_header: \definecolor{leanString}{HTML}{A35416}
+#+latex_header: \definecolor{leanProof}{HTML}{7B3FA1}
+#+latex_header: \lstdefinelanguage{Lean}{morekeywords={def,abbrev,inductive,structure,class,where,deriving,match,with,theorem,by,decide,do,let,instance,forall,fun,if,then,else,open,in},morekeywords=[2]{ComponentNode,PresentationNode,Binding,HashMap,Uuid,CollectionDisplay,Term,Member,Presentation,Layout,ViewRef,ViewContext,Fills,View,Control,Event,SubmitOutcome,ServerError,ControlKey,Input,HttpOutcome,Snapshot,Effect,FromJson,Fields,Location,Constructors,Fin,DataType,Form,Widget,Expr,Type,Prop,String,Bool,Nat,List,Option,Except,Json,FormModel,Validation,Validated,Decision,ConstraintRule,Targets,Error,Component,Columns,Branch,Computation,Inputs,Context,Entry,Access,Ref,Var,InputRef,Env,Action,Editor,Availability,Path,PartialPath,RowSelection,Source,Status,HttpRequest,Api,Name,Person,Address,Order,Shipping,ShippingAddress,Expense,ExpenseReport,PlannerProject,PlannerTask,TemperatureField},morekeywords=[3]{text,natural,checkbox,textInput,field,group,groupOf,computed,button,withAvailability,visibleWhen,disabledWhen,choice,choiceOf,list,table,focus,bind,observe,own,present,layout,layouts,arrange,place,fill,lam,var,app,load,loadWith,valid,invalid,enabled,hidden,disabled,readOnly,writable,here,there,set,const,pure,fetch,loading,ready,failed,none,row,self,stepField,pickup,standard,express,of},sensitive=true,morestring=[b]",morecomment=[l]{--},morecomment=[n]{/-}{-/}}
+#+latex_header: \lstset{basicstyle=\ttfamily\small,keywordstyle=\color{leanKeyword}\bfseries,keywordstyle=[2]\color{leanType},keywordstyle=[3]\color{leanType},stringstyle=\color{leanString},commentstyle=\color{gray},showstringspaces=false,columns=fullflexible,keepspaces=true,breaklines=true,frame=single,rulecolor=\color{codeBorder},backgroundcolor=\color{codeBackground},framerule=0.5pt,framesep=6pt,xleftmargin=7pt,xrightmargin=7pt,aboveskip=8pt,belowskip=10pt}
+#+latex_header: \setbeamertemplate{navigation symbols}{}
+
+* Last session: components
+So far:
+- a component edits a value in our model;
+- or, runs a pure computation and displays it.
+
+Today: more!
+
+* The component type
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+inductive ComponentNode
+  : (Γ : Context)
+  → (model state output : Type)
+  → (holes : Nat)
+  → Type 1
+#+end_src
+
+- =Γ=: the references in scope. *New*
+- =model=: the value being edited.
+- =state=: private UI state, such as a click count. *New*
+- =output=: a value that other components can read. *New*
+- =holes=: places where the parent puts content. *New*
+
+* State
+:properties:
+:beamer_env: fullframe
+:end:
+#+begin_export latex
+\begin{center}{\usebeamercolor[fg]{title}\fontsize{36}{42}\selectfont State}\end{center}
+#+end_export
+
+* State: count clicks
+A counter has a button that increments a click count.
+
+- The count is not part of the document.
+- Each counter on the screen has its own count.
+- Some counts are shared between several components.
+
+Where do we keep it, and how does the button refer to it?
+
+* Live example: private and shared counters
+:properties:
+:beamer_opt: fragile
+:end:
+#+begin_export latex
+\begin{lstlisting}
+lake -q exe forms-web shared-state --open
+\end{lstlisting}
+#+end_export
+
+#+attr_latex: :width \textwidth :height 0.52\textheight :options keepaspectratio
+[[file:assets/shared-state.pdf]]
+
+* Notation for computations :noexport:
+- Without sugar:
+  #+attr_latex: :options basicstyle=\ttfamily\scriptsize
+  #+begin_src lean
+  { inputs := inputs[
+      path[Order.Field.quantity],
+      path[Order.Field.unitPrice]]
+    run := fun (quantity : Nat) (price : Nat) => quantity * price }
+  #+end_src
+
+- With sugar:
+  #+attr_latex: :options basicstyle=\ttfamily\scriptsize
+  #+begin_src lean
+  open Forms.Model.Sugar
+
+  compute%
+    (quantity : Nat) ← path[Order.Field.quantity],
+    (price : Nat) ← path[Order.Field.unitPrice]
+    => quantity * price
+  #+end_src
+
+* Context
+:properties:
+:beamer_env: fullframe
+:end:
+#+begin_export latex
+\begin{center}{\usebeamercolor[fg]{title}\fontsize{36}{42}\selectfont Context}\end{center}
+#+end_export
+
+* Which variables are available?
+We need a *=Context=*, which keeps track of what variables are in scope.
+
+* Lambda calculus :noexport:
+#+begin_center
+Intermission: Lambda Calculus
+#+end_center
+
+* Untyped lambda calculus :noexport:
+Let $\mathsf{Var}$ be a set of variable names. Define $\mathsf{Term}$ inductively:
+
+\[ \frac{x ∈ \mathsf{Var}}{x ∈ \mathsf{Term}} \quad \text{Variable} \]
+
+\[ \frac{x ∈ \mathsf{Var} \qquad e ∈ \mathsf{Term}}{λ x.\;e ∈ \mathsf{Term}} \quad \text{Function} \]
+
+\[ \frac{f ∈ \mathsf{Term} \qquad a ∈ \mathsf{Term}}{f\;a ∈ \mathsf{Term}} \quad \text{Application} \]
+
+* Adding types: STLC :noexport:
+The *simply typed lambda calculus* adds types, defined inductively:
+
+\[ \frac{}{\mathsf{Nat} ∈ \mathsf{Ty}} \qquad \frac{}{\mathsf{Bool} ∈ \mathsf{Ty}} \qquad \frac{A ∈ \mathsf{Ty} \qquad B ∈ \mathsf{Ty}}{A → B ∈ \mathsf{Ty}} \]
+
+Lambda functions now annotate their parameter's type:
+
+\[ λ (x : \mathsf{Nat}).\;x \]
+
+What terms are valid?
+
+* Type contexts :noexport:
+A context is a list of variable bindings.
+
+\[ Γ = x : \mathsf{Nat},\; y : \mathsf{Bool} \]
+
+A *typing judgement* has the form:
+
+\[ Γ \;⊢\; e : T \]
+
+“Under the bindings in $Γ$, expression $e$ has type $T$.”
+
+* Variables: look up the context :noexport:
+- The *variable rule*:
+
+  \[ \frac{x : T ∈ Γ}{Γ \;⊢\; x : T} \]
+
+- For example, let $Γ ≔ x : \mathsf{Nat},\; y : \mathsf{Bool}$
+
+  \[ Γ \;⊢\; x : \mathsf{Nat} \qquad Γ \;⊢\; y : \mathsf{Bool} \]
+
+* Application uses the same context :noexport:
+- The *application rule*:
+
+  \[ \frac{Γ ⊢ f : A → B \qquad Γ ⊢ a : A} {Γ ⊢ f\;a : B} \]
+
+- For example, let $Γ ≔ f : \mathsf{Nat} → \mathsf{Bool},\; n : \mathsf{Nat}$:
+
+  \[ Γ \;⊢\; f\;n : \mathsf{Bool} \]
+
+* A binder extends the context :noexport:
+- The *function rule*:
+
+  \[ \frac{Γ,\;x : A \;⊢\; \mathit{body} : B} {Γ \;⊢\; λ (x : A).\;\mathit{body} : A → B} \]
+
+- Example, with an empty outer context:
+
+  \[ \frac{x : \mathsf{Nat} \;⊢\; x : \mathsf{Nat}}{∅ \;⊢\; λ (x : \mathsf{Nat}).\;x : \mathsf{Nat} → \mathsf{Nat}} \]
+
+* Variable names :noexport:
+
+#+begin_center
+What is a good representation for variable names? Strings?
+#+end_center
+
+* Names: shadowing :noexport:
+\[ λ (x : \mathsf{Nat}).\;λ (x : \mathsf{Bool}).\;t \]
+
+*Shadowing*: We can't refer to outer $x$ in $t$.
+
+* Bound and free variables :noexport:
+- A variable occurrence is *bound* if appears in the context.
+- It is *free* otherwise.
+
+\[ λ (x : \mathsf{Nat → Nat}).\; x\ y \]
+
+Inside the body, $x$ is bound and $y$ is free.
+
+* β-reduction: apply a function :noexport:
+\[ \frac{Γ,\;x : A ⊢ e : B \qquad Γ ⊢ a : A}{Γ ⊢ (λ (x : A).\;e)\;a \;→_β\; e[x := a] : B} \quad (β\text{-reduction}) \]
+
+$e[x := a]$ substitutes $a$ for the free occurrences of $x$ in $e$, avoiding capture.
+
+Example:
+
+\[ (λ (x : \mathsf{Nat}).\;λ (y : \mathsf{Nat}).\;x)\;7 \;→_β\; λ (y : \mathsf{Nat}).\;7 \]
+
+What if the argument is a variable instead of $7$?
+
+* Names: variable capture :noexport:
+We want to replace $x$ with the argument $y$:
+
+\[ (λ (x : \mathsf{Nat}).\;λ (y : \mathsf{Nat}).\;x)\;\underbrace{y}_{\text{free}} \]
+
+\[ λ (y : \mathsf{Nat}).\;\underbrace{\textcolor{red}{y}}_{\text{bound}} \]
+
+*Wrong*: replacing the name directly makes that $y$ bound:
+
+
+\[ (λ (x : \mathsf{Nat}).\;λ (z : \mathsf{Nat}).\;x)\;y \]
+
+\[ →_β\; λ (z : \mathsf{Nat}).\;\underbrace{\textcolor{green!50!black}{y}}_{\text{still free}} \]
+
+@@latex:\textcolor{green!50!black}{\textbf{Correct}}@@: rename the inner parameter first, then substitute. Complicated and inefficient!
+
+* De Bruijn indices :noexport:
+Replace bound names with positions.
+
+- With names: $λ (x : \mathsf{Nat}).\;λ (f : \mathsf{Nat} → \mathsf{Nat}).\;f\;x$
+- With indices: $λ_{\mathsf{Nat}}.\;λ_{\mathsf{Nat} → \mathsf{Nat}}.\;\mathbf{0}\;\mathbf{1}$
+
+
+* Back to forms: types and access
+In forms, each context entry has a type and an access mode.
+
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+inductive Access where
+  | readOnly
+  | writable
+
+structure Entry where
+  access : Access
+  type : Type
+
+abbrev Context := List Entry
+#+end_src
+
+* References into a context
+- =Member a l= is a proof that =x= belongs to =l=. Furthermore, it tells in which
+  position.
+  #+attr_latex: :options basicstyle=\ttfamily\footnotesize
+  #+begin_src lean
+  inductive Member {α : Type u} (x : α) : List α → Type u where
+    | here : Member x (x :: Γ)
+    | there (ref : Member x Γ) : Member x (b :: Γ)
+
+  #+end_src
+- =Ref Γ access α= points to an entry in =Γ= with type =α= and permission =access=.
+  #+attr_latex: :options basicstyle=\ttfamily\footnotesize
+  #+begin_src lean
+  abbrev Ref (Γ : Context) (access : Access) (α : Type) :=
+    Member (⟨access, α⟩ : Entry) Γ
+  #+end_src
+
+* Read and write access
+=Env Γ= stores a value for each entry in =Γ=. For example:
+
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+abbrev Γ : Context := [⟨.writable, Nat⟩, ⟨.readOnly, Bool⟩]
+
+example : Env Γ := env[7, false]
+#+end_src
+
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+get (ref : Ref Γ access α) (env : Env Γ) : α
+
+set (ref : Ref Γ .writable α) (value : α) (env : Env Γ) : Env Γ
+#+end_src
+
+* Computations read declared inputs :noexport:
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+structure Computation (Γ : Context) (α : Type) (β : Type u) where
+  {types : List Type}
+  inputs : Inputs Γ α types
+  run : Inputs.Function types β
+#+end_src
+
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+(compute%
+  (first : Nat) ← .ui first,
+  (second : Nat) ← .ui second
+  => first + second)
+#+end_src
+
+- =Γ=: the surrounding variables and outputs.
+- =α=: the document value being edited. Paths read from this value.
+- =β=: the result of the computation.
+
+* Binding changes the body's context
+How to introduce a variable.
+
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+Component.bind
+  (initial : β)
+  (body : Component (⟨.writable, β⟩ :: Γ) α γ 0)
+  : Component Γ α γ 0
+#+end_src
+
+* Bind private state
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+def clicks {Γ : Context} : Component Γ Nat Unit 0 := named%
+  state% count := (0 : Nat);
+  .group "Counter" [
+    .field .self "Value" .natural,
+    .computed "Clicks"
+      (compute%
+        (value : Nat) ← ref[count]
+        => toString value),
+    .button "Increment" (.set ref[count]
+      (compute%
+        (n : Nat) ← ref[count]
+        => n + 1))]
+#+end_src
+
+- =state%= introduces a private variable for the body.
+- =ref[count]= refers to it.
+
+* Two instances, two private counters
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+def twoCounters : Component [] Nat Unit 0 :=
+  .group "Two counters" [clicks, clicks]
+#+end_src
+
+- Both editors edit the same document value.
+- Each instance has its own click count.
+
+* Pass shared state explicitly
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+def sharedClicks
+  {Γ : Context}
+  (count : Ref Γ .writable Nat)
+  : Component Γ Nat Unit 0 := named%[count]
+  .group "Counter" [..] -- as in clicks
+
+def twoShared : Component [] Nat Unit 0 := named%
+  state% count := (0 : Nat);
+  .group "Two counters" [
+    sharedClicks ref[count],
+    sharedClicks ref[count]]
+#+end_src
+
+- =clicks= without =state%=: the parent passes =count= in.
+- Both counters show and increment the same count.
+
+* The state index :noexport:
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+-- One more value on top of the body's state.
+bind (initial : β) (body : .. state ..)
+  : PresentationNode owned Γ α (Binding β state) γ views
+
+-- One state per row, kept by item id.
+collection (row : PresentationNode [] .. rowState γ views) ..
+  : ComponentNode Γ α (HashMap Uuid rowState) (List γ) 1
+#+end_src
+
+The state type follows the structure of the component.
+
+* A component hides its state type :noexport:
+=clicks= has private state, but its type =Component Γ Nat Unit 0= does not show it.
+
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+structure Component
+  (Γ : Context)
+  (α : Type)
+  (β : Type := Unit)
+  (holes : Nat := 0) where
+  LocalState : Type
+  node : ComponentNode Γ α LocalState β holes
+#+end_src
+
+- The parent does not depend on how a child stores its state.
+
+* Output
+:properties:
+:beamer_env: fullframe
+:end:
+#+begin_export latex
+\begin{center}{\usebeamercolor[fg]{title}\fontsize{36}{42}\selectfont Output}\end{center}
+#+end_export
+
+* Live example: selected descriptions
+:properties:
+:beamer_opt: fragile
+:end:
+#+begin_export latex
+\begin{lstlisting}
+lake -q exe forms-web present-table --open
+\end{lstlisting}
+#+end_export
+
+- The selection is not part of the document.
+- Each row keeps it as private state.
+
+* Expose an output
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+Component.withOutput
+  (view : Component Γ α Unit 0)
+  (output : Computation Γ α β)
+  : Component Γ α β 0
+#+end_src
+
+- =α=: the model, =β=: the output.
+- Shows =view= and returns =output=.
+
+* A public output
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+def row {Γ : Context}
+  : Component Γ (Item String) (Option String) 0 := named%
+  state% selected := false;
+  .withOutput
+    (.group "" [
+      .field path[Item.Field.value] "Description" .text,
+      .button "Toggle" (.set ref[selected]
+        (compute%
+          s ← ref[selected]
+          => !s))])
+    (compute%
+      (description : String) ← path[Item.Field.value],
+      (s : Bool) ← ref[selected]
+      => if s then some description else none)
+#+end_src
+
+* Observe an output
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+Component.observe
+  (producer : Component Γ α β 0)
+  (body : Component (⟨.readOnly, β⟩ :: Γ) α γ 0)
+  : Component Γ α γ 0
+#+end_src
+
+- Like =bind=, but the new entry is read-only.
+
+* Consume the outputs
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+def selection : Component [] (List (Item String)) Unit 0 := named%
+  observe% (rows : List (Option String)) := .list
+    (path := .self)
+    (label := "Items")
+    (rowLabel := .numbered "Item")
+    (addCaption := "Add item")
+    (initial := Item.mkWithoutUuid "New item")
+    (body := row);
+  .computed "Selected"
+    (compute%
+      (selected : List (Option String)) ← ref[rows]
+      => ", ".intercalate (selected.filterMap id))
+#+end_src
+
+* Holes
+:properties:
+:beamer_env: fullframe
+:end:
+#+begin_export latex
+\begin{center}{\usebeamercolor[fg]{title}\fontsize{36}{42}\selectfont Holes}\end{center}
+#+end_export
+
+* Holes
+- Purpose: separate *ownership* and *layout*.
+- How: Components can have /holes/ that must be filled by their parents.
+- The number of holes in a component is tracked in the type so that we can
+  statically check that all holes have been filled.
+
+** Why regular lean arguments are not enough?
+Consider a list whose footer shows the selected items. \\
+The footer needs the list's output, so the list must exist first. \\
+As an argument, the footer would be needed before the list (Impossible!).
+
+* In React
+:properties:
+:beamer_opt: fragile
+:end:
+#+begin_export latex
+\begin{lstlisting}[language={}]
+// The list places the hole.
+function List({ footer }) {
+  return (
+    <div>
+      <Rows />
+      {footer}
+    </div>
+  );
+}
+
+// The parent fills it.
+<List footer={<Summary />} />
+\end{lstlisting}
+#+end_export
+
+* Presentations
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+inductive PresentationNode
+  : (Δ : ViewContext)
+  → (Γ : Context)
+  → (model state output : Type)
+  → (views : Nat)
+  → Type 1
+
+abbrev ViewContext := List Nat
+
+abbrev ViewRef (Δ : ViewContext) (holes : Nat) := Member holes Δ
+#+end_src
+
+- =Δ=: like =Γ=, but for views; each entry is a hole count.
+- =ViewRef=: like =Ref=, a position in =Δ=.
+- =views=: how many views it lays out, always one (except for table rows).
+- =present%= turns a presentation into a component.
+
+* Own: observe, but place it later
+Inside =present%=, components are owned first and arranged later.
+
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+Presentation.own
+  (component : Component Γ α β holes)
+  (body : Presentation (holes :: Δ) (⟨.readOnly, β⟩ :: Γ) α γ views)
+  : Presentation Δ Γ α γ views
+#+end_src
+
+- the body can place the view (=Δ= grows).
+
+* A presentation: own, then arrange
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+present%
+  own% rows := items;      -- Δ = [1]       rows: 1 hole
+  own% summary := ...;     -- Δ = [0, 1]    summary: 0 holes
+  .arrange
+    (compute%
+      => ...)              -- : Layout [0, 1]
+
+Presentation.arrange
+  (arrangement : Computation Γ α (Layout Δ))
+  : Presentation Δ Γ α Unit 1
+#+end_src
+
+- =.arrange= computes the layout.
+
+* Arrange the owned views
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+inductive Layout (Δ : ViewContext) where
+  | fill
+      (view : ViewRef Δ holes)
+      (contents : Fills Δ holes)  -- ≈ Vector (List (Layout Δ)) holes
+  | group
+      (label : Option String)
+      (children : List (Layout Δ))
+
+def Layout.place (view : ViewRef Δ 0) : Layout Δ :=
+  .fill view .nil
+#+end_src
+
+- =fill=: shows an owned view, with content for each of its holes. \\
+  E.g. the list, with the summary in its hole.
+- =group=: stacks layouts, under an optional label. \\
+  E.g. the summary above the list, labelled "Selection".
+
+* The summary inside the list
+:properties:
+:beamer_opt: fragile
+:end:
+#+attr_latex: :options basicstyle=\ttfamily\scriptsize
+#+begin_src lean
+named%
+  present%
+    own% (rows : List (Option String)) := items;
+    own% summary := .computed "Selected"
+      (compute%
+        (selected : List (Option String)) ← ref[rows]
+        => ", ".intercalate (selected.filterMap id));
+    .arrange
+      (compute%
+        => .fill view[rows] (.cons [.place view[summary]] .nil))
+#+end_src
+
+#+begin_export latex
+{\centering
+\begin{tikzpicture}[scale=0.95, transform shape, font=\small, box/.style={draw, minimum width=3cm, align=left, inner sep=4pt}]
+  \node[box, minimum height=2.6cm, text depth=1.7cm] (list) at (0,0) {\textbf{Items}\\Apples\\Bread};
+  \node[draw, dashed, minimum width=2.4cm, minimum height=0.6cm] (hole) at (0,-0.75) {};
+  \node[font=\scriptsize, text=gray] at (hole) {hole};
+  \node[above=2pt, font=\ttfamily\small] at (list.north) {view[rows]};
+  \node[box, align=center] (summary) at (5,-0.75) {Selected: Apples};
+  \node[above=2pt, font=\ttfamily\small] at (summary.north) {view[summary]};
+  \draw[->, thick] (summary.west) -- node[above, font=\ttfamily\scriptsize] {.fill} (hole.east);
+\end{tikzpicture}
+\par}
+#+end_export
+
+* Live example: the summary in the hole
+:properties:
+:beamer_opt: fragile
+:end:
+#+begin_export latex
+\begin{lstlisting}
+lake -q exe forms-web present-hole --open
+\end{lstlisting}
+#+end_export
+
+* Named notation
+:properties:
+:beamer_env: fullframe
+:end:
+#+begin_export latex
+\begin{center}{\usebeamercolor[fg]{title}\fontsize{36}{42}\selectfont Named notation}\end{center}
+#+end_export
+
+* Named notation inserts the shifts
+#+beamer: \begin{columns}[T]
+#+beamer: \begin{column}{0.47\textwidth}
+#+attr_latex: :options basicstyle=\ttfamily\scriptsize,escapeinside={<@}{@>}
+#+begin_src lean
+.present <|
+  .own items <|
+    .own (selected <@\textcolor{blue!70!black}{.here}@>) <|
+      .layout
+        (compute%
+          value ← .ui <@\textcolor{blue!70!black}{(.there .here)}@>
+          => value)
+        (compute%
+          => .fill <@\textcolor{orange!85!black}{(.there .here)}@>
+            (.cons [.place <@\textcolor{green!50!black}{.here}@>] .nil))
+#+end_src
+#+beamer: \end{column}
+#+beamer: \begin{column}{0.53\textwidth}
+#+attr_latex: :options basicstyle=\ttfamily\scriptsize,escapeinside={<@}{@>}
+#+begin_src lean
+named%
+  present%
+    own% rows := items;
+    own% summary := selected <@\textcolor{blue!70!black}{ref[rows]}@>;
+    .layout
+      (compute%
+        value ← <@\textcolor{blue!70!black}{ref[rows]}@>
+        => value)
+      (compute%
+        => .fill <@\textcolor{orange!85!black}{view[rows]}@>
+          (.cons [.place <@\textcolor{green!50!black}{view[summary]}@>] .nil))
+#+end_src
+#+beamer: \end{column}
+#+beamer: \end{columns}
+
+- Both elaborate to definitionally equal components.
+- Names replace positions in both =Γ= and =Δ=.
+- The same name can stand for different positions: =ref[rows]= is =.here=, then =.there .here=.
+
+* De Bruijn indices
+- With names: $λ (\textcolor{blue!70!black}{x} : \mathsf{Nat}).\;λ (\textcolor{orange!85!black}{f} : \mathsf{Nat} → \mathsf{Nat}).\;\textcolor{orange!85!black}{f}\;((λ (y : \mathsf{Nat}).\;\textcolor{orange!85!black}{f}\;\textcolor{blue!70!black}{x})\;\textcolor{blue!70!black}{x})$
+- With indices: $\textcolor{blue!70!black}{λ_{\mathsf{Nat}}}.\;\textcolor{orange!85!black}{λ_{\mathsf{Nat} → \mathsf{Nat}}}.\;\textcolor{orange!85!black}{\mathbf{0}}\;((λ_{\mathsf{Nat}}.\;\textcolor{orange!85!black}{\mathbf{1}}\;\textcolor{blue!70!black}{\mathbf{2}})\;\textcolor{blue!70!black}{\mathbf{1}})$
+
+\bigskip
+- An index counts binders from the innermost; =Member= is that count.
+  #+attr_latex: :options basicstyle=\ttfamily\footnotesize
+  #+begin_src lean
+  inductive Member (x : α) : List α → Type where
+    | here : Member x (x :: Γ)                       -- 0
+    | there (ref : Member x Γ) : Member x (b :: Γ)   -- n + 1
+  #+end_src
+- Why indices are better as an internal representation:
+  - No capture: substituting never requires renaming.
+  - No α-renaming: equal terms are syntactically equal.
+
+* Summary
+- =state=: private UI state per instance.
+- =Γ=: the typed references in scope, with their access.
+- =output=: each component can return some value.
+- =holes=: places in a view to be filled by the parent.
+
+* Example: a table and its summary :noexport:
+:properties:
+:beamer_opt: fragile
+:end:
+#+begin_export latex
+\begin{lstlisting}
+lake -q exe forms-web present-table --open
+\end{lstlisting}
+#+end_export
+
+- Select a row: its description appears in the summary.
+- Edit the description: the summary reads the updated output.
+
+The summary consumes the table's row outputs.
+
+We need to create the table before its summary can refer to its output.
+
+But we want to display the summary *above* the table.
+
+* Own a component, get an output and a view :noexport:
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+.own selectionTable <|
+  .own (summary .here) <|
+    ..
+#+end_src
+
+Each =.own= extends two separate contexts:
+
+- The variable context gets a read-only reference to the output.
+- The view context gets a reference to the view.
+
+Inside the second body, =.here= refers to the summary in each context.
+=.there .here= refers to the table.
+
+* Slots are typed positions too :noexport:
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+abbrev ViewRef (owned : List Nat) (holes : Nat) :=
+  Member holes owned
+
+inductive Layout (owned : List Nat) where
+  | place (view : ViewRef owned 0)
+  | fill {holes : Nat}
+      (view : ViewRef owned holes) (contents : Fills owned holes)
+  | group (label : Option String) (children : List (Layout owned))
+#+end_src
+
+- A view selects a component already owned in this presentation.
+- The view context records how many holes each component has.
+- A layout arranges views; it does not create component instances.
+
+* The same ownership, two layouts :noexport:
+After owning the table and then the summary, the view context is =[0, 0]=.
+
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+def summaryAbove : Layout [0, 0] :=
+  .group (some "Selected items") [
+    .place .here, .place (.there .here)]
+
+def tableAbove : Layout [0, 0] :=
+  .group (some "Selected items") [
+    .place (.there .here), .place .here]
+#+end_src
+
+- =.here=: the summary's view.
+- =.there .here=: the table's view.
+
+* Build the presentation :noexport:
+#+attr_latex: :options basicstyle=\ttfamily\scriptsize
+#+begin_src lean
+def tableSummary (arrangement : Layout [0, 0])
+  : Component [] (List (Item String)) String :=
+  .present <|
+    .own selectionTable <|
+      .own (summary .here) <|
+        .layout
+          (compute%
+            value ← .ui (.here : Ref _ .readOnly String)
+            => value)
+          (compute%
+            => arrangement)
+#+end_src
+
+- =.present= builds a component from a presentation.
+- =.layout= gives its public output and its arrangement.
+- =.arrange= is the version with output =Unit=.
+- Live: swap =summaryAbove= for =tableAbove=; the dependencies stay the same.
+
+
+* Example: two tabs, two private states :noexport:
+:properties:
+:beamer_opt: fragile
+:end:
+#+begin_export latex
+\begin{lstlisting}
+lake -q exe forms-web present-tabs --open
+\end{lstlisting}
+#+end_export
+
+Two panes share one counter. Each also has a private counter.
+
+1. Increment the first pane's private count.
+2. Switch to the second pane and increment its private count twice.
+3. Switch back: the first pane retains its count.
+4. Increment the shared count: both panes see the change.
+
+Own both panes; use the active tab to choose which view to place.
+
+* Tabs choose a layout :noexport:
+#+attr_latex: :options basicstyle=\ttfamily\scriptsize
+#+begin_src lean
+def sharedTabs : Component [] Nat Nat 0 :=
+  .present <|
+    .bind (0 : Nat) <|
+      .tabs "Panes" (compute%
+        => #v["First", "Second"]) <|
+        .own (pane (.there (.there .here)) "First") <|
+          .own (pane (.there (.there (.there .here))) "Second") <|
+            .layout
+              (compute%
+                value ← .ui (.there (.there (.there (.there .here))))
+                => value)
+              (compute%
+                (active : Fin 2) ← .ui (.there (.there (.there .here)))
+                => .group none [
+                  .place (.there (.there .here)),
+                  #v[.place (.there .here), .place .here][active]])
+#+end_src
+
+- =.tabs= binds a writable =Fin 2= and owns the tab strip.
+- The two panes remain owned; the layout places only the active pane.
+
+
+* The component type :noexport:
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+structure Component
+  (Γ : Context)
+  (α : Type)
+  (β : Type := Unit)
+  (holes : Nat := 0) where
+  LocalState : Type
+  node : ComponentNode Γ α LocalState β holes
+#+end_src
+
+- =Γ=: references supplied by the surrounding scope.
+- =α=: the document value being edited; =β=: the public output.
+- =LocalState=: the private state type chosen by this component.
+- =holes=: places for content supplied by an enclosing layout.
+
+* The presentation type :noexport:
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+structure Presentation
+  (owned : List Nat)
+  (Γ : Context)
+  (α : Type)
+  (β : Type := Unit)
+  (views : Nat := 1) where
+  LocalState : Type
+  node : PresentationNode owned Γ α LocalState β views
+#+end_src
+
+- =owned=: components available for placement, indexed by their hole counts.
+- =views=: how many layouts it produces. A table row can produce several cells.
+- =Component.present= closes a presentation with an empty outer view context.
+
+* Sugar: names for typed references :noexport:
+Writing =.there= chains becomes tedious as we add bindings.
+
+- Use names while writing the form.
+- Expand those names to typed de Bruijn references.
+- Insert shifts automatically when a binding extends the context.
+
+The same namespace also provides notation for bindings and owned.
+
+* The presentation, with names :noexport:
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+named%
+  present%
+    own% table := selectionTable;
+    own% summary := summary ref[table];
+    .layout
+      (compute%
+        value ← ref[summary]
+        => value)
+      (compute%
+        => .group none [
+        .place view[summary], .place view[table]])
+#+end_src
+
+- =own%= gives one name to an output and its view.
+- =ref[table]= refers to its output; =view[table]= refers to its view.
+- The same ownership, contexts, and layout as before.
+
+* Sugar: a recipe :noexport:
+#+attr_latex: :options basicstyle=\ttfamily\footnotesize
+#+begin_src lean
+open Forms.Model.Sugar
+
+named%
+  state% count := (0 : Nat);
+  observe% output := counter;
+  ..
+
+named%
+  present%
+    own% child := component;
+    ..
+#+end_src
+
+- =named%[shared] body=: import an existing Lean reference.
+- =ref[name]=: refer to state or an output; =view[name]=: refer to an owned view.
+- Use =_= for an ignored binding. Unused names produce a warning.
+- Names must be unique within the block: no shadowing.
