@@ -1,62 +1,61 @@
 module
 
 public import Forms.Runtime.ModelView
+public import Forms.Model.Sugar
 
 @[expose] public section
 namespace Forms.ExampleForms.Outputs
-open Forms.Model
+open Forms.Model Forms.Model.Sugar
 
-def counter {Γ : Context} : Component Γ Nat Nat :=
-  .bind (0 : Nat) <|
-    .bind (100 : Nat) <|
-      let count : Var (⟨.writable, Nat⟩ :: ⟨.writable, Nat⟩ :: Γ) Nat := .there .here
-      let hidden : Var (⟨.writable, Nat⟩ :: ⟨.writable, Nat⟩ :: Γ) Nat := .here
-      .withOutput
-        (.group "Counter" [
-          .computed "Item" { inputs := inputs[path[]], run := toString },
-          .computed "Owned count" { inputs := inputs[.ui count], run := toString },
-          .button "Increment" (.set count { inputs := inputs[.ui count], run := fun n => n + 1 }),
-          .computed "Private value" { inputs := inputs[.ui hidden], run := toString },
-          .button "Change private" (.set hidden { inputs := inputs[.ui hidden], run := fun n => n + 1 })])
-        { inputs := inputs[.ui count], run := id }
+def counter {Γ : Context} : Component Γ Nat Nat := named%
+  state% count := (0 : Nat);
+  state% hidden := (100 : Nat);
+  .withOutput
+    (.group "Counter" [
+      .computed "Item" { inputs := inputs[path[]], run := toString },
+      .computed "Owned count" { inputs := inputs[.ui ref[count]], run := toString },
+      .button "Increment" (.set ref[count] {
+        inputs := inputs[.ui ref[count]], run := fun n => n + 1 }),
+      .computed "Private value" { inputs := inputs[.ui ref[hidden]], run := toString },
+      .button "Change private" (.set ref[hidden] {
+        inputs := inputs[.ui ref[hidden]], run := fun n => n + 1 })])
+    { inputs := inputs[.ui ref[count]], run := id }
 
-def single : Component [] Nat Nat :=
+def single : Component [] Nat Nat := named%
   .labeled "Owned counter output" <|
-  .observe counter <|
-    .bind (0 : Nat) <|
-      let output : InputRef [⟨.writable, Nat⟩, ⟨.readOnly, Nat⟩] Nat := .there .here
-      let remembered : Var [⟨.writable, Nat⟩, ⟨.readOnly, Nat⟩] Nat := .here
-      .withOutput
-        (.group "Observers" [
-          .computed "Observer one" { inputs := inputs[.ui output], run := toString },
-          .computed "Observer two" { inputs := inputs[.ui output], run := fun n => s!"Twice: {2 * n}" },
-          .button "Remember output" (.set remembered { inputs := inputs[.ui output], run := id }),
-          .computed "Remembered" { inputs := inputs[.ui remembered], run := toString }])
-        { inputs := inputs[.ui output], run := id }
+  observe% output := counter;
+  state% remembered := (0 : Nat);
+  .withOutput
+    (.group "Observers" [
+      .computed "Observer one" { inputs := inputs[.ui ref[output]], run := toString },
+      .computed "Observer two" {
+        inputs := inputs[.ui ref[output]], run := fun n => s!"Twice: {2 * n}" },
+      .button "Remember output" (.set ref[remembered] {
+        inputs := inputs[.ui ref[output]], run := id }),
+      .computed "Remembered" { inputs := inputs[.ui ref[remembered]], run := toString }])
+    { inputs := inputs[.ui ref[output]], run := id }
 
-def pair {Γ : Context} : Component Γ Nat Nat :=
-  .observe counter <|
-    .observe counter <|
-      let first : InputRef (⟨.readOnly, Nat⟩ :: ⟨.readOnly, Nat⟩ :: Γ) Nat := .there .here
-      let second : InputRef (⟨.readOnly, Nat⟩ :: ⟨.readOnly, Nat⟩ :: Γ) Nat := .here
-      let total : Computation (⟨.readOnly, Nat⟩ :: ⟨.readOnly, Nat⟩ :: Γ) Nat Nat := {
-        inputs := inputs[.ui first, .ui second], run := Nat.add }
-      .withOutput (.computed "Pair sum" (toString <$> total)) total
+def pair {Γ : Context} : Component Γ Nat Nat := named%
+  observe% first := counter;
+  observe% second := counter;
+  let total : Computation _ Nat Nat := {
+    inputs := inputs[.ui ref[first], .ui ref[second]], run := Nat.add }
+  .withOutput (.computed "Pair sum" (toString <$> total)) total
 
 def rows : Component [] (List (Item Nat)) (List Nat) :=
   .list .self "Pairs" (.numbered "Pair") "Add pair"
       (Item.mkWithoutUuid 0) (.zoom path[Item.Field.value] pair)
 
-def nested : Component [] (List (Item Nat)) Nat :=
+def nested : Component [] (List (Item Nat)) Nat := named%
   .labeled "Nested outputs" <|
-  .observe rows <|
-    let total : Computation [⟨.readOnly, List Nat⟩] (List (Item Nat)) Nat := {
-      inputs := inputs[.ui (Ref.here : InputRef _ (List Nat))], run := List.sum }
-    .withOutput (.group "Outer observers" [
-      .computed "Pair totals" {
-        inputs := inputs[.ui (Ref.here : InputRef _ (List Nat))]
-        run := fun values => String.intercalate ", " (values.map toString) },
-      .computed "Overall sum" (toString <$> total)]) total
+  observe% totals := rows;
+  let total : Computation _ (List (Item Nat)) Nat := {
+    inputs := inputs[.ui ref[totals]], run := List.sum }
+  .withOutput (.group "Outer observers" [
+    .computed "Pair totals" {
+      inputs := inputs[.ui ref[totals]]
+      run := fun values => String.intercalate ", " (values.map toString) },
+    .computed "Overall sum" (toString <$> total)]) total
 
 def initial : List (Item Nat) := IdGen.run ([10, 20].mapM Item.fresh)
 
@@ -69,28 +68,28 @@ def descriptionCell {Γ : Context} : Component Γ (Item String) String :=
   .zoom path[Item.Field.value] <|
     .withOutput (.field .self "Description" .text) { inputs := inputs[path[]], run := id }
 
-def selectionCell {Γ : Context} : Component (⟨.readOnly, String⟩ :: Γ) (Item String) Bool :=
-  .bind false <|
-    let selected : Var (⟨.writable, Bool⟩ :: ⟨.readOnly, String⟩ :: Γ) Bool := .here
-    let description : InputRef (⟨.writable, Bool⟩ :: ⟨.readOnly, String⟩ :: Γ) String := .there .here
-    .withOutput
-      (.group "" [
-        .computed "Cell description" { inputs := inputs[.ui description], run := id },
-        .computed "Selection" { inputs := inputs[.ui selected], run := toString },
-        .button "Toggle selection" (.set selected { inputs := inputs[.ui selected], run := Bool.not })])
-      { inputs := inputs[.ui selected], run := id }
+def selectionCell
+  {Γ : Context}
+  (description : InputRef Γ String)
+  : Component Γ (Item String) Bool := named%[description]
+  state% selected := false;
+  .withOutput
+    (.group "" [
+      .computed "Cell description" { inputs := inputs[.ui ref[description]], run := id },
+      .computed "Selection" { inputs := inputs[.ui ref[selected]], run := toString },
+      .button "Toggle selection" (.set ref[selected] {
+        inputs := inputs[.ui ref[selected]], run := Bool.not })])
+    { inputs := inputs[.ui ref[selected]], run := id }
 
-def selectionColumns {Γ : Context} : Columns Γ (Item String) RowOutput :=
+def selectionColumns {Γ : Context} : Columns Γ (Item String) RowOutput := named%
   ⟨#v["Description", "Selected"],
-    .own descriptionCell <|
-      .own selectionCell <|
-        let description : InputRef (⟨.readOnly, Bool⟩ :: ⟨.readOnly, String⟩ :: Γ) String :=
-          .there .here
-        let selected : InputRef (⟨.readOnly, Bool⟩ :: ⟨.readOnly, String⟩ :: Γ) Bool := .here
-        .layouts
-          { inputs := inputs[.ui description, .ui selected]
-            run := fun description selected => { description, selected } }
-          (.const #v[.place (.there .here), .place .here])⟩
+    presentation%
+      own% description := descriptionCell;
+      own% selected := selectionCell ref[description];
+      .layouts
+        { inputs := inputs[.ui ref[description], .ui ref[selected]]
+          run := fun description selected => { description, selected } }
+        (.const #v[.place slot[description], .place slot[selected]])⟩
 
 def selectionTable : Component [] (List (Item String)) (List RowOutput) :=
   .table .self "Items" (.numbered "Item") "Add item"

@@ -1,12 +1,12 @@
 module
 
-public import Forms.Model.Component
+public import Forms.Model.Sugar
 public import Forms.ExampleForms.Format
 public meta import Forms.Model.Derive
 
 @[expose] public section
 namespace Forms.ExampleForms
-open Forms.Model
+open Forms.Model Forms.Model.Sugar
 
 /-! Rules are named: auto-generated names can clash with other example forms. -/
 
@@ -122,8 +122,9 @@ def ExpenseReport.form {Γ : Context} : Component Γ ExpenseReport.Raw :=
     (initial := Expense.initial)
     (columns := Expense.columns))
 
-def ExpenseReport.focusForm : Component [] ExpenseReport.Raw :=
-  .bind RowSelection.none (.group (label := "Expense report") (children := [
+def ExpenseReport.focusForm : Component [] ExpenseReport.Raw := named%
+  state% selection := RowSelection.none;
+  .group (label := "Expense report") (children := [
     .field
       (path := path[ExpenseReport.Field.employee])
       (label := "Employee") (editor := .text),
@@ -140,16 +141,16 @@ def ExpenseReport.focusForm : Component [] ExpenseReport.Raw :=
           inputs := inputs[path[Expense.Field.amount]], run := fun amount => s!"CHF {swiss amount}" },
         "Receipt" => .computed "Receipt" {
           inputs := inputs[path[Expense.Field.receipt]], run := fun receipt => if receipt then "Yes" else "No" }])
-      (selection := some .here),
+      (selection := some ref[selection]),
     Component.void <| .zoom?
       (target := {
-        inputs := inputs[.ui .here]
+        inputs := inputs[.ui ref[selection]]
         run := RowSelection.itemPath path[ExpenseReport.Field.expenses]
       })
       (body := Expense.columns.group "Selected expense"),
     .computed (label := "Total") (value := {
       inputs := inputs[path[ExpenseReport.Field.expenses]]
       run := fun expenses => s!"CHF {swiss (expenses.map (·.amount)).sum}"
-    })]))
+    })])
 
 end Forms.ExampleForms

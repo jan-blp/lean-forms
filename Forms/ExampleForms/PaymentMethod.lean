@@ -1,11 +1,11 @@
 module
 
-public import Forms.Model.Component
+public import Forms.Model.Sugar
 public meta import Forms.Model.Derive
 
 @[expose] public section
 namespace Forms.ExampleForms
-open Forms.Model
+open Forms.Model Forms.Model.Sugar
 
 structure FailingCheck where
   message : String
@@ -50,32 +50,31 @@ def PaymentMethod.field {Γ : Context} : Component Γ PaymentMethod.Raw :=
   .optional path[PaymentMethod.Field.value] "Expense Payment Method" "Not set" "Set" .blpCreditCard
     (.enum .self "Method" [⟨.blpCreditCard, "BLP credit card"⟩, ⟨.privatelyPaid, "Privately paid"⟩])
 
-def PaymentMethod.form : Component [] PaymentMethod.Raw :=
-  .observe .issues <|
-    let issues : Computation _ PaymentMethod.Raw (List Issue) := {
-      inputs := inputs[.ui (Ref.here : InputRef _ (List Issue))]
-      run := id }
-    .group "Payment" [
-      .statusMarkerAt path[PaymentMethod.Field.value],
-      PaymentMethod.field,
-      .visibleWhen {
-          inputs := inputs[
-            path[PaymentMethod.Field.value],
-            path[PaymentMethod.Field.approved],
-            path[PaymentMethod.Field.checks]]
-          run := fun value approved checks =>
-            value.isSome && approved != value && checks.value.any (·.approvable) } <|
-        .button "Approve" (.write path[PaymentMethod.Field.approved]
-          { inputs := inputs[path[PaymentMethod.Field.value]], run := id }),
-      .visibleWhen {
-          inputs := inputs[path[PaymentMethod.Field.value], path[PaymentMethod.Field.approved]]
-          run := fun value approved => value.isSome && approved == value } <|
-        .button "Withdraw approval" (.write path[PaymentMethod.Field.approved] (.const none)),
-      .computed "Current issues" ((fun issues =>
-        String.intercalate "\n" (issues.map (·.message))) <$> issues),
-      .disabledWhen (List.isEmpty <$> issues) <|
-        .button "Go to issue"
-          (.visit ((fun issues => issues.head?.bind (·.destination?)) <$> issues))]
+def PaymentMethod.form : Component [] PaymentMethod.Raw := named%
+  observe% currentIssues := .issues;
+  let issues : Computation _ PaymentMethod.Raw (List Issue) := {
+    inputs := inputs[.ui ref[currentIssues]], run := id }
+  .group "Payment" [
+    .statusMarkerAt path[PaymentMethod.Field.value],
+    PaymentMethod.field,
+    .visibleWhen {
+        inputs := inputs[
+          path[PaymentMethod.Field.value],
+          path[PaymentMethod.Field.approved],
+          path[PaymentMethod.Field.checks]]
+        run := fun value approved checks =>
+          value.isSome && approved != value && checks.value.any (·.approvable) } <|
+      .button "Approve" (.write path[PaymentMethod.Field.approved]
+        { inputs := inputs[path[PaymentMethod.Field.value]], run := id }),
+    .visibleWhen {
+        inputs := inputs[path[PaymentMethod.Field.value], path[PaymentMethod.Field.approved]]
+        run := fun value approved => value.isSome && approved == value } <|
+      .button "Withdraw approval" (.write path[PaymentMethod.Field.approved] (.const none)),
+    .computed "Current issues" ((fun issues =>
+      String.intercalate "\n" (issues.map (·.message))) <$> issues),
+    .disabledWhen (List.isEmpty <$> issues) <|
+      .button "Go to issue"
+        (.visit ((fun issues => issues.head?.bind (·.destination?)) <$> issues))]
 
 def PaymentMethod.receiptCheck : FailingCheck where
   message := "Attach the original receipt."

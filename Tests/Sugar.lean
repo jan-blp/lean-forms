@@ -37,56 +37,67 @@ def explicitCounter {Γ : Context} : Component Γ Nat Nat :=
 
 example {Γ : Context} : counter (Γ := Γ) = explicitCounter := rfl
 
-def consumer
+def explicitConsumer
   {Γ : Context}
   (shared : Var Γ Nat)
-  : Component Γ Nat := named%[shared]
-  state% own := (0 : Nat);
-  .group "" [
-    .computed "Item" { inputs := inputs[path[]], run := toString },
-    .computed "Shared count" { inputs := inputs[.ui ref[shared]], run := toString },
-    .computed "Private count" { inputs := inputs[.ui ref[own]], run := toString },
-    .button "Increment shared" (.set ref[shared] {
-      inputs := inputs[.ui ref[shared]], run := fun count => count + 1 }),
-    .button "Increment private" (.set ref[own] {
-      inputs := inputs[.ui ref[own]], run := fun count => count + 1 })]
+  : Component Γ Nat :=
+  .bind (0 : Nat) <|
+    .group "" [
+      .computed "Item" { inputs := inputs[path[]], run := toString },
+      .computed "Shared count" { inputs := inputs[.ui shared.there], run := toString },
+      .computed "Private count" { inputs := inputs[.ui .here], run := toString },
+      .button "Increment shared" (.set shared.there {
+        inputs := inputs[.ui shared.there], run := fun count => count + 1 }),
+      .button "Increment private" (.set .here {
+        inputs := inputs[.ui .here], run := fun count => count + 1 })]
 
 example {Γ : Context} (shared : Var Γ Nat) :
-    consumer shared = Forms.ExampleForms.SharedState.consumer shared := rfl
+    Forms.ExampleForms.SharedState.consumer shared = explicitConsumer shared := rfl
 
-def sharedForm : Component [] (List (Item Nat)) := named%
-  state% shared := (0 : Nat);
-  .group "Shared local state" [
-    Component.void <| .list .self "Consumers" (.numbered "Consumer") "Add consumer"
-        (Item.mkWithoutUuid 0) (.zoom path[Item.Field.value] (consumer ref[shared])),
-    .computed "Shared count outside the list" {
-      inputs := inputs[.ui ref[shared]], run := toString },
-    .button "Clear shared" (.set ref[shared] (.const 0))]
+def explicitSharedForm : Component [] (List (Item Nat)) :=
+  .bind (0 : Nat) <|
+    .group "Shared local state" [
+      Component.void <| .list .self "Consumers" (.numbered "Consumer") "Add consumer"
+          (Item.mkWithoutUuid 0) (.zoom path[Item.Field.value] (explicitConsumer .here)),
+      .computed "Shared count outside the list" { inputs := inputs[.ui .here], run := toString },
+      .button "Clear shared" (.set .here (.const 0))]
 
-example : sharedForm = Forms.ExampleForms.SharedState.form := rfl
+example : Forms.ExampleForms.SharedState.form = explicitSharedForm := rfl
 
-def tableSummary : Component [] (List (Item String)) String := named%
-  present%
-    own% table := Forms.ExampleForms.Outputs.selectionTable;
-    own% summary := Forms.ExampleForms.Presentation.summary ref[table];
-    .layout { inputs := inputs[.ui ref[summary]], run := id }
-      (.const (.group (some "Selected items") [.place slot[summary], .place slot[table]]))
+def explicitTableSummary : Component [] (List (Item String)) String :=
+  .present <|
+    .own Forms.ExampleForms.Outputs.selectionTable <|
+      .own (Forms.ExampleForms.Presentation.summary .here) <|
+        .layout { inputs := inputs[.ui (.here : InputRef _ String)], run := id }
+          (.const (.group (some "Selected items") [.place .here, .place (.there .here)]))
 
-example : tableSummary = Forms.ExampleForms.Presentation.tableSummary := rfl
+example : Forms.ExampleForms.Presentation.tableSummary = explicitTableSummary := rfl
 
-def sharedTabs : Component [] Nat Nat := named%
-  present%
-    state% shared := (0 : Nat);
-    tabs% active, strip := "Panes", #v["First pane", "Second pane"];
-    own% first := Forms.ExampleForms.Presentation.pane ref[shared] "First pane";
-    own% second := Forms.ExampleForms.Presentation.pane ref[shared] "Second pane";
-    .layout { inputs := inputs[.ui ref[shared]], run := id } {
-      inputs := inputs[.ui ref[active]]
-      run := fun active => .group (some "Shared state across tabs") [
-        .place slot[strip],
-        #v[.place slot[first], .place slot[second]][active]] }
+def explicitSharedTabs : Component [] Nat Nat :=
+  .present <|
+    .bind (0 : Nat) <|
+      .tabs "Panes" #v["First pane", "Second pane"] <|
+        .own (Forms.ExampleForms.Presentation.pane (.there (.there .here)) "First pane") <|
+          .own
+            (Forms.ExampleForms.Presentation.pane (.there (.there (.there .here))) "Second pane") <|
+            .layout { inputs := inputs[.ui (.there (.there (.there (.there .here))))], run := id } {
+              inputs := inputs[.ui (.there (.there (.there .here)))]
+              run := fun (active : Fin 2) => .group (some "Shared state across tabs") [
+                .place (.there (.there .here)),
+                #v[.place (.there .here), .place .here][active]] }
 
-example : sharedTabs = Forms.ExampleForms.Presentation.sharedTabs := rfl
+example : Forms.ExampleForms.Presentation.sharedTabs = explicitSharedTabs := rfl
+
+def observer : Component [] Nat Nat := named%
+  observe% first := .output (.const (1 : Nat));
+  observe% second := .output (.const (2 : Nat));
+  .output { inputs := inputs[.ui ref[first], .ui ref[second]], run := fun a b => 10 * a + b }
+
+example : observer =
+    .observe (.output (.const (1 : Nat))) (.observe (.output (.const (2 : Nat))) (.output {
+      inputs := inputs[.ui (.there .here), .ui .here], run := fun a b => 10 * a + b })) := rfl
+
+example : (observer.evaluate 0 Env.nil).output = 12 := by decide
 
 def importedPair
   {Γ : Context}

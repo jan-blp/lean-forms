@@ -1,11 +1,11 @@
 module
 
-public import Forms.Model.Component
+public import Forms.Model.Sugar
 public meta import Forms.Model.Derive
 
 @[expose] public section
 namespace Forms.ExampleForms
-open Forms.Model
+open Forms.Model Forms.Model.Sugar
 
 structure PlannerTask where
   id : Uuid
@@ -82,28 +82,27 @@ def PlannerProject.initial : HasUuid.WithoutUuid PlannerProject.Raw :=
   PlannerProject.Raw.mkWithoutUuid (name := "New project") (tasks := [])
 
 /-- Every project instance owns its selection. The table and editor share only that local variable. -/
-def PlannerProject.form {Γ : Context} : Component Γ PlannerProject.Raw :=
-  .bind RowSelection.none <|
-    let selectedTask : Var (⟨.writable, RowSelection⟩ :: Γ) RowSelection := .here
-    .group "" [
-      .field path[PlannerProject.Field.name] "Project name" .text,
-      .computed "Progress" {
-        inputs := inputs[path[PlannerProject.Field.tasks]]
-        run := fun tasks =>
-          s!"{(tasks.filter (·.completed)).length} / {tasks.length} tasks complete · {(tasks.map (·.hours)).sum} h planned" },
-      Component.void <| .table path[PlannerProject.Field.tasks] "Tasks"
-          (.numbered "Task") "Add task" PlannerTask.initial PlannerTask.columns
-        (some selectedTask),
-      .visibleWhen
-        { inputs := inputs[.ui selectedTask], run := fun selected => selected == .none }
-        (.computed "" (.const "Choose a task to see its details.")),
-      .visibleWhen
-        { inputs := inputs[.ui selectedTask], run := fun selected => selected != .none }
-        (.button "Close task" (.set selectedTask (.const .none))),
-      Component.void <| .zoom?
-        { inputs := inputs[.ui selectedTask]
-          run := RowSelection.itemPath path[PlannerProject.Field.tasks] }
-        PlannerTask.details]
+def PlannerProject.form {Γ : Context} : Component Γ PlannerProject.Raw := named%
+  state% selectedTask := RowSelection.none;
+  .group "" [
+    .field path[PlannerProject.Field.name] "Project name" .text,
+    .computed "Progress" {
+      inputs := inputs[path[PlannerProject.Field.tasks]]
+      run := fun tasks =>
+        s!"{(tasks.filter (·.completed)).length} / {tasks.length} tasks complete · {(tasks.map (·.hours)).sum} h planned" },
+    Component.void <| .table path[PlannerProject.Field.tasks] "Tasks"
+        (.numbered "Task") "Add task" PlannerTask.initial PlannerTask.columns
+      (some ref[selectedTask]),
+    .visibleWhen
+      { inputs := inputs[.ui ref[selectedTask]], run := fun selected => selected == .none }
+      (.computed "" (.const "Choose a task to see its details.")),
+    .visibleWhen
+      { inputs := inputs[.ui ref[selectedTask]], run := fun selected => selected != .none }
+      (.button "Close task" (.set ref[selectedTask] (.const .none))),
+    Component.void <| .zoom?
+      { inputs := inputs[.ui ref[selectedTask]]
+        run := RowSelection.itemPath path[PlannerProject.Field.tasks] }
+      PlannerTask.details]
 
 structure ProjectPlanner where
   name : String
