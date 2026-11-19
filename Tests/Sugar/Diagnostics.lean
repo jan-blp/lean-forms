@@ -104,6 +104,11 @@ example : Component [] Nat := named%
   present%
     .own (.computed "Raw" "binding") (.arrange (.const (.place .here)))
 
+/-- error: Use observe% for observation inside named% -/
+#guard_msgs in
+example : Component [] Nat Nat := named%
+  .observe (.output (.const (0 : Nat))) (.output { inputs := inputs[.ui .here], run := id })
+
 /-- error: Unknown variable 'later' in this scope -/
 #guard_msgs in
 example : Component [] Nat Nat := named%
@@ -151,6 +156,10 @@ example : Component [] Nat := state% x := (0 : Nat); .computed "X" "0"
 #guard_msgs in
 example : Component [] Nat := own% x := .computed "X" "0"; .computed "X" "0"
 
+/-- error: observe% is only valid inside named% -/
+#guard_msgs in
+example : Component [] Nat := observe% x := .computed "X" "0"; .computed "X" "0"
+
 /-- error: present% is only valid inside named% -/
 #guard_msgs in
 example : Component [] Nat := present% .arrange (.const (.group none []))
@@ -174,6 +183,13 @@ example : Component [] Nat := named%
 example : Component [] Nat := named%
   tabs% active, strip := "Tabs", #v["One"];
   .arrange (.const (.place slot[strip]))
+
+/-- error: observe% requires a component; use own% inside a presentation -/
+#guard_msgs in
+example : Component [] Nat := named%
+  present%
+    observe% x := .computed "X" "0";
+    .arrange (.const (.group none []))
 
 /-- error: Use the named% binding syntax here -/
 #guard_msgs in

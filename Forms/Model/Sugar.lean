@@ -37,6 +37,14 @@ abbrev bindPresentation
   : Presentation slots Γ α γ views :=
   .bind initial (body .here)
 
+abbrev observeComponent
+  {Γ : Context}
+  {α β γ : Type}
+  (producer : Component Γ α β)
+  (body : InputRef (⟨.readOnly, β⟩ :: Γ) β → Component (⟨.readOnly, β⟩ :: Γ) α γ)
+  : Component Γ α γ :=
+  .observe producer (body .here)
+
 abbrev ownComponent
   {slots : List Nat}
   {Γ : Context}
@@ -97,6 +105,9 @@ scoped syntax "named%[" ident,* "] " term : term
 
 /-- Bind writable UI state with `state% x := (initial : T); body`. Use `ref[x]` in the body. -/
 scoped syntax "state% " ident " := " term " ; " term : term
+
+/-- Observe a component's output with `observe% x := producer; body`. Use `ref[x]` in the body. -/
+scoped syntax "observe% " ident " := " term " ; " term : term
 
 /--
 Own a component with `own% child := component; body` inside a presentation.
@@ -240,6 +251,15 @@ private def requirePresentation
       s!"{form} requires a presentation; use present%, or presentation% for a Presentation"
   | .presentation (slots := slots) .. => return slots
 
+private def requireComponent
+  (form : String)
+  (bindings : Bindings)
+  : MacroM (List Binding) := do
+  match bindings with
+  | .component refs => return refs
+  | .presentation .. =>
+    Macro.throwError s!"{form} requires a component; use own% inside a presentation"
+
 private abbrev ExpandTerm := Bindings → MacroM (TSyntax `term)
 
 private def expandState
@@ -256,6 +276,19 @@ private def expandState
   match bindings with
   | .component _ => return ← `(bindComponent $initial (fun $localName => $body))
   | .presentation .. => return ← `(bindPresentation $initial (fun $localName => $body))
+
+private def expandObserve
+  (name : Ident)
+  (bindings : Bindings)
+  (producer : ExpandTerm)
+  (body : ExpandTerm)
+  : MacroM Syntax := do
+  let refs ← requireComponent "observe%" bindings
+  ensureFresh name bindings
+  let producer ← producer bindings
+  let localName ← freshIdent name
+  let body ← body (.component (extend refs [{ name, reference := localName, shifts := 0 }]))
+  return ← `(observeComponent $producer (fun $localName => $body))
 
 private def expandOwn
   (name : Ident)
@@ -330,6 +363,8 @@ private def rejectRawBinders (stx : Syntax) : MacroM Unit := do
     Macro.throwError "Use state% for bindings inside named%"
   | `(.own) =>
     Macro.throwError "Use own% for ownership inside named%"
+  | `(.observe) =>
+    Macro.throwError "Use observe% for observation inside named%"
   | `(.present) =>
     Macro.throwError "Use present% for presentations inside named%"
   | _ =>
@@ -337,6 +372,7 @@ private def rejectRawBinders (stx : Syntax) : MacroM Unit := do
         `Component.bind, `Forms.Model.Component.bind,
         `Presentation.bind, `Forms.Model.Presentation.bind,
         `Presentation.own, `Forms.Model.Presentation.own,
+        `Component.observe, `Forms.Model.Component.observe,
         `Component.present, `Forms.Model.Component.present,
         `Presentation.tabs, `Forms.Model.Presentation.tabs].contains stx.getId then
       Macro.throwError "Use the named% binding syntax here"
@@ -380,6 +416,10 @@ private def expand
       expandState name bindings
         (fun bindings => return ⟨← expand initial bindings⟩)
         (fun bindings => return ⟨← expand body bindings⟩)
+    | `(observe% $name := $producer; $body) =>
+      expandObserve name bindings
+        (fun bindings => return ⟨← expand producer bindings⟩)
+        (fun bindings => return ⟨← expand body bindings⟩)
     | `(own% $name := $component; $body) =>
       expandOwn name bindings
         (fun bindings => return ⟨← expand component bindings⟩)
@@ -417,6 +457,7 @@ macro_rules
   | `(ref[$_name]) => outsideNamed "ref[...]"
   | `(slot[$_name]) => outsideNamed "slot[...]"
   | `(state% $_name := $_initial; $_body) => outsideNamed "state%"
+  | `(observe% $_name := $_producer; $_body) => outsideNamed "observe%"
   | `(own% $_name := $_component; $_body) => outsideNamed "own%"
   | `(present% $_body) => outsideNamed "present%"
   | `(presentation% $_body) => outsideNamed "presentation%"
