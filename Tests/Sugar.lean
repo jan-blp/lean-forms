@@ -119,7 +119,7 @@ example : (reused.evaluate 0 Env.nil).output = 1230 := by decide
 def nestedPresentation : Component [] Nat Nat := named%
   present%
     state% shared := (7 : Nat);
-    own% outer := .computed "Outer" "outside";
+    own% _ := .computed "Outer" "outside";
     own% nested := present%
       own% inner := .computed "Inner" { inputs := inputs[.ui ref[shared]], run := toString };
       .layout { inputs := inputs[.ui ref[shared]], run := id } (.const (.place slot[inner]));
@@ -130,7 +130,7 @@ example : (nestedPresentation.evaluate 0 Env.nil).output = 7 := by decide
 def rows : Component [] (List (Item Nat)) (List Nat) := named%
   state% shared := (7 : Nat);
   .list .self "Rows"
-    (row% current, removed => {
+    (row% current, _ => {
       inputs := inputs[.ui ref[shared], .ui ref[current]]
       run := fun shared row => s!"Row {row.index.val + 1} ({shared})" })
     "Add row" (Item.mkWithoutUuid 0)
@@ -196,6 +196,49 @@ example {Γ : Context} (shared : Var Γ Nat) : collectionRows shared =
             (.const (.group none [.place (.there .here), .place .here])))
       .list) := rfl
 
+
+#guard_msgs in
+def anonymousBindings : Component [] Nat Nat := named%
+  state% count := (7 : Nat);
+  state% _ := false;
+  observe% _ := .output (.const "ignored");
+  .output { inputs := inputs[.ui ref[count]], run := id }
+
+example : anonymousBindings =
+    .bind (7 : Nat) (.bind false (.observe (.output (.const "ignored"))
+      (.output { inputs := inputs[.ui (.there (.there .here))], run := id }))) := rfl
+
+#guard_msgs in
+def anonymousOwners : Component [] Nat Nat := named%
+  present%
+    own% value := .output (.const (7 : Nat));
+    own% _ := .output (.const false);
+    tabs% _, bar := "First", #v["One"];
+    tabs% active, _ := "Second", #v["Two"];
+    .layout { inputs := inputs[.ui ref[value], .ui ref[active]], run := fun n _ => n }
+      (.const (.group none [.place slot[value], .place slot[bar]]))
+
+example : anonymousOwners =
+    (Component.present <|
+      .own (.output (.const (7 : Nat))) <|
+        .own (.output (.const false)) <|
+          .tabs "First" (.const #v["One"]) <|
+            .tabs "Second" (.const #v["Two"]) <|
+              .layout {
+                inputs := inputs[.ui (.there (.there (.there (.there (.there .here))))),
+                  .ui (.there .here)]
+                run := fun n _ => n }
+                (.const (.group none [.place (.there (.there (.there .here))),
+                  .place (.there .here)]))) := rfl
+
+#guard_msgs in
+def anonymousRow {Γ : Context} (shared : Var Γ Nat) :
+    Computation (Context.row Nat Γ) Nat Nat := named%[shared]
+  row% _, _ => { inputs := inputs[.ui ref[shared]], run := id }
+
+example {Γ : Context} (shared : Var Γ Nat) : anonymousRow shared =
+    { inputs := inputs[.ui (.there (.there shared))], run := id } := rfl
+
 def independentNames : Component [] Nat Nat := named%
   let first : Component [] Nat Nat := named%
     state% count := (10 : Nat);
@@ -210,7 +253,7 @@ example : (independentNames.evaluate 0 Env.nil).output = 20 := by decide
 def stateBetweenOwners : Component [] Nat Nat := named%
   present%
     own% producer := .output (.const (7 : Nat));
-    state% ignored := false;
+    state% _ := false;
     own% display := .computed "Count" { inputs := inputs[.ui ref[producer]], run := toString };
     .layout { inputs := inputs[.ui ref[producer]], run := id }
       (.const (.group none [.place slot[producer], .place slot[display]]))
