@@ -220,7 +220,7 @@ in the application
 #guard_msgs (positions := true) in
 example : Component [] (List (Item Nat)) (List Unit) := named%
   state% shared := (0 : Nat);
-  state% ignored := false;
+  state% _ := false;
   .list .self "Rows"
     { inputs := inputs[.ui ref[shared]], run := toString }
     "Add" (Item.mkWithoutUuid 0) (.computed "Row" "value")
@@ -236,3 +236,65 @@ example : Component [] Nat := named%
     own% child := .computed "Child" "value";
     tabs% active, strip := "Tabs", slot[child];
     .arrange (.const (.place slot[strip]))
+
+/--
+@ +2:9...14
+warning: Unused binding 'count'; use '_' to ignore it
+-/
+#guard_msgs (positions := true) in
+example : Component [] Nat Nat := named%
+  state% count := (0 : Nat);
+  let count := 7
+  .output (.const count)
+
+/-- warning: Unused binding 'output'; use '_' to ignore it -/
+#guard_msgs in
+example : Component [] Nat Nat := named%
+  observe% output := .output (.const (0 : Nat));
+  .output (.const 7)
+
+/-- warning: Unused binding 'child'; use '_' to ignore it -/
+#guard_msgs in
+example : Component [] Nat := named%
+  present%
+    own% child := .output (.const (0 : Nat));
+    .arrange (.const (.group none []))
+
+/--
+warning: Unused binding 'active'; use '_' to ignore it
+---
+warning: Unused binding 'bar'; use '_' to ignore it
+-/
+#guard_msgs in
+example : Component [] Nat := named%
+  present%
+    tabs% active, bar := "Tabs", #v["One"];
+    .arrange (.const (.group none []))
+
+/--
+warning: Unused binding 'current'; use '_' to ignore it
+---
+warning: Unused binding 'removed'; use '_' to ignore it
+-/
+#guard_msgs in
+example : Computation (Context.row Nat []) Nat String := named%
+  row% current, removed => .const "Row"
+
+#guard_msgs in
+example : Component [] Nat := named%
+  present%
+    tabs% active, bar := "Tabs", {
+      inputs := inputs[.ui ref[active]]
+      run := fun _ => #v["One"] };
+    .arrange (.const (.place slot[bar]))
+
+#guard_msgs in
+example : Computation (Context.row Nat []) Nat Bool := named%
+  row% _, removed => { inputs := inputs[.ui ref[removed]], run := id }
+
+#guard_msgs in
+example : Component [] Nat Nat := named%
+  present%
+    own% output := .output (.const (7 : Nat));
+    own% view := .computed "View" "text";
+    .layout { inputs := inputs[.ui ref[output]], run := id } (.const (.place slot[view]))
