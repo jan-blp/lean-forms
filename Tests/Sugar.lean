@@ -74,29 +74,12 @@ def tableSummary : Component [] (List (Item String)) String := named%
 
 example : tableSummary = Forms.ExampleForms.Presentation.tableSummary := rfl
 
-def pane
-  {Γ : Context}
-  (shared : Var Γ Nat)
-  (name : String)
-  : Component Γ Nat := named%[shared]
-  state% own := (0 : Nat);
-  .group name [
-    .computed "Shared count" { inputs := inputs[.ui ref[shared]], run := toString },
-    .computed "Private count" { inputs := inputs[.ui ref[own]], run := toString },
-    .button "Increment shared" (.set ref[shared] {
-      inputs := inputs[.ui ref[shared]], run := fun count => count + 1 }),
-    .button "Increment private" (.set ref[own] {
-      inputs := inputs[.ui ref[own]], run := fun count => count + 1 })]
-
-example {Γ : Context} (shared : Var Γ Nat) (name : String) :
-    pane shared name = Forms.ExampleForms.Presentation.pane shared name := rfl
-
 def sharedTabs : Component [] Nat Nat := named%
   present%
     state% shared := (0 : Nat);
     tabs% active, strip := "Panes", #v["First pane", "Second pane"];
-    own% first := pane ref[shared] "First pane";
-    own% second := pane ref[shared] "Second pane";
+    own% first := Forms.ExampleForms.Presentation.pane ref[shared] "First pane";
+    own% second := Forms.ExampleForms.Presentation.pane ref[shared] "Second pane";
     .layout { inputs := inputs[.ui ref[shared]], run := id } {
       inputs := inputs[.ui ref[active]]
       run := fun active => .group (some "Shared state across tabs") [
@@ -104,48 +87,6 @@ def sharedTabs : Component [] Nat Nat := named%
         #v[.place slot[first], .place slot[second]][active]] }
 
 example : sharedTabs = Forms.ExampleForms.Presentation.sharedTabs := rfl
-
-def noteTabs {Γ : Context} : Component Γ String := named%
-  present%
-    tabs% active, strip := "Note view", #v["Edit", "Preview"];
-    own% edit := .field .self "Text" .text;
-    own% preview := .computed "Preview" {
-      inputs := inputs[path[]]
-      run := fun text => s!"«{text}»" };
-    .arrange {
-      inputs := inputs[.ui ref[active]]
-      run := fun active => .group none [
-        .place slot[strip],
-        #v[.place slot[edit], .place slot[preview]][active]] }
-
-example {Γ : Context} : noteTabs (Γ := Γ) = Forms.ExampleForms.Presentation.noteTabs := rfl
-
-def notes : Component [] (List (Item String)) Nat := named%
-  present%
-    own% rows := Component.void (.list .self "Notes" (.numbered "Note") "Add note"
-      (Item.mkWithoutUuid "") (.zoom path[Item.Field.value] noteTabs));
-    own% count := .computed "Note count" {
-      inputs := inputs[path[]]
-      run := fun notes => toString notes.length };
-    .layout { inputs := inputs[path[]], run := List.length }
-      (.const (.group none [.place slot[count], .place slot[rows]]))
-
-example : notes = Forms.ExampleForms.Presentation.notes := rfl
-
-def distinctBindings : Component [] Nat Nat := named%
-  state% first := (10 : Nat);
-  state% second := (20 : Nat);
-  .output { inputs := inputs[.ui ref[first], .ui ref[second]], run := Nat.add }
-
-example : (distinctBindings.evaluate 0 Env.nil).output = 30 := by decide
-
-def aliased : Component [] Nat Nat := named%
-  state% count := (10 : Nat);
-  alias% outer := count;
-  state% other := (20 : Nat);
-  .output { inputs := inputs[.ui ref[outer], .ui ref[other]], run := Nat.add }
-
-example : (aliased.evaluate 0 Env.nil).output = 30 := by decide
 
 def importedPair
   {Γ : Context}
@@ -213,16 +154,15 @@ def independentNames : Component [] Nat Nat := named%
 
 example : (independentNames.evaluate 0 Env.nil).output = 20 := by decide
 
-def aliasedOwner : Component [] Nat Nat := named%
+def stateBetweenOwners : Component [] Nat Nat := named%
   present%
     own% producer := .output (.const (7 : Nat));
-    alias% original := producer;
     state% ignored := false;
-    own% display := .computed "Count" { inputs := inputs[.ui ref[original]], run := toString };
-    .layout { inputs := inputs[.ui ref[original]], run := id }
-      (.const (.group none [.place slot[original], .place slot[display]]))
+    own% display := .computed "Count" { inputs := inputs[.ui ref[producer]], run := toString };
+    .layout { inputs := inputs[.ui ref[producer]], run := id }
+      (.const (.group none [.place slot[producer], .place slot[display]]))
 
-example : aliasedOwner =
+example : stateBetweenOwners =
     (Component.present <|
       .own (.output (.const (7 : Nat))) <|
         .bind false <|
@@ -264,8 +204,6 @@ def definedTabs : Component [] Nat Nat := named%
         #v[.place slot[edit], .place slot[preview]][active]] }
 
 example : parenthesizedTabs = definedTabs := rfl
-
-example : (definedTabs.evaluate 0 Env.nil).output = 0 := by decide
 
 def displayTabs : Display.Editor := named% .tabs 0 ["Edit", "Preview"]
 

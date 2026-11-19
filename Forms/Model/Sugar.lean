@@ -2,8 +2,20 @@ module
 
 public import Forms.Model.Component
 public meta import Lean.Elab.Term
+meta import all Init.Prelude
 
-/-! Form authoring sugar, enabled with `open Forms.Model.Sugar`. -/
+/-!
+# Form sugar
+
+Enable the syntax with:
+
+```lean
+import Forms
+open Forms.Model.Sugar
+```
+
+Names must be unique within a block. References adjust automatically as bindings are added.
+-/
 
 public section
 namespace Forms.Model.Sugar.Internal
@@ -70,15 +82,47 @@ public meta section
 namespace Forms.Model.Sugar
 open Lean
 
+/-- Start a fresh block with `named% body`. Names from enclosing blocks are not imported. -/
 scoped syntax "named% " term : term
+
+/-- Start a block using existing `Var` or `InputRef` parameters: `named%[x, y] body`. -/
 scoped syntax "named%[" ident,* "] " term : term
+
+/-- Bind writable UI state with `state% x := (initial : T); body`. Use `ref[x]` in the body. -/
 scoped syntax "state% " ident " := " term " ; " term : term
+
+/--
+Own a component with `own% child := component; body` inside a presentation.
+Use `ref[child]` for its read-only output and `slot[child]` for its view.
+-/
 scoped syntax "own% " ident " := " term " ; " term : term
+
+/-- Build a component from a presentation with `present% body`. Starts a fresh slot scope. -/
 scoped syntax "present% " term : term
+
+/--
+Add tabs with `tabs% active, bar := title, labels; body`. Supply at least one label.
+For `N` labels, `ref[active] : Var _ (Fin N)` starts at zero. Place the bar with `slot[bar]`.
+Own panes separately and choose one in the layout using the active index.
+-/
 scoped syntax "tabs% " ident ", " ident " := " term ", " term " ; " term : term
-scoped syntax "alias% " ident " := " ident " ; " term : term
+
+/--
+Use `row% current, removed => computation` in a collection's row-label computation.
+Read the supplied `PointedList` with `ref[current]`; read or set the `Bool` with `ref[removed]`.
+-/
 scoped syntax "row% " ident ", " ident " => " term : term
+
+/--
+Refer to a variable or owned output with `ref[x]` inside `named%`.
+Read it through `inputs[.ui ref[x]]`; update writable state with `.set ref[x] computation`.
+-/
 scoped syntax "ref[" ident "]" : term
+
+/--
+Place an owned component's view with `.place slot[child]` inside `named%`.
+For a component with holes, use `.fill` instead.
+-/
 scoped syntax "slot[" ident "]" : term
 
 namespace Internal
@@ -135,25 +179,18 @@ private def importRefs (names : Array Ident) : MacroM Bindings := do
       refs := { name, reference := name, shifts := 0 } :: bindings.refs }
   return bindings
 
-private def findBinding
-  (kind : String)
-  (name : Ident)
-  (bindings : List Binding)
-  : MacroM Binding := do
-  match bindings.find? (·.name.getId == name.getId) with
-  | some binding => return binding
-  | none => Macro.throwErrorAt name s!"Unknown {kind} '{name.getId}' in this scope"
-
 private def lookup
   (kind : String)
   (name : Ident)
   (bindings : List Binding)
   : MacroM (TSyntax `term) := withRef name do
-  let binding ← findBinding kind name bindings
-  let mut reference : TSyntax `term := ⟨binding.reference.raw.setInfo (SourceInfo.fromRef name)⟩
-  for _ in [:binding.shifts] do
-    reference ← `(Member.there $reference)
-  return reference
+  match bindings.find? (·.name.getId == name.getId) with
+  | some binding =>
+    let mut reference : TSyntax `term := ⟨binding.reference.raw.setInfo (SourceInfo.fromRef name)⟩
+    for _ in [:binding.shifts] do
+      reference ← `(Member.there $reference)
+    return reference
+  | none => Macro.throwErrorAt name s!"Unknown {kind} '{name.getId}' in this scope"
 
 private def shift
   (bindings : List Binding)
@@ -172,7 +209,25 @@ private def requirePresentation
   | .component => Macro.throwError s!"{form} requires a presentation; use present%"
   | .presentation => pure ()
 
-private partial def expand
+private theorem sizeOf_getArg_lt
+  (info : SourceInfo)
+  (kind : SyntaxNodeKind)
+  (args : Array Syntax)
+  (i : Nat)
+  : sizeOf ((Syntax.node info kind args).getArg i) <
+      sizeOf (Syntax.node info kind args) := by
+  simp only [Syntax.getArg, Array.getD, Array.getInternal_eq_getElem]
+  split
+  next h =>
+    have := Array.sizeOf_getElem args i h
+    simp only [Syntax.node.sizeOf_spec]
+    omega
+  next =>
+    cases args
+    simp [Syntax.node.sizeOf_spec, Array.mk.sizeOf_spec]
+    omega
+
+private def expand
   (stx : Syntax)
   (bindings : Bindings)
   : MacroM Syntax := withRef stx do
@@ -228,14 +283,6 @@ private partial def expand
       (fun $activeName => $label)
       (fun $activeName => named_tab_labels% $labels)
       (fun $bodyActiveName $outputName $slotName => $body))
-  if let `(alias% $name := $original; $body) := stx then
-    ensureFresh name bindings
-    let binding ← findBinding "variable" original bindings.refs
-    let refs := { binding with name } :: bindings.refs
-    let slots := match bindings.slots.find? (·.name.getId == original.getId) with
-      | some binding => { binding with name } :: bindings.slots
-      | none => bindings.slots
-    return ← expand body { bindings with refs, slots }
   if let `(row% $current, $removed => $body) := stx then
     ensureFresh current bindings
     let currentName ← freshIdent current
@@ -263,6 +310,14 @@ private partial def expand
   | .missing => return stx
   | .atom .. => return stx
   | .ident .. => return stx
+termination_by sizeOf stx
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | decreasing_trivial
+    | cases stx <;> first
+      | exact sizeOf_getArg_lt ..
+      | simp_all +zetaDelta [Syntax.isOfKind, Syntax.getKind]
 
 macro_rules
   | `(named% $body) => expand body .empty
@@ -275,7 +330,6 @@ macro_rules
   | `(present% $_body) => Macro.throwError "present% is only valid inside named%"
   | `(tabs% $_active, $_strip := $_label, $_labels; $_body) =>
     Macro.throwError "tabs% is only valid inside named%"
-  | `(alias% $_name := $_original; $_body) => Macro.throwError "alias% is only valid inside named%"
   | `(row% $_current, $_removed => $_body) => Macro.throwError "row% is only valid inside named%"
 
 end Forms.Model.Sugar

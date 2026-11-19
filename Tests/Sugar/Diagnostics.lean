@@ -46,21 +46,6 @@ example : Component [] Nat := named%
     own% count := .computed "Count" "1";
     .arrange (.const (.place slot[count]))
 
-/-- error: Name 'count' is already in scope; choose a different name -/
-#guard_msgs in
-example : Component [] Nat Nat := named%
-  state% count := (10 : Nat);
-  alias% count := count;
-  .output { inputs := inputs[.ui ref[count]], run := id }
-
-/-- error: Name 'other' is already in scope; choose a different name -/
-#guard_msgs in
-example : Component [] Nat Nat := named%
-  state% count := (10 : Nat);
-  alias% other := count;
-  state% other := (20 : Nat);
-  .output { inputs := inputs[.ui ref[other]], run := id }
-
 /-- error: Name 'active' is already in scope; choose a different name -/
 #guard_msgs in
 example : Component [] Nat := named%
@@ -174,10 +159,6 @@ example : Component [] Nat := present% .arrange (.const (.group none []))
 #guard_msgs in
 example : Component [] Nat := tabs% active, strip := "Tabs", #v["One"]; .computed "X" "0"
 
-/-- error: alias% is only valid inside named% -/
-#guard_msgs in
-example : Component [] Nat := alias% x := y; .computed "X" "0"
-
 /-- error: row% is only valid inside named% -/
 #guard_msgs in
 example : Computation (Context.row Nat []) Nat String := row% current, removed => (.const "row")
@@ -193,10 +174,6 @@ example : Component [] Nat := named%
 example : Component [] Nat := named%
   tabs% active, strip := "Tabs", #v["One"];
   .arrange (.const (.place slot[strip]))
-
-/-- error: Unknown variable 'missing' in this scope -/
-#guard_msgs in
-example : Component [] Nat := named% alias% x := missing; .computed "X" "0"
 
 /-- error: Use the named% binding syntax here -/
 #guard_msgs in
