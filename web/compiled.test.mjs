@@ -585,17 +585,17 @@ test('table cells expose row-local selection to an independent summary', async (
   };
   try {
     apply('Toggle selection', 1);
-    assert.deepEqual(output(page(model)), ['Same description']);
+    assert.deepEqual(output(page(model)), ['Bread']);
     apply('Toggle selection');
-    assert.deepEqual(output(page(model)), ['Same description, Same description']);
+    assert.deepEqual(output(page(model)), ['Apples, Bread']);
     apply('Description', 0, 'Revised');
-    assert.deepEqual(output(page(model)), ['Revised, Same description']);
+    assert.deepEqual(output(page(model)), ['Revised, Bread']);
     assert.deepEqual(model.snapshot().submission.value.map(item => item.value),
-      ['Revised', 'Same description', 'Another item']);
+      ['Revised', 'Bread', 'Milk']);
     apply('Remove');
-    assert.deepEqual(output(page(model)), ['Same description']);
+    assert.deepEqual(output(page(model)), ['Bread']);
     apply('Add item');
-    assert.deepEqual(output(page(model)), ['Same description']);
+    assert.deepEqual(output(page(model)), ['Bread']);
     model.send('reset');
     assert.deepEqual(output(page(model)), ['']);
   } finally { model.dispose(); }

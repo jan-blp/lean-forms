@@ -95,8 +95,7 @@ def selectionTable : Component [] (List (Item String)) (List RowOutput) :=
   .table .self "Items" (.numbered "Item") "Add item"
       (Item.mkWithoutUuid "New item") selectionColumns
 
-/-- Two rows share a description, so selection must follow rows, not text. -/
 def descriptions : List (Item String) :=
-  IdGen.run (["Same description", "Same description", "Another item"].mapM Item.fresh)
+  IdGen.run (["Apples", "Bread", "Milk"].mapM Item.fresh)
 
 end Forms.ExampleForms.Outputs
