@@ -170,7 +170,6 @@ def renderLayout
   {owned : List Nat}
   (views : {holes : Nat} → ViewRef owned holes → Hollow holes)
   : Layout owned → Display.View
-  | .place view => views view #v[]
   | .fill view contents => views view (renderFills views contents)
   | .group label children => .stack label (renderAll views children)
 

@@ -16,7 +16,6 @@ end ViewRef
 mutual
 /-- Arranges the presentations in scope without owning or evaluating them. -/
 inductive Layout (owned : List Nat) where
-  | place (view : ViewRef owned 0)
   | fill {holes : Nat} (view : ViewRef owned holes) (contents : Fills owned holes)
   | group (label : Option String) (children : List (Layout owned))
 
@@ -28,12 +27,18 @@ inductive Fills (owned : List Nat) : (holes : Nat) → Type where
       : Fills owned (holes + 1)
 end
 
+/-- Places a view without holes. -/
+abbrev Layout.place
+  {owned : List Nat}
+  (view : ViewRef owned 0)
+  : Layout owned :=
+  .fill view .nil
+
 mutual
 def Layout.rename
   {owned others : List Nat}
   (rename : {holes : Nat} → ViewRef owned holes → ViewRef others holes)
   : Layout owned → Layout others
-  | .place view => .place (rename view)
   | .fill view contents => .fill (rename view) (Fills.rename rename contents)
   | .group label children => .group label (Layout.renameAll rename children)
 
