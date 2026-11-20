@@ -30,9 +30,9 @@ def form : Component [] Person.Raw (List Issue) := named%
     .layout { inputs := inputs[ref[issues]], run := id }
       { inputs := inputs[ref[active]]
         run := fun tab => .group (some "Navigable person") [
-          .place slot[problems],
-          .place slot[sections],
-          .place (if tab.val == 0 then slot[person] else slot[street])] }
+          .place view[problems],
+          .place view[sections],
+          .place (if tab.val == 0 then view[person] else view[street])] }
 
 def initial : Person.Raw := { Person.initial with address := ⟨""⟩ }
 

@@ -53,8 +53,8 @@ def sharedTabs : Component [] Nat Nat := named%
     .layout { inputs := inputs[ref[shared]], run := id } {
       inputs := inputs[ref[active]]
       run := fun active => .group (some "Shared state across tabs") [
-        .place slot[strip],
-        #v[.place slot[first], .place slot[second]][active]] }
+        .place view[strip],
+        #v[.place view[first], .place view[second]][active]] }
 
 /-- A presentation inside each list row, with row-local tab state. -/
 def noteTabs {Γ : Context} : Component Γ String := named%
@@ -66,8 +66,8 @@ def noteTabs {Γ : Context} : Component Γ String := named%
     .arrange {
       inputs := inputs[ref[active]]
       run := fun active => .group none [
-        .place slot[strip],
-        #v[.place slot[edit], .place slot[preview]][active]] }
+        .place view[strip],
+        #v[.place view[edit], .place view[preview]][active]] }
 
 /-- An outer presentation that owns rows with their own presentations. -/
 def notes : Component [] (List (Item String)) Nat := named%
@@ -78,7 +78,7 @@ def notes : Component [] (List (Item String)) Nat := named%
     own% count := .computed "Note count" {
       inputs := inputs[path[]], run := fun notes => toString notes.length };
     .layout { inputs := inputs[path[]], run := List.length }
-      (.const (.group none [.place slot[count], .place slot[list]]))
+      (.const (.group none [.place view[count], .place view[list]]))
 
 def initialNotes : List (Item String) := IdGen.run (["First note", "Second note"].mapM Item.fresh)
 

@@ -47,13 +47,13 @@ def ComponentNode.rename
   | .present body => .present (body.rename rename)
 
 def PresentationNode.rename
-  {slots : List Nat}
+  {owned : List Nat}
   {Γ Δ : Context}
   {α state β : Type}
   {views : Nat}
   (rename : Renaming Γ Δ)
-  (presentation : PresentationNode slots Γ α state β views)
-  : PresentationNode slots Δ α state β views :=
+  (presentation : PresentationNode owned Γ α state β views)
+  : PresentationNode owned Δ α state β views :=
   match presentation with
   | .layout output arrangement => .layout (output.rename rename) (arrangement.rename rename)
   | .own component body => .own (component.rename rename) (body.rename rename.lift)

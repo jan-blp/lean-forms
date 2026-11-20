@@ -36,7 +36,7 @@ example : Component [] Nat := named%
   present%
     own% count := .computed "First" "1";
     own% count := .computed "Second" "2";
-    .arrange (.const (.place slot[count]))
+    .arrange (.const (.place view[count]))
 
 /-- error: Name 'count' is already in scope; choose a different name -/
 #guard_msgs in
@@ -44,14 +44,14 @@ example : Component [] Nat := named%
   present%
     state% count := (0 : Nat);
     own% count := .computed "Count" "1";
-    .arrange (.const (.place slot[count]))
+    .arrange (.const (.place view[count]))
 
 /-- error: Name 'active' is already in scope; choose a different name -/
 #guard_msgs in
 example : Component [] Nat := named%
   present%
     tabs% active, active := "Tabs", #v["One", "Two"];
-    .arrange (.const (.place slot[active]))
+    .arrange (.const (.place view[active]))
 
 /-- error: Name 'current' is already in scope; choose a different name -/
 #guard_msgs in
@@ -90,7 +90,7 @@ example : Component [] Nat := named%
   present%
     own% counter := .output (.const (0 : Nat));
     own% button := .button "Write read-only output" (.set ref[counter] (.const 1));
-    .arrange (.const (.place slot[button]))
+    .arrange (.const (.place view[button]))
 
 /-- error: Use state% for bindings inside named% -/
 #guard_msgs in
@@ -119,7 +119,7 @@ example : Component [] Nat Nat := named%
 example : Component [] Nat := named%
   present%
     own% self := .computed "Self" { inputs := inputs[.ui ref[self]], run := id };
-    .arrange (.const (.place slot[self]))
+    .arrange (.const (.place view[self]))
 
 /-- error: Unknown variable 'outer' in this scope -/
 #guard_msgs in
@@ -130,23 +130,23 @@ example : Component [] Nat Nat := named%
     .output { inputs := inputs[.ui ref[outer]], run := id }
   independent.weaken
 
-/-- error: Unknown slot 'outer' in this scope -/
+/-- error: Unknown view 'outer' in this scope -/
 #guard_msgs in
 example : Component [] Nat := named%
   present%
     own% outer := .computed "Outer" "outside";
     own% nested := present%
       own% inner := .computed "Inner" "inside";
-      .arrange (.const (.place slot[outer]));
-    .arrange (.const (.place slot[nested]))
+      .arrange (.const (.place view[outer]));
+    .arrange (.const (.place view[nested]))
 
 /-- error: ref[...] is only valid inside named% -/
 #guard_msgs in
 example : Var [] Nat := ref[x]
 
-/-- error: slot[...] is only valid inside named% -/
+/-- error: view[...] is only valid inside named% -/
 #guard_msgs in
-example : Slot [] 0 := slot[x]
+example : ViewRef [] 0 := view[x]
 
 /-- error: state% is only valid inside named% -/
 #guard_msgs in
@@ -176,13 +176,13 @@ example : Computation (Context.row Nat []) Nat String := row% current, removed =
 #guard_msgs in
 example : Component [] Nat := named%
   own% x := .computed "X" "0";
-  .arrange (.const (.place slot[x]))
+  .arrange (.const (.place view[x]))
 
 /-- error: tabs% requires a presentation; use present%, or presentation% for a Presentation -/
 #guard_msgs in
 example : Component [] Nat := named%
   tabs% active, strip := "Tabs", #v["One"];
-  .arrange (.const (.place slot[strip]))
+  .arrange (.const (.place view[strip]))
 
 /-- error: observe% requires a component; use own% inside a presentation -/
 #guard_msgs in
@@ -229,13 +229,13 @@ example : Component [] (List (Item Nat)) (List Unit) := named%
 #guard_msgs in
 example : Presentation [] [] Nat := presentation% .arrange (.const (.group none []))
 
-/-- error: Unknown slot 'child' in this scope -/
+/-- error: Unknown view 'child' in this scope -/
 #guard_msgs in
 example : Component [] Nat := named%
   present%
     own% child := .computed "Child" "value";
-    tabs% active, strip := "Tabs", slot[child];
-    .arrange (.const (.place slot[strip]))
+    tabs% active, strip := "Tabs", view[child];
+    .arrange (.const (.place view[strip]))
 
 /--
 @ +2:9...14
@@ -286,7 +286,7 @@ example : Component [] Nat := named%
     tabs% active, bar := "Tabs", {
       inputs := inputs[.ui ref[active]]
       run := fun _ => #v["One"] };
-    .arrange (.const (.place slot[bar]))
+    .arrange (.const (.place view[bar]))
 
 #guard_msgs in
 example : Computation (Context.row Nat []) Nat Bool := named%
@@ -297,4 +297,4 @@ example : Component [] Nat Nat := named%
   present%
     own% output := .output (.const (7 : Nat));
     own% view := .computed "View" "text";
-    .layout { inputs := inputs[.ui ref[output]], run := id } (.const (.place slot[view]))
+    .layout { inputs := inputs[.ui ref[output]], run := id } (.const (.place view[view]))

@@ -89,7 +89,7 @@ def selectionColumns {Γ : Context} : Columns Γ (Item String) RowOutput := name
       .layouts
         { inputs := inputs[ref[description], ref[selected]]
           run := fun description selected => { description, selected } }
-        (.const #v[.place slot[description], .place slot[selected]])⟩
+        (.const #v[.place view[description], .place view[selected]])⟩
 
 def selectionTable : Component [] (List (Item String)) (List RowOutput) :=
   .table .self "Items" (.numbered "Item") "Add item"

@@ -29,14 +29,14 @@ example :
 def owner : Component [] Nat Nat := named%
   present%
     own% (count : Nat) := counter;
-    .layout { inputs := inputs[ref[count]], run := id } (.const (.place slot[count]))
+    .layout { inputs := inputs[ref[count]], run := id } (.const (.place view[count]))
 
 example :
     owner =
     (named%
       present%
         own% count := counter;
-        .layout { inputs := inputs[ref[count]], run := id } (.const (.place slot[count]))) := rfl
+        .layout { inputs := inputs[ref[count]], run := id } (.const (.place view[count]))) := rfl
 
 def tabs : Component [] String := named%
   present%
@@ -46,8 +46,8 @@ def tabs : Component [] String := named%
     .arrange {
       inputs := inputs[ref[active]]
       run := fun active => .group none [
-        .place slot[bar],
-        #v[.place slot[edit], .place slot[preview]][active]] }
+        .place view[bar],
+        #v[.place view[edit], .place view[preview]][active]] }
 
 example :
     tabs =
@@ -59,8 +59,8 @@ example :
         .arrange {
           inputs := inputs[ref[active]]
           run := fun active => .group none [
-            .place slot[bar],
-            #v[.place slot[edit], .place slot[preview]][active]] }) := rfl
+            .place view[bar],
+            #v[.place view[edit], .place view[preview]][active]] }) := rfl
 
 def rowLabel {Γ : Context} : Computation (Context.row Nat Γ) Nat String := named%
   row% (current : PointedList Nat), (_ : Bool) => {

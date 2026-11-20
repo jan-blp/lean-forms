@@ -15,8 +15,8 @@ namespace Tests.Sugar
     .arrange {
       inputs := inputs[ref[active]]
       run := fun active => .group none [
-        .place slot[bar],
-        #v[.place slot[edit], .place slot[preview]][active]] }
+        .place view[bar],
+        #v[.place view[edit], .place view[preview]][active]] }
 
 example : tabInference =
     (Component.present <|

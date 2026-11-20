@@ -8,20 +8,20 @@ open Forms.Model
 
 def firstRef (ref : Array Nat) : Nat := ref[0]!
 
-def firstSlot (slot : Array Nat) : Nat := slot[0]!
+def firstView (view : Array Nat) : Nat := view[0]!
 
 example : firstRef #[7] = 7 := by decide
-example : firstSlot #[8] = 8 := by decide
+example : firstView #[8] = 8 := by decide
 
 section
 open Forms.Model.Sugar
 
 def indexedRef (ref : Array Nat) : Nat := (ref)[0]!
 
-def indexedSlot (slot : Array Nat) : Nat := (slot)[0]!
+def indexedView (view : Array Nat) : Nat := (view)[0]!
 
 example : indexedRef #[7] = 7 := by decide
-example : indexedSlot #[8] = 8 := by decide
+example : indexedView #[8] = 8 := by decide
 
 def namedCounter : Component [] Nat Nat := named%
   state% count := (1 : Nat);
@@ -64,9 +64,9 @@ end
 
 def lastRef (ref : Array Nat) : Nat := ref[ref.size - 1]!
 
-def lastSlot (slot : Array Nat) : Nat := slot[slot.size - 1]!
+def lastView (view : Array Nat) : Nat := view[view.size - 1]!
 
 example : lastRef #[1, 2] = 2 := by decide
-example : lastSlot #[3, 4] = 4 := by decide
+example : lastView #[3, 4] = 4 := by decide
 
 end Tests.Sugar.Parsing

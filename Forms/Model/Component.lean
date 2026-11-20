@@ -15,13 +15,13 @@ structure Component (Γ : Context) (α : Type) (β : Type := Unit) (holes : Nat 
   node : ComponentNode Γ α LocalState β holes
 
 structure Presentation
-    (slots : List Nat)
+    (owned : List Nat)
     (Γ : Context)
     (α : Type)
     (β : Type := Unit)
     (views : Nat := 1) where
   LocalState : Type
-  node : PresentationNode slots Γ α LocalState β views
+  node : PresentationNode owned Γ α LocalState β views
 
 /-- Table cells: one view per header. -/
 structure Columns (Γ : Context) (α : Type) (β : Type := Unit) where
@@ -255,63 +255,63 @@ def Component.loadOr
     | .failed _ => fallback
 
 @[reducible] def Presentation.layouts
-  {slots : List Nat}
+  {owned : List Nat}
   {Γ : Context}
   {α β : Type}
   {views : Nat}
   (output : Computation Γ α β)
-  (arrangement : Computation Γ α (Vector (Layout slots) views))
-  : Presentation slots Γ α β views :=
+  (arrangement : Computation Γ α (Vector (Layout owned) views))
+  : Presentation owned Γ α β views :=
   ⟨Unit, .layout output arrangement⟩
 
 @[reducible] def Presentation.layout
-  {slots : List Nat}
+  {owned : List Nat}
   {Γ : Context}
   {α β : Type}
   (output : Computation Γ α β)
-  (arrangement : Computation Γ α (Layout slots))
-  : Presentation slots Γ α β :=
+  (arrangement : Computation Γ α (Layout owned))
+  : Presentation owned Γ α β :=
   .layouts output ((#v[·]) <$> arrangement)
 
 @[reducible] def Presentation.arrange
-  {slots : List Nat}
+  {owned : List Nat}
   {Γ : Context}
   {α : Type}
-  (arrangement : Computation Γ α (Layout slots))
-  : Presentation slots Γ α :=
+  (arrangement : Computation Γ α (Layout owned))
+  : Presentation owned Γ α :=
   .layout (.const ()) arrangement
 
 @[reducible] def Presentation.own
-  {slots : List Nat}
+  {owned : List Nat}
   {Γ : Context}
   {α β γ : Type}
   {holes views : Nat}
   (component : Component Γ α β holes)
-  (body : Presentation (holes :: slots) (⟨.readOnly, β⟩ :: Γ) α γ views)
-  : Presentation slots Γ α γ views :=
+  (body : Presentation (holes :: owned) (⟨.readOnly, β⟩ :: Γ) α γ views)
+  : Presentation owned Γ α γ views :=
   ⟨ObservationState component.LocalState body.LocalState, .own component.node body.node⟩
 
 @[reducible] def Presentation.bind
-  {slots : List Nat}
+  {owned : List Nat}
   {Γ : Context}
   {α β γ : Type}
   {views : Nat}
   (initial : β)
-  (body : Presentation slots (⟨.writable, β⟩ :: Γ) α γ views)
-  : Presentation slots Γ α γ views :=
+  (body : Presentation owned (⟨.writable, β⟩ :: Γ) α γ views)
+  : Presentation owned Γ α γ views :=
   ⟨Binding β body.LocalState, .bind initial body.node⟩
 
 /-- Binds the active tab and owns its strip; `body` reads the tab as `.there .here` and places the
-strip as `Slot.here`. -/
+strip as `ViewRef.here`. -/
 @[reducible] def Presentation.tabs
-  {slots : List Nat}
+  {owned : List Nat}
   {n : Nat}
   {Γ : Context}
   {α β : Type}
   (label : Computation (⟨.writable, Fin (n + 1)⟩ :: Γ) α String)
   (labels : Computation (⟨.writable, Fin (n + 1)⟩ :: Γ) α (Vector String (n + 1)))
-  (body : Presentation (0 :: slots) (⟨.readOnly, Unit⟩ :: ⟨.writable, Fin (n + 1)⟩ :: Γ) α β)
-  : Presentation slots Γ α β :=
+  (body : Presentation (0 :: owned) (⟨.readOnly, Unit⟩ :: ⟨.writable, Fin (n + 1)⟩ :: Γ) α β)
+  : Presentation owned Γ α β :=
   .bind 0 (.own (.tabBar label .here labels) body)
 
 @[reducible] def Component.present
@@ -351,59 +351,59 @@ strip as `Slot.here`. -/
   component.rename Renaming.shift
 
 @[reducible] def Layout.grouped
-  {slots : List Nat}
+  {owned : List Nat}
   {Γ : Context}
   {α : Type}
   (label : Computation Γ α String)
-  (placed : List (Slot slots 0))
-  : Computation Γ α (Layout slots) :=
+  (placed : List (ViewRef owned 0))
+  : Computation Γ α (Layout owned) :=
   (fun label => .group (some label) (placed.map Layout.place)) <$> label
 
 /-- Owns `children` after the presentations in `placed`, then lays out all of them with `render`
 applied to `arrangement`. -/
 def Presentation.ownAll
-  {slots : List Nat}
+  {owned : List Nat}
   {Γ Δ : Context}
   {α β γ : Type}
   (rename : Renaming Γ Δ)
   (arrangement : Computation Δ α γ)
-  (render : {slots : List Nat} → γ → List (Slot slots 0) → Layout slots)
-  (placed : List (Slot slots 0))
-  : List (Component Γ α β) → Presentation slots Δ α
+  (render : {owned : List Nat} → γ → List (ViewRef owned 0) → Layout owned)
+  (placed : List (ViewRef owned 0))
+  : List (Component Γ α β) → Presentation owned Δ α
   | [] => .arrange ((render · placed) <$> arrangement)
   | child :: rest =>
     .own (child.rename rename) <|
       Presentation.ownAll (fun ref => .there (rename ref)) (arrangement.rename Renaming.shift)
-        render (placed.map Slot.there ++ [.here]) rest
+        render (placed.map ViewRef.there ++ [.here]) rest
 
 /-- Owns `cell` innermost in `cells` and places it after their views. -/
 def PresentationNode.snoc
-  {slots : List Nat}
+  {owned : List Nat}
   {Γ Δ : Context}
   {α state β : Type}
   {views : Nat}
-  (cells : PresentationNode slots Δ α state β views)
+  (cells : PresentationNode owned Δ α state β views)
   (rename : Renaming Γ Δ)
   (cell : Component Γ α)
-  : Presentation slots Δ α β (views + 1) :=
+  : Presentation owned Δ α β (views + 1) :=
   match cells with
   | .layout output arrangement =>
     .own (cell.rename rename) <|
       .layouts (output.rename Renaming.shift)
-        ((fun layouts => (layouts.map (Layout.rename Slot.there)).push (.place .here)) <$>
+        ((fun layouts => (layouts.map (Layout.rename ViewRef.there)).push (.place .here)) <$>
           arrangement.rename Renaming.shift)
   | .own component body => .own ⟨_, component⟩ (body.snoc (fun ref => .there (rename ref)) cell)
   | .bind initial body => .bind initial (body.snoc (fun ref => .there (rename ref)) cell)
 
 def PresentationNode.group
-  {slots : List Nat}
+  {owned : List Nat}
   {Γ Δ : Context}
   {α state β : Type}
   {views : Nat}
-  (cells : PresentationNode slots Δ α state β views)
+  (cells : PresentationNode owned Δ α state β views)
   (rename : Renaming Γ Δ)
   (label : Computation Γ α String)
-  : PresentationNode slots Δ α state β 1 :=
+  : PresentationNode owned Δ α state β 1 :=
   match cells with
   | .layout output arrangement =>
     .layout output

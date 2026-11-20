@@ -182,35 +182,35 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       : ComponentNode Γ α state β 0
 
 /-- Components owned in order, arranged into `views` views;
-`slots` gives the hole count of each slot in scope. -/
+`owned` gives the hole count of each view in scope. -/
 inductive PresentationNode
-  : (slots : List Nat)
+  : (owned : List Nat)
   → (Γ : Context)
   → (model state output : Type)
   → (views : Nat)
   → Type 1 where
-  | layout {slots : List Nat}
+  | layout {owned : List Nat}
       {Γ : Context}
       {α β : Type}
       {views : Nat}
       (output : Computation Γ α β)
-      (arrangement : Computation Γ α (Vector (Layout slots) views))
-      : PresentationNode slots Γ α Unit β views
-  /-- Owns `component`: `body` reads its output as `Ref.here` and places its view as `Slot.here`. -/
-  | own {slots : List Nat}
+      (arrangement : Computation Γ α (Vector (Layout owned) views))
+      : PresentationNode owned Γ α Unit β views
+  /-- Owns `component`: `body` reads its output as `Ref.here` and places its view as `ViewRef.here`. -/
+  | own {owned : List Nat}
       {Γ : Context}
       {α β γ ownedState bodyState : Type}
       {holes views : Nat}
       (component : ComponentNode Γ α ownedState β holes)
-      (body : PresentationNode (holes :: slots) (⟨.readOnly, β⟩ :: Γ) α bodyState γ views)
-      : PresentationNode slots Γ α (ObservationState ownedState bodyState) γ views
-  | bind {slots : List Nat}
+      (body : PresentationNode (holes :: owned) (⟨.readOnly, β⟩ :: Γ) α bodyState γ views)
+      : PresentationNode owned Γ α (ObservationState ownedState bodyState) γ views
+  | bind {owned : List Nat}
       {Γ : Context}
       {α β γ state : Type}
       {views : Nat}
       (initial : β)
-      (body : PresentationNode slots (⟨.writable, β⟩ :: Γ) α state γ views)
-      : PresentationNode slots Γ α (Binding β state) γ views
+      (body : PresentationNode owned (⟨.writable, β⟩ :: Γ) α state γ views)
+      : PresentationNode owned Γ α (Binding β state) γ views
 
 end
 
