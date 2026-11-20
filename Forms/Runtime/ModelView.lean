@@ -163,29 +163,29 @@ abbrev Hollow (holes : Nat) := Vector (List Display.View) holes → Display.View
 structure Prepared (holes : Nat) where
   view : Hollow holes
 
-abbrev Presentations (slots : List Nat) := {holes : Nat} → Slot slots holes → Prepared holes
+abbrev Presentations (owned : List Nat) := {holes : Nat} → ViewRef owned holes → Prepared holes
 
 mutual
 def renderLayout
-  {slots : List Nat}
-  (views : {holes : Nat} → Slot slots holes → Hollow holes)
-  : Layout slots → Display.View
-  | .place slot => views slot #v[]
-  | .fill slot contents => views slot (renderFills views contents)
+  {owned : List Nat}
+  (views : {holes : Nat} → ViewRef owned holes → Hollow holes)
+  : Layout owned → Display.View
+  | .place view => views view #v[]
+  | .fill view contents => views view (renderFills views contents)
   | .group label children => .stack label (renderAll views children)
 
 def renderAll
-  {slots : List Nat}
-  (views : {holes : Nat} → Slot slots holes → Hollow holes)
-  : List (Layout slots) → List Display.View
+  {owned : List Nat}
+  (views : {holes : Nat} → ViewRef owned holes → Hollow holes)
+  : List (Layout owned) → List Display.View
   | [] => []
   | child :: rest => renderLayout views child :: renderAll views rest
 
 def renderFills
-  {slots : List Nat}
+  {owned : List Nat}
   {holes : Nat}
-  (views : {holes : Nat} → Slot slots holes → Hollow holes)
-  : Fills slots holes → Vector (List Display.View) holes
+  (views : {holes : Nat} → ViewRef owned holes → Hollow holes)
+  : Fills owned holes → Vector (List Display.View) holes
   | .nil => #v[]
   | .cons content rest => (#v[renderAll views content] ++ renderFills views rest).cast (by omega)
 end
@@ -451,11 +451,11 @@ def evaluateNode
         | _ => absent }
 
 def evaluatePresentation
-  {slots : List Nat}
+  {owned : List Nat}
   {Γ : Context}
   {α state β : Type}
   {views : Nat}
-  (presentation : PresentationNode slots Γ α state β views)
+  (presentation : PresentationNode owned Γ α state β views)
   (value : α)
   (env : Env Γ)
   (ambient : Ambient)
@@ -463,25 +463,25 @@ def evaluatePresentation
   (target : Display.Target)
   (location : ErasedLocation)
   (disabled : Bool)
-  (presentations : Presentations slots)
+  (presentations : Presentations owned)
   : NodeEvaluation Γ α state β (Vector Display.View views) :=
   match presentation with
   | .layout output arrangement =>
     let layouts := arrangement.eval value env
     { output := output.eval value env
       locals := ()
-      view := layouts.map (renderLayout fun slot => (presentations slot).view)
+      view := layouts.map (renderLayout fun view => (presentations view).view)
       requests := []
       apply := fun _ _ => absent }
   | .own (holes := owns) component body =>
-    let owned := evaluateNode component value env ambient locals.producer (target.child 0)
+    let child := evaluateNode component value env ambient locals.producer (target.child 0)
       location disabled
-    let presentations : Presentations (owns :: slots) := fun {holes} slot => match holes, slot with
-      | _, .here => ⟨owned.view⟩
-      | _, .there slot => presentations slot
-    let body := evaluatePresentation body value (Env.cons owned.output env) ambient
+    let presentations : Presentations (owns :: owned) := fun {holes} view => match holes, view with
+      | _, .here => ⟨child.view⟩
+      | _, .there view => presentations view
+    let body := evaluatePresentation body value (Env.cons child.output env) ambient
       locals.consumers (target.child 1) location disabled presentations
-    observed owned body body.view
+    observed child body body.view
   | .bind _ body =>
     bound locals.value <| evaluatePresentation body value (Env.cons locals.value env) ambient
       locals.tail (target.child 0) location disabled presentations

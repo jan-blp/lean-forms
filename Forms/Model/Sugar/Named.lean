@@ -8,7 +8,7 @@ meta import all Init.Prelude
 /-!
 # Form sugar
 
-Use `_` for an ignored binding. Named bindings warn when neither their reference nor slot is used.
+Use `_` for an ignored binding. Named bindings warn when neither their reference nor view is used.
 Write `(x : T)` for a binding to state the type that `ref[x]` reads.
 
 Enable the syntax with:
@@ -31,14 +31,14 @@ abbrev bindComponent
   .bind initial (body .here)
 
 abbrev bindPresentation
-  {slots : List Nat}
+  {owned : List Nat}
   {Γ : Context}
   {α β γ : Type}
   {views : Nat}
   (initial : β)
   (body : Var (⟨.writable, β⟩ :: Γ) β →
-    Presentation slots (⟨.writable, β⟩ :: Γ) α γ views)
-  : Presentation slots Γ α γ views :=
+    Presentation owned (⟨.writable, β⟩ :: Γ) α γ views)
+  : Presentation owned Γ α γ views :=
   .bind initial (body .here)
 
 abbrev observeComponent
@@ -50,14 +50,14 @@ abbrev observeComponent
   .observe producer (body .here)
 
 abbrev ownComponent
-  {slots : List Nat}
+  {owned : List Nat}
   {Γ : Context}
   {α β γ : Type}
   {holes views : Nat}
   (component : Component Γ α β holes)
-  (body : InputRef (⟨.readOnly, β⟩ :: Γ) β → Slot (holes :: slots) holes →
-    Presentation (holes :: slots) (⟨.readOnly, β⟩ :: Γ) α γ views)
-  : Presentation slots Γ α γ views :=
+  (body : InputRef (⟨.readOnly, β⟩ :: Γ) β → ViewRef (holes :: owned) holes →
+    Presentation (holes :: owned) (⟨.readOnly, β⟩ :: Γ) α γ views)
+  : Presentation owned Γ α γ views :=
   .own component (body .here .here)
 
 abbrev rowComputation
@@ -78,7 +78,7 @@ abbrev rowPresentation
   body Ref.row Ref.rowRemoved
 
 abbrev tabsPresentation
-  {slots : List Nat}
+  {owned : List Nat}
   {Γ : Context}
   {α β : Type}
   {n : Nat}
@@ -89,9 +89,9 @@ abbrev tabsPresentation
   (body :
     Var (⟨.readOnly, Unit⟩ :: ⟨.writable, Fin (n + 1)⟩ :: Γ) (Fin (n + 1)) →
     InputRef (⟨.readOnly, Unit⟩ :: ⟨.writable, Fin (n + 1)⟩ :: Γ) Unit →
-    Slot (0 :: slots) 0 →
-    Presentation (0 :: slots) (⟨.readOnly, Unit⟩ :: ⟨.writable, Fin (n + 1)⟩ :: Γ) α β)
-  : Presentation slots Γ α β :=
+    ViewRef (0 :: owned) 0 →
+    Presentation (0 :: owned) (⟨.readOnly, Unit⟩ :: ⟨.writable, Fin (n + 1)⟩ :: Γ) α β)
+  : Presentation owned Γ α β :=
   .tabs (label .here) (labels .here) (body (.there .here) .here .here)
 
 end Forms.Model.Sugar.Internal
@@ -120,19 +120,19 @@ scoped syntax "observe% " namedBinder " := " term " ; " term : term
 
 /--
 Own a component with `own% child := component; body` inside a presentation.
-Use `ref[child]` for its read-only output and `slot[child]` for its view.
+Use `ref[child]` for its read-only output and `view[child]` for its view.
 -/
 scoped syntax "own% " namedBinder " := " term " ; " term : term
 
-/-- Build a component from a presentation with `present% body`. Starts a fresh slot scope. -/
+/-- Build a component from a presentation with `present% body`. Starts a fresh view scope. -/
 scoped syntax "present% " term : term
 
-/-- Build a `Presentation` directly, keeping variables and starting a fresh slot scope. -/
+/-- Build a `Presentation` directly, keeping variables and starting a fresh view scope. -/
 scoped syntax "presentation% " term : term
 
 /--
 Add tabs with `tabs% active, bar := title, labels; body`. Supply at least one label.
-For `N` labels, `ref[active] : Var _ (Fin N)` starts at zero. Place the bar with `slot[bar]`.
+For `N` labels, `ref[active] : Var _ (Fin N)` starts at zero. Place the bar with `view[bar]`.
 Own panes separately and choose one in the layout using the active index.
 -/
 scoped syntax "tabs% " namedBinder ", " namedBinder " := " term ", " term " ; " term : term
@@ -151,10 +151,10 @@ Read it as an input, e.g. `inputs[ref[x]]`; update writable state with `.set ref
 scoped syntax "ref[" ident "]" : term
 
 /--
-Place an owned component's view with `.place slot[child]` inside `named%`.
+Place an owned component's view with `.place view[child]` inside `named%`.
 For a component with holes, use `.fill` instead.
 -/
-scoped syntax "slot[" ident "]" : term
+scoped syntax "view[" ident "]" : term
 
 namespace Internal
 
@@ -195,7 +195,7 @@ private structure Binding where
 
 private inductive Bindings where
   | component (refs : List Binding)
-  | presentation (refs : List Binding) (slots : List Binding)
+  | presentation (refs : List Binding) (owned : List Binding)
 
 private def Bindings.empty : Bindings :=
   .component []
@@ -204,9 +204,9 @@ private def Bindings.refs : Bindings → List Binding
   | .component refs => refs
   | .presentation refs _ => refs
 
-private def Bindings.slots : Bindings → List Binding
+private def Bindings.owned : Bindings → List Binding
   | .component _ => []
-  | .presentation (slots := slots) .. => slots
+  | .presentation (owned := owned) .. => owned
 
 private def Bindings.withRefs
   (bindings : Bindings)
@@ -214,7 +214,7 @@ private def Bindings.withRefs
   : Bindings :=
   match bindings with
   | .component _ => .component refs
-  | .presentation (slots := slots) .. => .presentation refs slots
+  | .presentation (owned := owned) .. => .presentation refs owned
 
 private def bindingName? (name : Syntax) : Option Ident :=
   if name.isIdent then some ⟨name⟩ else
@@ -228,7 +228,7 @@ private def ensureFresh
   : MacroM Unit := do
   let some name := bindingName? name | return
   let used (binding : Binding) := binding.name.any (·.getId == name.getId)
-  if bindings.refs.any used || bindings.slots.any used then
+  if bindings.refs.any used || bindings.owned.any used then
     Macro.throwErrorAt name s!"Name '{name.getId}' is already in scope; choose a different name"
 
 private def importRefs (names : Array Ident) : MacroM Bindings := do
@@ -287,7 +287,7 @@ private def requirePresentation
   | .component _ =>
     Macro.throwError
       s!"{form} requires a presentation; use present%, or presentation% for a Presentation"
-  | .presentation (slots := slots) .. => return slots
+  | .presentation (owned := owned) .. => return owned
 
 private def requireComponent
   (form : String)
@@ -378,16 +378,16 @@ private def expandOwn
   (body : ExpandTerm)
   : MacroM Syntax := do
   let name := binder.name
-  let slots ← requirePresentation "own%" bindings
+  let owned ← requirePresentation "own%" bindings
   ensureFresh name bindings
   let component ← binder.ascribeOutput (← component (.component bindings.refs))
   let outputName ← freshIdent name
-  let slotName ← freshIdent name
+  let viewName ← freshIdent name
   let refs := extend bindings.refs [binding name outputName]
-  let slots := extend slots [binding name slotName]
-  let body ← body (.presentation refs slots)
-  let result ← `(ownComponent $component (fun $outputName $slotName => $body))
-  warnUnused name (body.raw.hasIdent outputName.getId || body.raw.hasIdent slotName.getId) result
+  let owned := extend owned [binding name viewName]
+  let body ← body (.presentation refs owned)
+  let result ← `(ownComponent $component (fun $outputName $viewName => $body))
+  warnUnused name (body.raw.hasIdent outputName.getId || body.raw.hasIdent viewName.getId) result
 
 private def expandTabs
   (activeBinder : NamedBinder)
@@ -399,7 +399,7 @@ private def expandTabs
   : MacroM Syntax := do
   let active := activeBinder.name
   let strip := stripBinder.name
-  let slots ← requirePresentation "tabs%" bindings
+  let owned ← requirePresentation "tabs%" bindings
   ensureFresh active bindings
   let activeName ← freshIdent active
   let refs := extend bindings.refs [binding active activeName]
@@ -409,23 +409,23 @@ private def expandTabs
   let labels ← labels labelBindings
   let bodyActiveName ← freshIdent active
   let outputName ← freshIdent strip
-  let slotName ← freshIdent strip
+  let viewName ← freshIdent strip
   let refs := extend bindings.refs [
     binding strip outputName,
     binding active bodyActiveName]
-  let slots := extend slots [binding strip slotName]
-  let body ← body (.presentation refs slots)
+  let owned := extend owned [binding strip viewName]
+  let body ← body (.presentation refs owned)
   let labelActive ← activeBinder.refBinder activeName
   let bodyActive ← activeBinder.refBinder bodyActiveName
   let output ← stripBinder.refBinder outputName
   let result ← `(tabsPresentation
     (fun $labelActive => $label)
     (fun $labelActive => named_tab_labels% $labels)
-    (fun $bodyActive $output $slotName => $body))
+    (fun $bodyActive $output $viewName => $body))
   let activeUsed := label.raw.hasIdent activeName.getId || labels.raw.hasIdent activeName.getId ||
     body.raw.hasIdent bodyActiveName.getId
   let result ← warnUnused active activeUsed result
-  warnUnused strip (body.raw.hasIdent outputName.getId || body.raw.hasIdent slotName.getId) result
+  warnUnused strip (body.raw.hasIdent outputName.getId || body.raw.hasIdent viewName.getId) result
 
 private def expandRow
   (currentBinder : NamedBinder)
@@ -508,8 +508,8 @@ private def expand
       return ← expand body (← importRefs names.getElems)
     | `(ref[$name]) =>
       return (← lookup "variable" name bindings.refs).raw
-    | `(slot[$name]) =>
-      return (← lookup "slot" name bindings.slots).raw
+    | `(view[$name]) =>
+      return (← lookup "view" name bindings.owned).raw
     | `(state% $name:namedBinder := $initial; $body) =>
       expandState (← NamedBinder.ofSyntax name) bindings
         (fun bindings => return ⟨← expand initial bindings⟩)
@@ -579,7 +579,7 @@ macro_rules
   | `(named%[$names,*] $body) => do
     expand (← readRefInputs body) (← importRefs names.getElems)
   | `(ref[$_name]) => outsideNamed "ref[...]"
-  | `(slot[$_name]) => outsideNamed "slot[...]"
+  | `(view[$_name]) => outsideNamed "view[...]"
   | `(state% $_name:namedBinder := $_initial; $_body) => outsideNamed "state%"
   | `(observe% $_name:namedBinder := $_producer; $_body) => outsideNamed "observe%"
   | `(own% $_name:namedBinder := $_component; $_body) => outsideNamed "own%"

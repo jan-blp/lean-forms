@@ -133,8 +133,8 @@ def nestedPresentation : Component [] Nat Nat := named%
     own% _ := .computed "Outer" "outside";
     own% nested := present%
       own% inner := .computed "Inner" { inputs := inputs[ref[shared]], run := toString };
-      .layout { inputs := inputs[ref[shared]], run := id } (.const (.place slot[inner]));
-    .layout { inputs := inputs[ref[nested]], run := id } (.const (.place slot[nested]))
+      .layout { inputs := inputs[ref[shared]], run := id } (.const (.place view[inner]));
+    .layout { inputs := inputs[ref[nested]], run := id } (.const (.place view[nested]))
 
 example : (nestedPresentation.evaluate 0 Env.nil).output = 7 := by decide
 
@@ -174,7 +174,7 @@ def standalonePresentation
     own% child := .output {
       inputs := inputs[ref[shared], ref[count]]
       run := Nat.add };
-    .layout { inputs := inputs[ref[child]], run := id } (.const (.place slot[child]))
+    .layout { inputs := inputs[ref[child]], run := id } (.const (.place view[child]))
 
 example {Γ : Context} (shared : Var Γ Nat) :
     standalonePresentation shared =
@@ -194,7 +194,7 @@ def collectionRows
         run := fun shared (row : PointedList (Item Nat)) => shared + row.current.value };
       own% remove := .button "Remove" (.set ref[removed] (.const true));
       .layout { inputs := inputs[ref[value]], run := id }
-        (.const (.group none [.place slot[value], .place slot[remove]])))
+        (.const (.group none [.place view[value], .place view[remove]])))
     .list
 
 example {Γ : Context} (shared : Var Γ Nat) : collectionRows shared =
@@ -227,7 +227,7 @@ def anonymousOwners : Component [] Nat Nat := named%
     tabs% _, bar := "First", #v["One"];
     tabs% active, _ := "Second", #v["Two"];
     .layout { inputs := inputs[ref[value], ref[active]], run := fun n _ => n }
-      (.const (.group none [.place slot[value], .place slot[bar]]))
+      (.const (.group none [.place view[value], .place view[bar]]))
 
 example : anonymousOwners =
     (Component.present <|
@@ -267,7 +267,7 @@ def stateBetweenOwners : Component [] Nat Nat := named%
     state% _ := false;
     own% display := .computed "Count" { inputs := inputs[ref[producer]], run := toString };
     .layout { inputs := inputs[ref[producer]], run := id }
-      (.const (.group none [.place slot[producer], .place slot[display]]))
+      (.const (.group none [.place view[producer], .place view[display]]))
 
 example : stateBetweenOwners =
     (Component.present <|
@@ -282,7 +282,7 @@ def dynamicTabs : Component [] Nat Nat := named%
     tabs% active, strip := "Dynamic", {
       inputs := inputs[ref[active]]
       run := fun active => if active.val == 0 then #v["First", "Second"] else #v["One", "Two"] };
-    .layout { inputs := inputs[ref[active]], run := Fin.val } (.const (.place slot[strip]))
+    .layout { inputs := inputs[ref[active]], run := Fin.val } (.const (.place view[strip]))
 
 example : (dynamicTabs.evaluate 0 Env.nil).output = 0 := by decide
 
@@ -296,8 +296,8 @@ def parenthesizedTabs : Component [] Nat Nat := named%
     .layout { inputs := inputs[ref[active]], run := Fin.val } {
       inputs := inputs[ref[active]]
       run := fun active => .group none [
-        .place slot[strip],
-        #v[.place slot[edit], .place slot[preview]][active]] }
+        .place view[strip],
+        #v[.place view[edit], .place view[preview]][active]] }
 
 def definedTabs : Component [] Nat Nat := named%
   present%
@@ -307,8 +307,8 @@ def definedTabs : Component [] Nat Nat := named%
     .layout { inputs := inputs[ref[active]], run := Fin.val } {
       inputs := inputs[ref[active]]
       run := fun active => .group none [
-        .place slot[strip],
-        #v[.place slot[edit], .place slot[preview]][active]] }
+        .place view[strip],
+        #v[.place view[edit], .place view[preview]][active]] }
 
 example : parenthesizedTabs = definedTabs := rfl
 

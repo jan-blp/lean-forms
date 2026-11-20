@@ -30,11 +30,11 @@ def ComponentNode.initialState
   | .present body => body.initialState
 
 def PresentationNode.initialState
-  {slots : List Nat}
+  {owned : List Nat}
   {Γ : Context}
   {α state β : Type}
   {views : Nat}
-  (presentation : PresentationNode slots Γ α state β views)
+  (presentation : PresentationNode owned Γ α state β views)
   : state :=
   match presentation with
   | .layout .. => ()
