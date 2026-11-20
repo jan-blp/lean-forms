@@ -7,6 +7,7 @@ import Tests.Sugar.Diagnostics
 import Tests.Sugar.Computation
 import Tests.Sugar.Parsing
 import Tests.Sugar.TabInference
+import Tests.Sugar.TypedBindings
 
 @[expose] public section
 namespace Tests.Sugar

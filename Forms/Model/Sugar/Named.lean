@@ -9,6 +9,7 @@ meta import all Init.Prelude
 # Form sugar
 
 Use `_` for an ignored binding. Named bindings warn when neither their reference nor slot is used.
+Write `(x : T)` for a binding to state the type that `ref[x]` reads.
 
 Enable the syntax with:
 
@@ -106,17 +107,22 @@ scoped syntax "named% " term : term
 /-- Start a block using existing `Var` or `InputRef` parameters: `named%[x, y] body`. -/
 scoped syntax "named%[" ident,* "] " term : term
 
-/-- Bind writable UI state with `state% x := (initial : T); body`. Use `ref[x]` in the body. -/
-scoped syntax "state% " binderIdent " := " term " ; " term : term
+/-- A name introduced by `named%`; `(x : T)` states the type that `ref[x]` reads. -/
+declare_syntax_cat namedBinder
+syntax binderIdent : namedBinder
+syntax "(" binderIdent " : " term ")" : namedBinder
+
+/-- Bind writable UI state with `state% (x : T) := initial; body`. Use `ref[x]` in the body. -/
+scoped syntax "state% " namedBinder " := " term " ; " term : term
 
 /-- Observe a component's output with `observe% x := producer; body`. Use `ref[x]` in the body. -/
-scoped syntax "observe% " binderIdent " := " term " ; " term : term
+scoped syntax "observe% " namedBinder " := " term " ; " term : term
 
 /--
 Own a component with `own% child := component; body` inside a presentation.
 Use `ref[child]` for its read-only output and `slot[child]` for its view.
 -/
-scoped syntax "own% " binderIdent " := " term " ; " term : term
+scoped syntax "own% " namedBinder " := " term " ; " term : term
 
 /-- Build a component from a presentation with `present% body`. Starts a fresh slot scope. -/
 scoped syntax "present% " term : term
@@ -129,14 +135,14 @@ Add tabs with `tabs% active, bar := title, labels; body`. Supply at least one la
 For `N` labels, `ref[active] : Var _ (Fin N)` starts at zero. Place the bar with `slot[bar]`.
 Own panes separately and choose one in the layout using the active index.
 -/
-scoped syntax "tabs% " binderIdent ", " binderIdent " := " term ", " term " ; " term : term
+scoped syntax "tabs% " namedBinder ", " namedBinder " := " term ", " term " ; " term : term
 
 /--
 Use `row% current, removed => body` whenever a row label contains `ref[...]`.
 `current` reads the `PointedList`; `removed` reads or sets its removal flag.
 For a collection row presentation, use `presentation% row% current, removed => body`.
 -/
-scoped syntax "row% " binderIdent ", " binderIdent " => " term : term
+scoped syntax "row% " namedBinder ", " namedBinder " => " term : term
 
 /--
 Refer to a variable or owned output with `ref[x]` inside `named%`.
@@ -294,14 +300,53 @@ private def requireComponent
 
 private abbrev ExpandTerm := Bindings → MacroM (TSyntax `term)
 
+private structure NamedBinder where
+  name : TSyntax ``Lean.binderIdent
+  /-- The type that `ref[name]` reads, when annotated. -/
+  type? : Option (TSyntax `term)
+
+private def NamedBinder.ofSyntax (stx : TSyntax `namedBinder) : MacroM NamedBinder :=
+  match stx with
+  | `(namedBinder| $name:binderIdent) => return { name, type? := none }
+  | `(namedBinder| ($name:binderIdent : $type)) => return { name, type? := some type }
+  | _ => Macro.throwUnsupported
+
+/-- Ascribes the annotated type to an initial value. -/
+private def NamedBinder.ascribeValue
+  (binder : NamedBinder)
+  (value : TSyntax `term)
+  : MacroM (TSyntax `term) :=
+  match binder.type? with
+  | some type => `(($value : $type))
+  | none => return value
+
+/-- Ascribes the annotated type to a component's output. -/
+private def NamedBinder.ascribeOutput
+  (binder : NamedBinder)
+  (component : TSyntax `term)
+  : MacroM (TSyntax `term) :=
+  match binder.type? with
+  | some type => `(($component : Forms.Model.Component _ _ $type _))
+  | none => return component
+
+/-- The lambda binder for `reference`, checked against the annotation if present. -/
+private def NamedBinder.refBinder
+  (binder : NamedBinder)
+  (reference : Ident)
+  : MacroM (TSyntax `term) :=
+  match binder.type? with
+  | some type => `(($reference : Forms.Model.Ref _ _ $type))
+  | none => return reference
+
 private def expandState
-  (name : TSyntax ``Lean.binderIdent)
+  (binder : NamedBinder)
   (bindings : Bindings)
   (initial : ExpandTerm)
   (body : ExpandTerm)
   : MacroM Syntax := do
+  let name := binder.name
   ensureFresh name bindings
-  let initial ← initial bindings
+  let initial ← binder.ascribeValue (← initial bindings)
   let localName ← freshIdent name
   let refs := extend bindings.refs [binding name localName]
   let body ← body (bindings.withRefs refs)
@@ -312,28 +357,30 @@ private def expandState
   warnUnused name used result
 
 private def expandObserve
-  (name : TSyntax ``Lean.binderIdent)
+  (binder : NamedBinder)
   (bindings : Bindings)
   (producer : ExpandTerm)
   (body : ExpandTerm)
   : MacroM Syntax := do
+  let name := binder.name
   let refs ← requireComponent "observe%" bindings
   ensureFresh name bindings
-  let producer ← producer bindings
+  let producer ← binder.ascribeOutput (← producer bindings)
   let localName ← freshIdent name
   let body ← body (.component (extend refs [binding name localName]))
   let result ← `(observeComponent $producer (fun $localName => $body))
   warnUnused name (body.raw.hasIdent localName.getId) result
 
 private def expandOwn
-  (name : TSyntax ``Lean.binderIdent)
+  (binder : NamedBinder)
   (bindings : Bindings)
   (component : ExpandTerm)
   (body : ExpandTerm)
   : MacroM Syntax := do
+  let name := binder.name
   let slots ← requirePresentation "own%" bindings
   ensureFresh name bindings
-  let component ← component (.component bindings.refs)
+  let component ← binder.ascribeOutput (← component (.component bindings.refs))
   let outputName ← freshIdent name
   let slotName ← freshIdent name
   let refs := extend bindings.refs [binding name outputName]
@@ -343,13 +390,15 @@ private def expandOwn
   warnUnused name (body.raw.hasIdent outputName.getId || body.raw.hasIdent slotName.getId) result
 
 private def expandTabs
-  (active : TSyntax ``Lean.binderIdent)
-  (strip : TSyntax ``Lean.binderIdent)
+  (activeBinder : NamedBinder)
+  (stripBinder : NamedBinder)
   (bindings : Bindings)
   (label : ExpandTerm)
   (labels : ExpandTerm)
   (body : ExpandTerm)
   : MacroM Syntax := do
+  let active := activeBinder.name
+  let strip := stripBinder.name
   let slots ← requirePresentation "tabs%" bindings
   ensureFresh active bindings
   let activeName ← freshIdent active
@@ -366,21 +415,26 @@ private def expandTabs
     binding active bodyActiveName]
   let slots := extend slots [binding strip slotName]
   let body ← body (.presentation refs slots)
+  let labelActive ← activeBinder.refBinder activeName
+  let bodyActive ← activeBinder.refBinder bodyActiveName
+  let output ← stripBinder.refBinder outputName
   let result ← `(tabsPresentation
-    (fun $activeName => $label)
-    (fun $activeName => named_tab_labels% $labels)
-    (fun $bodyActiveName $outputName $slotName => $body))
+    (fun $labelActive => $label)
+    (fun $labelActive => named_tab_labels% $labels)
+    (fun $bodyActive $output $slotName => $body))
   let activeUsed := label.raw.hasIdent activeName.getId || labels.raw.hasIdent activeName.getId ||
     body.raw.hasIdent bodyActiveName.getId
   let result ← warnUnused active activeUsed result
   warnUnused strip (body.raw.hasIdent outputName.getId || body.raw.hasIdent slotName.getId) result
 
 private def expandRow
-  (current : TSyntax ``Lean.binderIdent)
-  (removed : TSyntax ``Lean.binderIdent)
+  (currentBinder : NamedBinder)
+  (removedBinder : NamedBinder)
   (bindings : Bindings)
   (body : ExpandTerm)
   : MacroM Syntax := do
+  let current := currentBinder.name
+  let removed := removedBinder.name
   ensureFresh current bindings
   let currentName ← freshIdent current
   let removedName ← freshIdent removed
@@ -393,9 +447,11 @@ private def expandRow
     | .component _ => Bindings.component refs
     | .presentation .. => .presentation refs []
   let body ← body rowBindings
+  let currentRef ← currentBinder.refBinder currentName
+  let removedRef ← removedBinder.refBinder removedName
   let result ← match bindings with
-    | .component _ => `(rowComputation (fun $currentName $removedName => $body))
-    | .presentation .. => `(rowPresentation (fun $currentName $removedName => $body))
+    | .component _ => `(rowComputation (fun $currentRef $removedRef => $body))
+    | .presentation .. => `(rowPresentation (fun $currentRef $removedRef => $body))
   let result ← warnUnused current (body.raw.hasIdent currentName.getId) result
   warnUnused removed (body.raw.hasIdent removedName.getId) result
 
@@ -454,16 +510,16 @@ private def expand
       return (← lookup "variable" name bindings.refs).raw
     | `(slot[$name]) =>
       return (← lookup "slot" name bindings.slots).raw
-    | `(state% $name:binderIdent := $initial; $body) =>
-      expandState name bindings
+    | `(state% $name:namedBinder := $initial; $body) =>
+      expandState (← NamedBinder.ofSyntax name) bindings
         (fun bindings => return ⟨← expand initial bindings⟩)
         (fun bindings => return ⟨← expand body bindings⟩)
-    | `(observe% $name:binderIdent := $producer; $body) =>
-      expandObserve name bindings
+    | `(observe% $name:namedBinder := $producer; $body) =>
+      expandObserve (← NamedBinder.ofSyntax name) bindings
         (fun bindings => return ⟨← expand producer bindings⟩)
         (fun bindings => return ⟨← expand body bindings⟩)
-    | `(own% $name:binderIdent := $component; $body) =>
-      expandOwn name bindings
+    | `(own% $name:namedBinder := $component; $body) =>
+      expandOwn (← NamedBinder.ofSyntax name) bindings
         (fun bindings => return ⟨← expand component bindings⟩)
         (fun bindings => return ⟨← expand body bindings⟩)
     | `(present% $body) =>
@@ -471,13 +527,13 @@ private def expand
       return ← `(Component.present $body)
     | `(presentation% $body) =>
       expand body (.presentation bindings.refs [])
-    | `(tabs% $active:binderIdent, $strip:binderIdent := $label, $labels; $body) =>
-      expandTabs active strip bindings
+    | `(tabs% $active:namedBinder, $strip:namedBinder := $label, $labels; $body) =>
+      expandTabs (← NamedBinder.ofSyntax active) (← NamedBinder.ofSyntax strip) bindings
         (fun bindings => return ⟨← expand label bindings⟩)
         (fun bindings => return ⟨← expand labels bindings⟩)
         (fun bindings => return ⟨← expand body bindings⟩)
-    | `(row% $current:binderIdent, $removed:binderIdent => $body) =>
-      expandRow current removed bindings
+    | `(row% $current:namedBinder, $removed:namedBinder => $body) =>
+      expandRow (← NamedBinder.ofSyntax current) (← NamedBinder.ofSyntax removed) bindings
         (fun bindings => return ⟨← expand body bindings⟩)
     | _ => return .node info kind (← args.mapM (expand · bindings))
   | .missing => return stx
@@ -524,13 +580,13 @@ macro_rules
     expand (← readRefInputs body) (← importRefs names.getElems)
   | `(ref[$_name]) => outsideNamed "ref[...]"
   | `(slot[$_name]) => outsideNamed "slot[...]"
-  | `(state% $_name:binderIdent := $_initial; $_body) => outsideNamed "state%"
-  | `(observe% $_name:binderIdent := $_producer; $_body) => outsideNamed "observe%"
-  | `(own% $_name:binderIdent := $_component; $_body) => outsideNamed "own%"
+  | `(state% $_name:namedBinder := $_initial; $_body) => outsideNamed "state%"
+  | `(observe% $_name:namedBinder := $_producer; $_body) => outsideNamed "observe%"
+  | `(own% $_name:namedBinder := $_component; $_body) => outsideNamed "own%"
   | `(present% $_body) => outsideNamed "present%"
   | `(presentation% $_body) => outsideNamed "presentation%"
-  | `(tabs% $_active:binderIdent, $_strip:binderIdent := $_label, $_labels; $_body) =>
+  | `(tabs% $_active:namedBinder, $_strip:namedBinder := $_label, $_labels; $_body) =>
     outsideNamed "tabs%"
-  | `(row% $_current:binderIdent, $_removed:binderIdent => $_body) => outsideNamed "row%"
+  | `(row% $_current:namedBinder, $_removed:namedBinder => $_body) => outsideNamed "row%"
 
 end Forms.Model.Sugar
