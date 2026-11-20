@@ -87,7 +87,7 @@ theorem Inputs.read_rename
   : (inputs.rename rename).read value renamed = inputs.read value state := by
   induction inputs with
   | nil => rfl
-  | cons _ _ ih => exact congrArg (Prod.mk _) ih
+  | path _ _ ih => exact congrArg (Prod.mk _) ih
   | ui key _ ih => exact Prod.ext (same key) ih
 
 theorem Computation.eval_rename

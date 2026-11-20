@@ -13,7 +13,7 @@ namespace Tests.Sugar
     own% edit := .field .self "Text" .text;
     own% preview := .computed "Preview" { inputs := inputs[path[]], run := id };
     .arrange {
-      inputs := inputs[.ui ref[active]]
+      inputs := inputs[ref[active]]
       run := fun active => .group none [
         .place slot[bar],
         #v[.place slot[edit], .place slot[preview]][active]] }

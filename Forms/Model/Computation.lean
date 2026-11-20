@@ -12,7 +12,7 @@ universe u v
 
 inductive Inputs (Γ : Context) (α : Type) : List Type → Type 1 where
   | nil : Inputs Γ α []
-  | cons
+  | path
       {β : Type}
       {rest : List Type}
       (path : Path α β)
@@ -31,7 +31,7 @@ macro "inputs[" paths:term,* "]" : term => do
   for path in paths.getElems.reverse do
     match path with
     | `(.ui $key) => result ← `(Inputs.ui $key $result)
-    | _ => result ← `(Inputs.cons $path $result)
+    | _ => result ← `(Inputs.path $path $result)
   return result
 
 def Inputs.weaken
@@ -43,7 +43,7 @@ def Inputs.weaken
   : Inputs Γ α types :=
   match inputs with
   | .nil => .nil
-  | .cons input rest => .cons (path.trans input) (rest.weaken path)
+  | .path input rest => .path (path.trans input) (rest.weaken path)
   | .ui key rest => .ui key (rest.weaken path)
 
 def Inputs.rename
@@ -55,7 +55,7 @@ def Inputs.rename
   : Inputs Δ α types :=
   match inputs with
   | .nil => .nil
-  | .cons path rest => .cons path (rest.rename rename)
+  | .path input rest => .path input (rest.rename rename)
   | .ui key rest => .ui (rename key) (rest.rename rename)
 
 def Inputs.append
@@ -67,7 +67,7 @@ def Inputs.append
   : Inputs Γ α (types ++ others) :=
   match inputs with
   | .nil => rest
-  | .cons path inputs => .cons path (inputs.append rest)
+  | .path input inputs => .path input (inputs.append rest)
   | .ui key inputs => .ui key (inputs.append rest)
 
 def Inputs.Values : List Type → Type
@@ -89,7 +89,7 @@ def Inputs.read
   : Values types :=
   match inputs with
   | .nil => ()
-  | .cons path rest => (path.get sourceValue, rest.read sourceValue state)
+  | .path input rest => (input.get sourceValue, rest.read sourceValue state)
   | .ui key rest => (key.get state, rest.read sourceValue state)
 
 def Inputs.apply

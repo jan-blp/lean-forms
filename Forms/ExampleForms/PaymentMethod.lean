@@ -53,7 +53,7 @@ def PaymentMethod.field {Γ : Context} : Component Γ PaymentMethod.Raw :=
 def PaymentMethod.form : Component [] PaymentMethod.Raw := named%
   observe% currentIssues := .issues;
   let issues : Computation _ PaymentMethod.Raw (List Issue) := {
-    inputs := inputs[.ui ref[currentIssues]], run := id }
+    inputs := inputs[ref[currentIssues]], run := id }
   .group "Payment" [
     .statusMarkerAt path[PaymentMethod.Field.value],
     PaymentMethod.field,

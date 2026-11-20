@@ -15,7 +15,7 @@ open Forms.Model Forms.Model.Sugar Forms.Runtime
 example :
     (named%
       state% count := (0 : Nat);
-      .output (compute% (count : Nat) ← .ui ref[count] => count + 1)
+      .output (compute% (count : Nat) ← ref[count] => count + 1)
       : Component [] Nat Nat) =
     .bind (0 : Nat) (.output {
       inputs := inputs[.ui .here]
@@ -26,12 +26,12 @@ def counter {Γ : Context} : Component Γ Nat Nat := named%
   state% expanded := false;
   .withOutput
     (.group "Counter" [
-      .computed "Count" { inputs := inputs[.ui ref[count]], run := toString },
+      .computed "Count" { inputs := inputs[ref[count]], run := toString },
       .button "Increment" (.set ref[count] {
-        inputs := inputs[.ui ref[count]], run := fun n => n + 1 }),
+        inputs := inputs[ref[count]], run := fun n => n + 1 }),
       .button "Toggle" (.set ref[expanded] {
-        inputs := inputs[.ui ref[expanded]], run := Bool.not })])
-    { inputs := inputs[.ui ref[count]], run := id }
+        inputs := inputs[ref[expanded]], run := Bool.not })])
+    { inputs := inputs[ref[count]], run := id }
 
 def explicitCounter {Γ : Context} : Component Γ Nat Nat :=
   .bind (0 : Nat) <|
@@ -101,7 +101,7 @@ example : Forms.ExampleForms.Presentation.sharedTabs = explicitSharedTabs := rfl
 def observer : Component [] Nat Nat := named%
   observe% first := .output (.const (1 : Nat));
   observe% second := .output (.const (2 : Nat));
-  .output { inputs := inputs[.ui ref[first], .ui ref[second]], run := fun a b => 10 * a + b }
+  .output { inputs := inputs[ref[first], ref[second]], run := fun a b => 10 * a + b }
 
 example : observer =
     .observe (.output (.const (1 : Nat))) (.observe (.output (.const (2 : Nat))) (.output {
@@ -116,7 +116,7 @@ def importedPair
   : Component Γ Nat Nat := named%[first, second]
   state% own := (30 : Nat);
   .output {
-    inputs := inputs[.ui ref[first], .ui ref[second], .ui ref[own]]
+    inputs := inputs[ref[first], ref[second], ref[own]]
     run := fun a b c => 100 * a + 10 * b + c }
 
 def reused : Component [] Nat Nat := named%
@@ -131,9 +131,9 @@ def nestedPresentation : Component [] Nat Nat := named%
     state% shared := (7 : Nat);
     own% _ := .computed "Outer" "outside";
     own% nested := present%
-      own% inner := .computed "Inner" { inputs := inputs[.ui ref[shared]], run := toString };
-      .layout { inputs := inputs[.ui ref[shared]], run := id } (.const (.place slot[inner]));
-    .layout { inputs := inputs[.ui ref[nested]], run := id } (.const (.place slot[nested]))
+      own% inner := .computed "Inner" { inputs := inputs[ref[shared]], run := toString };
+      .layout { inputs := inputs[ref[shared]], run := id } (.const (.place slot[inner]));
+    .layout { inputs := inputs[ref[nested]], run := id } (.const (.place slot[nested]))
 
 example : (nestedPresentation.evaluate 0 Env.nil).output = 7 := by decide
 
@@ -141,13 +141,13 @@ def rows : Component [] (List (Item Nat)) (List Nat) := named%
   state% shared := (7 : Nat);
   .list .self "Rows"
     (row% current, _ => {
-      inputs := inputs[.ui ref[shared], .ui ref[current]]
+      inputs := inputs[ref[shared], ref[current]]
       run := fun shared row => s!"Row {row.index.val + 1} ({shared})" })
     "Add row" (Item.mkWithoutUuid 0)
     (.zoom path[Item.Field.value] <|
       state% own := (3 : Nat);
       .output {
-        inputs := inputs[.ui ref[shared], .ui ref[own], path[]]
+        inputs := inputs[ref[shared], ref[own], path[]]
         run := fun shared own value => shared + own + value })
 
 def explicitRows : Component [] (List (Item Nat)) (List Nat) :=
@@ -171,9 +171,9 @@ def standalonePresentation
   presentation%
     state% count := (2 : Nat);
     own% child := .output {
-      inputs := inputs[.ui ref[shared], .ui ref[count]]
+      inputs := inputs[ref[shared], ref[count]]
       run := Nat.add };
-    .layout { inputs := inputs[.ui ref[child]], run := id } (.const (.place slot[child]))
+    .layout { inputs := inputs[ref[child]], run := id } (.const (.place slot[child]))
 
 example {Γ : Context} (shared : Var Γ Nat) :
     standalonePresentation shared =
@@ -189,10 +189,10 @@ def collectionRows
   .collection .self "Rows"
     (presentation% row% current, removed =>
       own% value := .output {
-        inputs := inputs[.ui ref[shared], .ui ref[current]]
+        inputs := inputs[ref[shared], ref[current]]
         run := fun shared (row : PointedList (Item Nat)) => shared + row.current.value };
       own% remove := .button "Remove" (.set ref[removed] (.const true));
-      .layout { inputs := inputs[.ui ref[value]], run := id }
+      .layout { inputs := inputs[ref[value]], run := id }
         (.const (.group none [.place slot[value], .place slot[remove]])))
     .list
 
@@ -212,7 +212,7 @@ def anonymousBindings : Component [] Nat Nat := named%
   state% count := (7 : Nat);
   state% _ := false;
   observe% _ := .output (.const "ignored");
-  .output { inputs := inputs[.ui ref[count]], run := id }
+  .output { inputs := inputs[ref[count]], run := id }
 
 example : anonymousBindings =
     .bind (7 : Nat) (.bind false (.observe (.output (.const "ignored"))
@@ -225,7 +225,7 @@ def anonymousOwners : Component [] Nat Nat := named%
     own% _ := .output (.const false);
     tabs% _, bar := "First", #v["One"];
     tabs% active, _ := "Second", #v["Two"];
-    .layout { inputs := inputs[.ui ref[value], .ui ref[active]], run := fun n _ => n }
+    .layout { inputs := inputs[ref[value], ref[active]], run := fun n _ => n }
       (.const (.group none [.place slot[value], .place slot[bar]]))
 
 example : anonymousOwners =
@@ -244,7 +244,7 @@ example : anonymousOwners =
 #guard_msgs in
 def anonymousRow {Γ : Context} (shared : Var Γ Nat) :
     Computation (Context.row Nat Γ) Nat Nat := named%[shared]
-  row% _, _ => { inputs := inputs[.ui ref[shared]], run := id }
+  row% _, _ => { inputs := inputs[ref[shared]], run := id }
 
 example {Γ : Context} (shared : Var Γ Nat) : anonymousRow shared =
     { inputs := inputs[.ui (.there (.there shared))], run := id } := rfl
@@ -252,10 +252,10 @@ example {Γ : Context} (shared : Var Γ Nat) : anonymousRow shared =
 def independentNames : Component [] Nat Nat := named%
   let first : Component [] Nat Nat := named%
     state% count := (10 : Nat);
-    .output { inputs := inputs[.ui ref[count]], run := id }
+    .output { inputs := inputs[ref[count]], run := id }
   let second : Component [] Nat Nat := named%
     state% count := (20 : Nat);
-    .output { inputs := inputs[.ui ref[count]], run := id }
+    .output { inputs := inputs[ref[count]], run := id }
   .sequence (Component.void first) second
 
 example : (independentNames.evaluate 0 Env.nil).output = 20 := by decide
@@ -264,8 +264,8 @@ def stateBetweenOwners : Component [] Nat Nat := named%
   present%
     own% producer := .output (.const (7 : Nat));
     state% _ := false;
-    own% display := .computed "Count" { inputs := inputs[.ui ref[producer]], run := toString };
-    .layout { inputs := inputs[.ui ref[producer]], run := id }
+    own% display := .computed "Count" { inputs := inputs[ref[producer]], run := toString };
+    .layout { inputs := inputs[ref[producer]], run := id }
       (.const (.group none [.place slot[producer], .place slot[display]]))
 
 example : stateBetweenOwners =
@@ -279,9 +279,9 @@ example : stateBetweenOwners =
 def dynamicTabs : Component [] Nat Nat := named%
   present%
     tabs% active, strip := "Dynamic", {
-      inputs := inputs[.ui ref[active]]
+      inputs := inputs[ref[active]]
       run := fun active => if active.val == 0 then #v["First", "Second"] else #v["One", "Two"] };
-    .layout { inputs := inputs[.ui ref[active]], run := Fin.val } (.const (.place slot[strip]))
+    .layout { inputs := inputs[ref[active]], run := Fin.val } (.const (.place slot[strip]))
 
 example : (dynamicTabs.evaluate 0 Env.nil).output = 0 := by decide
 
@@ -292,8 +292,8 @@ def parenthesizedTabs : Component [] Nat Nat := named%
     tabs% active, strip := "View", (#v["Edit", "Preview"]);
     own% edit := .computed "Edit" "editing";
     own% preview := .computed "Preview" "previewing";
-    .layout { inputs := inputs[.ui ref[active]], run := Fin.val } {
-      inputs := inputs[.ui ref[active]]
+    .layout { inputs := inputs[ref[active]], run := Fin.val } {
+      inputs := inputs[ref[active]]
       run := fun active => .group none [
         .place slot[strip],
         #v[.place slot[edit], .place slot[preview]][active]] }
@@ -303,8 +303,8 @@ def definedTabs : Component [] Nat Nat := named%
     tabs% active, strip := "View", tabNames;
     own% edit := .computed "Edit" "editing";
     own% preview := .computed "Preview" "previewing";
-    .layout { inputs := inputs[.ui ref[active]], run := Fin.val } {
-      inputs := inputs[.ui ref[active]]
+    .layout { inputs := inputs[ref[active]], run := Fin.val } {
+      inputs := inputs[ref[active]]
       run := fun active => .group none [
         .place slot[strip],
         #v[.place slot[edit], .place slot[preview]][active]] }
@@ -318,19 +318,32 @@ example : displayTabs = Display.Editor.tabs 0 ["Edit", "Preview"] := rfl
 def hygienic : Component [] Nat Nat := named%
   state% count := (10 : Nat);
   let count := 99
-  .output { inputs := inputs[.ui ref[count]], run := fun value => value + count }
+  .output { inputs := inputs[ref[count]], run := fun value => value + count }
 
 example : (hygienic.evaluate 0 Env.nil).output = 109 := by decide
 
 public meta def quotedReference : Lean.MacroM (Lean.TSyntax `term) := named%
   `(ref[missing])
 
+run_cmd Lean.Elab.Command.liftTermElabM do
+  Lean.Elab.liftMacroM do
+    let inputs ← named% `(inputs[ref[missing]])
+    match inputs with
+    | `(inputs[ref[$_name]]) => pure ()
+    | _ => Lean.Macro.throwError "Quoted inputs changed"
+    let computation ← named%
+      `(compute% (first : Nat) ← ref[missing], second ← ref[missing] => first + second)
+    match computation with
+    | `(compute% ($_first:binderIdent : Nat) ← ref[$_firstRef], $_second:binderIdent ← ref[$_secondRef] => $_body) =>
+      pure ()
+    | _ => Lean.Macro.throwError "Quoted computation changed"
+
 namespace ImportHygiene
 
 def reference : Var [⟨.writable, Nat⟩, ⟨.writable, Nat⟩] Nat := .there .here
 
 macro "named_import_hygiene%" : term =>
-  `(named%[reference] .output { inputs := inputs[.ui ref[reference]], run := id })
+  `(named%[reference] .output { inputs := inputs[ref[reference]], run := id })
 
 end ImportHygiene
 
