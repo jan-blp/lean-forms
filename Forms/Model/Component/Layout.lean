@@ -5,9 +5,11 @@ public import Forms.Model.Member
 @[expose] public section
 namespace Forms.Model
 
-/-- A component owned by an enclosing `own`, counted from the innermost.
-`owned` gives the hole count of each view in scope, innermost first; `holes` is this one's. -/
-abbrev ViewRef (owned : List Nat) (holes : Nat) := Member holes owned
+/-- The hole count of each owned view, innermost first. -/
+abbrev ViewContext := List Nat
+
+/-- A component owned by an enclosing `own`, counted from the innermost; `holes` is its hole count. -/
+abbrev ViewRef (Δ : ViewContext) (holes : Nat) := Member holes Δ
 
 namespace ViewRef
 export Member (here there)
@@ -15,45 +17,45 @@ end ViewRef
 
 mutual
 /-- Arranges the presentations in scope without owning or evaluating them. -/
-inductive Layout (owned : List Nat) where
-  | fill {holes : Nat} (view : ViewRef owned holes) (contents : Fills owned holes)
-  | group (label : Option String) (children : List (Layout owned))
+inductive Layout (Δ : ViewContext) where
+  | fill {holes : Nat} (view : ViewRef Δ holes) (contents : Fills Δ holes)
+  | group (label : Option String) (children : List (Layout Δ))
 
-inductive Fills (owned : List Nat) : (holes : Nat) → Type where
-  | nil : Fills owned 0
+inductive Fills (Δ : ViewContext) : (holes : Nat) → Type where
+  | nil : Fills Δ 0
   | cons {holes : Nat}
-      (content : List (Layout owned))
-      (rest : Fills owned holes)
-      : Fills owned (holes + 1)
+      (content : List (Layout Δ))
+      (rest : Fills Δ holes)
+      : Fills Δ (holes + 1)
 end
 
 /-- Places a view without holes. -/
 abbrev Layout.place
-  {owned : List Nat}
-  (view : ViewRef owned 0)
-  : Layout owned :=
+  {Δ : ViewContext}
+  (view : ViewRef Δ 0)
+  : Layout Δ :=
   .fill view .nil
 
 mutual
 def Layout.rename
-  {owned others : List Nat}
-  (rename : {holes : Nat} → ViewRef owned holes → ViewRef others holes)
-  : Layout owned → Layout others
+  {Δ Δ' : ViewContext}
+  (rename : {holes : Nat} → ViewRef Δ holes → ViewRef Δ' holes)
+  : Layout Δ → Layout Δ'
   | .fill view contents => .fill (rename view) (Fills.rename rename contents)
   | .group label children => .group label (Layout.renameAll rename children)
 
 def Layout.renameAll
-  {owned others : List Nat}
-  (rename : {holes : Nat} → ViewRef owned holes → ViewRef others holes)
-  : List (Layout owned) → List (Layout others)
+  {Δ Δ' : ViewContext}
+  (rename : {holes : Nat} → ViewRef Δ holes → ViewRef Δ' holes)
+  : List (Layout Δ) → List (Layout Δ')
   | [] => []
   | child :: rest => Layout.rename rename child :: Layout.renameAll rename rest
 
 def Fills.rename
-  {owned others : List Nat}
+  {Δ Δ' : ViewContext}
   {holes : Nat}
-  (rename : {holes : Nat} → ViewRef owned holes → ViewRef others holes)
-  : Fills owned holes → Fills others holes
+  (rename : {holes : Nat} → ViewRef Δ holes → ViewRef Δ' holes)
+  : Fills Δ holes → Fills Δ' holes
   | .nil => .nil
   | .cons content rest => .cons (Layout.renameAll rename content) (Fills.rename rename rest)
 end
