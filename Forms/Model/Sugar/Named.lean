@@ -492,8 +492,8 @@ decreasing_by
 private def outsideNamed (form : String) : MacroM Syntax :=
   Macro.throwError s!"{form} is only valid inside named%"
 
-/-- Reads `ref[x]` in an input position as `.ui ref[x]`. -/
-private partial def readRefInputs (stx : Syntax) : MacroM Syntax := do
+/-- Reads a direct `ref[x]` input of this node as `.ui ref[x]`. -/
+private def wrapRefInputs (stx : Syntax) : MacroM Syntax := do
   match stx with
   | `(computationInput| $name:binderIdent ← ref[$x]) =>
     `(computationInput| $name:binderIdent ← .ui ref[$x])
@@ -503,14 +503,18 @@ private partial def readRefInputs (stx : Syntax) : MacroM Syntax := do
     let inputs ← inputs.getElems.mapM fun input => do
       match input with
       | `(ref[$x]) => `(.ui ref[$x])
-      | _ => return ⟨← readRefInputs input⟩
+      | _ => return ⟨input⟩
     `(inputs[$inputs,*])
-  | _ =>
-    match stx with
-    | .node info kind args => return .node info kind (← args.mapM readRefInputs)
-    | .missing => return stx
-    | .atom .. => return stx
-    | .ident .. => return stx
+  | _ => return stx
+
+/-- Reads every `ref[x]` in an input position as `.ui ref[x]`. -/
+private def readRefInputs (stx : Syntax) : MacroM Syntax := do
+  match stx with
+  | .node info kind args =>
+    wrapRefInputs (.node info kind (← args.mapM readRefInputs))
+  | .missing => return stx
+  | .atom .. => return stx
+  | .ident .. => return stx
 
 macro_rules
   | `(named% $body) => do
