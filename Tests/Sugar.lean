@@ -325,6 +325,19 @@ example : (hygienic.evaluate 0 Env.nil).output = 109 := by decide
 public meta def quotedReference : Lean.MacroM (Lean.TSyntax `term) := named%
   `(ref[missing])
 
+run_cmd Lean.Elab.Command.liftTermElabM do
+  Lean.Elab.liftMacroM do
+    let inputs ← named% `(inputs[ref[missing]])
+    match inputs with
+    | `(inputs[ref[$_name]]) => pure ()
+    | _ => Lean.Macro.throwError "Quoted inputs changed"
+    let computation ← named%
+      `(compute% (first : Nat) ← ref[missing], second ← ref[missing] => first + second)
+    match computation with
+    | `(compute% ($_first:binderIdent : Nat) ← ref[$_firstRef], $_second:binderIdent ← ref[$_secondRef] => $_body) =>
+      pure ()
+    | _ => Lean.Macro.throwError "Quoted computation changed"
+
 namespace ImportHygiene
 
 def reference : Var [⟨.writable, Nat⟩, ⟨.writable, Nat⟩] Nat := .there .here

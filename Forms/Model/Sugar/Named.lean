@@ -509,6 +509,7 @@ private def wrapRefInputs (stx : Syntax) : MacroM Syntax := do
 
 /-- Reads every `ref[x]` in an input position as `.ui ref[x]`. -/
 private def readRefInputs (stx : Syntax) : MacroM Syntax := do
+  if stx.isQuot then return stx
   match stx with
   | .node info kind args =>
     wrapRefInputs (.node info kind (← args.mapM readRefInputs))
