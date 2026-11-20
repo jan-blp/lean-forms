@@ -2,6 +2,7 @@ module
 
 public import Forms.Runtime.Identity
 public import Forms.Model.Diagnostic
+public import Forms.Model.Evidence
 public import Forms.Model.Format
 
 @[expose] public section
@@ -21,7 +22,7 @@ def Target.child (target : Target) (index : Nat) : Target :=
 structure ChoiceOption where
   value : String
   label : String
-  deriving BEq
+  deriving DecidableEq
 
 inductive Editor where
   | text (kind : Model.TextKind) (value : String)
@@ -34,7 +35,14 @@ inductive Editor where
   | action
   /-- Tab labels with `active` selected; its argument is the chosen tab's index. -/
   | tabs (active : Nat) (labels : List String)
-  deriving BEq
+  deriving DecidableEq
+
+inductive Evidence where
+  | unsupported
+  | missing
+  /-- `stale` when the cells' text no longer reads as the current value. -/
+  | linked (evidence : Model.Evidence) (stale : Bool)
+  deriving DecidableEq
 
 structure Control where
   key : ControlKey
@@ -43,6 +51,7 @@ structure Control where
   disabled : Bool
   location : ErasedLocation
   input : Editor
+  evidence : Evidence
   messages : List Model.Message
   deriving BEq
 

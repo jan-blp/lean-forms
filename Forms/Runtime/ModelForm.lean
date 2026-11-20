@@ -311,7 +311,10 @@ def event {Γ : Model.Context}
       let ui := if state.ui.pending then state.ui else state.ui.announce message true
       let diagnostics ← match rejection with
         | .clientBug error => throw (toString error)
-        | .input _ => pure <| match state.evaluation.view.controls.find? (·.key == key) with
+        | .input _ =>
+          let control := if argument.any Input.typed
+            then state.evaluation.view.controls.find? (·.key == key) else none
+          pure <| match control with
           | none => state.draftDiagnostics
           | some control =>
             { control := key

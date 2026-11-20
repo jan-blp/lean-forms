@@ -21,6 +21,9 @@ def stored : List (String × ServerForm) := [
     init := Receipts.ServerState.init
     store := Receipts.serverCheck })]
 
+def documents : List (String × Viewer.Document) := [
+  ("evidence", InvoiceHeader.document)]
+
 def serverForms : List (String × ServerForm) :=
   forms.map fun (name, form) => (name, (stored.lookup name).getD (.plain form))
 

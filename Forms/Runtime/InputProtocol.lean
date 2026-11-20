@@ -14,7 +14,10 @@ def fromJson : Json → Except String Input
   | .arr values => .texts <$> values.toList.mapM fun
     | .str value => .ok value
     | _ => .error "Expected a list of texts."
-  | _ => .error "Expected a text, boolean or list of texts."
+  | json@(.obj _) => do
+    let evidence ← json.getObjVal? "pick"
+    .pick <$> fromJson? evidence
+  | _ => .error "Expected a text, boolean, list of texts or pick."
 
 def argumentFromJson : Option Json → Except String (Option Input)
   | none => .ok none

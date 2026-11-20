@@ -3,7 +3,7 @@ import Forms.Runtime.Web
 import FormsReact.Component
 import Forms.Protocol.TypeScript
 
-open Lean Forms.Protocol Forms.Runtime.Wire Forms.Runtime.Web
+open Lean Forms.Protocol Forms.Runtime Forms.Runtime.Wire Forms.Runtime.Web
 
 def routesModule : String :=
   let entries := (FinEnum.toList GetRoute).map fun route => s!"  {(toJson route).compress}: {(toJson route.path).compress},\n"
@@ -12,9 +12,10 @@ def routesModule : String :=
 /-- Each output directory is replaced wholesale by its files. -/
 def outputs : List (System.FilePath × List (System.FilePath × String)) := [
   ("packages/react/src/protocol",
-    (typescript% [Request, Success, Failure, FormsReact.Component]).modules.map
+    (typescript% [Request, Success, Failure, FormsReact.Component, FormsReact.Pick]).modules.map
       fun module => (module.file, module.pretty)),
-  ("web/generated", [("routes.ts", routesModule)])]
+  ("web/generated", ("routes.ts", routesModule) ::
+    (typescript% [Viewer.Document]).modules.map fun module => (module.file, module.pretty))]
 
 def banner : String := "// Generated from Lean. Run npm --prefix web run generate.\n"
 

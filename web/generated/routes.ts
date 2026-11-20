@@ -6,4 +6,5 @@ export const routes = {
   "wasmBinary": "/wasm/forms.wasm",
   "stylesheet": "/style.css",
   "formStart": "/api/form-start",
+  "document": "/api/document",
 } as const;

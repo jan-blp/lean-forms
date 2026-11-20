@@ -1,7 +1,8 @@
 // Generated from Lean. Run npm --prefix web run generate.
 export type Component = { "textField": TextField } | { "checkbox": Checkbox } | { "choice": Choice } | { "choices": Choices } | { "output": Output } | { "button": Button } | { "tabBar": TabBar } | { "group": Group } | { "table": Table } | { "page": Page } | { "statusMarker": Checks };
-export type TextField = { "name": string; "label": string; "kind": TextKind; "value": string; "disabled": boolean; "errors": string[]; "onCommit": Action };
+export type TextField = { "name": string; "label": string; "kind": TextKind; "value": string; "disabled": boolean; "errors": string[]; "evidence": Evidence; "onCommit": Action };
 export type TextKind = "plain" | "natural" | "integer" | "decimal" | "date" | "uuid";
+export type Evidence = "unsupported" | "missing" | { "linked": { "page": number; "cellIds": number[]; "stale": boolean } };
 export type Action = { "apply": { "name": string } } | { "press": { "name": string } } | "submit" | "reset";
 export type Checkbox = { "name": string; "label": string; "checked": boolean; "disabled": boolean; "errors": string[]; "onChange": Action };
 export type Choice = { "name": string; "label": string; "value": string; "options": ChoiceOption[]; "disabled": boolean; "errors": string[]; "onChange": Action };
@@ -18,3 +19,4 @@ export type Page = { "title": string; "busy": boolean; "body": Component[]; "too
 export type Notice = { "info": { "message": string } } | { "error": { "message": string } };
 export type Checks = { "tone": Tone; "unresolved": string[]; "outdated": string[]; "resolved": string[]; "approved": string[]; "info": string[]; "outdatedInfo": string[] };
 export type Tone = "attention" | "outdated" | "resolved" | "info";
+export type Pick = { "page": number; "cellIds": number[]; "text": string };

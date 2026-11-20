@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.Action
+public import Forms.Model.Evidence
 public import Forms.Model.Format
 public import Forms.Model.PartialPath
 public import Forms.Model.Component.State
@@ -85,11 +86,13 @@ inductive CollectionDisplay (Γ : Context) (α β : Type) : (columns : Nat) → 
 
 mutual
 inductive ComponentNode : (Γ : Context) → (model state output : Type) → (holes : Nat) → Type 1 where
+  /-- `evidence` records the document cells a value was picked from. -/
   | field {Γ : Context}
       {α β : Type}
       (path : Path α β)
       (label : Computation Γ α String)
       (editor : Editor β)
+      (evidence : Option (Path α (Option Evidence)))
       : ComponentNode Γ α Unit Unit 0
   | computed {Γ : Context}
       {α : Type}

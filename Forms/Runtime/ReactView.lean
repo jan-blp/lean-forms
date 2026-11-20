@@ -93,6 +93,11 @@ theorem _root_.FormsReact.Checks.of_info
     repeat' split
     all_goals simp_all [Decidable.or_iff_not_imp_left]
 
+def Display.Evidence.toReact : Evidence → FormsReact.Evidence
+  | .unsupported => .unsupported
+  | .missing => .missing
+  | .linked evidence stale => .linked evidence.page evidence.cellIds stale
+
 def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Component :=
   let name := ControlKeyProtocol.toString c.key
   let disabled := pending || c.disabled
@@ -104,6 +109,7 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       value
       disabled
       errors := Model.Message.errors c.messages
+      evidence := c.evidence.toReact
       onCommit := .apply name }
   | .checkbox checked => .checkbox {
       name

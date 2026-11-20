@@ -448,6 +448,62 @@ try {
     await click('[data-action=reset]');
     check(output() === '', 'Reset did not clear row-local selections');
   `);
+  await example('evidence', `
+    const cell = id => document.querySelector('.cell[data-cell="' + id + '"]');
+    const evidence = label => field(label).querySelector('.evidence-status')?.classList[1];
+    const pick = async (label, ...cells) => {
+      field(label).querySelector('.pick').click();
+      await tick();
+      check(document.querySelector('.document.picking'), 'Picking did not start');
+      for (const id of cells) {
+        cell(id).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await tick();
+      }
+      await click('[data-pick=fill]');
+    };
+    check(evidence('Invoice number') === 'linked' && evidence('Issued on') === 'missing' &&
+      evidence('Total') === 'stale', 'The initial evidence states were wrong');
+    check(!field('Internal note').querySelector('.evidence'), 'A field without evidence offered it');
+    input('Total').focus();
+    await tick();
+    check(cell(19).classList.contains('highlighted') && cell(19).classList.contains('stale'),
+      'Focusing the total did not highlight its stale cell');
+    const pointer = (type, label) => {
+      input(label).dispatchEvent(new MouseEvent(type, { bubbles: true, relatedTarget: null }));
+      return tick();
+    };
+    await pointer('mouseover', 'Invoice number');
+    check(cell(4).classList.contains('highlighted') && !cell(19).classList.contains('highlighted'),
+      'Hovering the number did not show its cells over the focused total');
+    await pointer('mouseout', 'Invoice number');
+    check(!cell(4).classList.contains('highlighted') && cell(19).classList.contains('highlighted'),
+      'Leaving the number did not return to the focused total');
+    await pointer('mouseover', 'Issued on');
+    check(cell(19).classList.contains('highlighted'), 'Hovering a field without cells hid the focused total');
+    await pointer('mouseout', 'Issued on');
+    input('Total').blur();
+    await tick();
+    check(!cell(19).classList.contains('highlighted'), 'Leaving the total kept its highlight');
+    await pick('Issued on', 6);
+    await wait(() => input('Issued on').value === '2026-11-03');
+    check(evidence('Issued on') === 'linked' && !document.querySelector('.document.picking'),
+      'The picked date was not linked');
+    input('Total').focus();
+    await pick('Total', 19);
+    await wait(() => evidence('Total') === 'linked');
+    check(input('Total').value === '1234.5', 'The picked total was not filled');
+    check(cell(19).classList.contains('highlighted') && !cell(19).classList.contains('stale'),
+      'The focused total kept showing its cell as stale after the pick');
+    input('Total').blur();
+    await pick('Total', 7, 8);
+    check(input('Total').value === '1234.5' && evidence('Total') === 'linked' &&
+      status().startsWith('Could not read "Customer Example Retail AG"'), 'An unreadable pick changed the total');
+    await edit('Invoice number', 'INV-2026-0043');
+    check(evidence('Invoice number') === 'stale', 'Editing a picked value did not mark it stale');
+    await submit();
+    const { page, cellIds, text } = submitted().issuedEvidence;
+    check(page === 1 && cellIds.join() === '6' && text === '2026-11-03', 'The picked cells were not submitted');
+  `);
   const marker = `const marker = () => document.querySelector('.status-marker');
     const issues = () => [...document.querySelectorAll('output')].find(output =>
       output.parentElement.firstChild.textContent === 'Current issues').textContent;

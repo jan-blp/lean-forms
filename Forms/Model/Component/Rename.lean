@@ -26,7 +26,7 @@ def ComponentNode.rename
   (component : ComponentNode Γ α state β holes)
   : ComponentNode Δ α state β holes :=
   match component with
-  | .field path label editor => .field path (label.rename rename) editor
+  | .field path label editor evidence => .field path (label.rename rename) editor evidence
   | .computed label value => .computed (label.rename rename) (value.rename rename)
   | .button caption action => .button (caption.rename rename) (action.rename rename)
   | .tabBar label active tabs => .tabBar (label.rename rename) (rename active) (tabs.rename rename)

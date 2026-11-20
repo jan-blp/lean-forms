@@ -58,4 +58,4 @@ public def main (args : List String) : IO Unit := do
   let options ← IO.ofExcept (parseOptions args)
   let some (name, form) := serverForms.find? (·.1 == options.form.getD (names.headD ""))
     | throw (IO.userError usage)
-  Web.run name form api options.port options.openBrowser
+  Web.run name form api (documents.lookup name) options.port options.openBrowser

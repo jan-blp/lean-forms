@@ -17,17 +17,52 @@ def editorInput {α : Type} : Model.Editor α → α → Display.Editor
       (options.map fun option => { value := Key.encode option.key, label := option.label })
   | .refine editor print .., value => editorInput editor (print value)
 
+def stale {α : Type} (widget : Model.Editor α) (value : α) (evidence : Model.Evidence) : Bool :=
+  match Input.decode widget (.text evidence.text) with
+  | .ok read => editorInput widget read != editorInput widget value
+  | .error _ => true
+
+theorem stale_of_decode
+  {α : Type}
+  {widget : Model.Editor α}
+  {value : α}
+  {evidence : Model.Evidence}
+  (read : Input.decode widget (.text evidence.text) = .ok value)
+  : stale widget value evidence = false := by
+  simp [stale, read]
+
+def readPick
+  {α : Type}
+  (widget : Model.Editor α)
+  (picked : Model.Evidence)
+  : Except DecodeError α :=
+  (Input.decode widget (.text picked.text)).mapError fun
+    | .input message => .input s!"Could not read \"{picked.text}\": {message}"
+    | .clientBug error => .clientBug error
+
+def evidenceOf
+  {α β : Type}
+  (widget : Model.Editor β)
+  (value : α)
+  (current : β)
+  : Option (Path α (Option Model.Evidence)) → Display.Evidence
+  | none => .unsupported
+  | some path => match path.get value with
+    | none => .missing
+    | some evidence => .linked evidence (stale widget current evidence)
+
 def editor
   {α : Type}
   (widget : Model.Editor α)
   (value : α)
+  (evidence : Display.Evidence)
   (target : Display.Target)
   (location : ErasedLocation)
   (label : String)
   (disabled : Bool)
   (messages : List Message)
   : Display.Control :=
-  { key := .edit location, target, label, disabled, location, messages
+  { key := .edit location, target, label, disabled, location, evidence, messages
     input := editorInput widget value }
 
 def _root_.Forms.Model.Targets.erase
@@ -59,6 +94,7 @@ def button
   : Display.Control :=
   { key, target, label, disabled, location
     input := .action
+    evidence := .unsupported
     messages := [] }
 
 inductive ActionError where
@@ -247,9 +283,10 @@ def evaluateNode
   (disabled : Bool := false)
   : NodeEvaluation Γ α state β (Hollow holes) :=
   match component with
-  | .field path label widget =>
+  | .field path label widget evidence =>
     let location := location ++ path.erase
-    let control := editor widget (path.get value) target location
+    let current := path.get value
+    let control := editor widget current (evidenceOf widget value current evidence) target location
       (label.eval value env) disabled (ambient.messagesAt location)
     { output := ()
       locals := ()
@@ -259,11 +296,22 @@ def evaluateNode
         | [] => do
           if disabled then throw (.invalid .disabled)
           let some input := argument | throw (.decode (.clientBug .missingArgument))
-          let updated ← MonadExcept.ofExcept ((Input.decode widget input).mapError .decode)
-          return {
-            value := path.set updated value
-            state := env
-            locals := () }
+          match input, evidence with
+          | .pick picked, some evidence =>
+            let updated ← MonadExcept.ofExcept ((readPick widget picked).mapError .decode)
+            return {
+              value := evidence.set (some picked) (path.set updated value)
+              state := env
+              locals := () }
+          | .pick _, none => throw (.decode (.clientBug .noEvidence))
+          | .text _, _
+          | .boolean _, _
+          | .texts _, _ =>
+            let updated ← MonadExcept.ofExcept ((Input.decode widget input).mapError .decode)
+            return {
+              value := path.set updated value
+              state := env
+              locals := () }
         | _ => absent }
   | .computed label computation =>
     { output := ()
@@ -279,6 +327,7 @@ def evaluateNode
         target, location, disabled
         label := caption.eval value env
         input := .action
+        evidence := .unsupported
         messages := [] }
       requests := []
       apply := fun route argument => match route with
@@ -295,6 +344,7 @@ def evaluateNode
         target, location, disabled
         label := label.eval value env
         input := .tabs (active.get env).val (tabs.eval value env).toList
+        evidence := .unsupported
         messages := [] }
       requests := []
       apply := fun route argument => match route with
@@ -328,6 +378,7 @@ def evaluateNode
       target, location, disabled
       label := label.eval value env
       messages := ambient.messagesAt location
+      evidence := .unsupported
       input := .choice shown
         (options.map fun option => { value := Key.encode option.key, label := option.label }) }
     { output := ()

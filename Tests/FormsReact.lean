@@ -16,13 +16,15 @@ private def control
   (label : String)
   (input : Display.Editor)
   (messages : List Forms.Model.Message := [])
+  (evidence : Display.Evidence := .unsupported)
   : Display.Control :=
-  { key, target := {}, label, disabled := false, location := [], input, messages }
+  { key, target := {}, label, disabled := false, location := [], input, evidence, messages }
 
 def view : Display.View :=
   .stack (some "Person") [
     .control (control (.edit [.field "name"]) "Name" (.text .plain "Ada")
-      (messages := [{ kind := .error, text := "Enter your name." }])),
+      (messages := [{ kind := .error, text := "Enter your name." }])
+      (evidence := .linked { page := 1, cellIds := [3, 4], text := "Ada" } false)),
     .control (control (.edit [.field "age"]) "Age" (.text .natural "36")),
     .hidden,
     .stack (some "") [.control (control (.edit [.field "delivery"]) "Delivery" (.checkbox true))],
@@ -39,6 +41,7 @@ def expected : FormsReact.Component :=
         value := "Ada"
         disabled := false
         errors := ["Enter your name."]
+        evidence := .linked 1 [3, 4] false
         onCommit := .apply "[\"edit\",\"name\"]" },
       .textField {
         name := "[\"edit\",\"age\"]"
@@ -47,6 +50,7 @@ def expected : FormsReact.Component :=
         value := "36"
         disabled := false
         errors := []
+        evidence := .unsupported
         onCommit := .apply "[\"edit\",\"age\"]" },
       .group {
         label := none

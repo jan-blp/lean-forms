@@ -78,7 +78,17 @@ def RowSelection.itemPath
   (label : Computation Γ α String)
   (editor : Editor β)
   : Component Γ α :=
-  ⟨Unit, .field path label editor⟩
+  ⟨Unit, .field path label editor none⟩
+
+@[reducible] def Component.fieldWithEvidence
+  {Γ : Context}
+  {α β : Type}
+  (path : Path α β)
+  (evidence : Path α (Option Evidence))
+  (label : Computation Γ α String)
+  (editor : Editor β)
+  : Component Γ α :=
+  ⟨Unit, .field path label editor (some evidence)⟩
 
 @[reducible] def Component.computed
   {Γ : Context}

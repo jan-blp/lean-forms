@@ -7,8 +7,24 @@ export type Props<K extends Kind> = Extract<FormsReact.Component, Record<K, unkn
 /** One React component per Lean constructor; containers render nested lists with `<Children>`. */
 export type Components = { [K in Kind]: ComponentType<Props<K>> };
 
+export interface LinkedEvidence {
+  page: number;
+  cellIds: number[];
+  stale: boolean;
+}
+
+export interface EvidenceHost {
+  /** Shows the cells of the field under the pointer; `null` when it leaves or has none. */
+  hover(evidence: LinkedEvidence | null): void;
+  /** Shows the cells of the focused field; `null` when focus leaves or it has none. */
+  focus(evidence: LinkedEvidence | null): void;
+  /** Hands the next cells picked on the document to `fill`. */
+  arm(fill: (pick: FormsReact.Pick) => void): void;
+}
+
 export interface LeanFormContext {
   components: Components;
+  evidence: EvidenceHost | null;
   draft(name: string): string | undefined;
   draftError(name: string): string | undefined;
   registerTarget(name: string, element: HTMLElement | null): void;

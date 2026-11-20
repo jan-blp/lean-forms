@@ -76,9 +76,51 @@ export function StatusMarker(checks: FormsReact.Checks) {
   );
 }
 
+function evidenceStatus(evidence: Exclude<FormsReact.Evidence, 'unsupported'>) {
+  if (evidence === 'missing') return { tone: 'missing', text: 'Not linked to the document' };
+  if (evidence.linked.stale) return { tone: 'stale', text: 'Changed since it was picked' };
+  return { tone: 'linked', text: `From page ${evidence.linked.page}` };
+}
+
+function Evidence({ evidence, disabled, onPick }: {
+  evidence: Exclude<FormsReact.Evidence, 'unsupported'>;
+  disabled: boolean;
+  onPick?: () => void;
+}) {
+  const { tone, text } = evidenceStatus(evidence);
+  return (
+    <div className="evidence">
+      <span className={`evidence-status ${tone}`}>{text}</span>
+      {onPick && <button type="button" className="pick" disabled={disabled} onClick={onPick}>
+        Pick from document</button>}
+    </div>
+  );
+}
+
 export function TextField(
-    { name, label, kind, value, disabled, errors, onCommit }: FormsReact.TextField) {
+    { name, label, kind, value, disabled, errors, evidence, onCommit }: FormsReact.TextField) {
   const form = useLeanForm();
+  const host = form.evidence;
+  const linked = typeof evidence === 'object' ? evidence.linked : null;
+  const pointer = useRef({ hovered: false, focused: false });
+  const hover = (on: boolean) => { pointer.current.hovered = on; host?.hover(on ? linked : null); };
+  const focus = (on: boolean) => { pointer.current.focused = on; host?.focus(on ? linked : null); };
+  // A pick or an edit can change the cells, or their staleness, while the field is shown.
+  const linkedKey = JSON.stringify(linked);
+  useEffect(() => {
+    if (pointer.current.hovered) host?.hover(linked);
+    if (pointer.current.focused) host?.focus(linked);
+  }, [linkedKey]);
+  useEffect(() => () => {
+    if (pointer.current.hovered) host?.hover(null);
+    if (pointer.current.focused) host?.focus(null);
+  }, []);
+  const tracking = host && evidence !== 'unsupported' ? {
+    onMouseEnter: () => hover(true),
+    onMouseLeave: () => hover(false),
+    onFocus: () => focus(true),
+    onBlur: () => focus(false),
+  } : {};
   const input = useRef<HTMLInputElement>(null);
   const feedback = useId();
   const draft = form.draft(name);
@@ -103,7 +145,8 @@ export function TextField(
   // Enter submits the form; leaving the field applies a pending edit.
   // A picked date applies at once; the date input reports "" while a typed date is incomplete.
   return (
-    <form className="editor" noValidate onSubmit={event => { event.preventDefault(); commit(); }}>
+    <form className="editor" noValidate onSubmit={event => { event.preventDefault(); commit(); }}
+      {...tracking}>
       <label>{label}<input ref={element => {
         input.current = element;
         form.registerTarget(name, element);
@@ -119,6 +162,8 @@ export function TextField(
         } : undefined}
         onBlur={() => { if (form.draft(name) !== undefined) commit(); }} /></label>
       <Feedback id={feedback} errors={shown} />
+      {evidence !== 'unsupported' && <Evidence evidence={evidence} disabled={disabled}
+        onPick={host ? () => host.arm(pick => form.run(onCommit, { pick })) : undefined} />}
     </form>
   );
 }
