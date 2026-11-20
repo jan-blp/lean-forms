@@ -13,13 +13,13 @@ def counter {Γ : Context} : Component Γ Nat Nat := named%
   .withOutput
     (.group "Counter" [
       .computed "Item" { inputs := inputs[path[]], run := toString },
-      .computed "Owned count" { inputs := inputs[.ui ref[count]], run := toString },
+      .computed "Owned count" { inputs := inputs[ref[count]], run := toString },
       .button "Increment" (.set ref[count] {
-        inputs := inputs[.ui ref[count]], run := fun n => n + 1 }),
-      .computed "Private value" { inputs := inputs[.ui ref[hidden]], run := toString },
+        inputs := inputs[ref[count]], run := fun n => n + 1 }),
+      .computed "Private value" { inputs := inputs[ref[hidden]], run := toString },
       .button "Change private" (.set ref[hidden] {
-        inputs := inputs[.ui ref[hidden]], run := fun n => n + 1 })])
-    { inputs := inputs[.ui ref[count]], run := id }
+        inputs := inputs[ref[hidden]], run := fun n => n + 1 })])
+    { inputs := inputs[ref[count]], run := id }
 
 def single : Component [] Nat Nat := named%
   .labeled "Owned counter output" <|
@@ -27,19 +27,19 @@ def single : Component [] Nat Nat := named%
   state% remembered := (0 : Nat);
   .withOutput
     (.group "Observers" [
-      .computed "Observer one" { inputs := inputs[.ui ref[output]], run := toString },
+      .computed "Observer one" { inputs := inputs[ref[output]], run := toString },
       .computed "Observer two" {
-        inputs := inputs[.ui ref[output]], run := fun n => s!"Twice: {2 * n}" },
+        inputs := inputs[ref[output]], run := fun n => s!"Twice: {2 * n}" },
       .button "Remember output" (.set ref[remembered] {
-        inputs := inputs[.ui ref[output]], run := id }),
-      .computed "Remembered" { inputs := inputs[.ui ref[remembered]], run := toString }])
-    { inputs := inputs[.ui ref[output]], run := id }
+        inputs := inputs[ref[output]], run := id }),
+      .computed "Remembered" { inputs := inputs[ref[remembered]], run := toString }])
+    { inputs := inputs[ref[output]], run := id }
 
 def pair {Γ : Context} : Component Γ Nat Nat := named%
   observe% first := counter;
   observe% second := counter;
   let total : Computation _ Nat Nat := {
-    inputs := inputs[.ui ref[first], .ui ref[second]], run := Nat.add }
+    inputs := inputs[ref[first], ref[second]], run := Nat.add }
   .withOutput (.computed "Pair sum" (toString <$> total)) total
 
 def rows : Component [] (List (Item Nat)) (List Nat) :=
@@ -50,10 +50,10 @@ def nested : Component [] (List (Item Nat)) Nat := named%
   .labeled "Nested outputs" <|
   observe% totals := rows;
   let total : Computation _ (List (Item Nat)) Nat := {
-    inputs := inputs[.ui ref[totals]], run := List.sum }
+    inputs := inputs[ref[totals]], run := List.sum }
   .withOutput (.group "Outer observers" [
     .computed "Pair totals" {
-      inputs := inputs[.ui ref[totals]]
+      inputs := inputs[ref[totals]]
       run := fun values => String.intercalate ", " (values.map toString) },
     .computed "Overall sum" (toString <$> total)]) total
 
@@ -75,11 +75,11 @@ def selectionCell
   state% selected := false;
   .withOutput
     (.group "" [
-      .computed "Cell description" { inputs := inputs[.ui ref[description]], run := id },
-      .computed "Selection" { inputs := inputs[.ui ref[selected]], run := toString },
+      .computed "Cell description" { inputs := inputs[ref[description]], run := id },
+      .computed "Selection" { inputs := inputs[ref[selected]], run := toString },
       .button "Toggle selection" (.set ref[selected] {
-        inputs := inputs[.ui ref[selected]], run := Bool.not })])
-    { inputs := inputs[.ui ref[selected]], run := id }
+        inputs := inputs[ref[selected]], run := Bool.not })])
+    { inputs := inputs[ref[selected]], run := id }
 
 def selectionColumns {Γ : Context} : Columns Γ (Item String) RowOutput := named%
   ⟨#v["Description", "Selected"],
@@ -87,7 +87,7 @@ def selectionColumns {Γ : Context} : Columns Γ (Item String) RowOutput := name
       own% description := descriptionCell;
       own% selected := selectionCell ref[description];
       .layouts
-        { inputs := inputs[.ui ref[description], .ui ref[selected]]
+        { inputs := inputs[ref[description], ref[selected]]
           run := fun description selected => { description, selected } }
         (.const #v[.place slot[description], .place slot[selected]])⟩
 

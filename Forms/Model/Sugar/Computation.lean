@@ -13,7 +13,7 @@ syntax "(" binderIdent " : " term ")" unicode(" ← ", " <- ") term : computatio
 
 /--
 `compute% (x : T) ← input, … => body` reads each input into its binder and evaluates `body`.
-Types are optional; use `.ui ref[name]` to read context inputs inside `named%`.
+Types are optional. Read a context input with `.ui ref`, or with `ref[name]` inside `named%`.
 -/
 scoped syntax "compute% " computationInput,* " => " term : term
 

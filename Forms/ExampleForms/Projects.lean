@@ -94,13 +94,13 @@ def PlannerProject.form {Γ : Context} : Component Γ PlannerProject.Raw := name
         (.numbered "Task") "Add task" PlannerTask.initial PlannerTask.columns
       (some ref[selectedTask]),
     .visibleWhen
-      { inputs := inputs[.ui ref[selectedTask]], run := fun selected => selected == .none }
+      { inputs := inputs[ref[selectedTask]], run := fun selected => selected == .none }
       (.computed "" (.const "Choose a task to see its details.")),
     .visibleWhen
-      { inputs := inputs[.ui ref[selectedTask]], run := fun selected => selected != .none }
+      { inputs := inputs[ref[selectedTask]], run := fun selected => selected != .none }
       (.button "Close task" (.set ref[selectedTask] (.const .none))),
     Component.void <| .zoom?
-      { inputs := inputs[.ui ref[selectedTask]]
+      { inputs := inputs[ref[selectedTask]]
         run := RowSelection.itemPath path[PlannerProject.Field.tasks] }
       PlannerTask.details]
 

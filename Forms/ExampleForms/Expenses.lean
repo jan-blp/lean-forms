@@ -144,7 +144,7 @@ def ExpenseReport.focusForm : Component [] ExpenseReport.Raw := named%
       (selection := some ref[selection]),
     Component.void <| .zoom?
       (target := {
-        inputs := inputs[.ui ref[selection]]
+        inputs := inputs[ref[selection]]
         run := RowSelection.itemPath path[ExpenseReport.Field.expenses]
       })
       (body := Expense.columns.group "Selected expense"),

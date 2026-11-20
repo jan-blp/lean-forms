@@ -28,7 +28,7 @@ def tableSummary
   present%
     own% table := selectionTable;
     own% summary := summary ref[table];
-    .layout { inputs := inputs[.ui ref[summary]], run := id } (.const arrangement)
+    .layout { inputs := inputs[ref[summary]], run := id } (.const arrangement)
 
 def pane
   {Γ : Context}
@@ -37,12 +37,12 @@ def pane
   : Component Γ Nat := named%[shared]
   state% own := (0 : Nat);
   .group name [
-    .computed "Shared count" { inputs := inputs[.ui ref[shared]], run := toString },
-    .computed "Private count" { inputs := inputs[.ui ref[own]], run := toString },
+    .computed "Shared count" { inputs := inputs[ref[shared]], run := toString },
+    .computed "Private count" { inputs := inputs[ref[own]], run := toString },
     .button "Increment shared" (.set ref[shared] {
-      inputs := inputs[.ui ref[shared]], run := fun count => count + 1 }),
+      inputs := inputs[ref[shared]], run := fun count => count + 1 }),
     .button "Increment private" (.set ref[own] {
-      inputs := inputs[.ui ref[own]], run := fun count => count + 1 })]
+      inputs := inputs[ref[own]], run := fun count => count + 1 })]
 
 def sharedTabs : Component [] Nat Nat := named%
   present%
@@ -50,8 +50,8 @@ def sharedTabs : Component [] Nat Nat := named%
     tabs% active, strip := "Panes", #v["First pane", "Second pane"];
     own% first := pane ref[shared] "First pane";
     own% second := pane ref[shared] "Second pane";
-    .layout { inputs := inputs[.ui ref[shared]], run := id } {
-      inputs := inputs[.ui ref[active]]
+    .layout { inputs := inputs[ref[shared]], run := id } {
+      inputs := inputs[ref[active]]
       run := fun active => .group (some "Shared state across tabs") [
         .place slot[strip],
         #v[.place slot[first], .place slot[second]][active]] }
@@ -64,7 +64,7 @@ def noteTabs {Γ : Context} : Component Γ String := named%
     own% preview := .computed "Preview" {
       inputs := inputs[path[]], run := fun text => s!"«{text}»" };
     .arrange {
-      inputs := inputs[.ui ref[active]]
+      inputs := inputs[ref[active]]
       run := fun active => .group none [
         .place slot[strip],
         #v[.place slot[edit], .place slot[preview]][active]] }

@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.Component
+public import Forms.Model.Sugar.Computation
 public meta import Lean.Elab.Term
 meta import all Init.Prelude
 
@@ -139,7 +140,7 @@ scoped syntax "row% " binderIdent ", " binderIdent " => " term : term
 
 /--
 Refer to a variable or owned output with `ref[x]` inside `named%`.
-Read it through `inputs[.ui ref[x]]`; update writable state with `.set ref[x] computation`.
+Read it as an input, e.g. `inputs[ref[x]]`; update writable state with `.set ref[x] computation`.
 -/
 scoped syntax "ref[" ident "]" : term
 
@@ -491,10 +492,31 @@ decreasing_by
 private def outsideNamed (form : String) : MacroM Syntax :=
   Macro.throwError s!"{form} is only valid inside named%"
 
+/-- Reads `ref[x]` in an input position as `.ui ref[x]`. -/
+private partial def readRefInputs (stx : Syntax) : MacroM Syntax := do
+  match stx with
+  | `(computationInput| $name:binderIdent ← ref[$x]) =>
+    `(computationInput| $name:binderIdent ← .ui ref[$x])
+  | `(computationInput| ($name:binderIdent : $type) ← ref[$x]) =>
+    `(computationInput| ($name:binderIdent : $type) ← .ui ref[$x])
+  | `(inputs[$inputs,*]) =>
+    let inputs ← inputs.getElems.mapM fun input => do
+      match input with
+      | `(ref[$x]) => `(.ui ref[$x])
+      | _ => return ⟨← readRefInputs input⟩
+    `(inputs[$inputs,*])
+  | _ =>
+    match stx with
+    | .node info kind args => return .node info kind (← args.mapM readRefInputs)
+    | .missing => return stx
+    | .atom .. => return stx
+    | .ident .. => return stx
+
 macro_rules
-  | `(named% $body) => expand body .empty
+  | `(named% $body) => do
+    expand (← readRefInputs body) .empty
   | `(named%[$names,*] $body) => do
-    expand body (← importRefs names.getElems)
+    expand (← readRefInputs body) (← importRefs names.getElems)
   | `(ref[$_name]) => outsideNamed "ref[...]"
   | `(slot[$_name]) => outsideNamed "slot[...]"
   | `(state% $_name:binderIdent := $_initial; $_body) => outsideNamed "state%"
