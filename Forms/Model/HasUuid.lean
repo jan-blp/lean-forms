@@ -14,6 +14,20 @@ This is useful because new items, such as the one an add button inserts, must no
 own UUID: `append` takes a `WithoutUuid` and gives it a fresh one, so a new item cannot repeat a
 UUID that is already in the list.
 
+To construct a `HasUuid.WithoutUuid T`, import `Forms.Model.Derive` and derive `HasUuid` for
+a structure `T` with an `id : Uuid` field. This generates `T.mkWithoutUuid`, which takes all
+fields except `id`. For form models, derive the instance for the raw type:
+
+```lean
+deriving instance HasUuid for Expense.Raw
+
+def Expense.initial : HasUuid.WithoutUuid Expense.Raw :=
+  Expense.Raw.mkWithoutUuid (description := "") (amount := 0) (receipt := false)
+```
+
+For a simple wrapped value, use `Item.mkWithoutUuid value`. To copy an existing item `item : T`
+without its UUID, use `HasUuid.withoutUuid item`.
+
 We use a quotient rather than a separate structure because:
 - No code can read the UUID it forgets: `Quotient.lift` rejects any function that depends on it.
 - `append` always sets a fresh UUID, since `withUuid` is the only way back to `β`.
