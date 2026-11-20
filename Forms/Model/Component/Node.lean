@@ -182,35 +182,35 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       : ComponentNode Γ α state β 0
 
 /-- Components owned in order, arranged into `views` views;
-`owned` gives the hole count of each view in scope. -/
+`Δ` gives the hole count of each view in scope. -/
 inductive PresentationNode
-  : (owned : List Nat)
+  : (Δ : ViewContext)
   → (Γ : Context)
   → (model state output : Type)
   → (views : Nat)
   → Type 1 where
-  | layout {owned : List Nat}
+  | layout {Δ : ViewContext}
       {Γ : Context}
       {α β : Type}
       {views : Nat}
       (output : Computation Γ α β)
-      (arrangement : Computation Γ α (Vector (Layout owned) views))
-      : PresentationNode owned Γ α Unit β views
+      (arrangement : Computation Γ α (Vector (Layout Δ) views))
+      : PresentationNode Δ Γ α Unit β views
   /-- Owns `component`: `body` reads its output as `Ref.here` and places its view as `ViewRef.here`. -/
-  | own {owned : List Nat}
+  | own {Δ : ViewContext}
       {Γ : Context}
       {α β γ ownedState bodyState : Type}
       {holes views : Nat}
       (component : ComponentNode Γ α ownedState β holes)
-      (body : PresentationNode (holes :: owned) (⟨.readOnly, β⟩ :: Γ) α bodyState γ views)
-      : PresentationNode owned Γ α (ObservationState ownedState bodyState) γ views
-  | bind {owned : List Nat}
+      (body : PresentationNode (holes :: Δ) (⟨.readOnly, β⟩ :: Γ) α bodyState γ views)
+      : PresentationNode Δ Γ α (ObservationState ownedState bodyState) γ views
+  | bind {Δ : ViewContext}
       {Γ : Context}
       {α β γ state : Type}
       {views : Nat}
       (initial : β)
-      (body : PresentationNode owned (⟨.writable, β⟩ :: Γ) α state γ views)
-      : PresentationNode owned Γ α (Binding β state) γ views
+      (body : PresentationNode Δ (⟨.writable, β⟩ :: Γ) α state γ views)
+      : PresentationNode Δ Γ α (Binding β state) γ views
 
 end
 
