@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { FormsReact, LinkedEvidence } from '@blp/lean-forms-react';
+import type { LinkedEvidence, Model } from '@blp/lean-forms-react';
 import type { Document } from './generated/Forms/Runtime/Viewer';
 
 interface Selection {
@@ -11,7 +11,7 @@ export interface DocumentViewerProps {
   document: Document;
   highlighted: LinkedEvidence | null;
   picking: boolean;
-  onPick(pick: FormsReact.Pick): void;
+  onPick(pick: Model.Evidence): void;
   onCancel(): void;
 }
 

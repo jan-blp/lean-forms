@@ -19,4 +19,3 @@ export type Page = { "title": string; "busy": boolean; "body": Component[]; "too
 export type Notice = { "info": { "message": string } } | { "error": { "message": string } };
 export type Checks = { "tone": Tone; "unresolved": string[]; "outdated": string[]; "resolved": string[]; "approved": string[]; "info": string[]; "outdatedInfo": string[] };
 export type Tone = "attention" | "outdated" | "resolved" | "info";
-export type Pick = { "page": number; "cellIds": number[]; "text": string };

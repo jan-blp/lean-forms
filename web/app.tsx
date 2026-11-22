@@ -1,6 +1,6 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LeanForm, type EvidenceHost, type FormsReact, type LinkedEvidence, type Wire } from '@blp/lean-forms-react';
+import { LeanForm, type EvidenceHost, type LinkedEvidence, type Model, type Wire } from '@blp/lean-forms-react';
 import { routes } from './generated/routes';
 import type { Document } from './generated/Forms/Runtime/Viewer';
 import { DocumentViewer } from './viewer';
@@ -14,7 +14,7 @@ const moduleUrl = new URL(routes.wasmLoader, location.href);
 function WithDocument({ start, source }: { start: Wire.FormStart; source: Document }) {
   const [hovered, setHovered] = useState<LinkedEvidence | null>(null);
   const [focused, setFocused] = useState<LinkedEvidence | null>(null);
-  const [fill, setFill] = useState<((pick: FormsReact.Pick) => void) | null>(null);
+  const [fill, setFill] = useState<((pick: Model.Evidence) => void) | null>(null);
   const evidence: EvidenceHost = { hover: setHovered, focus: setFocused, arm: fill => setFill(() => fill) };
   return (
     <div className="with-document">

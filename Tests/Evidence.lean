@@ -65,8 +65,7 @@ def run : IO Unit := do
     (match perform initial note.key (.pick customer) with
     | .error rejection => rejection == .clientBug .noEvidence
     | .ok _ => false)
-  let pick : FormsReact.Pick := { page := 1, cellIds := [6], text := "2026-11-03" }
-  let pickJson := Json.mkObj [("pick", toJson pick)]
+  let pickJson := Json.mkObj [("pick", toJson date)]
   check "EvidencePickProtocolDecodes"
     (match InputProtocol.fromJson pickJson with
     | .ok (.pick decoded) => decoded == date

@@ -59,14 +59,9 @@ inductive Evidence where
   | linked (page : Nat) (cellIds : List Nat) (stale : Bool)
   deriving ToJson, FromJson, BEq, Repr
 
-structure Pick where
-  page : Nat
-  cellIds : List Nat
-  text : String
-  deriving ToJson, FromJson, BEq, Repr
-
-/-- A text input whose draft React owns; `onCommit` receives the draft text, or a `Pick` when the
-field takes evidence. Values travel as text, so numbers beyond 2^53 survive JavaScript. -/
+/-- A text input whose draft React owns; `onCommit` receives the draft text, or a
+`Forms.Model.Evidence` when the field takes evidence. Values travel as text, so numbers beyond 2^53
+survive JavaScript. -/
 structure TextField where
   name : String
   label : String

@@ -1,5 +1,6 @@
 import { createContext, useContext, type ComponentType } from 'react';
 import type * as FormsReact from './protocol/FormsReact.js';
+import type { Evidence } from './protocol/Forms/Model.js';
 
 type Kinds<C> = C extends unknown ? keyof C : never;
 export type Kind = Kinds<FormsReact.Component>;
@@ -7,11 +8,7 @@ export type Props<K extends Kind> = Extract<FormsReact.Component, Record<K, unkn
 /** One React component per Lean constructor; containers render nested lists with `<Children>`. */
 export type Components = { [K in Kind]: ComponentType<Props<K>> };
 
-export interface LinkedEvidence {
-  page: number;
-  cellIds: number[];
-  stale: boolean;
-}
+export type LinkedEvidence = Extract<FormsReact.Evidence, { linked: unknown }>['linked'];
 
 export interface EvidenceHost {
   /** Shows the cells of the field under the pointer; `null` when it leaves or has none. */
@@ -19,7 +16,7 @@ export interface EvidenceHost {
   /** Shows the cells of the focused field; `null` when focus leaves or it has none. */
   focus(evidence: LinkedEvidence | null): void;
   /** Hands the next cells picked on the document to `fill`. */
-  arm(fill: (pick: FormsReact.Pick) => void): void;
+  arm(fill: (pick: Evidence) => void): void;
 }
 
 export interface LeanFormContext {
