@@ -163,7 +163,7 @@ export function TextField(
         onBlur={() => { if (form.draft(name) !== undefined) commit(); }} /></label>
       <Feedback id={feedback} errors={shown} />
       {evidence !== 'unsupported' && <Evidence evidence={evidence} disabled={disabled}
-        onPick={host ? () => host.arm(pick => form.run(onCommit, { pick })) : undefined} />}
+        onPick={host ? () => form.arm(name, onCommit) : undefined} />}
     </form>
   );
 }

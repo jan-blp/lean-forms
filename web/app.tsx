@@ -15,12 +15,17 @@ function WithDocument({ start, source }: { start: Wire.FormStart; source: Docume
   const [hovered, setHovered] = useState<LinkedEvidence | null>(null);
   const [focused, setFocused] = useState<LinkedEvidence | null>(null);
   const [fill, setFill] = useState<((pick: Model.Evidence) => void) | null>(null);
-  const evidence: EvidenceHost = { hover: setHovered, focus: setFocused, arm: fill => setFill(() => fill) };
+  const evidence: EvidenceHost = {
+    hover: setHovered,
+    focus: setFocused,
+    arm: fill => setFill(() => fill),
+    disarm: () => setFill(null),
+  };
   return (
     <div className="with-document">
       <LeanForm start={start} moduleUrl={moduleUrl} evidence={evidence} onSnapshot={setTitle} />
-      <DocumentViewer document={source} highlighted={hovered ?? focused} picking={fill !== null}
-        onPick={pick => { setFill(null); fill?.(pick); }} onCancel={() => setFill(null)} />
+      <DocumentViewer document={source} highlighted={hovered ?? focused} armed={fill}
+        onClose={() => setFill(null)} />
     </div>
   );
 }

@@ -10,24 +10,27 @@ interface Selection {
 export interface DocumentViewerProps {
   document: Document;
   highlighted: LinkedEvidence | null;
-  picking: boolean;
-  onPick(pick: Model.Evidence): void;
-  onCancel(): void;
+  /** Receives the picked cells; `null` when no field waits for a pick. */
+  armed: ((pick: Model.Evidence) => void) | null;
+  onClose(): void;
 }
 
-export function DocumentViewer({ document, highlighted, picking, onPick, onCancel }: DocumentViewerProps) {
+export function DocumentViewer({ document, highlighted, armed, onClose }: DocumentViewerProps) {
   const [selection, setSelection] = useState<Selection | null>(null);
-  useEffect(() => { if (!picking) setSelection(null); }, [picking]);
+  // Every pick, also one armed while another is open, starts with no cells selected.
+  useEffect(() => { setSelection(null); }, [armed]);
+  const picking = armed !== null;
   const toggle = (page: number, cell: number) => setSelection(current => {
     const cellIds = current?.page === page ? current.cellIds : [];
     return { page, cellIds: cellIds.includes(cell) ? cellIds.filter(id => id !== cell) : [...cellIds, cell] };
   });
   const fill = () => {
-    if (!selection) return;
+    if (!selection || !armed) return;
     const page = document.pages.find(page => page.number === selection.page)!;
     const cellIds = [...selection.cellIds].sort((a, b) => a - b);
     const text = cellIds.map(id => page.cells.find(cell => cell.id === id)!.text).join(' ');
-    onPick({ page: selection.page, cellIds, text });
+    onClose();
+    armed({ page: selection.page, cellIds, text });
   };
   return (
     <aside className={picking ? 'document picking' : 'document'} aria-label="Source document">
@@ -35,7 +38,7 @@ export function DocumentViewer({ document, highlighted, picking, onPick, onCance
         <span>Select the cells that hold the value.</span>
         <button type="button" className="primary" data-pick="fill"
           disabled={!selection || selection.cellIds.length === 0} onClick={fill}>Fill field</button>
-        <button type="button" data-pick="cancel" onClick={onCancel}>Cancel</button>
+        <button type="button" data-pick="cancel" onClick={onClose}>Cancel</button>
       </div>}
       {document.pages.map(page =>
         <svg key={page.number} className="page" viewBox={`0 0 ${page.width} ${page.height}`}

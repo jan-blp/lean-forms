@@ -17,6 +17,8 @@ export interface EvidenceHost {
   focus(evidence: LinkedEvidence | null): void;
   /** Hands the next cells picked on the document to `fill`. */
   arm(fill: (pick: Evidence) => void): void;
+  /** Drops the armed `fill`, if any. */
+  disarm(): void;
 }
 
 export interface LeanFormContext {
@@ -28,6 +30,8 @@ export interface LeanFormContext {
   /** Records the text of field `name`; `undefined` drops the draft. */
   setDraft(name: string, text: string | undefined, error?: string): void;
   run(action: FormsReact.Action, argument?: unknown): void;
+  /** Lets the evidence host fill text field `name` with the next pick, through `onCommit`. */
+  arm(name: string, onCommit: FormsReact.Action): void;
 }
 
 export const Context = createContext<LeanFormContext | null>(null);

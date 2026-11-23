@@ -54,6 +54,7 @@ function OpenForm({ model, components, evidence, onSnapshot, onFailure }: OpenFo
   const [drafts, setDrafts] = useState<ReadonlyMap<string, Draft>>(new Map());
   const currentDrafts = useRef(drafts);
   const targets = useRef(new Map<string, HTMLElement>());
+  const armed = useRef<string | null>(null);
   useEffect(() => onSnapshot?.(snapshot), [snapshot, onSnapshot]);
   // The opened snapshot may already request data; Lean ignores repeated responses.
   useEffect(() => performAll(model.snapshot()), [model]);
@@ -67,8 +68,14 @@ function OpenForm({ model, components, evidence, onSnapshot, onFailure }: OpenFo
     const next = model.send(event);
     setSnapshot(next);
     updateDrafts(new Map([...currentDrafts.current].filter(([name]) => next.draftFields.includes(name))));
+    if (armed.current !== null && !next.draftFields.includes(armed.current)) disarm();
     performAll(next);
     return next;
+  }
+
+  function disarm() {
+    armed.current = null;
+    evidence?.disarm();
   }
 
   function updateDrafts(next: ReadonlyMap<string, Draft>) {
@@ -133,9 +140,11 @@ function OpenForm({ model, components, evidence, onSnapshot, onFailure }: OpenFo
   function run(action: FormsReact.Action, argument?: unknown) {
     try {
       if (action === 'reset') {
+        disarm();
         updateDrafts(new Map());
         send('reset');
       } else if (action === 'submit') {
+        disarm();
         commitAllDrafts();
         send('submit');
       } else if ('press' in action) {
@@ -161,6 +170,14 @@ function OpenForm({ model, components, evidence, onSnapshot, onFailure }: OpenFo
       }
     },
     run,
+    arm: (name, onCommit) => {
+      if (!evidence) return;
+      armed.current = name;
+      evidence.arm(pick => {
+        armed.current = null;
+        run(onCommit, { pick });
+      });
+    },
   };
   return <Context value={context}><Render component={snapshot.view} /></Context>;
 }
