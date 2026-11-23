@@ -39,7 +39,7 @@ async function load<T>(url: string): Promise<T> {
 try {
   const [start, source] = await Promise.all([
     load<Wire.FormStart>(routes.formStart),
-    load<Document | null>(routes.document)]);
+    load<Document | null>(routes.document).catch(() => null)]);
   main.classList.toggle('wide', source !== null);
   root.render(
     <StrictMode>

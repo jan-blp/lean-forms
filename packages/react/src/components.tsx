@@ -105,6 +105,8 @@ function useEvidence(
     action: FormsReact.Action) {
   const form = useLeanForm();
   const host = form.evidence;
+  const hostRef = useRef(host);
+  hostRef.current = host;
   const linked = typeof evidence === 'object' ? evidence.linked : null;
   const pointer = useRef({ hovered: false, focused: false });
   const hover = (on: boolean) => { pointer.current.hovered = on; host?.hover(on ? linked : null); };
@@ -112,12 +114,12 @@ function useEvidence(
   // A pick or an edit can change the cells, or their staleness, while the field is shown.
   const linkedKey = JSON.stringify(linked);
   useEffect(() => {
-    if (pointer.current.hovered) host?.hover(linked);
-    if (pointer.current.focused) host?.focus(linked);
+    if (pointer.current.hovered) hostRef.current?.hover(linked);
+    if (pointer.current.focused) hostRef.current?.focus(linked);
   }, [linkedKey]);
   useEffect(() => () => {
-    if (pointer.current.hovered) host?.hover(null);
-    if (pointer.current.focused) host?.focus(null);
+    if (pointer.current.hovered) hostRef.current?.hover(null);
+    if (pointer.current.focused) hostRef.current?.focus(null);
   }, []);
   const tracking = host && evidence !== 'unsupported' ? {
     onMouseEnter: () => hover(true),
