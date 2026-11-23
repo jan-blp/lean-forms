@@ -14,18 +14,18 @@ const moduleUrl = new URL(routes.wasmLoader, location.href);
 function WithDocument({ start, source }: { start: Wire.FormStart; source: Document }) {
   const [hovered, setHovered] = useState<LinkedEvidence | null>(null);
   const [focused, setFocused] = useState<LinkedEvidence | null>(null);
-  const [fill, setFill] = useState<((pick: Model.Evidence) => void) | null>(null);
+  const [request, setRequest] = useState<((pick: Model.Evidence) => void) | null>(null);
   const evidence: EvidenceHost = {
     hover: setHovered,
     focus: setFocused,
-    arm: fill => setFill(() => fill),
-    disarm: () => setFill(null),
+    requestPick: fill => setRequest(() => fill),
+    cancelPick: () => setRequest(null),
   };
   return (
     <div className="with-document">
       <LeanForm start={start} moduleUrl={moduleUrl} evidence={evidence} onSnapshot={setTitle} />
-      <DocumentViewer document={source} highlighted={hovered ?? focused} armed={fill}
-        onClose={() => setFill(null)} />
+      <DocumentViewer document={source} highlighted={hovered ?? focused} request={request}
+        onClose={() => setRequest(null)} />
     </div>
   );
 }

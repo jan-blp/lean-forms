@@ -11,26 +11,26 @@ export interface DocumentViewerProps {
   document: Document;
   highlighted: LinkedEvidence | null;
   /** Receives the picked cells; `null` when no field waits for a pick. */
-  armed: ((pick: Model.Evidence) => void) | null;
+  request: ((pick: Model.Evidence) => void) | null;
   onClose(): void;
 }
 
-export function DocumentViewer({ document, highlighted, armed, onClose }: DocumentViewerProps) {
+export function DocumentViewer({ document, highlighted, request, onClose }: DocumentViewerProps) {
   const [selection, setSelection] = useState<Selection | null>(null);
-  // Every pick, also one armed while another is open, starts with no cells selected.
-  useEffect(() => { setSelection(null); }, [armed]);
-  const picking = armed !== null;
+  // Every pick, also one requested while another is open, starts with no cells selected.
+  useEffect(() => { setSelection(null); }, [request]);
+  const picking = request !== null;
   const toggle = (page: number, cell: number) => setSelection(current => {
     const cellIds = current?.page === page ? current.cellIds : [];
     return { page, cellIds: cellIds.includes(cell) ? cellIds.filter(id => id !== cell) : [...cellIds, cell] };
   });
   const fill = () => {
-    if (!selection || !armed) return;
+    if (!selection || !request) return;
     const page = document.pages.find(page => page.number === selection.page)!;
     const cellIds = [...selection.cellIds].sort((a, b) => a - b);
     const text = cellIds.map(id => page.cells.find(cell => cell.id === id)!.text).join(' ');
     onClose();
-    armed({ page: selection.page, cellIds, text });
+    request({ page: selection.page, cellIds, text });
   };
   return (
     <aside className={picking ? 'document picking' : 'document'} aria-label="Source document">
