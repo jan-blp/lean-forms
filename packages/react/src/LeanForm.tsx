@@ -68,7 +68,7 @@ function OpenForm({ model, components, evidence, onSnapshot, onFailure }: OpenFo
     const next = model.send(event);
     setSnapshot(next);
     updateDrafts(new Map([...currentDrafts.current].filter(([name]) => next.draftFields.includes(name))));
-    if (picking.current !== null && !next.draftFields.includes(picking.current)) cancelPick();
+    if (picking.current !== null && !next.pickFields.includes(picking.current)) cancelPick();
     performAll(next);
     return next;
   }
@@ -170,12 +170,12 @@ function OpenForm({ model, components, evidence, onSnapshot, onFailure }: OpenFo
       }
     },
     run,
-    requestPick: (name, onCommit) => {
+    requestPick: (name, action) => {
       if (!evidence) return;
       picking.current = name;
       evidence.requestPick(pick => {
         picking.current = null;
-        run(onCommit, { pick });
+        run(action, { pick });
       });
     },
   };

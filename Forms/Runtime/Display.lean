@@ -24,24 +24,29 @@ structure ChoiceOption where
   label : String
   deriving DecidableEq
 
-inductive Editor where
-  | text (kind : Model.TextKind) (value : String)
-  | checkbox (value : Bool)
-  /-- `selected` is the active option's `value`, or empty when no option matches. -/
-  | choice (selected : String) (options : List ChoiceOption)
-  /-- Its argument is the picked options' values. -/
-  | choices (selected : List String) (options : List ChoiceOption)
-  /-- A button; its argument is ignored. -/
-  | action
-  /-- Tab labels with `active` selected; its argument is the chosen tab's index. -/
-  | tabs (active : Nat) (labels : List String)
-  deriving DecidableEq
-
 inductive Evidence where
   | unsupported
   | missing
   /-- `stale` when the cells' text no longer reads as the current value. -/
   | linked (evidence : Model.Evidence) (stale : Bool)
+  deriving DecidableEq
+
+/-- How a field shows its value. -/
+inductive Value where
+  | text (kind : Model.TextKind) (value : String)
+  | checkbox (value : Bool)
+  /-- Its argument is the picked options' values. -/
+  | choices (selected : List String) (options : List ChoiceOption)
+  deriving DecidableEq
+
+inductive Editor where
+  | field (value : Value) (evidence : Evidence)
+  /-- `selected` is the active option's `value`, or empty when no option matches. -/
+  | choice (selected : String) (options : List ChoiceOption)
+  /-- A button; its argument is ignored. -/
+  | action
+  /-- Tab labels with `active` selected; its argument is the chosen tab's index. -/
+  | tabs (active : Nat) (labels : List String)
   deriving DecidableEq
 
 structure Control where
@@ -51,7 +56,6 @@ structure Control where
   disabled : Bool
   location : ErasedLocation
   input : Editor
-  evidence : Evidence
   messages : List Model.Message
   deriving BEq
 
@@ -170,20 +174,20 @@ def View.title (view : View) : String :=
 
 def Control.editable (control : Control) : Bool :=
   !control.disabled && match control.input with
-    | .text .. => true
-    | .checkbox .. => true
+    | .field (.text ..) _ => true
+    | .field (.checkbox _) _ => true
+    | .field (.choices ..) _ => true
     | .choice .. => true
-    | .choices .. => true
     | .action => false
     | .tabs .. => false
 
 /-- Whether the control keeps uncommitted text, whose errors become draft diagnostics. -/
 def Control.acceptsDrafts (control : Control) : Bool :=
   !control.disabled && match control.input with
-    | .text .. => true
-    | .checkbox .. => false
+    | .field (.text ..) _ => true
+    | .field (.checkbox _) _ => false
+    | .field (.choices ..) _ => false
     | .choice .. => false
-    | .choices .. => false
     | .action => false
     | .tabs .. => false
 

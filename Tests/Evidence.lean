@@ -27,6 +27,13 @@ private def control (value : InvoiceHeader.Raw) (label : String) : IO Display.Co
     | throw (IO.userError s!"FAIL missing control {label}")
   return control
 
+private def evidence (control : Display.Control) : Display.Evidence :=
+  match control.input with
+  | .field _ evidence => evidence
+  | .choice .. => .unsupported
+  | .action => .unsupported
+  | .tabs .. => .unsupported
+
 private def isStale : Display.Evidence → Bool
   | .linked _ stale => stale
   | .missing => false
@@ -39,21 +46,29 @@ def run : IO Unit := do
   let total ← control initial "Total"
   let note ← control initial "Internal note"
   check "EvidenceStatesOfInitialInvoice"
-    (number.evidence == .linked { page := 1, cellIds := [4], text := "INV-2026-0042" } false &&
-      issued.evidence == .missing && isStale total.evidence && note.evidence == .unsupported)
+    (evidence number == .linked { page := 1, cellIds := [4], text := "INV-2026-0042" } false &&
+      evidence issued == .missing && isStale (evidence total) && evidence note == .unsupported)
   let date : Evidence := { page := 1, cellIds := [6], text := "2026-11-03" }
   let picked ← IO.ofExcept ((perform initial issued.key (.pick date)).mapError toString)
   check "EvidencePickWritesValueAndCells"
     (toJson picked == toJson { initial with
       issued := some (.ofYearMonthDayClip 2026 11 3)
       issuedEvidence := some date })
-  check "EvidencePickIsNotStale" ((← control picked "Issued on").evidence == .linked date false)
+  check "EvidencePickIsNotStale" (evidence (← control picked "Issued on") == .linked date false)
   let edited ← IO.ofExcept ((perform picked issued.key (.text "2026-11-04")).mapError toString)
   check "EvidenceEditKeepsCellsAndMarksStale"
     (edited.issuedEvidence == some date &&
-      (← control edited "Issued on").evidence == .linked date true)
+      evidence (← control edited "Issued on") == .linked date true)
   let reformatted ← IO.ofExcept ((perform initial total.key (.text "1234.5")).mapError toString)
-  check "EvidenceStaleComparesParsedValues" (!isStale (← control reformatted "Total").evidence)
+  check "EvidenceStaleComparesParsedValues" (!isStale (evidence (← control reformatted "Total")))
+  let paid ← control initial "Paid"
+  let stamp : Evidence := { page := 1, cellIds := [21], text := "PAID" }
+  let stamped ← IO.ofExcept ((perform initial paid.key (.pick stamp)).mapError toString)
+  check "EvidencePickReadsCheckbox"
+    (stamped.paid && stamped.paidEvidence == some stamp &&
+      evidence (← control stamped "Paid") == .linked stamp false)
+  let unticked ← IO.ofExcept ((perform stamped paid.key (.boolean false)).mapError toString)
+  check "EvidenceCheckboxEditMarksStale" (isStale (evidence (← control unticked "Paid")))
   let customer : Evidence := { page := 1, cellIds := [8], text := "Example Retail AG" }
   check "EvidenceUnreadablePickIsRejected"
     (match perform initial total.key (.pick customer) with

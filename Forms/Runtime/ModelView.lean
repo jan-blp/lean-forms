@@ -9,47 +9,52 @@ public import Forms.Runtime.Display
 namespace Forms.Runtime.ModelView
 open Forms.Model
 
-def editorInput {α : Type} : Model.Editor α → α → Display.Editor
+def editorValue {α : Type} : Model.Editor α → α → Display.Value
   | .formatted format, value => .text format.kind (format.print value)
   | .checkbox, value => .checkbox value
   | .choices (key := _) { options, .. } selected, value =>
     .choices (value.map (Key.encode ∘ selected))
       (options.map fun option => { value := Key.encode option.key, label := option.label })
-  | .refine editor print .., value => editorInput editor (print value)
+  | .refine editor print .., value => editorValue editor (print value)
 
-def stale {α : Type} (widget : Model.Editor α) (value : α) (evidence : Model.Evidence) : Bool :=
-  match Input.decode widget (.text evidence.text) with
-  | .ok read => editorInput widget read != editorInput widget value
+def stale
+  {α : Type}
+  (widget : Model.Editor α)
+  (read : String → Except String α)
+  (value : α)
+  (evidence : Model.Evidence)
+  : Bool :=
+  match read evidence.text with
+  | .ok read => editorValue widget read != editorValue widget value
   | .error _ => true
 
-theorem stale_of_decode
+theorem stale_of_read
   {α : Type}
   {widget : Model.Editor α}
+  {read : String → Except String α}
   {value : α}
   {evidence : Model.Evidence}
-  (read : Input.decode widget (.text evidence.text) = .ok value)
-  : stale widget value evidence = false := by
-  simp [stale, read]
+  (reads : read evidence.text = .ok value)
+  : stale widget read value evidence = false := by
+  simp [stale, reads]
 
 def readPick
   {α : Type}
-  (widget : Model.Editor α)
+  (read : String → Except String α)
   (picked : Model.Evidence)
   : Except DecodeError α :=
-  (Input.decode widget (.text picked.text)).mapError fun
-    | .input message => .input s!"Could not read \"{picked.text}\": {message}"
-    | .clientBug error => .clientBug error
+  (read picked.text).mapError fun message => .input s!"Could not read \"{picked.text}\": {message}"
 
 def evidenceOf
   {α β : Type}
   (widget : Model.Editor β)
   (value : α)
   (current : β)
-  : Option (Path α (Option Model.Evidence)) → Display.Evidence
+  : Option (EvidenceSlot α β) → Display.Evidence
   | none => .unsupported
-  | some path => match path.get value with
+  | some slot => match slot.path.get value with
     | none => .missing
-    | some evidence => .linked evidence (stale widget current evidence)
+    | some evidence => .linked evidence (stale widget slot.read current evidence)
 
 def editor
   {α : Type}
@@ -62,8 +67,8 @@ def editor
   (disabled : Bool)
   (messages : List Message)
   : Display.Control :=
-  { key := .edit location, target, label, disabled, location, evidence, messages
-    input := editorInput widget value }
+  { key := .edit location, target, label, disabled, location, messages
+    input := .field (editorValue widget value) evidence }
 
 def _root_.Forms.Model.Targets.erase
   {α : Type}
@@ -94,7 +99,6 @@ def button
   : Display.Control :=
   { key, target, label, disabled, location
     input := .action
-    evidence := .unsupported
     messages := [] }
 
 inductive ActionError where
@@ -297,10 +301,10 @@ def evaluateNode
           if disabled then throw (.invalid .disabled)
           let some input := argument | throw (.decode (.clientBug .missingArgument))
           match input, evidence with
-          | .pick picked, some evidence =>
-            let updated ← MonadExcept.ofExcept ((readPick widget picked).mapError .decode)
+          | .pick picked, some slot =>
+            let updated ← MonadExcept.ofExcept ((readPick slot.read picked).mapError .decode)
             return {
-              value := evidence.set (some picked) (path.set updated value)
+              value := slot.path.set (some picked) (path.set updated value)
               state := env
               locals := () }
           | .pick _, none => throw (.decode (.clientBug .noEvidence))
@@ -327,7 +331,6 @@ def evaluateNode
         target, location, disabled
         label := caption.eval value env
         input := .action
-        evidence := .unsupported
         messages := [] }
       requests := []
       apply := fun route argument => match route with
@@ -344,7 +347,6 @@ def evaluateNode
         target, location, disabled
         label := label.eval value env
         input := .tabs (active.get env).val (tabs.eval value env).toList
-        evidence := .unsupported
         messages := [] }
       requests := []
       apply := fun route argument => match route with
@@ -378,7 +380,6 @@ def evaluateNode
       target, location, disabled
       label := label.eval value env
       messages := ambient.messagesAt location
-      evidence := .unsupported
       input := .choice shown
         (options.map fun option => { value := Key.encode option.key, label := option.label }) }
     { output := ()

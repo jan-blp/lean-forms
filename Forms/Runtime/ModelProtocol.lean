@@ -62,6 +62,7 @@ def ModelForm.Snapshot.toWire
   { title := snapshot.view.title
     view
     draftFields := view.draftFields
+    pickFields := view.pickFields
     rejection := snapshot.ui.rejection
     controls := snapshot.controls.map DisplayProtocol.controlToJson
     submission

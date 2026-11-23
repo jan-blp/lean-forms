@@ -97,8 +97,12 @@ function Evidence({ evidence, disabled, onPick }: {
   );
 }
 
-export function TextField(
-    { name, label, kind, value, disabled, errors, evidence, onCommit }: FormsReact.TextField) {
+/** Shows the field's cells while it is hovered or focused, and its evidence with a pick button. */
+function useEvidence(
+    name: string,
+    evidence: FormsReact.Evidence,
+    disabled: boolean,
+    action: FormsReact.Action) {
   const form = useLeanForm();
   const host = form.evidence;
   const linked = typeof evidence === 'object' ? evidence.linked : null;
@@ -121,6 +125,16 @@ export function TextField(
     onFocus: () => focus(true),
     onBlur: () => focus(false),
   } : {};
+  const status = evidence === 'unsupported' ? null
+    : <Evidence evidence={evidence} disabled={disabled}
+      onPick={host ? () => form.requestPick(name, action) : undefined} />;
+  return { tracking, status };
+}
+
+export function TextField(
+    { name, label, kind, value, disabled, errors, evidence, onCommit }: FormsReact.TextField) {
+  const form = useLeanForm();
+  const { tracking, status } = useEvidence(name, evidence, disabled, onCommit);
   const input = useRef<HTMLInputElement>(null);
   const feedback = useId();
   const draft = form.draft(name);
@@ -162,23 +176,24 @@ export function TextField(
         } : undefined}
         onBlur={() => { if (form.draft(name) !== undefined) commit(); }} /></label>
       <Feedback id={feedback} errors={shown} />
-      {evidence !== 'unsupported' && <Evidence evidence={evidence} disabled={disabled}
-        onPick={host ? () => form.requestPick(name, onCommit) : undefined} />}
+      {status}
     </form>
   );
 }
 
 export function Checkbox(
-    { name, label, checked, disabled, errors, onChange }: FormsReact.Checkbox) {
+    { name, label, checked, disabled, errors, evidence, onChange }: FormsReact.Checkbox) {
   const form = useLeanForm();
+  const { tracking, status } = useEvidence(name, evidence, disabled, onChange);
   const feedback = useId();
   return (
-    <form className="editor" noValidate onSubmit={event => event.preventDefault()}>
+    <form className="editor" noValidate onSubmit={event => event.preventDefault()} {...tracking}>
       <label>{label}<input ref={element => form.registerTarget(name, element)}
         type="checkbox" checked={checked} disabled={disabled}
         {...described(errors, feedback)}
         onChange={event => form.run(onChange, event.target.checked)} /></label>
       <Feedback id={feedback} errors={errors} />
+      {status}
     </form>
   );
 }
@@ -202,8 +217,9 @@ export function Choice(
 }
 
 export function Choices(
-    { name, label, values, options, disabled, errors, onChange }: FormsReact.Choices) {
+    { name, label, values, options, disabled, errors, evidence, onChange }: FormsReact.Choices) {
   const form = useLeanForm();
+  const { tracking, status } = useEvidence(name, evidence, disabled, onChange);
   const feedback = useId();
   const toggle = (value: string, checked: boolean) => form.run(onChange,
     options.map(option => option.value)
@@ -211,13 +227,14 @@ export function Choices(
   return (
     <fieldset ref={element => form.registerTarget(name,
       element?.querySelector<HTMLInputElement>('input:checked') ?? element?.querySelector('input') ?? null)}
-      className="choice" {...described(errors, feedback)}>
+      className="choice" {...described(errors, feedback)} {...tracking}>
       <legend>{label}</legend>
       {options.map(option =>
         <label key={option.value}><input type="checkbox" value={option.value}
           checked={values.includes(option.value)} disabled={disabled}
           onChange={event => toggle(option.value, event.target.checked)} />{option.label}</label>)}
       <Feedback id={feedback} errors={errors} />
+      {status}
     </fieldset>
   );
 }

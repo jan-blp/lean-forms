@@ -102,21 +102,22 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
   let name := ControlKeyProtocol.toString c.key
   let disabled := pending || c.disabled
   match c.input with
-  | .text kind value => .textField {
+  | .field (.text kind value) evidence => .textField {
       name
       label := c.label
       kind := kind.toReact
       value
       disabled
       errors := Model.Message.errors c.messages
-      evidence := c.evidence.toReact
+      evidence := evidence.toReact
       onCommit := .apply name }
-  | .checkbox checked => .checkbox {
+  | .field (.checkbox checked) evidence => .checkbox {
       name
       label := c.label
       checked
       disabled
       errors := Model.Message.errors c.messages
+      evidence := evidence.toReact
       onChange := .apply name }
   | .choice value options => .choice {
       name
@@ -126,13 +127,14 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       disabled
       errors := Model.Message.errors c.messages
       onChange := .apply name }
-  | .choices values options => .choices {
+  | .field (.choices values options) evidence => .choices {
       name
       label := c.label
       values
       options := options.map fun option => { value := option.value, label := option.label }
       disabled
       errors := Model.Message.errors c.messages
+      evidence := evidence.toReact
       onChange := .apply name }
   | .action => .button { label := c.label, variant := .secondary, disabled, onClick := .press name }
   | .tabs active labels =>

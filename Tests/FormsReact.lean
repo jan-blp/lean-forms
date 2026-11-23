@@ -15,21 +15,19 @@ private def control
   (key : ControlKey)
   (label : String)
   (input : Display.Editor)
-  (evidence : Display.Evidence)
   (messages : List Forms.Model.Message := [])
   : Display.Control :=
-  { key, target := {}, label, disabled := false, location := [], input, evidence, messages }
+  { key, target := {}, label, disabled := false, location := [], input, messages }
 
 def view : Display.View :=
   .stack (some "Person") [
-    .control (control (.edit [.field "name"]) "Name" (.text .plain "Ada")
-      (messages := [{ kind := .error, text := "Enter your name." }])
-      (evidence := .linked { page := 1, cellIds := [3, 4], text := "Ada" } false)),
-    .control (control (.edit [.field "age"]) "Age" (.text .natural "36")
-      (evidence := .unsupported)),
+    .control (control (.edit [.field "name"]) "Name"
+      (.field (.text .plain "Ada") (.linked { page := 1, cellIds := [3, 4], text := "Ada" } false))
+      (messages := [{ kind := .error, text := "Enter your name." }])),
+    .control (control (.edit [.field "age"]) "Age" (.field (.text .natural "36") .unsupported)),
     .hidden,
-    .stack (some "") [.control (control (.edit [.field "delivery"]) "Delivery" (.checkbox true)
-      (evidence := .unsupported))],
+    .stack (some "") [.control (control (.edit [.field "delivery"]) "Delivery"
+      (.field (.checkbox true) .missing))],
     .computed "Summary" "Ada, 36"]
 
 def expected : FormsReact.Component :=
@@ -63,6 +61,7 @@ def expected : FormsReact.Component :=
             checked := true
             disabled := false
             errors := []
+            evidence := .missing
             onChange := .apply "[\"edit\",\"delivery\"]" }]
         errors := []
         key := none },
@@ -73,9 +72,11 @@ def expected : FormsReact.Component :=
 def run : IO Unit := do
   check "Lowering changed" (view.toReact false == some expected)
   check "Draft fields changed" (expected.draftFields == ["[\"edit\",\"name\"]", "[\"edit\",\"age\"]"])
+  check "Pick fields changed"
+    (expected.pickFields == ["[\"edit\",\"name\"]", "[\"edit\",\"delivery\"]"])
   check "Hidden view must lower to nothing" (Display.View.hidden.toReact false == none)
   check "Buttons must lower to press"
-    ((control (.press [0] []) "Add" .action (evidence := .unsupported)).toReact false ==
+    ((control (.press [0] []) "Add" .action).toReact false ==
       .button { label := "Add", variant := .secondary, disabled := false, onClick := .press "[\"press\",[0],[]]" })
   let pendingPage := view.toReactPage { Interaction.State.initial with pending := true } "{}"
   check "Pending page must have no draft fields" pendingPage.draftFields.isEmpty

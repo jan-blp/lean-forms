@@ -15,20 +15,35 @@ structure InvoiceHeader where
   issuedEvidence : Option Evidence
   total : Option Decimal
   totalEvidence : Option Evidence
+  paid : Bool
+  paidEvidence : Option Evidence
   note : String
   deriving FormModel
 
+/-- Reads the payment stamp printed on the invoice. -/
+def InvoiceHeader.readStamp (text : String) : Except String Bool :=
+  match (String.ofList (Format.trim text.toList)).toUpper with
+  | "PAID" => .ok true
+  | "UNPAID" => .ok false
+  | _ => .error "Expected PAID or UNPAID."
+
 def InvoiceHeader.form : Component [] InvoiceHeader.Raw :=
   .group "Invoice" [
-    .fieldWithEvidence path[InvoiceHeader.Field.number] path[InvoiceHeader.Field.numberEvidence]
+    .fieldWithEvidence path[InvoiceHeader.Field.number]
+      { path := path[InvoiceHeader.Field.numberEvidence], read := Format.plain.parse }
       "Invoice number" .text,
-    .fieldWithEvidence path[InvoiceHeader.Field.issued] path[InvoiceHeader.Field.issuedEvidence]
+    .fieldWithEvidence path[InvoiceHeader.Field.issued]
+      { path := path[InvoiceHeader.Field.issuedEvidence], read := (some <$> Format.date.parse ·) }
       "Issued on" (.optional .date),
-    .fieldWithEvidence path[InvoiceHeader.Field.total] path[InvoiceHeader.Field.totalEvidence]
+    .fieldWithEvidence path[InvoiceHeader.Field.total]
+      { path := path[InvoiceHeader.Field.totalEvidence], read := (some <$> Format.decimal.parse ·) }
       "Total" (.optional .decimal),
+    .fieldWithEvidence path[InvoiceHeader.Field.paid]
+      { path := path[InvoiceHeader.Field.paidEvidence], read := InvoiceHeader.readStamp }
+      "Paid" .checkbox,
     .field path[InvoiceHeader.Field.note] "Internal note" .text]
 
-/-- The number matches its cells, the date has none, and the total was mistyped. -/
+/-- The number matches its cells, the date and payment have none, and the total was mistyped. -/
 def InvoiceHeader.initial : InvoiceHeader.Raw where
   number := "INV-2026-0042"
   numberEvidence := some { page := 1, cellIds := [4], text := "INV-2026-0042" }
@@ -36,6 +51,8 @@ def InvoiceHeader.initial : InvoiceHeader.Raw where
   issuedEvidence := none
   total := some { mantissa := 12435, exponent := 1, normalized := by decide }
   totalEvidence := some { page := 1, cellIds := [19], text := "1234.50" }
+  paid := false
+  paidEvidence := none
   note := ""
 
 def InvoiceHeader.cell (id x y width : Nat) (text : String) : Runtime.Viewer.Cell :=
@@ -67,6 +84,7 @@ def InvoiceHeader.document : Runtime.Viewer.Document where
       InvoiceHeader.cell 17 440 290 120 "438.50",
       InvoiceHeader.cell 18 320 340 100 "Total (EUR)",
       InvoiceHeader.cell 19 440 340 120 "1234.50",
-      InvoiceHeader.cell 20 40 440 360 "Payment due within 30 days."] }]
+      InvoiceHeader.cell 20 40 440 360 "Payment due within 30 days.",
+      InvoiceHeader.cell 21 440 70 120 "PAID"] }]
 
 end Forms.ExampleForms

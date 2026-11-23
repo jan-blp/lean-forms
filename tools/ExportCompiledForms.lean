@@ -7,17 +7,18 @@ open Lean Forms Forms.Runtime Forms.ExampleForms
 
 private def actionArgument (input : Display.Editor) : Json :=
   match input with
-  | .text .natural text => toJson ("00" ++ toString (text.toNat! + 123456789012345678901234567890))
-  | .text .plain text => toJson (text ++ " 🌍\x00")
-  | .text .integer text => toJson (s!" {text.toInt! - 123456789012345678901234567890} ")
-  | .text .decimal text => toJson (text ++ "05")
-  | .text .date _ => toJson "2024-02-29"
-  | .text .uuid _ => toJson "123E4567-E89B-12D3-A456-426614174000"
-  | .checkbox value => toJson (!value)
+  | .field (.text .natural text) _ =>
+    toJson ("00" ++ toString (text.toNat! + 123456789012345678901234567890))
+  | .field (.text .plain text) _ => toJson (text ++ " 🌍\x00")
+  | .field (.text .integer text) _ => toJson (s!" {text.toInt! - 123456789012345678901234567890} ")
+  | .field (.text .decimal text) _ => toJson (text ++ "05")
+  | .field (.text .date _) _ => toJson "2024-02-29"
+  | .field (.text .uuid _) _ => toJson "123E4567-E89B-12D3-A456-426614174000"
+  | .field (.checkbox value) _ => toJson (!value)
   | .action => Json.null
   | .tabs active labels => toJson (toString ((active + 1) % labels.length.max 1))
   | .choice selected options => toJson ((options.find? (·.value != selected)).map (·.value) |>.getD selected)
-  | .choices selected options =>
+  | .field (.choices selected options) _ =>
     let toggled := (options.head?.map (·.value)).getD ""
     let picked (value : String) := (value == toggled) != selected.contains value
     toJson ((options.map (·.value)).filter picked)

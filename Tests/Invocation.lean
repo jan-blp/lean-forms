@@ -12,11 +12,11 @@ private def check (message : String) (ok : Bool) : IO Unit := do
   IO.println s!"PASS {message}"
 
 private def argument : Display.Editor → Option Input
-  | .text .natural _ => some (.text "1")
-  | .text _ _ => some (.text "x")
-  | .checkbox value => some (.boolean !value)
+  | .field (.text .natural _) _ => some (.text "1")
+  | .field (.text _ _) _ => some (.text "x")
+  | .field (.checkbox value) _ => some (.boolean !value)
+  | .field (.choices selected _) _ => some (.texts selected)
   | .choice selected _ => some (.text selected)
-  | .choices selected _ => some (.texts selected)
   | .action => none
   | .tabs active labels => some (.text (toString ((active + 1) % labels.length.max 1)))
 

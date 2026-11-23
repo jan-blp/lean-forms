@@ -64,6 +64,8 @@ structure Snapshot where
   rejection : Option String
   /-- Names of the fields whose drafts React keeps. -/
   draftFields : List String
+  /-- Names of the fields that take a pick from the document. -/
+  pickFields : List String
   effects : List Effect
   controls : List Json
   submission : Json

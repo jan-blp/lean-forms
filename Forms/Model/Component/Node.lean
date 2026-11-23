@@ -84,6 +84,11 @@ inductive CollectionDisplay (Γ : Context) (α β : Type) : (columns : Nat) → 
       (selected : Option (Computation (Context.row β Γ) β Bool))
       : CollectionDisplay Γ α β columns
 
+/-- Where a field keeps its evidence, and how the picked text reads as its value. -/
+structure EvidenceSlot (α β : Type) where
+  path : Path α (Option Evidence)
+  read : String → Except String β
+
 mutual
 inductive ComponentNode : (Γ : Context) → (model state output : Type) → (holes : Nat) → Type 1 where
   /-- `evidence` records the document cells a value was picked from. -/
@@ -92,7 +97,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (path : Path α β)
       (label : Computation Γ α String)
       (editor : Editor β)
-      (evidence : Option (Path α (Option Evidence)))
+      (evidence : Option (EvidenceSlot α β))
       : ComponentNode Γ α Unit Unit 0
   | computed {Γ : Context}
       {α : Type}

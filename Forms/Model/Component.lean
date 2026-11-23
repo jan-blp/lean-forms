@@ -84,7 +84,7 @@ def RowSelection.itemPath
   {Γ : Context}
   {α β : Type}
   (path : Path α β)
-  (evidence : Path α (Option Evidence))
+  (evidence : EvidenceSlot α β)
   (label : Computation Γ α String)
   (editor : Editor β)
   : Component Γ α :=

@@ -30,8 +30,8 @@ export interface LeanFormContext {
   /** Records the text of field `name`; `undefined` drops the draft. */
   setDraft(name: string, text: string | undefined, error?: string): void;
   run(action: FormsReact.Action, argument?: unknown): void;
-  /** Lets the evidence host fill text field `name` with the next pick, through `onCommit`. */
-  requestPick(name: string, onCommit: FormsReact.Action): void;
+  /** Lets the evidence host fill field `name` with the next pick, through `action`. */
+  requestPick(name: string, action: FormsReact.Action): void;
 }
 
 export const Context = createContext<LeanFormContext | null>(null);
