@@ -78,7 +78,7 @@ abbrev Component.field
   (label : Computation Γ α String)
   (editor : Editor β)
   : Component Γ α :=
-  { LocalState := Unit, node := .field path label editor none }
+  { LocalState := Unit, node := .field path label editor .unsupported }
 
 abbrev Component.fieldWithEvidence
   {Γ : Context}
@@ -88,7 +88,7 @@ abbrev Component.fieldWithEvidence
   (label : Computation Γ α String)
   (editor : Editor β)
   : Component Γ α :=
-  { LocalState := Unit, node := .field path label editor (some evidence) }
+  { LocalState := Unit, node := .field path label editor (.supported evidence) }
 
 abbrev Component.computed
   {Γ : Context}

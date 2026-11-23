@@ -50,9 +50,9 @@ def evidenceOf
   (widget : Model.Editor β)
   (value : α)
   (current : β)
-  : Option (EvidenceSlot α β) → Display.Evidence
-  | none => .unsupported
-  | some slot => match slot.path.get value with
+  : EvidenceSupport α β → Display.Evidence
+  | .unsupported => .unsupported
+  | .supported slot => match slot.path.get value with
     | none => .missing
     | some evidence => .linked evidence (stale widget slot.read current evidence)
 
@@ -300,17 +300,18 @@ def evaluateNode
         | [] => do
           if disabled then throw (.invalid .disabled)
           let some input := argument | throw (.decode (.clientBug .missingArgument))
-          match input, evidence with
-          | .pick picked, some slot =>
-            let updated ← MonadExcept.ofExcept ((readPick slot.read picked).mapError .decode)
-            return {
-              value := slot.path.set (some picked) (path.set updated value)
-              state := env
-              locals := () }
-          | .pick _, none => throw (.decode (.clientBug .noEvidence))
-          | .text _, _
-          | .boolean _, _
-          | .texts _, _ =>
+          match input with
+          | .pick picked => match evidence with
+            | .supported slot =>
+              let updated ← MonadExcept.ofExcept ((readPick slot.read picked).mapError .decode)
+              return {
+                value := slot.path.set (some picked) (path.set updated value)
+                state := env
+                locals := () }
+            | .unsupported => throw (.decode (.clientBug .noEvidence))
+          | .text _
+          | .boolean _
+          | .texts _ =>
             let updated ← MonadExcept.ofExcept ((Input.decode widget input).mapError .decode)
             return {
               value := path.set updated value

@@ -88,6 +88,10 @@ structure EvidenceSlot (α β : Type) where
   path : Path α (Option Evidence)
   read : String → Except String β
 
+inductive EvidenceSupport (α β : Type) where
+  | unsupported
+  | supported (slot : EvidenceSlot α β)
+
 mutual
 inductive ComponentNode : (Γ : Context) → (model state output : Type) → (holes : Nat) → Type 1 where
   /-- `evidence` records the document cells a value was picked from. -/
@@ -96,7 +100,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (path : Path α β)
       (label : Computation Γ α String)
       (editor : Editor β)
-      (evidence : Option (EvidenceSlot α β))
+      (evidence : EvidenceSupport α β)
       : ComponentNode Γ α Unit Unit 0
   | computed {Γ : Context}
       {α : Type}
