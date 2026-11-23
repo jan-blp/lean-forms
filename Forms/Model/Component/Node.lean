@@ -84,7 +84,6 @@ inductive CollectionDisplay (Γ : Context) (α β : Type) : (columns : Nat) → 
       (selected : Option (Computation (Context.row β Γ) β Bool))
       : CollectionDisplay Γ α β columns
 
-/-- Where a field keeps its evidence, and how the picked text reads as its value. -/
 structure EvidenceSlot (α β : Type) where
   path : Path α (Option Evidence)
   read : String → Except String β
