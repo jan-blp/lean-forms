@@ -93,24 +93,31 @@ theorem _root_.FormsReact.Checks.of_info
     repeat' split
     all_goals simp_all [Decidable.or_iff_not_imp_left]
 
+def Display.Evidence.toReact : Evidence → FormsReact.Evidence
+  | .unsupported => .unsupported
+  | .missing => .missing
+  | .linked evidence stale => .linked evidence.page evidence.cellIds stale
+
 def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Component :=
   let name := ControlKeyProtocol.toString c.key
   let disabled := pending || c.disabled
   match c.input with
-  | .text kind value => .textField {
+  | .field (.text kind value) evidence => .textField {
       name
       label := c.label
       kind := kind.toReact
       value
       disabled
       errors := Model.Message.errors c.messages
+      evidence := evidence.toReact
       onCommit := .apply name }
-  | .checkbox checked => .checkbox {
+  | .field (.checkbox checked) evidence => .checkbox {
       name
       label := c.label
       checked
       disabled
       errors := Model.Message.errors c.messages
+      evidence := evidence.toReact
       onChange := .apply name }
   | .choice value options => .choice {
       name
@@ -120,13 +127,14 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       disabled
       errors := Model.Message.errors c.messages
       onChange := .apply name }
-  | .choices values options => .choices {
+  | .field (.choices values options) evidence => .choices {
       name
       label := c.label
       values
       options := options.map fun option => { value := option.value, label := option.label }
       disabled
       errors := Model.Message.errors c.messages
+      evidence := evidence.toReact
       onChange := .apply name }
   | .action => .button { label := c.label, variant := .secondary, disabled, onClick := .press name }
   | .tabs active labels =>

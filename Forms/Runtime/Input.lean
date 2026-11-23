@@ -10,12 +10,21 @@ inductive Input where
   | text (value : String)
   | boolean (value : Bool)
   | texts (values : List String)
+  | pick (evidence : Model.Evidence)
+
+/-- Whether the input is text the user typed, which stays in the field as a draft when rejected. -/
+def Input.typed : Input → Bool
+  | .text _ => true
+  | .boolean _ => false
+  | .texts _ => false
+  | .pick _ => false
 
 inductive ClientBug where
   | missingArgument
   | unexpectedArgument
   | wrongArgument (expected : String)
   | unknownOption
+  | noEvidence
   deriving DecidableEq, Repr
 
 instance : ToString ClientBug where
@@ -24,6 +33,7 @@ instance : ToString ClientBug where
     | .unexpectedArgument => "This action takes no argument."
     | .wrongArgument expected => s!"Expected {expected}."
     | .unknownOption => "Unknown option."
+    | .noEvidence => "This field takes no evidence."
 
 inductive DecodeError where
   | input (message : String)

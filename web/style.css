@@ -176,3 +176,27 @@ caption { text-align: left; font-size: 16px; font-weight: 500; padding-bottom: v
 .check::before { content: "•"; display: inline-block; width: var(--space-m); text-indent: 0; }
 .editor .feedback { flex-basis: 100%; }
 [aria-invalid="true"] { border-color: var(--error); }
+
+main.wide { max-width: 1320px; }
+.with-document { display: grid; gap: var(--space-xl); grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1000px) {
+  .with-document { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .document { position: sticky; top: var(--space-m); }
+}
+.document { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-m); padding: var(--space-m); }
+.page { display: block; width: 100%; height: auto; }
+.page .sheet { fill: var(--surface); }
+.cell rect { fill: transparent; stroke: transparent; }
+.cell text { font-size: 13px; fill: var(--text); }
+.cell.highlighted rect { fill: var(--primary-light); stroke: var(--primary); }
+.cell.highlighted.stale rect { fill: #fff1e6; stroke: var(--warning); }
+.picking .cell { cursor: pointer; }
+.picking .cell:hover rect { stroke: var(--primary-pressed); }
+.cell.selected rect { fill: var(--primary-pressed); stroke: var(--primary-active); }
+.pick-bar { display: flex; flex-wrap: wrap; gap: var(--space-xs); align-items: center; margin-bottom: var(--space-s); }
+.pick-bar > span { flex-basis: 100%; color: var(--text-secondary); }
+.evidence { display: flex; flex-wrap: wrap; flex-basis: 100%; gap: var(--space-xs); align-items: center; }
+.evidence-status { font-size: 12px; color: var(--text-secondary); }
+.evidence-status.linked { color: var(--success); }
+.evidence-status.stale { color: var(--warning); }
+.evidence .pick { min-height: 24px; padding: 0 var(--space-s); font-size: 12px; }

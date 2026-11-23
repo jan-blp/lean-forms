@@ -21,11 +21,13 @@ private def control
 
 def view : Display.View :=
   .stack (some "Person") [
-    .control (control (.edit [.field "name"]) "Name" (.text .plain "Ada")
+    .control (control (.edit [.field "name"]) "Name"
+      (.field (.text .plain "Ada") (.linked { page := 1, cellIds := [3, 4], text := "Ada" } false))
       (messages := [{ kind := .error, text := "Enter your name." }])),
-    .control (control (.edit [.field "age"]) "Age" (.text .natural "36")),
+    .control (control (.edit [.field "age"]) "Age" (.field (.text .natural "36") .unsupported)),
     .hidden,
-    .stack (some "") [.control (control (.edit [.field "delivery"]) "Delivery" (.checkbox true))],
+    .stack (some "") [.control (control (.edit [.field "delivery"]) "Delivery"
+      (.field (.checkbox true) .missing))],
     .computed "Summary" "Ada, 36"]
 
 def expected : FormsReact.Component :=
@@ -39,6 +41,7 @@ def expected : FormsReact.Component :=
         value := "Ada"
         disabled := false
         errors := ["Enter your name."]
+        evidence := .linked 1 [3, 4] false
         onCommit := .apply "[\"edit\",\"name\"]" },
       .textField {
         name := "[\"edit\",\"age\"]"
@@ -47,6 +50,7 @@ def expected : FormsReact.Component :=
         value := "36"
         disabled := false
         errors := []
+        evidence := .unsupported
         onCommit := .apply "[\"edit\",\"age\"]" },
       .group {
         label := none
@@ -57,6 +61,7 @@ def expected : FormsReact.Component :=
             checked := true
             disabled := false
             errors := []
+            evidence := .missing
             onChange := .apply "[\"edit\",\"delivery\"]" }]
         errors := []
         key := none },
@@ -67,6 +72,8 @@ def expected : FormsReact.Component :=
 def run : IO Unit := do
   check "Lowering changed" (view.toReact false == some expected)
   check "Draft fields changed" (expected.draftFields == ["[\"edit\",\"name\"]", "[\"edit\",\"age\"]"])
+  check "Pick fields changed"
+    (expected.pickFields == ["[\"edit\",\"name\"]", "[\"edit\",\"delivery\"]"])
   check "Hidden view must lower to nothing" (Display.View.hidden.toReact false == none)
   check "Buttons must lower to press"
     ((control (.press [0] []) "Add" .action).toReact false ==

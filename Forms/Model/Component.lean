@@ -36,25 +36,25 @@ structure Branch (Γ : Context) (α : Type) [Constructors α] where
   initial : Payload
   body : Component Γ Payload
 
-@[reducible] def Component.issues
+abbrev Component.issues
   {Γ : Context}
   {α : Type}
   : Component Γ α (List Issue) :=
   { LocalState := Unit, node := .issues }
 
-@[reducible] def Component.reports
+abbrev Component.reports
   {Γ : Context}
   {α β : Type}
   (path : Path α β)
   : Component Γ α (List ReportMessage) :=
-  ⟨Unit, .reports path⟩
+  { LocalState := Unit, node := .reports path }
 
-@[reducible] def Component.statusMarker
+abbrev Component.statusMarker
   {Γ : Context}
   {α : Type}
   (reports : Computation Γ α (List ReportMessage))
   : Component Γ α :=
-  ⟨Unit, .statusMarker reports⟩
+  { LocalState := Unit, node := .statusMarker reports }
 
 def RowSelection.itemPath
   {α β : Type}
@@ -64,39 +64,49 @@ def RowSelection.itemPath
   | .none => Option.none
   | .row id => some ((PartialPath.ofPath items).trans (.item id .self))
 
-@[reducible] def Component.output
+abbrev Component.output
   {Γ : Context}
   {α β : Type}
   (value : Computation Γ α β)
   : Component Γ α β :=
-  ⟨Unit, .output value⟩
+  { LocalState := Unit, node := .output value }
 
-@[reducible] def Component.field
+abbrev Component.field
   {Γ : Context}
   {α β : Type}
   (path : Path α β)
   (label : Computation Γ α String)
   (editor : Editor β)
   : Component Γ α :=
-  ⟨Unit, .field path label editor⟩
+  { LocalState := Unit, node := .field path label editor .unsupported }
 
-@[reducible] def Component.computed
+abbrev Component.fieldWithEvidence
+  {Γ : Context}
+  {α β : Type}
+  (path : Path α β)
+  (evidence : EvidenceSlot α β)
+  (label : Computation Γ α String)
+  (editor : Editor β)
+  : Component Γ α :=
+  { LocalState := Unit, node := .field path label editor (.supported evidence) }
+
+abbrev Component.computed
   {Γ : Context}
   {α : Type}
   (label : Computation Γ α String)
   (value : Computation Γ α String)
   : Component Γ α :=
-  ⟨Unit, .computed label value⟩
+  { LocalState := Unit, node := .computed label value }
 
-@[reducible] def Component.button
+abbrev Component.button
   {Γ : Context}
   {α : Type}
   (caption : Computation Γ α String)
   (action : Action Γ α)
   : Component Γ α :=
-  ⟨Unit, .button caption action⟩
+  { LocalState := Unit, node := .button caption action }
 
-@[reducible] def Component.tabBar
+abbrev Component.tabBar
   {Γ : Context}
   {α : Type}
   {n : Nat}
@@ -104,18 +114,18 @@ def RowSelection.itemPath
   (active : Var Γ (Fin n))
   (tabs : Computation Γ α (Vector String n))
   : Component Γ α :=
-  ⟨Unit, .tabBar label active tabs⟩
+  { LocalState := Unit, node := .tabBar label active tabs }
 
-@[reducible] def Component.withAvailability
+abbrev Component.withAvailability
   {Γ : Context}
   {α β : Type}
   {holes : Nat}
   (availability : Computation Γ α Availability)
   (body : Component Γ α β holes)
   : Component Γ α β holes :=
-  ⟨body.LocalState, .withAvailability availability body.node⟩
+  { LocalState := body.LocalState, node := .withAvailability availability body.node }
 
-@[reducible] def Component.collection
+abbrev Component.collection
   {Γ : Context}
   {α β γ : Type}
   {views : Nat}
@@ -125,28 +135,28 @@ def RowSelection.itemPath
   (row : Presentation [] (Context.row β Γ) β γ views)
   (display : CollectionDisplay Γ α β views)
   : Component Γ α (List γ) (holes := 1) :=
-  ⟨Std.HashMap Uuid row.LocalState, .collection path label row.node display⟩
+  { LocalState := Std.HashMap Uuid row.LocalState, node := .collection path label row.node display }
 
-@[reducible] def Component.zoom?
+abbrev Component.zoom?
   {Γ : Context}
   {α β γ : Type}
   {holes : Nat}
   (target : Computation Γ α (Option (PartialPath α β)))
   (body : Component Γ β γ holes)
   : Component Γ α (Option γ) holes :=
-  ⟨body.LocalState, .zoom? target body.node⟩
+  { LocalState := body.LocalState, node := .zoom? target body.node }
 
-@[reducible] def Component.zoom
+abbrev Component.zoom
   {Γ : Context}
   {α β γ : Type}
   {holes : Nat}
   (path : Path α β)
   (body : Component Γ β γ holes)
   : Component Γ α γ holes :=
-  ⟨body.LocalState, .zoom path body.node⟩
+  { LocalState := body.LocalState, node := .zoom path body.node }
 
 /-- Loaded subtree state persists while its resolved status is equal. -/
-@[reducible] def Component.load
+abbrev Component.load
   {Γ : Context}
   {α β data : Type}
   {holes : Nat}
@@ -154,7 +164,8 @@ def RowSelection.itemPath
   (source : Computation Γ α (Source data))
   (body : Status data → Component Γ α β holes)
   : Component Γ α β holes :=
-  ⟨LoadedState data (fun status => (body status).LocalState), .load source (fun status => (body status).node)⟩
+  { LocalState := LoadedState data (fun status => (body status).LocalState)
+    node := .load source (fun status => (body status).node) }
 
 def Component.visibleWhen
   {Γ : Context}
@@ -172,7 +183,7 @@ def Component.disabledWhen
   : Component Γ α β :=
   .withAvailability ((fun disabled => if disabled then .disabled else .enabled) <$> condition) body
 
-@[reducible] def Component.select
+abbrev Component.select
   {Γ : Context}
   {α β κ : Type}
   [DecidableEq κ]
@@ -182,7 +193,7 @@ def Component.disabledWhen
   (options : Computation Γ α (SelectOptions κ β))
   (selected : β → κ)
   : Component Γ α :=
-  ⟨Unit, .select path label options selected⟩
+  { LocalState := Unit, node := .select path label options selected }
 
 structure Labelled (β : Type) where
   value : β
@@ -254,7 +265,7 @@ def Component.loadOr
     | .loading => fallback
     | .failed _ => fallback
 
-@[reducible] def Presentation.layouts
+abbrev Presentation.layouts
   {Δ : ViewContext}
   {Γ : Context}
   {α β : Type}
@@ -262,9 +273,9 @@ def Component.loadOr
   (output : Computation Γ α β)
   (arrangement : Computation Γ α (Vector (Layout Δ) views))
   : Presentation Δ Γ α β views :=
-  ⟨Unit, .layout output arrangement⟩
+  { LocalState := Unit, node := .layout output arrangement }
 
-@[reducible] def Presentation.layout
+abbrev Presentation.layout
   {Δ : ViewContext}
   {Γ : Context}
   {α β : Type}
@@ -273,7 +284,7 @@ def Component.loadOr
   : Presentation Δ Γ α β :=
   .layouts output ((#v[·]) <$> arrangement)
 
-@[reducible] def Presentation.arrange
+abbrev Presentation.arrange
   {Δ : ViewContext}
   {Γ : Context}
   {α : Type}
@@ -281,7 +292,7 @@ def Component.loadOr
   : Presentation Δ Γ α :=
   .layout (.const ()) arrangement
 
-@[reducible] def Presentation.own
+abbrev Presentation.own
   {Δ : ViewContext}
   {Γ : Context}
   {α β γ : Type}
@@ -289,9 +300,10 @@ def Component.loadOr
   (component : Component Γ α β holes)
   (body : Presentation (holes :: Δ) (⟨.readOnly, β⟩ :: Γ) α γ views)
   : Presentation Δ Γ α γ views :=
-  ⟨ObservationState component.LocalState body.LocalState, .own component.node body.node⟩
+  { LocalState := ObservationState component.LocalState body.LocalState
+    node := .own component.node body.node }
 
-@[reducible] def Presentation.bind
+abbrev Presentation.bind
   {Δ : ViewContext}
   {Γ : Context}
   {α β γ : Type}
@@ -299,11 +311,11 @@ def Component.loadOr
   (initial : β)
   (body : Presentation Δ (⟨.writable, β⟩ :: Γ) α γ views)
   : Presentation Δ Γ α γ views :=
-  ⟨Binding β body.LocalState, .bind initial body.node⟩
+  { LocalState := Binding β body.LocalState, node := .bind initial body.node }
 
 /-- Binds the active tab and owns its strip; `body` reads the tab as `.there .here` and places the
 strip as `ViewRef.here`. -/
-@[reducible] def Presentation.tabs
+abbrev Presentation.tabs
   {Δ : ViewContext}
   {n : Nat}
   {Γ : Context}
@@ -314,14 +326,14 @@ strip as `ViewRef.here`. -/
   : Presentation Δ Γ α β :=
   .bind 0 (.own (.tabBar label .here labels) body)
 
-@[reducible] def Component.present
+abbrev Component.present
   {Γ : Context}
   {α β : Type}
   (body : Presentation [] Γ α β)
   : Component Γ α β :=
-  ⟨body.LocalState, .present body.node⟩
+  { LocalState := body.LocalState, node := .present body.node }
 
-@[reducible] def Component.bind
+abbrev Component.bind
   {Γ : Context}
   {α β γ : Type}
   (initial : β)
@@ -332,16 +344,16 @@ strip as `ViewRef.here`. -/
       .own body <|
         .layout { inputs := inputs[.ui .here], run := id } (.const (.place .here))
 
-@[reducible] def Component.rename
+abbrev Component.rename
   {Γ Δ : Context}
   {α β : Type}
   {holes : Nat}
   (rename : Renaming Γ Δ)
   (component : Component Γ α β holes)
   : Component Δ α β holes :=
-  ⟨component.LocalState, component.node.rename rename⟩
+  { LocalState := component.LocalState, node := component.node.rename rename }
 
-@[reducible] def Component.weaken
+abbrev Component.weaken
   {Γ : Context}
   {entry : Entry}
   {α β : Type}
@@ -350,7 +362,7 @@ strip as `ViewRef.here`. -/
   : Component (entry :: Γ) α β holes :=
   component.rename Renaming.shift
 
-@[reducible] def Layout.grouped
+abbrev Layout.grouped
   {Δ : ViewContext}
   {Γ : Context}
   {α : Type}
@@ -392,7 +404,8 @@ def PresentationNode.snoc
       .layouts (output.rename Renaming.shift)
         ((fun layouts => (layouts.map (Layout.rename ViewRef.there)).push (.place .here)) <$>
           arrangement.rename Renaming.shift)
-  | .own component body => .own ⟨_, component⟩ (body.snoc (fun ref => .there (rename ref)) cell)
+  | .own component body =>
+    .own { LocalState := _, node := component } (body.snoc (fun ref => .there (rename ref)) cell)
   | .bind initial body => .bind initial (body.snoc (fun ref => .there (rename ref)) cell)
 
 def PresentationNode.group
@@ -412,8 +425,8 @@ def PresentationNode.group
   | .own component body => .own component (body.group (fun ref => .there (rename ref)) label)
   | .bind initial body => .bind initial (body.group (fun ref => .there (rename ref)) label)
 
-@[reducible] def Columns.nil {Γ : Context} {α : Type} : Columns Γ α :=
-  ⟨#v[], .layouts (.const ()) (.const #v[])⟩
+abbrev Columns.nil {Γ : Context} {α : Type} : Columns Γ α :=
+  { headers := #v[], cells := .layouts (.const ()) (.const #v[]) }
 
 def Columns.snoc
   {Γ : Context}
@@ -422,7 +435,7 @@ def Columns.snoc
   (header : String)
   (cell : Component Γ α)
   : Columns Γ α β :=
-  ⟨columns.headers.push header, columns.cells.node.snoc (fun ref => ref) cell⟩
+  { headers := columns.headers.push header, cells := columns.cells.node.snoc (fun ref => ref) cell }
 
 def Columns.ofList
   {Γ : Context}
@@ -444,13 +457,14 @@ macro "columns[" columns:tableColumn,* "]" : term => do
     | _ => Lean.Macro.throwUnsupported
   return result
 
-@[reducible] def Columns.rename
+abbrev Columns.rename
   {Γ Δ : Context}
   {α β : Type}
   (rename : Renaming Γ Δ)
   (columns : Columns Γ α β)
   : Columns Δ α β :=
-  ⟨columns.headers, ⟨_, columns.cells.node.rename rename⟩⟩
+  { headers := columns.headers
+    cells := { LocalState := _, node := columns.cells.node.rename rename } }
 
 def Columns.group
   {Γ : Context}
@@ -458,11 +472,11 @@ def Columns.group
   (label : Computation Γ α String)
   (columns : Columns Γ α β)
   : Component Γ α β :=
-  ⟨_, .present (columns.cells.node.group (fun ref => ref) label)⟩
+  { LocalState := _, node := .present (columns.cells.node.group (fun ref => ref) label) }
 
 /-- Renders `producer` followed by `body`.
 The first entry in `body`'s context is the producer's current output, available read-only. -/
-@[reducible] def Component.observe
+abbrev Component.observe
   {Γ : Context}
   {α β γ : Type}
   (producer : Component Γ α β)
@@ -475,14 +489,14 @@ The first entry in `body`'s context is the producer's current output, available 
           (.const (.group none [.place (.there .here), .place .here]))
 
 /-- A status marker for the reports at `path`. -/
-@[reducible] def Component.statusMarkerAt
+abbrev Component.statusMarkerAt
   {Γ : Context}
   {α β : Type}
   (path : Path α β)
   : Component Γ α :=
   .observe (.reports path) (.statusMarker { inputs := inputs[.ui .here], run := id })
 
-@[reducible] def Component.sequence
+abbrev Component.sequence
   {Γ : Context}
   {α β : Type}
   (first : Component Γ α Unit)
@@ -490,7 +504,7 @@ The first entry in `body`'s context is the producer's current output, available 
   : Component Γ α β :=
   .observe first second.weaken
 
-@[reducible] def Component.withOutput
+abbrev Component.withOutput
   {Γ : Context}
   {α β : Type}
   (view : Component Γ α)
@@ -498,14 +512,14 @@ The first entry in `body`'s context is the producer's current output, available 
   : Component Γ α β :=
   .sequence view (.output output)
 
-@[reducible] def Component.void
+abbrev Component.void
   {Γ : Context}
   {α β : Type}
   (body : Component Γ α β)
   : Component Γ α :=
   .present (.own body (.arrange (.const (.place .here))))
 
-@[reducible] def Component.withAddButton
+abbrev Component.withAddButton
   {Γ : Context}
   {α β γ : Type}
   [HasUuid β]
@@ -521,14 +535,14 @@ The first entry in `body`'s context is the producer's current output, available 
           (.const (.fill (.there .here) (.cons [.place .here] .nil)))
 
 /-- Labels each row "`itemLabel` n", counting from 1. -/
-@[reducible] def Computation.numbered
+abbrev Computation.numbered
   {Γ : Context}
   {β : Type}
   (itemLabel : String)
   : Computation (Context.row β Γ) β String :=
   { inputs := inputs[.ui Ref.row], run := fun row => s!"{itemLabel} {row.index.val + 1}" }
 
-@[reducible] def Component.list
+abbrev Component.list
   {Γ : Context}
   {α β γ : Type}
   [HasUuid β]
@@ -548,7 +562,7 @@ The first entry in `body`'s context is the producer's current output, available 
             ((fun label => .group (some label) [.place (.there .here), .place .here]) <$> rowLabel))
       .list
 
-@[reducible] def Component.table
+abbrev Component.table
   {Γ : Context}
   {α β γ : Type}
   [HasUuid β]
@@ -582,7 +596,7 @@ The first entry in `body`'s context is the producer's current output, available 
   .withAddButton path addCaption initial <|
     .collection path label columns.cells (.table (.const columns.headers) rowLabel selected)
 
-@[reducible] def Component.labeled
+abbrev Component.labeled
   {Γ : Context}
   {α β : Type}
   (label : Computation Γ α String)

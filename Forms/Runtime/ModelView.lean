@@ -9,18 +9,58 @@ public import Forms.Runtime.Display
 namespace Forms.Runtime.ModelView
 open Forms.Model
 
-def editorInput {α : Type} : Model.Editor α → α → Display.Editor
+def editorValue {α : Type} : Model.Editor α → α → Display.Value
   | .formatted format, value => .text format.kind (format.print value)
   | .checkbox, value => .checkbox value
   | .choices (key := _) { options, .. } selected, value =>
     .choices (value.map (Key.encode ∘ selected))
       (options.map fun option => { value := Key.encode option.key, label := option.label })
-  | .refine editor print .., value => editorInput editor (print value)
+  | .refine editor print .., value => editorValue editor (print value)
+
+def stale
+  {α : Type}
+  (widget : Model.Editor α)
+  (read : String → Except String α)
+  (value : α)
+  (evidence : Model.Evidence)
+  : Bool :=
+  match read evidence.text with
+  | .ok read => editorValue widget read != editorValue widget value
+  | .error _ => true
+
+theorem stale_of_read
+  {α : Type}
+  {widget : Model.Editor α}
+  {read : String → Except String α}
+  {value : α}
+  {evidence : Model.Evidence}
+  (reads : read evidence.text = .ok value)
+  : stale widget read value evidence = false := by
+  simp [stale, reads]
+
+def readPick
+  {α : Type}
+  (read : String → Except String α)
+  (picked : Model.Evidence)
+  : Except DecodeError α :=
+  (read picked.text).mapError fun message => .input s!"Could not read \"{picked.text}\": {message}"
+
+def evidenceOf
+  {α β : Type}
+  (widget : Model.Editor β)
+  (value : α)
+  (current : β)
+  : EvidenceSupport α β → Display.Evidence
+  | .unsupported => .unsupported
+  | .supported slot => match slot.path.get value with
+    | none => .missing
+    | some evidence => .linked evidence (stale widget slot.read current evidence)
 
 def editor
   {α : Type}
   (widget : Model.Editor α)
   (value : α)
+  (evidence : Display.Evidence)
   (target : Display.Target)
   (location : ErasedLocation)
   (label : String)
@@ -28,7 +68,7 @@ def editor
   (messages : List Message)
   : Display.Control :=
   { key := .edit location, target, label, disabled, location, messages
-    input := editorInput widget value }
+    input := .field (editorValue widget value) evidence }
 
 def _root_.Forms.Model.Targets.erase
   {α : Type}
@@ -247,9 +287,10 @@ def evaluateNode
   (disabled : Bool := false)
   : NodeEvaluation Γ α state β (Hollow holes) :=
   match component with
-  | .field path label widget =>
+  | .field path label widget evidence =>
     let location := location ++ path.erase
-    let control := editor widget (path.get value) target location
+    let current := path.get value
+    let control := editor widget current (evidenceOf widget value current evidence) target location
       (label.eval value env) disabled (ambient.messagesAt location)
     { output := ()
       locals := ()
@@ -259,11 +300,23 @@ def evaluateNode
         | [] => do
           if disabled then throw (.invalid .disabled)
           let some input := argument | throw (.decode (.clientBug .missingArgument))
-          let updated ← MonadExcept.ofExcept ((Input.decode widget input).mapError .decode)
-          return {
-            value := path.set updated value
-            state := env
-            locals := () }
+          match input with
+          | .pick picked => match evidence with
+            | .supported slot =>
+              let updated ← MonadExcept.ofExcept ((readPick slot.read picked).mapError .decode)
+              return {
+                value := slot.path.set (some picked) (path.set updated value)
+                state := env
+                locals := () }
+            | .unsupported => throw (.decode (.clientBug .noEvidence))
+          | .text _
+          | .boolean _
+          | .texts _ =>
+            let updated ← MonadExcept.ofExcept ((Input.decode widget input).mapError .decode)
+            return {
+              value := path.set updated value
+              state := env
+              locals := () }
         | _ => absent }
   | .computed label computation =>
     { output := ()

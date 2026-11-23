@@ -76,9 +76,67 @@ export function StatusMarker(checks: FormsReact.Checks) {
   );
 }
 
-export function TextField(
-    { name, label, kind, value, disabled, errors, onCommit }: FormsReact.TextField) {
+function evidenceStatus(evidence: Exclude<FormsReact.Evidence, 'unsupported'>) {
+  if (evidence === 'missing') return { tone: 'missing', text: 'Not linked to the document' };
+  if (evidence.linked.stale) return { tone: 'stale', text: 'Changed since it was picked' };
+  return { tone: 'linked', text: `From page ${evidence.linked.page}` };
+}
+
+function Evidence({ evidence, disabled, onPick }: {
+  evidence: Exclude<FormsReact.Evidence, 'unsupported'>;
+  disabled: boolean;
+  onPick?: () => void;
+}) {
+  const { tone, text } = evidenceStatus(evidence);
+  return (
+    <div className="evidence">
+      <span className={`evidence-status ${tone}`}>{text}</span>
+      {onPick && <button type="button" className="pick" disabled={disabled} onClick={onPick}>
+        Pick from document</button>}
+    </div>
+  );
+}
+
+/** Shows the field's cells while it is hovered or focused, and its evidence with a pick button. */
+function useEvidence(
+    name: string,
+    evidence: FormsReact.Evidence,
+    disabled: boolean,
+    action: FormsReact.Action) {
   const form = useLeanForm();
+  const host = form.evidence;
+  const hostRef = useRef(host);
+  hostRef.current = host;
+  const linked = typeof evidence === 'object' ? evidence.linked : null;
+  const pointer = useRef({ hovered: false, focused: false });
+  const hover = (on: boolean) => { pointer.current.hovered = on; host?.hover(on ? linked : null); };
+  const focus = (on: boolean) => { pointer.current.focused = on; host?.focus(on ? linked : null); };
+  // A pick or an edit can change the cells, or their staleness, while the field is shown.
+  const linkedKey = JSON.stringify(linked);
+  useEffect(() => {
+    if (pointer.current.hovered) hostRef.current?.hover(linked);
+    if (pointer.current.focused) hostRef.current?.focus(linked);
+  }, [linkedKey]);
+  useEffect(() => () => {
+    if (pointer.current.hovered) hostRef.current?.hover(null);
+    if (pointer.current.focused) hostRef.current?.focus(null);
+  }, []);
+  const tracking = host && evidence !== 'unsupported' ? {
+    onMouseEnter: () => hover(true),
+    onMouseLeave: () => hover(false),
+    onFocus: () => focus(true),
+    onBlur: () => focus(false),
+  } : {};
+  const status = evidence === 'unsupported' ? null
+    : <Evidence evidence={evidence} disabled={disabled}
+      onPick={host ? () => form.requestPick(name, action) : undefined} />;
+  return { tracking, status };
+}
+
+export function TextField(
+    { name, label, kind, value, disabled, errors, evidence, onCommit }: FormsReact.TextField) {
+  const form = useLeanForm();
+  const { tracking, status } = useEvidence(name, evidence, disabled, onCommit);
   const input = useRef<HTMLInputElement>(null);
   const feedback = useId();
   const draft = form.draft(name);
@@ -103,7 +161,8 @@ export function TextField(
   // Enter submits the form; leaving the field applies a pending edit.
   // A picked date applies at once; the date input reports "" while a typed date is incomplete.
   return (
-    <form className="editor" noValidate onSubmit={event => { event.preventDefault(); commit(); }}>
+    <form className="editor" noValidate onSubmit={event => { event.preventDefault(); commit(); }}
+      {...tracking}>
       <label>{label}<input ref={element => {
         input.current = element;
         form.registerTarget(name, element);
@@ -119,21 +178,24 @@ export function TextField(
         } : undefined}
         onBlur={() => { if (form.draft(name) !== undefined) commit(); }} /></label>
       <Feedback id={feedback} errors={shown} />
+      {status}
     </form>
   );
 }
 
 export function Checkbox(
-    { name, label, checked, disabled, errors, onChange }: FormsReact.Checkbox) {
+    { name, label, checked, disabled, errors, evidence, onChange }: FormsReact.Checkbox) {
   const form = useLeanForm();
+  const { tracking, status } = useEvidence(name, evidence, disabled, onChange);
   const feedback = useId();
   return (
-    <form className="editor" noValidate onSubmit={event => event.preventDefault()}>
+    <form className="editor" noValidate onSubmit={event => event.preventDefault()} {...tracking}>
       <label>{label}<input ref={element => form.registerTarget(name, element)}
         type="checkbox" checked={checked} disabled={disabled}
         {...described(errors, feedback)}
         onChange={event => form.run(onChange, event.target.checked)} /></label>
       <Feedback id={feedback} errors={errors} />
+      {status}
     </form>
   );
 }
@@ -157,8 +219,9 @@ export function Choice(
 }
 
 export function Choices(
-    { name, label, values, options, disabled, errors, onChange }: FormsReact.Choices) {
+    { name, label, values, options, disabled, errors, evidence, onChange }: FormsReact.Choices) {
   const form = useLeanForm();
+  const { tracking, status } = useEvidence(name, evidence, disabled, onChange);
   const feedback = useId();
   const toggle = (value: string, checked: boolean) => form.run(onChange,
     options.map(option => option.value)
@@ -166,13 +229,14 @@ export function Choices(
   return (
     <fieldset ref={element => form.registerTarget(name,
       element?.querySelector<HTMLInputElement>('input:checked') ?? element?.querySelector('input') ?? null)}
-      className="choice" {...described(errors, feedback)}>
+      className="choice" {...described(errors, feedback)} {...tracking}>
       <legend>{label}</legend>
       {options.map(option =>
         <label key={option.value}><input type="checkbox" value={option.value}
           checked={values.includes(option.value)} disabled={disabled}
           onChange={event => toggle(option.value, event.target.checked)} />{option.label}</label>)}
       <Feedback id={feedback} errors={errors} />
+      {status}
     </fieldset>
   );
 }

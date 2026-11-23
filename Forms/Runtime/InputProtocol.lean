@@ -13,8 +13,16 @@ def fromJson : Json → Except String Input
   | .bool value => .ok (.boolean value)
   | .arr values => .texts <$> values.toList.mapM fun
     | .str value => .ok value
-    | _ => .error "Expected a list of texts."
-  | _ => .error "Expected a text, boolean or list of texts."
+    | .null
+    | .bool _
+    | .num _
+    | .arr _
+    | .obj _ => .error "Expected a list of texts."
+  | json@(.obj _) => do
+    let evidence ← json.getObjVal? "pick"
+    .pick <$> fromJson? evidence
+  | .null
+  | .num _ => .error "Expected a text, boolean, list of texts or pick."
 
 def argumentFromJson : Option Json → Except String (Option Input)
   | none => .ok none

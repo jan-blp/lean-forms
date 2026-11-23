@@ -52,8 +52,22 @@ structure Checks where
   outdatedInfo : List String
   deriving ToJson, FromJson, BEq, DecidableEq, Repr
 
-/-- A text input whose draft React owns; `onCommit` receives the draft text.
-Values travel as text, so numbers beyond 2^53 survive JavaScript. -/
+inductive Evidence where
+  | unsupported
+  | missing
+  /-- `stale` when the value no longer matches the cells' text. -/
+  | linked (page : Nat) (cellIds : List Nat) (stale : Bool)
+  deriving ToJson, FromJson, BEq, Repr
+
+/-- Whether the field takes a pick from the document. -/
+def Evidence.picks : Evidence → Bool
+  | .unsupported => false
+  | .missing => true
+  | .linked .. => true
+
+/-- A text input whose draft React owns; `onCommit` receives the draft text, or
+`{ "pick": Forms.Model.Evidence }` when the field takes evidence. Values travel as text, so numbers
+beyond 2^53 survive JavaScript. -/
 structure TextField where
   name : String
   label : String
@@ -61,16 +75,18 @@ structure TextField where
   value : String
   disabled : Bool
   errors : List String
+  evidence : Evidence
   onCommit : Action
   deriving ToJson, FromJson, BEq, Repr
 
-/-- `onChange` receives the new checked state. -/
+/-- `onChange` receives the new checked state, or `{ "pick": Forms.Model.Evidence }`. -/
 structure Checkbox where
   name : String
   label : String
   checked : Bool
   disabled : Bool
   errors : List String
+  evidence : Evidence
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -90,7 +106,7 @@ structure Choice where
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
-/-- `onChange` receives the picked options' `value`s. -/
+/-- `onChange` receives the picked options' `value`s, or `{ "pick": Forms.Model.Evidence }`. -/
 structure Choices where
   name : String
   label : String
@@ -98,6 +114,7 @@ structure Choices where
   options : List ChoiceOption
   disabled : Bool
   errors : List String
+  evidence : Evidence
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
@@ -191,6 +208,33 @@ def draftFieldsOf : List Component → List String
 def draftFieldsOfRows : List TableRow → List String
   | [] => []
   | ⟨_, _, cells, _⟩ :: rest => draftFieldsOf cells ++ draftFieldsOfRows rest
+end
+
+def pickField (name : String) (disabled : Bool) (evidence : Evidence) : List String :=
+  if !disabled && evidence.picks then [name] else []
+
+mutual
+/-- Names of the enabled fields that take a pick from the document. -/
+def Component.pickFields : Component → List String
+  | .textField { name, disabled, evidence, .. } => pickField name disabled evidence
+  | .checkbox { name, disabled, evidence, .. } => pickField name disabled evidence
+  | .choices { name, disabled, evidence, .. } => pickField name disabled evidence
+  | .choice _ => []
+  | .output _ => []
+  | .button _ => []
+  | .tabBar _ => []
+  | .group { children, .. } => pickFieldsOf children
+  | .table { rows, footer, .. } => pickFieldsOfRows rows ++ footer.pickFields
+  | .page { body, toolbar, .. } => pickFieldsOf body ++ pickFieldsOf toolbar
+  | .statusMarker _ => []
+
+def pickFieldsOf : List Component → List String
+  | [] => []
+  | component :: rest => component.pickFields ++ pickFieldsOf rest
+
+def pickFieldsOfRows : List TableRow → List String
+  | [] => []
+  | { cells, .. } :: rest => pickFieldsOf cells ++ pickFieldsOfRows rest
 end
 
 end FormsReact

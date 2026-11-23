@@ -4,6 +4,7 @@ public import Std.Http
 public import Forms.Runtime.TrafficLog
 public import Forms.ExampleForms.FormFingerprint
 public import Forms.Runtime.ServerForm
+public import Forms.Runtime.Viewer
 public meta import Forms.Deriving.FinEnum
 
 @[expose] public section
@@ -21,6 +22,7 @@ inductive GetRoute where
   | wasmBinary
   | stylesheet
   | formStart
+  | document
   deriving DecidableEq, FinEnum, Lean.ToJson
 
 /-- Also generated into `web/generated/routes.ts`. -/
@@ -31,6 +33,7 @@ def GetRoute.path : GetRoute → String
   | .wasmBinary => "/wasm/forms.wasm"
   | .stylesheet => "/style.css"
   | .formStart => "/api/form-start"
+  | .document => "/api/document"
 
 def GetRoute.ofPath (path : String) : Option GetRoute :=
   (FinEnum.toList GetRoute).find? (·.path == path)
@@ -101,6 +104,7 @@ structure Application where
   wasmBinary : Option ByteArray
   style : String
   formStart : Lean.Json
+  document : Option Viewer.Document
   api : Model.HttpRequest → Option Lean.Json
 
 def Application.get
@@ -114,6 +118,7 @@ def Application.get
   | .wasmBinary => app.wasmBinary.map .wasm
   | .stylesheet => some (.css app.style)
   | .formStart => some (.json app.formStart)
+  | .document => some (.json (Lean.toJson app.document))
 
 def Application.readBody
   (app : Application)
@@ -211,6 +216,7 @@ def run
   (name : String)
   (form : ServerForm)
   (api : Model.HttpRequest → Option Lean.Json)
+  (document : Option Viewer.Document)
   (port : UInt16 := 8080)
   (openBrowser : Bool := false)
   : IO Unit := do
@@ -228,6 +234,7 @@ def run
       then some <$> IO.FS.readFile "web/dist/wasm/forms.mjs" else pure none
     wasmBinary
     style := ← IO.FS.readFile "web/style.css"
+    document
     api
   }
   Async.block do

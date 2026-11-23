@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { defaultComponents } from './components.js';
-import { Context, type Components, type LeanFormContext } from './context.js';
+import { Context, type Components, type EvidenceHost, type LeanFormContext } from './context.js';
 import type * as Wire from './protocol/Forms/Runtime/Wire.js';
 import type * as FormsReact from './protocol/FormsReact.js';
 import { Render } from './render.js';
@@ -11,12 +11,13 @@ export interface LeanFormProps {
   /** URL of the app's compiled `forms.mjs`. */
   moduleUrl: string | URL;
   components?: Partial<Components>;
+  evidence?: EvidenceHost;
   onSnapshot?(snapshot: Wire.Snapshot): void;
 }
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 
-export function LeanForm({ start, moduleUrl, components, onSnapshot }: LeanFormProps) {
+export function LeanForm({ start, moduleUrl, components, evidence, onSnapshot }: LeanFormProps) {
   const [model, setModel] = useState<FormModel>();
   const [failure, setFailure] = useState<string>();
   const url = String(moduleUrl);
@@ -32,12 +33,13 @@ export function LeanForm({ start, moduleUrl, components, onSnapshot }: LeanFormP
   if (failure !== undefined) return <p className="error" role="alert">{failure}</p>;
   if (!model) return <p role="status">Loading…</p>;
   return <OpenForm model={model} components={{ ...defaultComponents, ...components }}
-    onSnapshot={onSnapshot} onFailure={error => setFailure(message(error))} />;
+    evidence={evidence ?? null} onSnapshot={onSnapshot} onFailure={error => setFailure(message(error))} />;
 }
 
 interface OpenFormProps {
   model: FormModel;
   components: Components;
+  evidence: EvidenceHost | null;
   onSnapshot?(snapshot: Wire.Snapshot): void;
   onFailure(error: unknown): void;
 }
@@ -47,11 +49,12 @@ interface Draft {
   error?: string;
 }
 
-function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
+function OpenForm({ model, components, evidence, onSnapshot, onFailure }: OpenFormProps) {
   const [snapshot, setSnapshot] = useState(() => model.snapshot());
   const [drafts, setDrafts] = useState<ReadonlyMap<string, Draft>>(new Map());
   const currentDrafts = useRef(drafts);
   const targets = useRef(new Map<string, HTMLElement>());
+  const picking = useRef<string | null>(null);
   useEffect(() => onSnapshot?.(snapshot), [snapshot, onSnapshot]);
   // The opened snapshot may already request data; Lean ignores repeated responses.
   useEffect(() => performAll(model.snapshot()), [model]);
@@ -65,8 +68,14 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
     const next = model.send(event);
     setSnapshot(next);
     updateDrafts(new Map([...currentDrafts.current].filter(([name]) => next.draftFields.includes(name))));
+    if (picking.current !== null && !next.pickFields.includes(picking.current)) cancelPick();
     performAll(next);
     return next;
+  }
+
+  function cancelPick() {
+    picking.current = null;
+    evidence?.cancelPick();
   }
 
   function updateDrafts(next: ReadonlyMap<string, Draft>) {
@@ -131,9 +140,11 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
   function run(action: FormsReact.Action, argument?: unknown) {
     try {
       if (action === 'reset') {
+        cancelPick();
         updateDrafts(new Map());
         send('reset');
       } else if (action === 'submit') {
+        cancelPick();
         commitAllDrafts();
         send('submit');
       } else if ('press' in action) {
@@ -144,6 +155,7 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
 
   const context: LeanFormContext = {
     components,
+    evidence,
     draft: name => currentDrafts.current.get(name)?.text,
     draftError: name => currentDrafts.current.get(name)?.error,
     registerTarget: (name, element) => {
@@ -158,6 +170,14 @@ function OpenForm({ model, components, onSnapshot, onFailure }: OpenFormProps) {
       }
     },
     run,
+    requestPick: (name, action) => {
+      if (!evidence) return;
+      picking.current = name;
+      evidence.requestPick(pick => {
+        picking.current = null;
+        run(action, { pick });
+      });
+    },
   };
   return <Context value={context}><Render component={snapshot.view} /></Context>;
 }

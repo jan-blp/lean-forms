@@ -1,12 +1,13 @@
 // Generated from Lean. Run npm --prefix web run generate.
 export type Component = { "textField": TextField } | { "checkbox": Checkbox } | { "choice": Choice } | { "choices": Choices } | { "output": Output } | { "button": Button } | { "tabBar": TabBar } | { "group": Group } | { "table": Table } | { "page": Page } | { "statusMarker": Checks };
-export type TextField = { "name": string; "label": string; "kind": TextKind; "value": string; "disabled": boolean; "errors": string[]; "onCommit": Action };
+export type TextField = { "name": string; "label": string; "kind": TextKind; "value": string; "disabled": boolean; "errors": string[]; "evidence": Evidence; "onCommit": Action };
 export type TextKind = "plain" | "natural" | "integer" | "decimal" | "date" | "uuid";
+export type Evidence = "unsupported" | "missing" | { "linked": { "page": number; "cellIds": number[]; "stale": boolean } };
 export type Action = { "apply": { "name": string } } | { "press": { "name": string } } | "submit" | "reset";
-export type Checkbox = { "name": string; "label": string; "checked": boolean; "disabled": boolean; "errors": string[]; "onChange": Action };
+export type Checkbox = { "name": string; "label": string; "checked": boolean; "disabled": boolean; "errors": string[]; "evidence": Evidence; "onChange": Action };
 export type Choice = { "name": string; "label": string; "value": string; "options": ChoiceOption[]; "disabled": boolean; "errors": string[]; "onChange": Action };
 export type ChoiceOption = { "value": string; "label": string };
-export type Choices = { "name": string; "label": string; "values": string[]; "options": ChoiceOption[]; "disabled": boolean; "errors": string[]; "onChange": Action };
+export type Choices = { "name": string; "label": string; "values": string[]; "options": ChoiceOption[]; "disabled": boolean; "errors": string[]; "evidence": Evidence; "onChange": Action };
 export type Output = { "label": string; "value": string };
 export type Button = { "label": string; "variant": ButtonVariant; "disabled": boolean; "onClick": Action };
 export type ButtonVariant = "primary" | "secondary";

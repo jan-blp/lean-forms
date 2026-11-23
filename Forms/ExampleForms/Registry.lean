@@ -12,6 +12,7 @@ public import Forms.ExampleForms.Selections
 public import Forms.ExampleForms.Navigation
 public import Forms.ExampleForms.PaymentMethod
 public import Forms.ExampleForms.Receipts
+public import Forms.ExampleForms.InvoiceEvidence
 public import Forms.Runtime.FormDefinition
 public import Std.Data.HashMap
 
@@ -71,7 +72,10 @@ def forms : List (String × RegisteredForm) := [
     definition := .ofModel Preferences Preferences.form Preferences.initial
     submitUrl := "/api/submit" }),
   ("payment-method", paymentMethod),
-  ("receipts", receipts)]
+  ("receipts", receipts),
+  ("evidence", {
+    definition := .ofModel InvoiceHeader InvoiceHeader.form InvoiceHeader.initial
+    submitUrl := "/api/submit" })]
 
 def api : Model.HttpRequest → Option Lean.Json :=
   fun _ => none
