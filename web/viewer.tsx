@@ -27,8 +27,9 @@ export function DocumentViewer({ document, highlighted, request, onClose }: Docu
   const fill = () => {
     if (!selection || !request) return;
     const page = document.pages.find(page => page.number === selection.page)!;
-    const cellIds = [...selection.cellIds].sort((a, b) => a - b);
-    const text = cellIds.map(id => page.cells.find(cell => cell.id === id)!.text).join(' ');
+    const cells = page.cells.filter(cell => selection.cellIds.includes(cell.id));
+    const cellIds = cells.map(cell => cell.id);
+    const text = cells.map(cell => cell.text).join(' ');
     onClose();
     request({ page: selection.page, cellIds, text });
   };
