@@ -36,21 +36,21 @@ inductive Editor : Type → Type 1 where
       (parse_print : ∀ value, parse (print value) = .ok value)
       : Editor β
 
-@[reducible] def Editor.text : Editor String := .formatted .plain
+abbrev Editor.text : Editor String := .formatted .plain
 
-@[reducible] def Editor.natural : Editor Nat := .formatted .natural
+abbrev Editor.natural : Editor Nat := .formatted .natural
 
-@[reducible] def Editor.integer : Editor Int := .formatted .integer
+abbrev Editor.integer : Editor Int := .formatted .integer
 
-@[reducible] def Editor.int32 : Editor Int32 := .formatted .int32
+abbrev Editor.int32 : Editor Int32 := .formatted .int32
 
-@[reducible] def Editor.int64 : Editor Int64 := .formatted .int64
+abbrev Editor.int64 : Editor Int64 := .formatted .int64
 
-@[reducible] def Editor.decimal : Editor Decimal := .formatted .decimal
+abbrev Editor.decimal : Editor Decimal := .formatted .decimal
 
-@[reducible] def Editor.date : Editor Std.Time.PlainDate := .formatted .date
+abbrev Editor.date : Editor Std.Time.PlainDate := .formatted .date
 
-@[reducible] def Editor.uuid : Editor Uuid := .formatted .uuid
+abbrev Editor.uuid : Editor Uuid := .formatted .uuid
 
 def Editor.subtype
     {α : Type}
@@ -63,7 +63,7 @@ def Editor.subtype
     (fun value => if valid : property value then .ok ⟨value, valid⟩ else .error errorMsg)
     (fun value => by simp [value.property])
 
-@[reducible] def Editor.optional
+abbrev Editor.optional
     {α : Type}
     (format : Format α)
     (blank : (format.parse "").isOk = false := by decide)

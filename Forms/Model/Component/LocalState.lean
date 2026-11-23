@@ -43,7 +43,7 @@ def PresentationNode.initialState
 
 end
 
-@[reducible] def Component.initialState
+abbrev Component.initialState
   {Γ : Context}
   {α β : Type}
   {holes : Nat}

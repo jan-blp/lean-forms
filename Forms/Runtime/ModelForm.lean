@@ -42,10 +42,10 @@ structure State {Γ : Model.Context} {α β : Type} (form : Model.Component Γ �
 
 variable {Γ : Model.Context} {α β : Type} {form : Model.Component Γ α β}
 
-@[reducible] def State.value (state : State form) : α := state.evaluation.value
-@[reducible] def State.env (state : State form) : Model.Env Γ := state.evaluation.env
-@[reducible] def State.cache (state : State form) : Model.HttpRequest.Cache := state.evaluation.cache
-@[reducible] def State.locals (state : State form) : form.LocalState := state.evaluation.locals
+abbrev State.value (state : State form) : α := state.evaluation.value
+abbrev State.env (state : State form) : Model.Env Γ := state.evaluation.env
+abbrev State.cache (state : State form) : Model.HttpRequest.Cache := state.evaluation.cache
+abbrev State.locals (state : State form) : form.LocalState := state.evaluation.locals
 
 def validationErrors
   {model : Type}
