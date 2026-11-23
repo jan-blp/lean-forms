@@ -15,8 +15,8 @@ private def control
   (key : ControlKey)
   (label : String)
   (input : Display.Editor)
+  (evidence : Display.Evidence)
   (messages : List Forms.Model.Message := [])
-  (evidence : Display.Evidence := .unsupported)
   : Display.Control :=
   { key, target := {}, label, disabled := false, location := [], input, evidence, messages }
 
@@ -25,9 +25,11 @@ def view : Display.View :=
     .control (control (.edit [.field "name"]) "Name" (.text .plain "Ada")
       (messages := [{ kind := .error, text := "Enter your name." }])
       (evidence := .linked { page := 1, cellIds := [3, 4], text := "Ada" } false)),
-    .control (control (.edit [.field "age"]) "Age" (.text .natural "36")),
+    .control (control (.edit [.field "age"]) "Age" (.text .natural "36")
+      (evidence := .unsupported)),
     .hidden,
-    .stack (some "") [.control (control (.edit [.field "delivery"]) "Delivery" (.checkbox true))],
+    .stack (some "") [.control (control (.edit [.field "delivery"]) "Delivery" (.checkbox true)
+      (evidence := .unsupported))],
     .computed "Summary" "Ada, 36"]
 
 def expected : FormsReact.Component :=
@@ -73,7 +75,7 @@ def run : IO Unit := do
   check "Draft fields changed" (expected.draftFields == ["[\"edit\",\"name\"]", "[\"edit\",\"age\"]"])
   check "Hidden view must lower to nothing" (Display.View.hidden.toReact false == none)
   check "Buttons must lower to press"
-    ((control (.press [0] []) "Add" .action).toReact false ==
+    ((control (.press [0] []) "Add" .action (evidence := .unsupported)).toReact false ==
       .button { label := "Add", variant := .secondary, disabled := false, onClick := .press "[\"press\",[0],[]]" })
   let pendingPage := view.toReactPage { Interaction.State.initial with pending := true } "{}"
   check "Pending page must have no draft fields" pendingPage.draftFields.isEmpty

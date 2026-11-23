@@ -34,7 +34,7 @@ def InvoiceHeader.initial : InvoiceHeader.Raw where
   numberEvidence := some { page := 1, cellIds := [4], text := "INV-2026-0042" }
   issued := none
   issuedEvidence := none
-  total := some ⟨12435, 1, by decide⟩
+  total := some { mantissa := 12435, exponent := 1, normalized := by decide }
   totalEvidence := some { page := 1, cellIds := [19], text := "1234.50" }
   note := ""
 

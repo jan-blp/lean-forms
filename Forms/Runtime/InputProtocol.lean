@@ -17,7 +17,8 @@ def fromJson : Json → Except String Input
   | json@(.obj _) => do
     let evidence ← json.getObjVal? "pick"
     .pick <$> fromJson? evidence
-  | _ => .error "Expected a text, boolean, list of texts or pick."
+  | .null
+  | .num _ => .error "Expected a text, boolean, list of texts or pick."
 
 def argumentFromJson : Option Json → Except String (Option Input)
   | none => .ok none
