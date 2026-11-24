@@ -17,14 +17,37 @@ open Lean
 
 namespace LookupResults
 
+theorem choose_spec
+  {Key Details : Type}
+  [ToJson Key]
+  {results : LookupResults Key Details}
+  {availability : LookupCandidate Key Details → LookupAvailability}
+  {key : LookupKey}
+  {reference : Reference Key}
+  (chosen : results.choose availability key = .ok reference)
+  : ∃ candidate ∈ results.found,
+      candidate.reference = reference ∧ candidate.wireKey = key ∧ availability candidate = .enabled := by
+  cases found : results.found.find? (fun candidate => decide (candidate.wireKey = key)) with
+  | none => simp [choose, found] at chosen
+  | some candidate =>
+    cases available : availability candidate with
+    | disabled reason => simp [choose, found, available] at chosen
+    | enabled =>
+      have reference_eq : candidate.reference = reference := by
+        simpa [choose, found, available] using chosen
+      exact ⟨candidate, List.mem_of_find?_eq_some found, reference_eq,
+        of_decide_eq_true (List.find?_some
+          (p := fun (candidate : LookupCandidate Key Details) => decide (candidate.wireKey = key)) found),
+        available⟩
+
 variable
-  {κ : Type}
-  [ToJson κ]
-  {records : List (Reference κ)}
-  {keep : Reference κ → Prop}
+  {Key Details : Type}
+  [ToJson Key]
+  {records : List (LookupCandidate Key Details)}
+  {keep : LookupCandidate Key Details → Prop}
   [DecidablePred keep]
   {limit : Nat}
-  {result : LookupResults κ}
+  {result : LookupResults Key Details}
 
 theorem select_found
   (selected : select records keep limit = .ok result)
@@ -38,7 +61,7 @@ theorem select_found
 
 theorem select_kept
   (selected : select records keep limit = .ok result)
-  {record : Reference κ}
+  {record : LookupCandidate Key Details}
   (member : record ∈ result.found)
   : keep record := by
   rw [select_found selected] at member
@@ -70,7 +93,7 @@ theorem select_more_omitted
   next distinct =>
     cases selected
     by_contra! all_returned
-    have length_le := (List.Nodup.of_map Reference.wireKey distinct).length_le_of_subset (by
+    have length_le := (List.Nodup.of_map LookupCandidate.wireKey distinct).length_le_of_subset (by
       intro record member
       have kept := List.mem_filter.mp member
       exact all_returned record kept.1 (of_decide_eq_true kept.2))

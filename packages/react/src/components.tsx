@@ -243,7 +243,7 @@ export function Choices(
 
 const searchPause = 300;
 
-function foundOptions(search: FormsReact.Search | null): FormsReact.ChoiceOption[] {
+function foundOptions(search: FormsReact.Search | null): FormsReact.LookupOption[] {
   return search !== null && typeof search.results === 'object' && 'found' in search.results
     ? search.results.found.options : [];
 }
@@ -268,8 +268,10 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
   const timer = useRef<number | undefined>(undefined);
   const current = typed === null || typed === search?.text;
   const options = current ? foundOptions(search) : [];
-  const optionKeys = options.map(option => option.value).join('\n');
-  useEffect(() => setActive(0), [optionKeys]);
+  const optionKeys = JSON.stringify(options.map(option => [option.value, option.disabledReason]));
+  const firstEnabled = options.findIndex(option => option.disabledReason === null);
+  const activeIndex = options[active]?.disabledReason === null ? active : firstEnabled;
+  useEffect(() => setActive(firstEnabled), [optionKeys, firstEnabled]);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   const send = (command: FormsReact.LookupInput) => {
     window.clearTimeout(timer.current);
@@ -280,9 +282,10 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => send({ search: { text } }), searchPause);
   };
-  const choose = (key: string) => {
+  const choose = (option: FormsReact.LookupOption) => {
+    if (disabled || option.disabledReason !== null) return;
     setTyped(null);
-    send({ choose: { key } });
+    send({ choose: { key: option.value } });
   };
   const clear = () => {
     setTyped(null);
@@ -294,18 +297,26 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
     else send('close');
   };
   const optionId = (index: number) => `${list}-${index}`;
+  const move = (direction: -1 | 1) => {
+    for (let index = activeIndex + direction; index >= 0 && index < options.length; index += direction) {
+      if (options[index].disabledReason === null) {
+        setActive(index);
+        return;
+      }
+    }
+  };
   const keyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       if (search === null) send({ search: { text: typed ?? '' } });
-      else setActive(Math.max(0, Math.min(active + 1, options.length - 1)));
+      else move(1);
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setActive(Math.max(active - 1, 0));
+      move(-1);
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      const option = options[active];
-      if (option) choose(option.value);
+      const option = options[activeIndex];
+      if (option) choose(option);
     } else if (event.key === 'Escape' && (search !== null || typed !== null)) {
       event.preventDefault();
       close();
@@ -316,7 +327,7 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
     <div className="editor lookup">
       <label>{label}<input ref={element => form.registerTarget(name, element)} type="text"
         role="combobox" aria-expanded={open} aria-controls={list} aria-autocomplete="list"
-        aria-activedescendant={open && options[active] ? optionId(active) : undefined}
+        aria-activedescendant={open && options[activeIndex] ? optionId(activeIndex) : undefined}
         autoComplete="off" spellCheck={false} disabled={disabled}
         value={typed ?? search?.text ?? picked?.label ?? ''}
         placeholder={picked === null ? 'Type to search' : undefined}
@@ -331,10 +342,18 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
         <ul id={list} role="listbox" aria-label={label}>
           {options.map((option, index) =>
             <li key={option.value} id={optionId(index)} role="option"
-              aria-selected={index === active}
+              aria-label={option.label}
+              aria-describedby={option.disabledReason !== null ? `${optionId(index)}-reason` : undefined}
+              aria-selected={index === activeIndex}
+              aria-disabled={option.disabledReason !== null || disabled}
               onMouseDown={event => event.preventDefault()}
-              onMouseEnter={() => setActive(index)}
-              onClick={() => choose(option.value)}>{option.label}</li>)}
+              onMouseEnter={() => { if (option.disabledReason === null) setActive(index); }}
+              onClick={() => choose(option)}>{option.label}
+              {option.disabledReason !== null &&
+                <span id={`${optionId(index)}-reason`} className="lookup-disabled-reason">
+                  {option.disabledReason}
+                </span>}
+            </li>)}
         </ul>
         {current ? <SearchNote search={search} label={label} />
           : <p className="lookup-note" role="status">Searching…</p>}
