@@ -36,4 +36,10 @@ example : (Api.signature Nested.Shadowed.String).Output = Nat := rfl
 endpoints Curried where
   | read : (String → (Nat → Bool)) at "/curried"
 
+/-- error: duplicate path /same -/
+#guard_msgs in
+endpoints Duplicated where
+  | first : Nat at "/same"
+  | second : String at "/same"
+
 end Tests.Endpoints

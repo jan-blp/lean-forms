@@ -7,45 +7,57 @@ public meta import Forms.Deriving.FinEnum
 namespace Forms.Model
 open Lean
 
-syntax endpointCase := ppLine (docComment)? "| " ident " : " term " at " str
+syntax endpointCase := ppLine atomic((docComment)? "| ") ident " : " term " at " str
 
-/-- Declares endpoints, one per `| name : Input → Output at "/path"`; `| name : Output` takes `Unit`.
-Generates the inductive and its `Api` instance. -/
+private meta structure EndpointCase where
+  ref : Syntax
+  doc : Option (TSyntax ``Parser.Command.docComment)
+  ctor : Ident
+  input : Term
+  output : Term
+  path : StrLit
+
 macro doc:(docComment)? "endpoints " name:ident " where" cases:endpointCase* : command => do
-  let parsed ← cases.mapM fun case => match case with
-    | `(endpointCase| $[$caseDoc]? | $ctor:ident : $type at $path) => do
+  let parsed : Array EndpointCase ← cases.mapM fun
+    | case@`(endpointCase| $[$caseDoc]? | $ctor:ident : $type at $path) => do
       let (input, output) ← match (⟨Parser.Term.dropParens type⟩ : Term) with
         | `($input → $output) => pure (input, output)
         | _ => pure (← `(Unit), type)
       if let `($_ → $_) := (⟨Parser.Term.dropParens output⟩ : Term) then
         Macro.throwErrorAt output "endpoints take one input; use a structure"
-      pure (case, caseDoc, ctor, input, output, path)
+      pure {
+        ref := case
+        doc := caseDoc
+        ctor
+        input
+        output
+        path }
     | _ => Macro.throwUnsupported
   let mut seen : List String := []
-  for (_, _, _, _, _, path) in parsed do
-    if seen.contains path.getString then
-      Macro.throwErrorAt path s!"duplicate path {path.getString}"
-    seen := path.getString :: seen
+  for endpoint in parsed do
+    if seen.contains endpoint.path.getString then
+      Macro.throwErrorAt endpoint.path s!"duplicate path {endpoint.path.getString}"
+    seen := endpoint.path.getString :: seen
   let qualified (ctor : Ident) := mkIdent (name.getId ++ ctor.getId)
-  let ctors ← parsed.mapM fun (_, caseDoc, ctor, _) =>
-    `(Lean.Parser.Command.ctor| $[$caseDoc:docComment]? | $ctor:ident)
-  let signatures ← parsed.mapM fun (case, _, ctor, input, output, _) => withRef case
-    `(Lean.Parser.Term.matchAltExpr|
-      | $(qualified ctor):ident => { Input := $input, Output := $output })
-  let paths ← parsed.mapM fun (_, _, ctor, _, _, path) =>
-    `(Lean.Parser.Term.matchAltExpr| | $(qualified ctor):ident => $path)
+  let ctors ← parsed.mapM fun endpoint =>
+    `(Parser.Command.ctor| $[$endpoint.doc:docComment]? | $endpoint.ctor:ident)
+  let signatures ← parsed.mapM fun endpoint => withRef endpoint.ref
+    `(Parser.Term.matchAltExpr|
+      | $(qualified endpoint.ctor):ident =>
+        { Input := $endpoint.input, Output := $endpoint.output })
+  let paths ← parsed.mapM fun endpoint =>
+    `(Parser.Term.matchAltExpr| | $(qualified endpoint.ctor):ident => $endpoint.path)
   let signature := mkIdent (name.getId ++ `signature)
   let type ← `($[$doc:docComment]? inductive $name where
     $ctors:ctor*
     deriving DecidableEq, FinEnum, Repr)
-  -- Elaborate the supplied types in the caller's namespace, where endpoint
-  -- constructors cannot shadow them through the signature declaration's name.
-  let implementation ← `(@[expose] def endpointSignature : $name → Api.Signature := fun named =>
-    match named with $signatures:matchAlt*)
+  -- Elaborate supplied types outside the namespace, so constructors cannot shadow them.
+  let implementation ← `(@[expose] def endpointSignature : $name → Api.Signature :=
+    fun $signatures:matchAlt*)
   let definition ← `(@[expose] def $signature : $name → Api.Signature := endpointSignature)
   let api ← `(instance : Api $name where
     signature := $signature
-    path := fun named => match named with $paths:matchAlt*
+    path := fun $paths:matchAlt*
     distinct := by decide)
   `($type:command
     $implementation:command
