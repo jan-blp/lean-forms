@@ -43,7 +43,7 @@ def countries : List (Reference String) := [
   ⟨"AT", "Austria"⟩,
   ⟨"BE", "Belgium"⟩,
   ⟨"DE", "Germany"⟩,
-  ⟨"ES", "Spain"⟩,
+  ⟨"CAT", "Catalonia"⟩,
   ⟨"FR", "France"⟩,
   ⟨"IT", "Italy"⟩,
   ⟨"NL", "Netherlands"⟩,
@@ -51,7 +51,13 @@ def countries : List (Reference String) := [
 
 def cities : String → List (Reference String)
   | "DE" => [⟨"BER", "Berlin"⟩, ⟨"HAM", "Hamburg"⟩, ⟨"MUC", "Munich"⟩]
-  | "ES" => [⟨"BCN", "Barcelona"⟩, ⟨"MAD", "Madrid"⟩, ⟨"VLC", "Valencia"⟩]
+  | "CAT" => [
+    ⟨"VIC", "Vic"⟩,
+    ⟨"GIR", "Girona"⟩,
+    ⟨"BCN", "Barcelona"⟩,
+    ⟨"TGN", "Tarragona"⟩,
+    ⟨"LLE", "Lleida"⟩,
+    ⟨"MAN", "Manresa"⟩]
   | "FR" => [⟨"LYS", "Lyon"⟩, ⟨"MRS", "Marseille"⟩, ⟨"PAR", "Paris"⟩]
   | _ => []
 

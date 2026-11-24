@@ -118,10 +118,10 @@ def run : IO Unit := do
   let chosen ← apply found "Country" (.lookup (.choose germany.wireKey))
   check "LookupChooseStores" (chosen.value.country == some germany)
   check "LookupChooseCloses" ((← search? chosen "Country").isNone && (fetches chosen).isEmpty)
-  let other ← settle (← apply chosen "Country" (.lookup (.search "spa")))
+  let other ← settle (← apply chosen "Country" (.lookup (.search "cat")))
   check "LookupPickedShownWhileSearching"
     ((← picked? other "Country") == some { value := germany.wireKey.value, label := "Germany" } &&
-      ((← search? other "Country").map (labels ·.results)) == some ["Spain"])
+      ((← search? other "Country").map (labels ·.results)) == some ["Catalonia"])
   let again ← apply other "Country" (.lookup (.search "an"))
   check "LookupRevisitIsCached" ((fetches again).isEmpty &&
     ((← search? again "Country").map (labels ·.results)) == some ["Germany", "France", "Netherlands"])
@@ -137,11 +137,11 @@ def run : IO Unit := do
   check "LookupSearchPreservesDependentValue" (searchingCountry.value.city == some berlin)
   let sameCountry ← apply searchingCountry "Country" (.lookup (.choose germany.wireKey))
   check "LookupSameCountryPreservesCity" (sameCountry.value.city == some berlin)
-  let spainResults ← settle (← apply pickedCity "Country" (.lookup (.search "spa")))
-  let spain : Reference String := { id := "ES", displayText := "Spain" }
-  let changedCountry ← apply spainResults "Country" (.lookup (.choose spain.wireKey))
+  let cataloniaResults ← settle (← apply pickedCity "Country" (.lookup (.search "cat")))
+  let catalonia : Reference String := { id := "CAT", displayText := "Catalonia" }
+  let changedCountry ← apply cataloniaResults "Country" (.lookup (.choose catalonia.wireKey))
   check "LookupCountryChangeClearsCity"
-    (changedCountry.value.country == some spain && changedCountry.value.city.isNone)
+    (changedCountry.value.country == some catalonia && changedCountry.value.city.isNone)
   let clearedCountry ← apply pickedCity "Country" (.lookup .clear)
   check "LookupCountryClearClearsCity"
     (clearedCountry.value.country.isNone && clearedCountry.value.city.isNone &&

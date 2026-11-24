@@ -510,16 +510,16 @@ try {
     input('Country').focus();
     await type(input('Country'), 'an');
     await wait(() => field('Country').querySelector('[role=option]')?.textContent === 'Germany');
-    await type(input('Country'), 'spa');
+    await type(input('Country'), 'cat');
     key('Enter');
     await tick();
-    check(input('Country').value === 'spa' && input('City').disabled,
+    check(input('Country').value === 'cat' && input('City').disabled,
       'Enter selected a result from the previous query');
     check(!field('Country').querySelector('[role=option]'), 'The previous matches remained selectable');
-    await wait(() => field('Country').querySelector('[role=option]')?.textContent === 'Spain');
+    await wait(() => field('Country').querySelector('[role=option]')?.textContent === 'Catalonia');
     key('Enter');
     await tick();
-    check(input('Country').value === 'Spain' && !input('City').disabled, 'The current match was not picked');
+    check(input('Country').value === 'Catalonia' && !input('City').disabled, 'The current match was not picked');
     input('City').focus();
     await type(input('City'), 'bar');
     await wait(() => field('City').querySelector('[role=option]')?.textContent === 'Barcelona');
@@ -531,7 +531,7 @@ try {
     await wait(() => field('Country').querySelector('[role=option]')?.textContent === 'Germany');
     key('Escape');
     await tick();
-    check(input('Country').value === 'Spain' && input('City').value === 'Barcelona' &&
+    check(input('Country').value === 'Catalonia' && input('City').value === 'Barcelona' &&
       !field('Country').querySelector('[role=listbox]'), 'Closing the search changed the selection');
     field('Country').querySelector('.clear').click();
     await tick();
