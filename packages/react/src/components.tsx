@@ -248,14 +248,14 @@ function foundOptions(search: FormsReact.Search | null): FormsReact.ChoiceOption
     ? search.results.found.options : [];
 }
 
-function SearchNote({ search }: { search: FormsReact.Search }) {
+function SearchNote({ search, label }: { search: FormsReact.Search; label: string }) {
   const { results } = search;
   if (results === 'loading') return <p className="lookup-note" role="status">Searching…</p>;
   if ('failed' in results) {
     return <p className="lookup-note validation-error">Could not search: {results.failed.message}</p>;
   }
   if (results.found.more) return <p className="lookup-note">Keep typing to narrow the list.</p>;
-  if (results.found.options.length === 0) return <p className="lookup-note">No matches.</p>;
+  if (results.found.options.length === 0) return <p className="lookup-note">No matches. Choose a listed {label.toLowerCase()}.</p>;
   return null;
 }
 
@@ -336,7 +336,7 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
               onMouseEnter={() => setActive(index)}
               onClick={() => choose(option.value)}>{option.label}</li>)}
         </ul>
-        {current ? <SearchNote search={search} />
+        {current ? <SearchNote search={search} label={label} />
           : <p className="lookup-note" role="status">Searching…</p>}
       </div>}
       <Feedback id={feedback} errors={errors} />
