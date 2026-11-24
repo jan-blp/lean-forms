@@ -14,7 +14,7 @@ inductive Input where
   /-- `none` stops searching. -/
   | search (text : Option String)
   /-- `none` clears the value. -/
-  | choose (key : Option String)
+  | choose (key : Option Model.LookupKey)
 
 /-- Whether the input is text the user typed, which stays in the field as a draft when rejected. -/
 def Input.typed : Input → Bool

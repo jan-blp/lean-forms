@@ -3,18 +3,38 @@ module
 public import Forms.Model.Remote
 public import Forms.Model.Report
 public import Mathlib.Data.List.Nodup
+import all Lean.Data.Json.Basic
 
 @[expose] public section
 namespace Forms.Model
 open Lean
+
+structure LookupKey where
+  value : String
+  deriving DecidableEq, BEq, Repr
+
+instance : ToJson LookupKey where
+  toJson key := .str key.value
+
+instance : FromJson LookupKey where
+  fromJson? json := do
+    return { value := ← json.getStr? }
+
+@[simp] theorem LookupKey.toJson_eq (key : LookupKey) :
+    toJson key = Json.str key.value := rfl
+
+@[simp] theorem LookupKey.fromJson_toJson (key : LookupKey) :
+    fromJson? (toJson key) = .ok key := by
+  cases key
+  rfl
 
 structure Reference (κ : Type) where
   id : κ
   label : String
   deriving DecidableEq, Repr, ToJson, FromJson
 
-def Reference.wireKey {κ : Type} [ToJson κ] (reference : Reference κ) : String :=
-  (toJson reference.id).compress
+def Reference.wireKey {κ : Type} [ToJson κ] (reference : Reference κ) : LookupKey :=
+  { value := (toJson reference.id).compress }
 
 @[reducible] instance {κ : Type} : FormModel (Reference κ) where
   Raw := Reference κ

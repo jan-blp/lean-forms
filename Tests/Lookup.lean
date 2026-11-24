@@ -63,7 +63,7 @@ private def searched (json : Json) : Option (Option String) :=
   | .ok (.pick _)
   | .error _ => none
 
-private def choiceOf (json : Json) : Option (Option String) :=
+private def choiceOf (json : Json) : Option (Option LookupKey) :=
   match InputProtocol.fromJson json with
   | .ok (.choose key) => some key
   | .ok (.search _)
@@ -120,13 +120,14 @@ def run : IO Unit := do
     | none => false)
   let unlisted ← apply found "Country" (.choose (some (Reference.wireKey ⟨"IT", "Italy"⟩)))
   check "LookupUnlistedRejected"
-    ((snapshot unlisted).ui.rejection == some (toString (InvocationError.unlistedMatch "\"IT\"")))
+    ((snapshot unlisted).ui.rejection ==
+      some (toString (InvocationError.unlistedMatch { value := "\"IT\"" })))
   let chosen ← apply found "Country" (.choose (some germany.wireKey))
   check "LookupChooseStores" (chosen.value.country == some germany)
   check "LookupChooseCloses" ((← search? chosen "Country").isNone && (fetches chosen).isEmpty)
   let other ← settle (← apply chosen "Country" (.search (some "spa")))
   check "LookupPickedShownWhileSearching"
-    ((← picked? other "Country") == some { value := germany.wireKey, label := "Germany" } &&
+    ((← picked? other "Country") == some { value := germany.wireKey.value, label := "Germany" } &&
       ((← search? other "Country").map (labels ·.results)) == some ["Spain"])
   let again ← apply other "Country" (.search (some "an"))
   check "LookupRevisitIsCached" ((fetches again).isEmpty &&
@@ -177,7 +178,7 @@ def run : IO Unit := do
   check "LookupProtocolDecodes"
     (searched (Json.mkObj [("search", "an")]) == some (some "an") &&
       searched (Json.mkObj [("search", Json.null)]) == some none &&
-      choiceOf (Json.mkObj [("choose", "\"DE\"")]) == some (some "\"DE\"") &&
+      choiceOf (Json.mkObj [("choose", "\"DE\"")]) == some (some { value := "\"DE\"" }) &&
       choiceOf (Json.mkObj [("choose", Json.null)]) == some none)
 
 end Tests.Lookup
