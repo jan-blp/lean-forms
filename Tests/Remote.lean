@@ -2,6 +2,7 @@ module
 
 public import Forms.ExampleForms.Registry
 public import Forms.Model.Endpoints
+public meta import Forms.Model.Remote.Theorems
 meta import Forms.Model.Derive
 public import Tests.FreshId
 public import Tests.Fetch
@@ -152,7 +153,7 @@ def run : IO Unit := do
   check "RemoteUnitUsesCoreCodec" (suppliers.body == some "{}")
   let fetch : HttpFetch := { request := supplier "acme", generation := 7 }
   check "RemoteFetchEffectRoundtrip" (match fetchEffect fetch with
-    | .fetch id _ => (fetchedRequest id).toOption == some fetch
+    | .fetch id _ => (fetchOfId id).toOption == some fetch
     | .submit _ => false
     | .focus _ => false)
   let definition := FormDefinition.ofModel Lookup Lookup.form Lookup.initial

@@ -91,6 +91,8 @@ class Api (endpoint : Type) [FinEnum endpoint] where
   path : endpoint → String
   distinct : FinEnum.toList endpoint |>.map path |>.Nodup
 
+def Api.method : HttpMethod := .post
+
 structure Api.Call (endpoint : Type) [FinEnum endpoint] [Api endpoint] where
   named : endpoint
   input : (Api.signature named).Input
@@ -102,7 +104,7 @@ def Api.request
   (named : endpoint)
   (input : (Api.signature named).Input)
   : HttpRequest :=
-  { method := .post, url := Api.path named, body := some (toJson input).compress }
+  { method := Api.method, url := Api.path named, body := some (toJson input).compress }
 
 def Api.source
   {endpoint : Type}
@@ -119,7 +121,7 @@ def Api.scope
   [Api endpoint]
   (named : endpoint)
   : RequestScope :=
-  .endpoint .post (Api.path named)
+  .endpoint Api.method (Api.path named)
 
 def Api.parse
   {endpoint : Type}
@@ -127,7 +129,7 @@ def Api.parse
   [Api endpoint]
   (request : HttpRequest)
   : Option (Api.Call endpoint) := do
-  guard (request.method == .post)
+  guard (request.method == Api.method)
   let named ← (FinEnum.toList endpoint).find? (Api.path · == request.url)
   let input ← (Json.parse (request.body.getD "") >>= fromJson?).toOption
   return ⟨named, input⟩

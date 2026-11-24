@@ -74,7 +74,10 @@ def checked
   : Bool :=
   Lean.toJson value == Lean.toJson initial
 
-def openState
+/-- `nextFetch` must be 0 for a new form or the existing counter when restarting one.
+Do not recompute it from the cache: removed requests may still return with old IDs.
+This precondition is the caller's responsibility and is not checked here. -/
+private def openWithCache
   {Γ : Model.Context}
   {model β : Type}
   [FormModel model]
@@ -84,7 +87,8 @@ def openState
   (value : Model.Raw model)
   (env : Model.Env Γ)
   (supply : Model.Supply)
-  (cache : Model.HttpRequest.Cache := {})
+  (cache : Model.HttpRequest.Cache)
+  (nextFetch : Nat)
   : State form :=
   let validationDiagnostics := validationErrors (model := model) value
   let reportDiagnostics := reports (model := model) value true
@@ -98,10 +102,20 @@ def openState
     validationDiagnostics
     reportDiagnostics
     supply
-    nextFetch := cache.fold (init := 0) fun next _ response => match response with
-      | .loading generation => max next (generation + 1)
-      | .loaded _
-      | .failed _ => next }
+    nextFetch }
+
+@[no_expose] def openState
+  {Γ : Model.Context}
+  {model β : Type}
+  [FormModel model]
+  [Model.Validation model]
+  [Model.Reports model]
+  (form : Model.Component Γ (Model.Raw model) β)
+  (value : Model.Raw model)
+  (env : Model.Env Γ)
+  (supply : Model.Supply)
+  : State form :=
+  openWithCache (model := model) form value env supply {} 0
 
 def refresh
   {Γ : Model.Context}
@@ -138,7 +152,7 @@ def load
         .fetch { request, generation := state.nextFetch } }
 
 /-- Starts over from `initial`, keeping loaded responses; failed requests are retried. -/
-def restart
+@[no_expose] def restart
   {Γ : Model.Context}
   {model β : Type}
   [FormModel model]
@@ -151,8 +165,8 @@ def restart
     | .failed _ => false
     | .loading _ => true
     | .loaded _ => true
-  { openState (model := model) form state.initial state.initialEnv state.supply cache with
-    nextFetch := state.nextFetch }
+  openWithCache (model := model) form state.initial state.initialEnv state.supply cache
+    state.nextFetch
 
 inductive SubmitOutcome (α : Type) where
   /-- `saved` is the document the server stored. -/

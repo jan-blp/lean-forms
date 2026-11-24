@@ -49,7 +49,7 @@ def fetchEffect (fetch : Model.HttpFetch) : Wire.Effect :=
     headers := { «Content-Type» := "application/json" }
     body := request.body }
 
-def fetchedRequest (id : String) : Except String Model.HttpFetch :=
+def fetchOfId (id : String) : Except String Model.HttpFetch :=
   Json.parse id >>= fromJson?
 
 def ModelForm.Snapshot.toWire
@@ -97,6 +97,6 @@ def ModelForm.Event.fromWire
       | .response status body => if 200 ≤ status && status < 300 then Json.parse body
         else .error s!"The server responded with status {status}."
       | .unreachable message => .error message
-    pure (.loaded (← fetchedRequest id) response)
+    pure (.loaded (← fetchOfId id) response)
 
 end Forms.Runtime

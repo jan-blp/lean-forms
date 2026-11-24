@@ -160,16 +160,11 @@ def run : IO Unit := do
   let again ← press reset "One request"
   check "InvalidationDoesNotReuseIdentityAfterReset"
     ((← pendingFetch again first) != fresh)
-  let seeded := ModelForm.load form (ModelForm.openState (model := Nat) form 0 Env.nil supply
-    (({} : HttpRequest.Cache).insert first (.loading 12)))
-  let refreshed ← press seeded "One request"
-  check "InvalidationDoesNotReuseSeededIdentity"
-    ((← pendingFetch refreshed first).generation > 12)
 
   let failed ← execute opened (.loaded old (.error "offline"))
   let retry ← press failed "One request"
   check "InvalidationRetriesFailedSources" ((fetches retry).map (·.request) == [first])
-  let fetched ← IO.ofExcept (fetchedRequest ((toJson fresh).compress))
+  let fetched ← IO.ofExcept (fetchOfId ((toJson fresh).compress))
   let fromWire ← IO.ofExcept (ModelForm.Event.fromWire (α := Nat)
     (.fetched (toJson fetched).compress (.response 200 "3")))
   let wire ← execute refreshing fromWire
