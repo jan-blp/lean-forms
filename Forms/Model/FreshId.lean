@@ -69,6 +69,40 @@ def Uuid.ofNat (n : Nat) : Uuid :=
     else if index.val < 20 then 0
     else Fin.ofNat 16 (n >>> (4 * (31 - index.val)))
 
+theorem Uuid.hexDigit_injective : Function.Injective Uuid.hexDigit := by
+  have injective : ∀ first second : Fin 16,
+      Uuid.hexDigit first = Uuid.hexDigit second → first = second := by decide
+  exact injective
+
+theorem Uuid.mod_eq_of_hexDigits
+  {first second : Nat}
+  (count : Nat)
+  (same : ∀ index < count, first / 2 ^ (4 * index) % 16 = second / 2 ^ (4 * index) % 16)
+  : first % 2 ^ (4 * count) = second % 2 ^ (4 * count) := by
+  induction count with
+  | zero => simp [Nat.mod_one]
+  | succ count ih =>
+    rw [Nat.mul_succ, Nat.pow_add, Nat.mod_mul, Nat.mod_mul,
+      ih fun index bound => same index (by omega), same count (by omega)]
+
+theorem Uuid.ofNat_inj
+  {first second : Nat}
+  (first_pos : 0 < first)
+  (first_bound : first ≤ 2^48)
+  (second_pos : 0 < second)
+  (second_bound : second ≤ 2^48)
+  (same : Uuid.ofNat first = Uuid.ofNat second)
+  : first = second := by
+  have same := congrArg (fun id : Uuid => id.value.toList) same
+  simp [Uuid.ofNat, Uuid.ofDigits, Vector.toList_ofFn, List.ofFn_succ,
+    List.splitLengths, List.splitAt_eq] at same
+  simp only [Uuid.hexDigit_injective.eq_iff, Fin.ext_iff, Fin.val_ofNat,
+    Nat.shiftRight_eq_div_pow] at same
+  have low := Uuid.mod_eq_of_hexDigits (first := first) (second := second) 12 (by
+    simp only [Nat.forall_lt_succ_right, Nat.not_lt_zero]
+    simp_all)
+  omega
+
 /-- Monads that can hand out new item ids. -/
 class MonadFreshId (m : Type → Type) where
   freshId : m Uuid

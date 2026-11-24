@@ -3,6 +3,7 @@ module
 public import Forms.Model.FreshId
 public import Forms.Model.Format
 public import Mathlib.Data.List.Dedup
+public import Mathlib.Data.List.Nodup
 
 /-! Collections separate uuid from content. -/
 
@@ -26,7 +27,8 @@ theorem Item.id_mapValue
   : (item.mapValue f).id = item.id :=
   rfl
 
-/-- Reads an entry from a flat object that keeps its id under `idKey`, as upstream records do. -/
+/-- With `idKey := "uuid"`, decodes `{ "uuid": "...", "amount": 58 }` as
+`{ id := ..., value := { amount := 58 } }`. The remaining fields are decoded as `β`. -/
 def Item.flatFromJson?
   {β : Type}
   [FromJson β]
@@ -119,10 +121,16 @@ def append
 /-- Example data with the ids `Uuid.ofNat 1`, `Uuid.ofNat 2`, … -/
 def numbered
   (values : List β)
-  (distinct : ((List.range values.length).map (Uuid.ofNat ·.succ)).Nodup := by decide)
+  (fits : values.length ≤ 2^48 := by decide)
   : Collection β where
   entries := values.mapIdx fun index value => { id := .ofNat index.succ, value }
   nodup := by
+    have distinct : ((List.range values.length).map (Uuid.ofNat ·.succ)).Nodup :=
+      List.nodup_range.map_on fun first first_mem second second_mem same => by
+        have first_bound := List.mem_range.mp first_mem
+        have second_bound := List.mem_range.mp second_mem
+        have equal := Uuid.ofNat_inj (by omega) (by omega) (by omega) (by omega) same
+        omega
     convert distinct using 1
     apply List.ext_getElem <;> simp
 
@@ -130,7 +138,6 @@ structure IdCollision where
   id : Uuid
   deriving DecidableEq, Repr
 
-/-- Fresh ids are not proven new, so a clash is reported. -/
 def appendFresh
   {m : Type → Type}
   [Monad m]

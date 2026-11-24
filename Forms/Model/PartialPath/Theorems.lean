@@ -5,20 +5,14 @@ public import Forms.Model.PartialPath
 public section
 namespace Forms.Model
 
-private theorem modifyAt_eq_self_of_fixed
+private theorem modify_eq_self_of_fixed
   {α : Type}
-  (value : Collection α)
+  (entries : List (Item α))
   (position : Nat)
   (f : α → α)
-  (fixed : ∀ child, value.entries[position]? = some child → f child.value = child.value)
-  : value.modifyAt position f = value := by
-  apply Collection.ext
-  apply List.ext_getElem?
-  intro index
-  simp only [Collection.modifyAt, List.getElem?_modify]
-  split
-  · cases found : value.entries[index]? <;> simp_all [Item.mapValue]
-  · simp
+  (fixed : ∀ child, entries[position]? = some child → f child.value = child.value)
+  : entries.modify position (Item.mapValue f) = entries := by
+  induction entries generalizing position <;> cases position <;> simp_all [Item.mapValue]
 
 theorem PartialPath.set_get
   {α β : Type}
@@ -40,7 +34,7 @@ theorem PartialPath.set_get
     | none => rfl
     | some position =>
       simp only [found, Option.bind_some] at present ⊢
-      exact modifyAt_eq_self_of_fixed _ _ _ fun child here =>
+      exact Collection.ext <| modify_eq_self_of_fixed _ _ _ fun child here =>
         ih child.value old (by simpa [here] using present)
 
 theorem PartialPath.set_absent
@@ -63,7 +57,7 @@ theorem PartialPath.set_absent
     | none => rfl
     | some position =>
       simp only [found, Option.bind_some] at absent ⊢
-      exact modifyAt_eq_self_of_fixed _ _ _ fun child here =>
+      exact Collection.ext <| modify_eq_self_of_fixed _ _ _ fun child here =>
         ih child.value new (by simpa [here] using absent)
 
 /-- Writing through an entry never changes the ids of the collection. -/
