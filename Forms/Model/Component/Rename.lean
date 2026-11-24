@@ -35,8 +35,8 @@ def ComponentNode.rename
   | .onChange update body => .onChange update (body.rename rename)
   | .select (decidableEq := _) (key := _) path label options selected =>
     .select path (label.rename rename) (options.rename rename) selected
-  | .lookup (toJson := _) path label search =>
-    .lookup path (label.rename rename) (search.rename rename)
+  | .lookup (toJson := _) path label search availability =>
+    .lookup path (label.rename rename) (search.rename rename) (availability.rename rename)
   | .output value => .output (value.rename rename)
   | .issues => .issues
   | .reports path => .reports path

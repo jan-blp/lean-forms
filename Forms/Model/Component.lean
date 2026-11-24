@@ -204,13 +204,14 @@ abbrev Component.select
 
 abbrev Component.lookup
   {Γ : Context}
-  {α κ : Type}
+  {α κ payload : Type}
   [Lean.ToJson κ]
   (path : Path α (Option (Reference κ)))
   (label : Computation Γ α String)
-  (search : Computation Γ α (String → Source (LookupResults κ)))
+  (search : Computation Γ α (String → Source (LookupResults κ payload)))
+  (availability : Computation Γ α (LookupCandidate κ payload → LookupAvailability))
   : Component Γ α :=
-  { LocalState := Option String, node := .lookup path label search }
+  { LocalState := Option String, node := .lookup path label search availability }
 
 structure Labelled (β : Type) where
   value : β

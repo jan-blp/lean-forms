@@ -37,13 +37,41 @@ instance {κ : Type} : Validation (Reference κ) where
 instance {κ : Type} : Reports (Reference κ) where
   reports _ := []
 
-/-- `more` when the server left some matches out. -/
-structure LookupResults (κ : Type) [ToJson κ] where
-  found : List (Reference κ)
-  more : Bool
-  keys_nodup : (found.map Reference.wireKey).Nodup
+structure LookupCandidate (κ payload : Type) where
+  reference : Reference κ
+  data : payload
+  deriving DecidableEq, Repr, ToJson, FromJson
 
-def LookupResults.empty {κ : Type} [ToJson κ] : LookupResults κ :=
+def LookupCandidate.ofReference
+  {κ : Type}
+  (reference : Reference κ)
+  : LookupCandidate κ Unit :=
+  { reference, data := () }
+
+def LookupCandidate.wireKey
+  {κ payload : Type}
+  [ToJson κ]
+  (candidate : LookupCandidate κ payload)
+  : LookupKey :=
+  candidate.reference.wireKey
+
+inductive LookupAvailability where
+  | enabled
+  | disabled (reason : String)
+  deriving DecidableEq, Repr
+
+inductive LookupSelectionError where
+  | unlisted (key : LookupKey)
+  | disabled (key : LookupKey) (reason : String)
+  deriving DecidableEq, Repr
+
+/-- `more` when the server left some matches out. -/
+structure LookupResults (κ payload : Type) [ToJson κ] where
+  found : List (LookupCandidate κ payload)
+  more : Bool
+  keys_nodup : (found.map LookupCandidate.wireKey).Nodup
+
+def LookupResults.empty {κ payload : Type} [ToJson κ] : LookupResults κ payload :=
   { found := [], more := false, keys_nodup := List.nodup_nil }
 
 inductive LookupError where
@@ -55,37 +83,59 @@ instance : ToString LookupError where
     | .duplicateKeys => "Lookup results repeat an id."
 
 def LookupResults.ofList
-  {κ : Type}
+  {κ payload : Type}
   [ToJson κ]
-  (found : List (Reference κ))
+  (found : List (LookupCandidate κ payload))
   (more : Bool)
-  : Except LookupError (LookupResults κ) :=
-  if distinct : (found.map Reference.wireKey).Nodup then
+  : Except LookupError (LookupResults κ payload) :=
+  if distinct : (found.map LookupCandidate.wireKey).Nodup then
     .ok { found, more, keys_nodup := distinct }
   else .error .duplicateKeys
 
 def LookupResults.select
-  {κ : Type}
+  {κ payload : Type}
   [ToJson κ]
-  (records : List (Reference κ))
-  (keep : Reference κ → Prop)
+  (records : List (LookupCandidate κ payload))
+  (keep : LookupCandidate κ payload → Prop)
   [DecidablePred keep]
   (limit : Nat)
-  : Except LookupError (LookupResults κ) :=
+  : Except LookupError (LookupResults κ payload) :=
   let filtered := records.filter (fun record => decide (keep record))
-  if distinct : (filtered.map Reference.wireKey).Nodup then
+  if distinct : (filtered.map LookupCandidate.wireKey).Nodup then
     .ok {
       found := filtered.take limit
       more := decide (limit < filtered.length)
       keys_nodup := List.Nodup.sublist ((List.take_sublist _ _).map _) distinct }
   else .error .duplicateKeys
 
-instance {κ : Type} [ToJson κ] : ToJson (LookupResults κ) where
+def LookupResults.choose
+  {κ payload : Type}
+  [ToJson κ]
+  (results : LookupResults κ payload)
+  (availability : LookupCandidate κ payload → LookupAvailability)
+  (key : LookupKey)
+  : Except LookupSelectionError (Reference κ) :=
+  match results.found.find? (fun candidate => decide (candidate.wireKey = key)) with
+  | none => .error (.unlisted key)
+  | some candidate => match availability candidate with
+    | .enabled => .ok candidate.reference
+    | .disabled reason => .error (.disabled key reason)
+
+instance
+  {κ payload : Type}
+  [ToJson κ]
+  [ToJson payload]
+  : ToJson (LookupResults κ payload) where
   toJson results := Json.mkObj [("found", toJson results.found), ("more", toJson results.more)]
 
-instance {κ : Type} [ToJson κ] [FromJson κ] : FromJson (LookupResults κ) where
+instance
+  {κ payload : Type}
+  [ToJson κ]
+  [FromJson κ]
+  [FromJson payload]
+  : FromJson (LookupResults κ payload) where
   fromJson? json := do
-    let found : List (Reference κ) ← json.getObjValAs? _ "found"
+    let found : List (LookupCandidate κ payload) ← json.getObjValAs? _ "found"
     let more ← json.getObjValAs? Bool "more"
     (LookupResults.ofList found more).mapError toString
 

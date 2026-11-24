@@ -538,6 +538,64 @@ try {
     check(input('Country').value === '' && input('City').value === '' && input('City').disabled,
       'Clearing the country retained the city');
   `);
+  await example('business-partners', `
+    const partner = () => input('Business partner');
+    const options = () => [...field('Business partner').querySelectorAll('[role=option]')];
+    const active = () => document.getElementById(partner().getAttribute('aria-activedescendant'));
+    const key = value => partner().dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true }));
+    partner().focus();
+    await type(partner(), '');
+    // Opening with ArrowDown also covers browsing before any text is typed.
+    key('ArrowDown');
+    await wait(() => options().length === 5);
+    check(options().filter(option => option.getAttribute('aria-disabled') === 'true').length === 3,
+      'Blocked partners were not displayed as disabled');
+    check(options()[0].textContent.includes('Account is blocked.'), 'Disabled reason was not shown');
+    check(active()?.textContent === 'Barcelona Office', 'Initial active option was disabled');
+    options()[0].click();
+    await tick();
+    check(partner().value === '' && options().length === 5, 'Click selected a disabled option');
+    key('ArrowUp');
+    await tick();
+    check(active()?.textContent === 'Barcelona Office', 'ArrowUp reached a leading disabled option');
+    key('ArrowDown');
+    await tick();
+    check(active()?.textContent === 'Vic Components', 'ArrowDown did not skip a disabled option');
+    key('ArrowDown');
+    await tick();
+    check(active()?.textContent === 'Vic Components', 'ArrowDown reached a trailing disabled option');
+    key('ArrowUp');
+    await tick();
+    check(active()?.textContent === 'Barcelona Office', 'ArrowUp did not skip a disabled option');
+    options()[2].dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    await tick();
+    check(active()?.textContent === 'Barcelona Office', 'Hover activated a disabled option');
+    key('Enter');
+    await tick();
+    check(partner().value === 'Barcelona Office', 'Enter did not choose the active enabled partner');
+
+    await type(partner(), 'legacy');
+    await wait(() => options().length === 1 && options()[0].getAttribute('aria-disabled') === 'true');
+    check(!partner().hasAttribute('aria-activedescendant') &&
+      !field('Business partner').querySelector('[aria-selected=true]'), 'All-disabled matches had an active option');
+    key('ArrowDown');
+    key('ArrowUp');
+    key('Enter');
+    await tick();
+    check(partner().value === 'legacy' && options().length === 1, 'Keyboard chose an all-disabled result');
+    key('Escape');
+    await tick();
+    check(partner().value === 'Barcelona Office', 'Disabled choice changed the previous selection');
+
+    await type(partner(), 'VAT-400');
+    await wait(() => options()[0]?.textContent === 'Vic Components');
+    options()[0].click();
+    await tick();
+    await submit();
+    const saved = submitted().partner;
+    check(saved.id === 'vic' && Object.keys(saved).sort().join(',') === 'displayText,id',
+      'Submission persisted candidate data instead of the reference');
+  `);
   const marker = `const marker = () => document.querySelector('.status-marker');
     const issues = () => [...document.querySelectorAll('output')].find(output =>
       output.parentElement.firstChild.textContent === 'Current issues').textContent;

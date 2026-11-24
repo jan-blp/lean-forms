@@ -78,20 +78,20 @@ private def countries (text : String) : HttpRequest := Api.request DeliveryEndpo
 
 private def germany : Reference String := ⟨"DE", "Germany"⟩
 
-example : (LookupResults.select [germany, germany] (fun _ => True) 1).map (·.found) =
+example : (LookupResults.select [LookupCandidate.ofReference germany, LookupCandidate.ofReference germany] (fun _ => True) 1).map (·.found) =
     .error .duplicateKeys := by
-  simp [LookupResults.select, germany, Reference.wireKey, Except.map]
+  simp [LookupResults.select, germany, LookupCandidate.ofReference, LookupCandidate.wireKey, Reference.wireKey, Except.map]
 
-example : (LookupResults.select [germany] (fun _ => True) 1).map (·.found) = .ok [germany] := by
-  simp [LookupResults.select, germany, Reference.wireKey, Except.map]
+example : (LookupResults.select [LookupCandidate.ofReference germany] (fun _ => True) 1).map (·.found) = .ok [LookupCandidate.ofReference germany] := by
+  simp [LookupResults.select, germany, LookupCandidate.ofReference, LookupCandidate.wireKey, Reference.wireKey, Except.map]
 
-example : (LookupResults.select [germany] (fun _ => True) 0).map (·.more) = .ok true := by
-  simp [LookupResults.select, germany, Reference.wireKey, Except.map]
+example : (LookupResults.select [LookupCandidate.ofReference germany] (fun _ => True) 0).map (·.more) = .ok true := by
+  simp [LookupResults.select, germany, LookupCandidate.ofReference, LookupCandidate.wireKey, Reference.wireKey, Except.map]
 
 def run : IO Unit := do
   check "LookupDuplicateIdsRejected"
-    (fromJson? (α := LookupResults String) (Json.mkObj [
-      ("found", toJson [germany, { germany with displayText := "Deutschland" }]),
+    (fromJson? (α := LookupResults String Unit) (Json.mkObj [
+      ("found", toJson [LookupCandidate.ofReference germany, LookupCandidate.ofReference { germany with displayText := "Deutschland" }]),
       ("more", toJson false)]) |>.isOk |> not)
   let definition := FormDefinition.ofModel Delivery Delivery.form Delivery.initial
   let (opened, _) ← IO.ofExcept (definition.openState (toJson Delivery.initial) supply)
@@ -154,7 +154,7 @@ def run : IO Unit := do
   check "LookupFailureShown"
     (((← search? failed "Country").map (·.results)) == some (.failed "offline"))
   let duplicated ← execute searching (.loaded (countries "an") (.ok (Json.mkObj [
-    ("found", toJson [germany, germany]),
+    ("found", toJson [LookupCandidate.ofReference germany, LookupCandidate.ofReference germany]),
     ("more", toJson false)])))
   let duplicatedResults ← results? duplicated "Country"
   check "LookupDuplicateResponseFails" (match duplicatedResults with

@@ -24,6 +24,12 @@ structure ChoiceOption where
   label : String
   deriving DecidableEq
 
+structure LookupOption where
+  value : String
+  label : String
+  disabledReason : Option String
+  deriving DecidableEq
+
 inductive Evidence where
   | unsupported
   | missing
@@ -34,7 +40,7 @@ inductive Evidence where
 inductive SearchResults where
   | loading
   | failed (message : String)
-  | found (options : List ChoiceOption) (more : Bool)
+  | found (options : List LookupOption) (more : Bool)
   deriving DecidableEq
 
 structure Search where

@@ -118,10 +118,16 @@ structure Choices where
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
+structure LookupOption where
+  value : String
+  label : String
+  disabledReason : Option String
+  deriving ToJson, FromJson, BEq, Repr
+
 inductive SearchResults where
   | loading
   | failed (message : String)
-  | found (options : List ChoiceOption) (more : Bool)
+  | found (options : List LookupOption) (more : Bool)
   deriving ToJson, FromJson, BEq, Repr
 
 structure Search where

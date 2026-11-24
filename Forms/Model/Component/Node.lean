@@ -146,11 +146,12 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       : ComponentNode Γ α Unit Unit 0
   /-- The search text is local state, `none` while closed. -/
   | lookup {Γ : Context}
-      {α κ : Type}
+      {α κ payload : Type}
       [toJson : Lean.ToJson κ]
       (path : Path α (Option (Reference κ)))
       (label : Computation Γ α String)
-      (search : Computation Γ α (String → Source (LookupResults κ)))
+      (search : Computation Γ α (String → Source (LookupResults κ payload)))
+      (availability : Computation Γ α (LookupCandidate κ payload → LookupAvailability))
       : ComponentNode Γ α (Option String) Unit 0
   | output {Γ : Context}
       {α β : Type}

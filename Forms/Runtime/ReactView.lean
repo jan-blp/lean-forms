@@ -102,7 +102,8 @@ def Display.SearchResults.toReact : SearchResults → FormsReact.SearchResults
   | .loading => .loading
   | .failed message => .failed message
   | .found options more =>
-    .found (options.map fun option => { value := option.value, label := option.label }) more
+    .found (options.map fun option => {
+      value := option.value, label := option.label, disabledReason := option.disabledReason }) more
 
 def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Component :=
   let name := ControlKeyProtocol.toString c.key
