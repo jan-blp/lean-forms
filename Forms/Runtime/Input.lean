@@ -11,6 +11,10 @@ inductive Input where
   | boolean (value : Bool)
   | texts (values : List String)
   | pick (evidence : Model.Evidence)
+  /-- Sets a lookup's search text; `none` stops searching. -/
+  | search (text : Option String)
+  /-- Picks the lookup match with this key; `none` clears the value. -/
+  | choose (key : Option String)
 
 /-- Whether the input is text the user typed, which stays in the field as a draft when rejected. -/
 def Input.typed : Input → Bool
@@ -18,6 +22,8 @@ def Input.typed : Input → Bool
   | .boolean _ => false
   | .texts _ => false
   | .pick _ => false
+  | .search _ => false
+  | .choose _ => false
 
 inductive ClientBug where
   | missingArgument

@@ -23,6 +23,7 @@ const named = {
   checkbox: true,
   choice: true,
   choices: true,
+  lookup: true,
   output: false,
   button: false,
   tabBar: true,

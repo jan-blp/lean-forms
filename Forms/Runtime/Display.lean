@@ -31,6 +31,19 @@ inductive Evidence where
   | linked (evidence : Model.Evidence) (stale : Bool)
   deriving DecidableEq
 
+/-- A lookup's matches for its search text. -/
+inductive SearchResults where
+  | loading
+  | failed (message : String)
+  /-- `more` when the server left some matches out. -/
+  | found (options : List ChoiceOption) (more : Bool)
+  deriving DecidableEq
+
+structure Search where
+  text : String
+  results : SearchResults
+  deriving DecidableEq
+
 /-- How a field shows its value. -/
 inductive Value where
   | text (kind : Model.TextKind) (value : String)
@@ -43,6 +56,8 @@ inductive Editor where
   | field (value : Value) (evidence : Evidence)
   /-- `selected` is the active option's `value`, or empty when no option matches. -/
   | choice (selected : String) (options : List ChoiceOption)
+  /-- Picks a server record; `search` is present while searching. -/
+  | lookup (picked : Option ChoiceOption) (search : Option Search)
   /-- A button; its argument is ignored. -/
   | action
   /-- Tab labels with `active` selected; its argument is the chosen tab's index. -/
@@ -178,6 +193,7 @@ def Control.editable (control : Control) : Bool :=
     | .field (.checkbox _) _ => true
     | .field (.choices ..) _ => true
     | .choice .. => true
+    | .lookup .. => true
     | .action => false
     | .tabs .. => false
 
@@ -188,6 +204,7 @@ def Control.acceptsDrafts (control : Control) : Bool :=
     | .field (.checkbox _) _ => false
     | .field (.choices ..) _ => false
     | .choice .. => false
+    | .lookup .. => false
     | .action => false
     | .tabs .. => false
 

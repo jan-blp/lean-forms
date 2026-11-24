@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type InputHTMLAttributes } from 'react';
+import { useEffect, useId, useRef, useState, type InputHTMLAttributes, type KeyboardEvent } from 'react';
 import { useLeanForm, type Components } from './context.js';
 import type * as FormsReact from './protocol/FormsReact.js';
 import { Children, Render } from './render.js';
@@ -241,6 +241,105 @@ export function Choices(
   );
 }
 
+/** How long typing pauses before the search text is sent. */
+const searchPause = 300;
+
+function foundOptions(search: FormsReact.Search | null): FormsReact.ChoiceOption[] {
+  return search !== null && typeof search.results === 'object' && 'found' in search.results
+    ? search.results.found.options : [];
+}
+
+function SearchNote({ search }: { search: FormsReact.Search }) {
+  const { results } = search;
+  if (results === 'loading') return <p className="lookup-note" role="status">Searching…</p>;
+  if ('failed' in results) {
+    return <p className="lookup-note validation-error">Could not search: {results.failed.message}</p>;
+  }
+  if (results.found.more) return <p className="lookup-note">Keep typing to narrow the list.</p>;
+  if (results.found.options.length === 0) return <p className="lookup-note">No matches.</p>;
+  return null;
+}
+
+/** Typed text goes to Lean after a pause; the input shows the picked record otherwise. */
+export function Lookup({ name, label, picked, search, disabled, errors, onChange }: FormsReact.Lookup) {
+  const form = useLeanForm();
+  const feedback = useId();
+  const list = useId();
+  const [typed, setTyped] = useState<string | null>(null);
+  const [active, setActive] = useState(0);
+  const timer = useRef<number | undefined>(undefined);
+  const options = foundOptions(search);
+  const optionKeys = options.map(option => option.value).join('\n');
+  useEffect(() => setActive(0), [optionKeys]);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const send = (argument: { search: string | null } | { choose: string | null }) => {
+    window.clearTimeout(timer.current);
+    form.run(onChange, argument);
+  };
+  const type = (text: string) => {
+    setTyped(text);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => form.run(onChange, { search: text }), searchPause);
+  };
+  const choose = (value: string | null) => {
+    setTyped(null);
+    send({ choose: value });
+  };
+  const close = () => {
+    setTyped(null);
+    if (search === null) window.clearTimeout(timer.current);
+    else send({ search: null });
+  };
+  const optionId = (index: number) => `${list}-${index}`;
+  const keyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (search === null) send({ search: typed ?? '' });
+      else setActive(Math.min(active + 1, options.length - 1));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActive(Math.max(active - 1, 0));
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      const option = options[active];
+      if (option) choose(option.value);
+    } else if (event.key === 'Escape' && (search !== null || typed !== null)) {
+      event.preventDefault();
+      close();
+    }
+  };
+  const open = search !== null;
+  return (
+    <div className="editor lookup">
+      <label>{label}<input ref={element => form.registerTarget(name, element)} type="text"
+        role="combobox" aria-expanded={open} aria-controls={list} aria-autocomplete="list"
+        aria-activedescendant={open && options[active] ? optionId(active) : undefined}
+        autoComplete="off" spellCheck={false} disabled={disabled}
+        value={typed ?? search?.text ?? picked?.label ?? ''}
+        placeholder={picked === null ? 'Type to search' : undefined}
+        {...described(errors, feedback)}
+        onFocus={event => event.currentTarget.select()}
+        onChange={event => type(event.currentTarget.value)}
+        onKeyDown={keyDown}
+        onBlur={close} /></label>
+      {picked !== null && !disabled &&
+        <button type="button" className="clear" onClick={() => choose(null)}>Clear</button>}
+      {open && <div className="lookup-results">
+        <ul id={list} role="listbox" aria-label={label}>
+          {options.map((option, index) =>
+            <li key={option.value} id={optionId(index)} role="option"
+              aria-selected={index === active}
+              onMouseDown={event => event.preventDefault()}
+              onMouseEnter={() => setActive(index)}
+              onClick={() => choose(option.value)}>{option.label}</li>)}
+        </ul>
+        <SearchNote search={search} />
+      </div>}
+      <Feedback id={feedback} errors={errors} />
+    </div>
+  );
+}
+
 export function Output({ label, value }: FormsReact.Output) {
   return <div className="computed"><label>{label}<output>{value}</output></label></div>;
 }
@@ -319,6 +418,7 @@ export const defaultComponents: Components = {
   checkbox: Checkbox,
   choice: Choice,
   choices: Choices,
+  lookup: Lookup,
   output: Output,
   button: Button,
   tabBar: TabBar,

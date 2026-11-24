@@ -118,6 +118,31 @@ structure Choices where
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
+inductive SearchResults where
+  | loading
+  | failed (message : String)
+  /-- `more` when the server left some matches out. -/
+  | found (options : List ChoiceOption) (more : Bool)
+  deriving ToJson, FromJson, BEq, Repr
+
+structure Search where
+  text : String
+  results : SearchResults
+  deriving ToJson, FromJson, BEq, Repr
+
+/-- Picks a server record; `search` is present while searching. `onChange` receives
+`{ "search": text }`, `{ "search": null }` to stop, `{ "choose": value }`, or `{ "choose": null }`
+to clear. -/
+structure Lookup where
+  name : String
+  label : String
+  picked : Option ChoiceOption
+  search : Option Search
+  disabled : Bool
+  errors : List String
+  onChange : Action
+  deriving ToJson, FromJson, BEq, Repr
+
 structure Output where
   label : String
   value : String
@@ -175,6 +200,7 @@ inductive Component where
   | checkbox : Checkbox → Component
   | choice : Choice → Component
   | choices : Choices → Component
+  | lookup : Lookup → Component
   | output : Output → Component
   | button : Button → Component
   | tabBar : TabBar → Component
@@ -193,6 +219,7 @@ def Component.draftFields : Component → List String
   | .checkbox _ => []
   | .choice _ => []
   | .choices _ => []
+  | .lookup _ => []
   | .output _ => []
   | .button _ => []
   | .tabBar _ => []
@@ -220,6 +247,7 @@ def Component.pickFields : Component → List String
   | .checkbox { name, disabled, evidence, .. } => pickField name disabled evidence
   | .choices { name, disabled, evidence, .. } => pickField name disabled evidence
   | .choice _ => []
+  | .lookup _ => []
   | .output _ => []
   | .button _ => []
   | .tabBar _ => []

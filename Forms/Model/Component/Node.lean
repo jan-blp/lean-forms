@@ -3,6 +3,7 @@ module
 public import Forms.Model.Action
 public import Forms.Model.Evidence
 public import Forms.Model.Format
+public import Forms.Model.Lookup
 public import Forms.Model.PartialPath
 public import Forms.Model.Component.State
 public import Forms.Model.Component.Layout
@@ -137,6 +138,15 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (options : Computation Γ α (SelectOptions κ β))
       (selected : β → κ)
       : ComponentNode Γ α Unit Unit 0
+  /-- Picks the value at `path` from the server's matches for a search text, which `search`
+  turns into a request. The text is local state, `none` while not searching. -/
+  | lookup {Γ : Context}
+      {α κ : Type}
+      [toJson : Lean.ToJson κ]
+      (path : Path α (Option (Reference κ)))
+      (label : Computation Γ α String)
+      (search : Computation Γ α (String → Source (LookupResults κ)))
+      : ComponentNode Γ α (Option String) Unit 0
   | output {Γ : Context}
       {α β : Type}
       (value : Computation Γ α β)

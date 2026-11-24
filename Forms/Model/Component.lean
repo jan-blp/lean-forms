@@ -192,6 +192,16 @@ abbrev Component.select
   : Component Γ α :=
   { LocalState := Unit, node := .select path label options selected }
 
+abbrev Component.lookup
+  {Γ : Context}
+  {α κ : Type}
+  [Lean.ToJson κ]
+  (path : Path α (Option (Reference κ)))
+  (label : Computation Γ α String)
+  (search : Computation Γ α (String → Source (LookupResults κ)))
+  : Component Γ α :=
+  { LocalState := Option String, node := .lookup path label search }
+
 structure Labelled (β : Type) where
   value : β
   label : String

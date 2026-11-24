@@ -13,6 +13,8 @@ inductive InvocationError where
   | absent
   /-- No option of the select has the requested key. -/
   | unavailableBranch (key : String)
+  /-- The lookup's current matches have no record with the key. -/
+  | unlistedMatch (key : String)
   deriving DecidableEq, Repr
 
 instance : ToString InvocationError where
@@ -22,6 +24,7 @@ instance : ToString InvocationError where
       | .disabled => "the control is disabled"
       | .absent => "the control is no longer shown"
       | .unavailableBranch key => s!"branch '{key}' is no longer available"
+      | .unlistedMatch key => s!"{key} is no longer among the matches"
     s!"This action is unavailable: {reason}."
 
 structure ComponentUpdate (Γ : Context) (α localState : Type) where
