@@ -29,7 +29,6 @@ def RequestScope.contains (scope : RequestScope) (request : HttpRequest) : Bool 
   | .request target => target == request
   | .endpoint method url => request.method == method && request.url == url
 
-/-- Identifies one attempt, so responses from before invalidation can be ignored. -/
 structure HttpFetch where
   request : HttpRequest
   generation : Nat
