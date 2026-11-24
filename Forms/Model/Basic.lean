@@ -34,20 +34,23 @@ def Fields.set
   LeanLens.set (Fields.lens field)
 
 /-- Keys sent to the client and decoded back; `""` is reserved for no selection. -/
-class Key (κ : Type) where
-  encode : κ → String
-  decode : String → Option κ
+class Key (Value : Type) where
+  encode : Value → String
+  decode : String → Option Value
   decode_encode : ∀ key, decode (encode key) = some key
   encode_ne_empty : ∀ key, encode key ≠ ""
 
-theorem Key.encode_injective {κ : Type} [Key κ] : Function.Injective (Key.encode (κ := κ)) := by
+theorem Key.encode_injective
+  {Key : Type}
+  [Forms.Model.Key Key]
+  : Function.Injective (Forms.Model.Key.encode (Value := Key)) := by
   intro first second h
-  simpa [Key.decode_encode] using congrArg (Key.decode (κ := κ)) h
+  simpa [Forms.Model.Key.decode_encode] using congrArg (Forms.Model.Key.decode (Value := Key)) h
 
 theorem Key.find?_encode
-  {κ : Type}
-  (encode : κ → String)
-  : ∀ (all : List κ) (key : κ), key ∈ all → (all.map encode).Nodup →
+  {Key : Type}
+  (encode : Key → String)
+  : ∀ (all : List Key) (key : Key), key ∈ all → (all.map encode).Nodup →
     all.find? (encode · == encode key) = some key
   | [], _, member, _ => nomatch member
   | head :: rest, key, member, nodup => by
@@ -57,23 +60,23 @@ theorem Key.find?_encode
       simp
     · by_cases clash : encode head = encode key
       · exact absurd (clash ▸ List.mem_map_of_mem later) nodup.1
-      · simp [clash, Key.find?_encode encode rest key later nodup.2]
+      · simp [clash, Forms.Model.Key.find?_encode encode rest key later nodup.2]
 
 /-- Decodes by looking names up in `all`. Its names strictly increase, so checking them takes
 one comparison per key rather than one per pair. -/
 @[instance_reducible] def Key.ofSorted
-  {κ : Type}
-  (all : List κ)
-  (encode : κ → String)
+  {Key : Type}
+  (all : List Key)
+  (encode : Key → String)
   (complete : ∀ key, key ∈ all)
   (sorted : (all.map encode).IsChain (· < ·))
   (named : ∀ name ∈ all.map encode, name ≠ "")
-  : Key κ where
+  : Forms.Model.Key Key where
   encode
   decode name := all.find? (encode · == name)
   decode_encode key :=
     haveI : Trans (α := String) (· < ·) (· < ·) (· < ·) := ⟨String.lt_trans⟩
-    Key.find?_encode encode all key (complete key)
+    Forms.Model.Key.find?_encode encode all key (complete key)
       (sorted.pairwise.imp (S := (· ≠ ·)) fun {first second} (less : first < second) same =>
         String.lt_irrefl second (same ▸ less))
   encode_ne_empty key := named (encode key) (List.mem_map_of_mem (complete key))
@@ -98,7 +101,7 @@ instance {α : Type} [Constructors α] : Key (Constructors.Tag α) :=
   Constructors.tagKey
 
 def Constructors.key {α β : Type} [Constructors α] (constructor : Constructor α β) : String :=
-  Key.encode (tagOf constructor)
+  Forms.Model.Key.encode (tagOf constructor)
 
 class LawfulConstructors (α : Type) [Constructors α] : Prop where
   project_inject : ∀ {β : Type} (c : Constructors.Constructor α β) (value : β),

@@ -1,8 +1,8 @@
 # Lookups
 
-A lookup stores a `Reference κ` containing an `id` and `displayText`. Search
-results contain `LookupCandidate κ payload` values: a reference and typed `data`
-used by the Lean form. The candidate payload is not stored in the selected field
+A lookup stores a `Reference Key` containing an `id` and `displayText`. Search
+results contain `LookupCandidate Key Details` values: a reference and typed `details`
+used by the Lean form. The candidate details are not stored in the selected field
 or included in the React view.
 
 The JSON response has this shape:
@@ -10,14 +10,14 @@ The JSON response has this shape:
 ```json
 {
   "found": [
-    { "reference": { "id": "DE", "displayText": "Germany" }, "data": {} }
+    { "reference": { "id": "DE", "displayText": "Germany" }, "details": {} }
   ],
   "more": false
 }
 ```
 
-For `LookupResults String Unit`, every candidate must include `"data": {}`.
-Missing `data` and `"data": null` fail to decode. Other payload types use their
+For `LookupResults String Unit`, every candidate must include `"details": {}`.
+Missing `details` and `"details": null` fail to decode. Other details types use their
 own JSON encoding. Results must have unique reference keys.
 
 `LookupResults.select` filters candidates using a decidable predicate, rejects
@@ -36,7 +36,7 @@ candidate becomes disabled. Add a separate validation rule when a saved selectio
 must remain eligible. The submit endpoint must independently enforce business
 constraints, since the form runs on the client.
 
-To try typed payloads and disabled candidates, build the native and Wasm targets
+To try typed details and disabled candidates, build the native and Wasm targets
 as described in the README, then run:
 
 ```sh

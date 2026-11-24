@@ -29,7 +29,7 @@ structure BusinessPartnerSelection where
 namespace BusinessPartners
 
 def availability (candidate : LookupCandidate String BusinessPartnerData) : LookupAvailability :=
-  match candidate.data.status with
+  match candidate.details.status with
   | .active => .enabled
   | .blocked reason => .disabled reason
 
@@ -41,19 +41,22 @@ def initial : BusinessPartnerSelection.Raw := { partner := none }
 
 def candidates : List (LookupCandidate String BusinessPartnerData) := [
   { reference := { id := "alpine", displayText := "Alpine Supplies" }
-    data := { city := "Girona", vatNumber := "VAT-100"
-              status := .blocked "Account is blocked." } },
+    details := {
+      city := "Girona", vatNumber := "VAT-100", status := .blocked "Account is blocked." } },
   { reference := { id := "barcelona", displayText := "Barcelona Office" }
-    data := { city := "Barcelona", vatNumber := "VAT-200", status := .active } },
+    details := { city := "Barcelona", vatNumber := "VAT-200", status := .active } },
   { reference := { id := "girona", displayText := "Girona Goods" }
-    data := { city := "Girona", vatNumber := "VAT-300", status := .blocked "Account is closed." } },
+    details := {
+      city := "Girona", vatNumber := "VAT-300", status := .blocked "Account is closed." } },
   { reference := { id := "vic", displayText := "Vic Components" }
-    data := { city := "Vic", vatNumber := "VAT-400", status := .active } },
+    details := { city := "Vic", vatNumber := "VAT-400", status := .active } },
   { reference := { id := "legacy", displayText := "Vic Legacy" }
-    data := { city := "Vic", vatNumber := "VAT-500", status := .blocked "Account is blocked." } }]
+    details := {
+      city := "Vic", vatNumber := "VAT-500", status := .blocked "Account is blocked." } }]
 
 def searchText (candidate : LookupCandidate String BusinessPartnerData) : String :=
-  candidate.reference.displayText ++ " " ++ candidate.data.city ++ " " ++ candidate.data.vatNumber
+  candidate.reference.displayText ++ " " ++
+    candidate.details.city ++ " " ++ candidate.details.vatNumber
 
 def mentions (text : String) (candidate : LookupCandidate String BusinessPartnerData) : Prop :=
   (searchText candidate).toLower.contains text.toLower = true

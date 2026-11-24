@@ -192,24 +192,24 @@ def Component.disabledWhen
 
 abbrev Component.select
   {Γ : Context}
-  {α β κ : Type}
-  [DecidableEq κ]
-  [Key κ]
+  {α β Key : Type}
+  [DecidableEq Key]
+  [Forms.Model.Key Key]
   (path : Path α β)
   (label : Computation Γ α String)
-  (options : Computation Γ α (SelectOptions κ β))
-  (selected : β → κ)
+  (options : Computation Γ α (SelectOptions Key β))
+  (selected : β → Key)
   : Component Γ α :=
   { LocalState := Unit, node := .select path label options selected }
 
 abbrev Component.lookup
   {Γ : Context}
-  {α κ payload : Type}
-  [Lean.ToJson κ]
-  (path : Path α (Option (Reference κ)))
+  {α Key Details : Type}
+  [Lean.ToJson Key]
+  (path : Path α (Option (Reference Key)))
   (label : Computation Γ α String)
-  (search : Computation Γ α (String → Source (LookupResults κ payload)))
-  (availability : Computation Γ α (LookupCandidate κ payload → LookupAvailability))
+  (search : Computation Γ α ((searchText : String) → Source (LookupResults Key Details)))
+  (availability : Computation Γ α (LookupCandidate Key Details → LookupAvailability))
   : Component Γ α :=
   { LocalState := Option String, node := .lookup path label search availability }
 

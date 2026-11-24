@@ -70,7 +70,7 @@ def run : IO Unit := do
     (fromJson? (α := LookupResults String BusinessPartnerData) (toJson results))
   check "CandidatePayloadRoundtrip" (decoded.found == results.found)
   let some candidate := results.found.head? | throw (IO.userError "FAIL missing candidate")
-  let duplicate := { candidate with data := { candidate.data with status := .active } }
+  let duplicate := { candidate with details := { candidate.details with status := .active } }
   check "CandidateDuplicateIdsIgnorePayload"
     ((LookupResults.select [candidate, duplicate] (fun _ => True) 0).isOk |> not)
   check "CandidateDuplicateJsonRejected"

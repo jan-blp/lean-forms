@@ -18,12 +18,12 @@ open Lean
 namespace LookupResults
 
 theorem choose_spec
-  {κ payload : Type}
-  [ToJson κ]
-  {results : LookupResults κ payload}
-  {availability : LookupCandidate κ payload → LookupAvailability}
+  {Key Details : Type}
+  [ToJson Key]
+  {results : LookupResults Key Details}
+  {availability : LookupCandidate Key Details → LookupAvailability}
   {key : LookupKey}
-  {reference : Reference κ}
+  {reference : Reference Key}
   (chosen : results.choose availability key = .ok reference)
   : ∃ candidate ∈ results.found,
       candidate.reference = reference ∧ candidate.wireKey = key ∧ availability candidate = .enabled := by
@@ -37,17 +37,17 @@ theorem choose_spec
         simpa [choose, found, available] using chosen
       exact ⟨candidate, List.mem_of_find?_eq_some found, reference_eq,
         of_decide_eq_true (List.find?_some
-          (p := fun (candidate : LookupCandidate κ payload) => decide (candidate.wireKey = key)) found),
+          (p := fun (candidate : LookupCandidate Key Details) => decide (candidate.wireKey = key)) found),
         available⟩
 
 variable
-  {κ payload : Type}
-  [ToJson κ]
-  {records : List (LookupCandidate κ payload)}
-  {keep : LookupCandidate κ payload → Prop}
+  {Key Details : Type}
+  [ToJson Key]
+  {records : List (LookupCandidate Key Details)}
+  {keep : LookupCandidate Key Details → Prop}
   [DecidablePred keep]
   {limit : Nat}
-  {result : LookupResults κ payload}
+  {result : LookupResults Key Details}
 
 theorem select_found
   (selected : select records keep limit = .ok result)
@@ -61,7 +61,7 @@ theorem select_found
 
 theorem select_kept
   (selected : select records keep limit = .ok result)
-  {record : LookupCandidate κ payload}
+  {record : LookupCandidate Key Details}
   (member : record ∈ result.found)
   : keep record := by
   rw [select_found selected] at member

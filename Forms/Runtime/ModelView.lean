@@ -101,14 +101,14 @@ def button
     input := .action
     messages := [] }
 
-def option {κ : Type} [Lean.ToJson κ] (reference : Reference κ) : Display.ChoiceOption :=
+def option {Key : Type} [Lean.ToJson Key] (reference : Reference Key) : Display.ChoiceOption :=
   { value := reference.wireKey.value, label := reference.displayText }
 
 def searchResults
-  {κ payload : Type}
-  [Lean.ToJson κ]
-  (availability : LookupCandidate κ payload → LookupAvailability)
-  : Status (LookupResults κ payload) → Display.SearchResults
+  {Key Details : Type}
+  [Lean.ToJson Key]
+  (availability : LookupCandidate Key Details → LookupAvailability)
+  : Status (LookupResults Key Details) → Display.SearchResults
   | .loading => .loading
   | .failed message => .failed message
   | .ready results => .found (results.found.map fun candidate => {

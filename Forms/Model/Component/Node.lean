@@ -12,23 +12,23 @@ public import Std.Data.HashMap
 @[expose] public section
 namespace Forms.Model
 
-structure SelectOption (κ α : Type) where
-  key : κ
+structure SelectOption (Key α : Type) where
+  key : Key
   label : String
   start : α
 
-structure SelectOptions (κ α : Type) where
-  options : List (SelectOption κ α)
+structure SelectOptions (Key α : Type) where
+  options : List (SelectOption Key α)
   keys_nodup : options.map SelectOption.key |>.Nodup := by simp <;> decide
   labels_nodup : options.map SelectOption.label |>.Nodup := by simp <;> decide
 
 inductive Editor : Type → Type 1 where
   | formatted {α : Type} (format : Format α) : Editor α
   | checkbox : Editor Bool
-  | choices {β κ : Type}
-      [key : Key κ]
-      (options : SelectOptions κ β)
-      (selected : β → κ)
+  | choices {β Key : Type}
+      [key : Forms.Model.Key Key]
+      (options : SelectOptions Key β)
+      (selected : β → Key)
       : Editor (List β)
   | refine {α β : Type}
       (editor : Editor α)
@@ -136,22 +136,21 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
   The option with key `selected value` is marked selected, if there is one.
   Choosing a different option sets the value to its `start`. -/
   | select {Γ : Context}
-      {α β κ : Type}
-      [decidableEq : DecidableEq κ]
-      [key : Key κ]
+      {α β Key : Type}
+      [decidableEq : DecidableEq Key]
+      [key : Forms.Model.Key Key]
       (path : Path α β)
       (label : Computation Γ α String)
-      (options : Computation Γ α (SelectOptions κ β))
-      (selected : β → κ)
+      (options : Computation Γ α (SelectOptions Key β))
+      (selected : β → Key)
       : ComponentNode Γ α Unit Unit 0
-  /-- The search text is local state, `none` while closed. -/
   | lookup {Γ : Context}
-      {α κ payload : Type}
-      [toJson : Lean.ToJson κ]
-      (path : Path α (Option (Reference κ)))
+      {α Key Details : Type}
+      [toJson : Lean.ToJson Key]
+      (path : Path α (Option (Reference Key)))
       (label : Computation Γ α String)
-      (search : Computation Γ α (String → Source (LookupResults κ payload)))
-      (availability : Computation Γ α (LookupCandidate κ payload → LookupAvailability))
+      (search : Computation Γ α ((searchText : String) → Source (LookupResults Key Details)))
+      (availability : Computation Γ α (LookupCandidate Key Details → LookupAvailability))
       : ComponentNode Γ α (Option String) Unit 0
   | output {Γ : Context}
       {α β : Type}
