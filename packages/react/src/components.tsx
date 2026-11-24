@@ -265,23 +265,19 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
   const list = useId();
   const [typed, setTyped] = useState<string | null>(null);
   const [active, setActive] = useState(0);
-  const timer = useRef<number | undefined>(undefined);
   const current = typed === null || typed === search?.text;
   const options = current ? foundOptions(search) : [];
   const optionKeys = JSON.stringify(options.map(option => [option.value, option.disabledReason]));
   const firstEnabled = options.findIndex(option => option.disabledReason === null);
   const activeIndex = options[active]?.disabledReason === null ? active : firstEnabled;
   useEffect(() => setActive(firstEnabled), [optionKeys, firstEnabled]);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
-  const send = (command: FormsReact.LookupInput) => {
-    window.clearTimeout(timer.current);
-    form.run(onChange, { lookup: command });
-  };
-  const type = (text: string) => {
-    setTyped(text);
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => send({ search: { text } }), searchPause);
-  };
+  const send = (command: FormsReact.LookupInput) => form.run(onChange, { lookup: command });
+  // An effect, not a timer set in the handler, so a remount (e.g. StrictMode's) re-arms it.
+  useEffect(() => {
+    if (current) return;
+    const timer = window.setTimeout(() => send({ search: { text: typed } }), searchPause);
+    return () => window.clearTimeout(timer);
+  }, [typed, current]);
   const choose = (option: FormsReact.LookupOption) => {
     if (disabled || option.disabledReason !== null) return;
     setTyped(null);
@@ -293,8 +289,7 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
   };
   const close = () => {
     setTyped(null);
-    if (search === null) window.clearTimeout(timer.current);
-    else send('close');
+    if (search !== null) send('close');
   };
   const optionId = (index: number) => `${list}-${index}`;
   const move = (direction: -1 | 1) => {
@@ -333,7 +328,7 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
         placeholder={picked === null ? 'Type to search' : undefined}
         {...described(errors, feedback)}
         onFocus={event => event.currentTarget.select()}
-        onChange={event => type(event.currentTarget.value)}
+        onChange={event => setTyped(event.currentTarget.value)}
         onKeyDown={keyDown}
         onBlur={close} /></label>
       {picked !== null && !disabled &&
