@@ -104,7 +104,6 @@ def button
 inductive ActionError where
   | decode (error : DecodeError)
   | invalid (error : Model.InvocationError)
-  /-- A new entry drew an id its collection already uses. -/
   | idCollision (id : Uuid)
 
 def noArgument

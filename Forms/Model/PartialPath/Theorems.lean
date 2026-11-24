@@ -17,11 +17,7 @@ private theorem modifyAt_eq_self_of_fixed
   intro index
   simp only [Collection.modifyAt, List.getElem?_modify]
   split
-  · cases found : value.entries[index]? with
-    | none => rfl
-    | some child =>
-      subst_vars
-      simp [Item.mapValue, fixed child found]
+  · cases found : value.entries[index]? <;> simp_all [Item.mapValue]
   · simp
 
 theorem PartialPath.set_get

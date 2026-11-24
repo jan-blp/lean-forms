@@ -37,7 +37,6 @@ abbrev Var (Γ : Context) (α : Type) := Ref Γ .writable α
 
 abbrev InputRef (Γ : Context) (α : Type) := Ref Γ .readOnly α
 
-/-- The context of a row editing an entry with content `α`. -/
 abbrev Context.row (α : Type) (Γ : Context) : Context :=
   ⟨.readOnly, PointedList (Item α)⟩ -- the entries and the row's index
   :: ⟨.writable, Bool⟩ -- whether to remove the row
