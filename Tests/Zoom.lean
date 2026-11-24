@@ -70,7 +70,7 @@ def run : IO Unit := do
     (.field path[Expense.Field.description] "Description" .text)
   check "ZoomMissingItemIsHidden"
     ((ModelView.render absent ExpenseReport.initial {} [] Env.nil).view == .hidden &&
-      toJson (outOfBounds.set ⟨thirdId, "Ignored", 1, false⟩ ExpenseReport.initial) == toJson ExpenseReport.initial)
+      toJson (outOfBounds.set ⟨"Ignored", 1, false⟩ ExpenseReport.initial) == toJson ExpenseReport.initial)
   let phonePath : PartialPath Shipping.Raw String :=
     .constructor Shipping.Constructor.express (.ofPath path[Shipping.express.Field.phone])
   let phone : Component [] Shipping.Raw := Component.void <| .zoom?
@@ -99,10 +99,10 @@ def run : IO Unit := do
   let detail ← firstControl details selected selectedUi
   let edited ← IO.ofExcept ((perform details selected detail.key (some (.text "Independent")) selectedUi).mapError toString)
   check "ZoomIndependentOfTable"
-    (edited.expenses.map (·.description) == ["Train to Bern", "Independent"] &&
+    (edited.expenses.values.map (·.description) == ["Train to Bern", "Independent"] &&
       edited.employee == selected.employee)
   let invalidValue : ExpenseReport.Raw := { selected with
-    expenses := [⟨firstId, "Train to Bern", 58, false⟩, ⟨secondId, "", 180, true⟩] }
+    expenses := .numbered [⟨"Train to Bern", 58, false⟩, ⟨"", 180, true⟩] }
   let invalidState := ModelForm.openState (model := ExpenseReport) (supply := supply) details invalidValue selectedUi
   let invalidDetails := ModelForm.snapshot details invalidState
   check "ZoomListValidationLocation"
@@ -113,6 +113,6 @@ def run : IO Unit := do
   let movedControl ← firstControl moved selected selectedUi
   let movedEdit ← IO.ofExcept ((perform moved selected detail.key (some (.text "Moved")) selectedUi).mapError toString)
   check "ZoomKeySurvivesLayoutChange"
-    (movedControl.key == detail.key && movedEdit.expenses.map (·.description) == ["Train to Bern", "Moved"])
+    (movedControl.key == detail.key && movedEdit.expenses.values.map (·.description) == ["Train to Bern", "Moved"])
 
 end Tests.Zoom

@@ -2,10 +2,12 @@ module
 
 public import Lean.Data.Json
 public import Forms.Model.ErasedLocation
-public import Forms.Model.HasUuid
+public import Forms.Model.Collection
+public import Forms.Model.Lens
 public import Forms.Model.LawfulJson
 public import LeanLens.Lawful
 public import Mathlib.Data.List.Dedup
+public import Mathlib.Data.List.OfFn
 public import Std.Data.HashMap
 open LeanLens
 
@@ -171,24 +173,23 @@ inductive Location : {α : Type} → α → Type 1 where
       : Location (Constructors.inject constructor value)
   | item
       {α : Type}
-      [hasUuid : HasUuid α]
-      {items : List α}
-      (item : α)
-      (member : item ∈ items)
-      (rest : Location item)
+      {items : Collection α}
+      (entry : Item α)
+      (member : entry ∈ items.entries)
+      (rest : Location entry.value)
       : Location items
 
 def Location.keys {α : Type} {value : α} : Location value → List String
   | .self => []
   | .field (fields := _) f rest => Fields.key f :: rest.keys
   | .constructor (constructors := _) c rest => Constructors.key c :: rest.keys
-  | .item (hasUuid := _) (items := items) entry _ rest => (HasUuid.id entry).value :: rest.keys
+  | .item (items := items) entry _ rest => entry.id.value :: rest.keys
 
 def Location.erase {α : Type} {value : α} : Location value → ErasedLocation
   | .self => []
   | .field (fields := _) f rest => .field (Fields.key f) :: rest.erase
   | .constructor (constructors := _) c rest => .constructor (Constructors.key c) :: rest.erase
-  | .item (hasUuid := _) (items := items) entry _ rest => .item (HasUuid.id entry) :: rest.erase
+  | .item (items := items) entry _ rest => .item entry.id :: rest.erase
 
 inductive Targets (α : Type) (value : α) where
   | global
@@ -206,14 +207,7 @@ macro "locations[" paths:sepBy1(locationPath, ", ") "]" : term => do
   let rest := locations.extract 1 locations.size
   `(Targets.locations (first := $(locations[0]!)) (rest := [$rest,*]))
 
-inductive Error.Kind where
-  /-- The input is invalid (e.g. an empty required field or a malformed email). -/
-  | invalid
-  /-- The data breaks an invariant the form relies on (e.g. duplicate UUID). -/
-  | corrupt
-
 structure Error {α : Type} (value : α) where
-  kind : Error.Kind
   message : String
   targets : Targets α value
 
@@ -233,7 +227,6 @@ def Error.mapLocations
   (step : Location value → Location outer)
   (error : Error value)
   : Error outer where
-  kind := error.kind
   message := error.message
   targets := error.targets.mapLocations step
 
@@ -265,7 +258,7 @@ def Decision.errors
   {value : α}
   : Decision property value → List (Error value)
   | .valid _ => []
-  | .invalid _ message targets => [{ kind := .invalid, message, targets }]
+  | .invalid _ message targets => [{ message, targets }]
 
 def Decision.toExcept
   {property : Prop}
@@ -313,14 +306,6 @@ def errors {α β : Type _} : Except (List α) β → List α
   | .ok _ => []
   | .error errors => errors
 
-def corruption?
-  (model : Type)
-  [FormModel model]
-  [Validation model]
-  (raw : Raw model)
-  : Option (Error raw) :=
-  (errors (Validation.validate (model := model) raw)).find? (·.kind matches .corrupt)
-
 /-- Applies `f` to `x` if both succeed, else collects the errors of both. -/
 def accumulate
   {ε : Type _}
@@ -354,37 +339,31 @@ instance : Validation Uuid := ⟨fun value => .ok ⟨value, rfl⟩⟩
 @[reducible] instance {α : Type} [FormModel α] : FormModel (List α) :=
   ⟨List (Raw α), List.map FormModel.erase⟩
 
-def duplicateIdsMessage (ids : List Uuid) : String :=
-  s!"These UUIDs are shared by more than one item: {", ".intercalate (ids.map (·.value))}. " ++
-    "This is a bug in the form data; please contact BLP."
+@[reducible] instance {α : Type} [FormModel α] : FormModel (Collection α) :=
+  ⟨Collection (Raw α), Collection.map FormModel.erase⟩
 
-/-- The UUIDs that appear more than once. -/
-def duplicateIds {β : Type} [HasUuid β] (items : List β) : { ids : List Uuid // ids.Nodup } :=
-  let ids := items.map HasUuid.id
-  ⟨(ids.filter (ids.count · > 1)).dedup, List.nodup_dedup _⟩
-
-/-- Validates every item; errors point at their item's id. Repeated ids are an error. -/
-instance {α : Type} [FormModel α] [Validation α] [HasUuid (Raw α)] : Validation (List α) where
+/-- Validates every entry's content; errors point at their entry's id. -/
+instance {α : Type} [FormModel α] [Validation α] : Validation (Collection α) where
   validate raw :=
-    let results (position : Fin raw.length) := Validation.validate (model := α) (raw.get position)
-    let duplicates : List (Error raw) :=
-      match duplicateIds raw with
-      | ⟨[], _⟩ => []
-      | ids => [{
-          kind := .corrupt
-          message := duplicateIdsMessage ids.val
-          targets := .locations .self }]
-    if valid : (∀ position, (results position).isOk) ∧ duplicates.isEmpty then
-      let values (position : Fin raw.length) : Validated α (raw.get position) :=
-        match results position, valid.1 position with
+    let entries := raw.entries
+    let results (position : Fin entries.length) :=
+      Validation.validate (model := α) (entries.get position).value
+    if valid : ∀ position, (results position).isOk then
+      let values (position : Fin entries.length) : Validated α (entries.get position).value :=
+        match results position, valid position with
         | .ok value, _ => value
         | .error _, h => nomatch h
-      .ok ⟨List.ofFn fun position => (values position).val, by
-        simp [FormModel.erase, Function.comp_def, (values _).property]⟩
+      let validated : List (Item α) := List.ofFn fun position =>
+        { id := (entries.get position).id, value := (values position).val }
+      have ids : validated.map Item.id = entries.map Item.id := by
+        simp [validated, List.map_ofFn, Function.comp_def, List.ofFn_getElem_eq_map]
+      .ok ⟨{ entries := validated, nodup := ids ▸ raw.nodup }, Collection.ext (by
+        simp [validated, FormModel.erase, Collection.map, Collection.mapEntries, Item.mapValue,
+          List.map_ofFn, Function.comp_def, (values _).property, entries])⟩
     else
-      .error (duplicates ++ (List.finRange raw.length).flatMap fun position =>
+      .error ((List.finRange entries.length).flatMap fun position =>
         (errors (results position)).map
-          (Error.mapLocations (.item (raw.get position) (List.get_mem raw position))))
+          (Error.mapLocations (.item (entries.get position) (List.get_mem entries position))))
 
 /-- A model whose raw values are all valid. -/
 class AlwaysValid (α : Type) [FormModel α] where

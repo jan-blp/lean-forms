@@ -65,7 +65,7 @@ private partial def checkOptionalJson (type : Expr) : MetaM Unit := do
     if payload.isAppOf ``Option then
       throwError "nested Option fields lose presence in JSON; wrap the inner option in a structure"
     checkOptionalJson payload
-  else if type.isAppOf ``List then
+  else if type.isAppOf ``List || type.isAppOf ``Collection then
     checkOptionalJson type.getAppArgs[0]!
 
 private def inspect (name : Name) : MetaM (Bool × Array Constructor) := do
@@ -100,7 +100,7 @@ private def inspect (name : Name) : MetaM (Bool × Array Constructor) := do
           let some fn := decl.type.getAppFn.constName?
             | throwError "unsupported field type: {decl.type}"
           unless [``String, ``Bool, ``Nat].contains fn do
-            let formers := [``List, ``Subtype, ``Option, ``ReadOnly]
+            let formers := [``List, ``Collection, ``Subtype, ``Option, ``ReadOnly]
             unless decl.type.getAppArgs.isEmpty || formers.contains fn do
               throwError "unsupported field type: {decl.type}"
             unless (← synthInstance? (mkApp (mkConst ``FormModel) decl.type)).isSome do
@@ -715,43 +715,6 @@ private def deriveOne (name : Name) : CommandElabM Unit := do
 
 initialize registerDerivingHandler ``FormModel fun names => do
   for name in names do deriveOne name
-  return true
-
-/-- `deriving HasUuid` for a structure with an `id : Uuid` field. Also generates `mkWithoutUuid`,
-which takes the other fields. -/
-private def deriveHasUuid (name : Name) : CommandElabM Unit := do
-  let env ← getEnv
-  unless isStructure env name do throwError "`{name}` is not a structure"
-  let ctor := getStructureCtor env name
-  unless ctor.numParams == 0 do throwError "the structure must not have parameters"
-  let fields ← liftTermElabM <| forallTelescope ctor.type fun args _ => args.mapM fun arg => do
-    let decl ← arg.fvarId!.getDecl
-    if decl.type.hasFVar then throwError "fields cannot be dependent"
-    return (decl.userName, decl.type)
-  let some (_, idType) := fields.find? (·.1 == `id)
-    | throwError "the structure needs an `id : Uuid` field"
-  unless ← liftTermElabM (isDefEq idType (mkConst ``Uuid)) do
-    throwError "the `id` field must have type `Uuid`"
-  let item ← fresh `item
-  let uuid ← fresh `uuid
-  let withUuid ← app (global ctor.name) <| ← fields.mapM fun (field, _) =>
-    if field == `id then pure uuid else app (global (name ++ field)) #[item]
-  emit (← `(command| @[expose] instance $(global (name ++ `hasUuid)):ident :
-      Forms.Model.HasUuid $(global name) where
-    lens := LeanLens.mkLens $(global (name ++ `id)) fun $uuid:ident $item:ident => $withUuid))
-  let rest := fields.filter (·.1 != `id)
-  let binders ← rest.mapM fun (field, type) => do
-    `(Parser.Term.bracketedBinderF| ($(ident field) : $(← delabRooted {} {} type)))
-  let representative ← app (global ctor.name) <| ← fields.mapM fun (field, _) =>
-    if field == `id then `(Forms.Model.Uuid.nil) else pure (ident field)
-  let constructor := global (name ++ `mkWithoutUuid)
-  emit (← `(command| @[expose] def $constructor:ident $binders:bracketedBinder* :
-      Forms.Model.HasUuid.WithoutUuid $(global name) :=
-    Forms.Model.HasUuid.withoutUuid $representative))
-
-initialize registerDerivingHandler ``HasUuid fun names => do
-  for name in names do
-    emitting m!"deriving HasUuid for `{privateToUserName name}`" (deriveHasUuid name)
   return true
 
 elab "#fields " id:ident : command => do

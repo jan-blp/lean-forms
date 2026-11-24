@@ -8,7 +8,6 @@ namespace Forms.ExampleForms
 open Forms.Model
 
 @[report_rule] structure Receipt where
-  id : Uuid
   number : String
   alreadySubmitted : ReadOnly Bool
   number_valid : number ≠ ""
@@ -29,22 +28,20 @@ instance : ReportRule Receipt where
          targets := .locations (.field Receipt.Field.number .self) }]
     else []
 
-deriving instance HasUuid for Receipt.Raw
-
 structure Receipts where
-  receipts : List Receipt
-  numbers_distinct : (receipts.map (·.number)).Nodup
+  receipts : Collection Receipt
+  numbers_distinct : (receipts.values.map (·.number)).Nodup
   deriving FormModel
 
 instance Receipts.numbers_distinct_rule : ConstraintRule Receipts.Constraint.numbers_distinct where
   check parts :=
-    if h : (parts.receipts.map (fun receipt : Receipt => receipt.number)).Nodup then .valid h
+    if h : (parts.receipts.values.map (fun receipt : Receipt => receipt.number)).Nodup then .valid h
     else
       let raw := Receipts.Parts.toRaw parts
-      let repeated := raw.receipts.attach.filterMap fun ⟨receipt, member⟩ =>
-        if (raw.receipts.filter (·.number == receipt.number)).length > 1 then
+      let repeated := raw.receipts.entries.attach.filterMap fun ⟨entry, member⟩ =>
+        if (raw.receipts.values.filter (·.number == entry.value.number)).length > 1 then
           some (.field Receipts.Field.receipts
-            (.item receipt member (.field Receipt.Field.number .self)))
+            (.item entry member (.field Receipt.Field.number .self)))
         else none
       let message := "Another receipt in this form has the same number."
       match repeated with
@@ -58,13 +55,12 @@ def Receipts.form : Component [] Receipts.Raw :=
     (label := "Receipts")
     (rowLabel := .numbered "Receipt")
     (addCaption := "Add receipt")
-    (initial := Receipt.Raw.mkWithoutUuid (number := "") (alreadySubmitted := ⟨false⟩))
+    (initial := { number := "", alreadySubmitted := ⟨false⟩ })
     (body := .group "" [
       .statusMarkerAt path[Receipt.Field.number],
       .field path[Receipt.Field.number] "Receipt number" .text])
 
-def Receipts.initial : Receipts.Raw :=
-  IdGen.run do
-    pure ⟨[⟨← freshId, "R-1001", ⟨false⟩⟩]⟩
+def Receipts.initial : Receipts.Raw where
+  receipts := .numbered [{ number := "R-1001", alreadySubmitted := ⟨false⟩ }]
 
 end Forms.ExampleForms

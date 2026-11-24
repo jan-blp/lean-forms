@@ -2,6 +2,7 @@ module
 
 public import Forms.Model.Member
 public import Forms.Model.PointedList
+public import Forms.Model.Collection
 
 @[expose] public section
 namespace Forms.Model
@@ -36,12 +37,13 @@ abbrev Var (Γ : Context) (α : Type) := Ref Γ .writable α
 
 abbrev InputRef (Γ : Context) (α : Type) := Ref Γ .readOnly α
 
+/-- The context of a row editing an entry with content `α`. -/
 abbrev Context.row (α : Type) (Γ : Context) : Context :=
-  ⟨.readOnly, PointedList α⟩ -- its list and the row's index
+  ⟨.readOnly, PointedList (Item α)⟩ -- the entries and the row's index
   :: ⟨.writable, Bool⟩ -- whether to remove the row
   :: Γ
 
-abbrev Ref.row {α : Type} {Γ : Context} : InputRef (Context.row α Γ) (PointedList α) := .here
+abbrev Ref.row {α : Type} {Γ : Context} : InputRef (Context.row α Γ) (PointedList (Item α)) := .here
 
 abbrev Ref.rowRemoved {α : Type} {Γ : Context} : Var (Context.row α Γ) Bool := .there .here
 
@@ -61,7 +63,7 @@ abbrev Env.cons (value : α) (tail : Env Γ) : Env (⟨access, α⟩ :: Γ) :=
 
 abbrev Env.row
   {β : Type}
-  (items : List β)
+  (items : List (Item β))
   (index : Fin items.length)
   (env : Env Γ)
   : Env (Context.row β Γ) :=

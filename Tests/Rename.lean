@@ -52,8 +52,9 @@ private def weakeningPreserves
 def run : IO Unit := do
   weakeningPreserves "SharedState" SharedState.form SharedState.initial
   weakeningPreserves "Outputs" Outputs.nested Outputs.initial
-  weakeningPreserves "Selection" (Presentation.tableSummary) (items ["same", "same", "other"])
+  weakeningPreserves "Selection" (Presentation.tableSummary)
+    (Collection.numbered ["same", "same", "other"])
   weakeningPreserves "Tabs" Presentation.sharedTabs 0
-  weakeningPreserves "Notes" Presentation.notes (items ["a", "b"])
+  weakeningPreserves "Notes" Presentation.notes (Collection.numbered ["a", "b"])
 
 end Tests.Rename

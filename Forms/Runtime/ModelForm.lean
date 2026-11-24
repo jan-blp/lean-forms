@@ -196,6 +196,7 @@ inductive Rejection where
   | input (message : String)
   | stale (error : StaleError)
   | clientBug (error : ClientBug)
+  | idCollision (id : Model.Uuid)
   deriving DecidableEq, Repr
 
 instance : ToString Rejection where
@@ -203,6 +204,8 @@ instance : ToString Rejection where
     | .input message => message
     | .stale error => toString error
     | .clientBug error => toString error
+    | .idCollision id => s!"The new item drew the id {id.value}, which is already used. \
+      This is a bug; please contact BLP."
 
 def Rejection.ofDecode : DecodeError → Rejection
   | .input message => .input message
@@ -211,6 +214,7 @@ def Rejection.ofDecode : DecodeError → Rejection
 def Rejection.ofAction : ModelView.ActionError → Rejection
   | .decode error => .ofDecode error
   | .invalid error => .stale (.invocation error)
+  | .idCollision id => .idCollision id
 
 def validateAction
   {Γ : Model.Context}
@@ -311,6 +315,7 @@ def event {Γ : Model.Context}
       let ui := if state.ui.pending then state.ui else state.ui.announce message true
       let diagnostics ← match rejection with
         | .clientBug error => throw (toString error)
+        | .idCollision _ => throw message
         | .input _ =>
           let control := if argument.any Input.typed
             then state.evaluation.view.controls.find? (·.key == key) else none
@@ -347,8 +352,6 @@ def event {Γ : Model.Context}
       { state with ui := { (state.ui.announce message true) with pending := false } }
     match outcome with
     | .accepted saved =>
-      if (Model.corruption? model saved).isSome
-      then return unreachable "Your form was saved, but an internal error occurred. Please contact BLP."
       -- The saved document becomes the new starting point; UI state is kept.
       let state := applyUpdate (model := model) form { state with initial := saved }
         { value := saved, state := state.env, locals := state.locals }

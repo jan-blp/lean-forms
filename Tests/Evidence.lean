@@ -75,6 +75,7 @@ def run : IO Unit := do
     | .error (.input message) => message.startsWith "Could not read \"Example Retail AG\""
     | .error (.stale _)
     | .error (.clientBug _)
+    | .error (.idCollision _)
     | .ok _ => false)
   check "EvidencePickOnPlainFieldIsClientBug"
     (match perform initial note.key (.pick customer) with

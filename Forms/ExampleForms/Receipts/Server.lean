@@ -17,12 +17,13 @@ def Receipts.serverCheck
   (state : Receipts.ServerState)
   (raw : Receipts.Raw)
   : IO Receipts.Raw := do
-  let ids := raw.receipts.map (·.id)
-  let receipts ← raw.receipts.mapM fun receipt => do
-    let owner ← state.claims.modifyGet fun claimed =>
-      let owner := claimed.getD receipt.number receipt.id
-      (owner, claimed.insert receipt.number owner)
-    pure { receipt with alreadySubmitted := ⟨!ids.contains owner⟩ }
+  for entry in raw.receipts.entries do
+    state.claims.modify fun claimed =>
+      claimed.insert entry.value.number (claimed.getD entry.value.number entry.id)
+  let claimed ← state.claims.get
+  let ids := raw.receipts.ids
+  let receipts := raw.receipts.mapWithId fun id receipt =>
+    { receipt with alreadySubmitted := ⟨!ids.contains (claimed.getD receipt.number id)⟩ }
   pure { raw with receipts }
 
 end Forms.ExampleForms

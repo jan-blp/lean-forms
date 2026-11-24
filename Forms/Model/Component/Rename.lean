@@ -38,7 +38,7 @@ def ComponentNode.rename
   | .issues => .issues
   | .reports path => .reports path
   | .statusMarker reports => .statusMarker (reports.rename rename)
-  | .collection (hasUuid := _) path label row display =>
+  | .collection path label row display =>
     .collection path (label.rename rename) (row.rename rename.liftRow) (display.rename rename)
   | .zoom? target body => .zoom? (target.rename rename) (body.rename rename)
   | .zoom path body => .zoom path (body.rename rename)

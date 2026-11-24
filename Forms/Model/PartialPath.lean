@@ -6,7 +6,7 @@ public import Forms.Model.Computation
 namespace Forms.Model
 
 /-- A type-preserving affine traversal represented as an inspectable path to zero or one value.
-Items are found by id, so it is only lawful for edits that keep item ids. -/
+Entries are found by id; writes change only their content. -/
 inductive PartialPath : Type → Type → Type 1 where
   | self {α : Type} : PartialPath α α
   | field
@@ -24,10 +24,9 @@ inductive PartialPath : Type → Type → Type 1 where
       : PartialPath α γ
   | item
       {α β : Type}
-      [hasUuid : HasUuid α]
       (id : Uuid)
       (rest : PartialPath α β)
-      : PartialPath (List α) β
+      : PartialPath (Collection α) β
 
 def PartialPath.ofPath {α β : Type} : Path α β → PartialPath α β
   | .self => .self
@@ -43,14 +42,14 @@ def PartialPath.trans
   | .field (fields := _) f rest => .field f (rest.trans second)
   | .constructor (constructors := _) (lawful := _) ctor rest =>
     .constructor ctor (rest.trans second)
-  | .item (hasUuid := _) id rest => .item id (rest.trans second)
+  | .item id rest => .item id (rest.trans second)
 
 def PartialPath.erase {α β : Type} : PartialPath α β → ErasedLocation
   | .self => []
   | .field (fields := _) f rest => .field (Fields.key f) :: rest.erase
   | .constructor (constructors := _) (lawful := _) ctor rest =>
     .constructor (Constructors.key ctor) :: rest.erase
-  | .item (hasUuid := _) id rest => .item id :: rest.erase
+  | .item id rest => .item id :: rest.erase
 
 def PartialPath.get?
   {α β : Type}
@@ -62,7 +61,7 @@ def PartialPath.get?
   | .field (fields := _) f rest => rest.get? (Fields.get f value)
   | .constructor (constructors := _) (lawful := _) ctor rest =>
     (Constructors.project ctor value).bind rest.get?
-  | .item (hasUuid := _) id rest => (value.find? (HasUuid.id · == id)).bind rest.get?
+  | .item id rest => (value.entries.find? (·.id == id)).bind (rest.get? ·.value)
 
 def PartialPath.set
   {α β : Type}
@@ -77,9 +76,9 @@ def PartialPath.set
     match Constructors.project ctor value with
     | none => value
     | some child => Constructors.inject ctor (rest.set new child)
-  | .item (hasUuid := _) id rest =>
-    match value.findIdx? (HasUuid.id · == id) with
+  | .item id rest =>
+    match value.entries.findIdx? (·.id == id) with
     | none => value
-    | some position => value.modify position (rest.set new)
+    | some position => value.modifyAt position (rest.set new)
 
 end Forms.Model

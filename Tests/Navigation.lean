@@ -90,12 +90,12 @@ def run : IO Unit := do
     (root.output.length == 2 && addressIssues.map (·.message) == ["Both"] &&
       addressIssues.head?.bind (·.destination?) == some { locations := [street] })
 
-  let rows : Component [] (List (Item Address.Raw)) (List (List Issue)) :=
-    .list .self "Addresses" (.numbered "Address") "Add" (Item.mkWithoutUuid ⟨""⟩) .issues
-  let secondStreet : ErasedLocation := [.item secondId, .field "value", .field "street"]
+  let rows : Component [] (Collection Address.Raw) (List (List Issue)) :=
+    .list .self "Addresses" (.numbered "Address") "Add" ⟨""⟩ .issues
+  let secondStreet : ErasedLocation := [.item secondId, .field "street"]
   let rowIssues : List Diagnostic := [
     { kind := .error, message := "Second address", targets := .locations secondStreet [] }]
-  let collected := (rows.evaluate [⟨firstId, ⟨"Main"⟩⟩, ⟨secondId, ⟨""⟩⟩] Env.nil
+  let collected := (rows.evaluate (.numbered [⟨"Main"⟩, ⟨""⟩]) Env.nil
     (diagnostics := rowIssues)).output
   check "CollectionsCollectIssueOutputs"
     (collected.map List.length == [0, 1] &&
@@ -160,7 +160,7 @@ def run : IO Unit := do
   check "FocusIsAnEventEffect" (focuses acknowledged).isEmpty
 
   let report : ExpenseReport.Raw := { ExpenseReport.initial with
-    expenses := [⟨firstId, "Train to Bern", 58, false⟩, ⟨secondId, "", 180, true⟩] }
+    expenses := .numbered [⟨"Train to Bern", 58, false⟩, ⟨"", 180, true⟩] }
   let rowsOpened := ModelForm.openState (model := ExpenseReport) (supply := supply) rememberedRow
     report Env.nil
   let rowSaved ← press rememberedRow rowsOpened "Remember"
@@ -186,7 +186,6 @@ def run : IO Unit := do
 
   let _ : Validation Person := {
     validate := fun _ => .error [{
-      kind := .invalid
       message := "Check the form and name"
       targets := .locations .self [.field Person.Field.name .self] }] }
   let resolution : Component [] Person.Raw := .observe .issues <|
@@ -207,11 +206,9 @@ def run : IO Unit := do
 
   let _ : Validation Person := {
     validate := fun _ => .error [
-      { kind := .invalid
-        message := "Check the age"
+      { message := "Check the age"
         targets := .locations (.field Person.Field.age .self) },
-      { kind := .invalid
-        message := "Check the address"
+      { message := "Check the address"
         targets := .locations (.field Person.Field.address .self) }] }
   let ordered : Component [] Person.Raw := .group "Ordered" [
     .field path[Person.Field.address, Address.Field.street] "Street" .text,

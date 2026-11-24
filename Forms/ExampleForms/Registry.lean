@@ -43,23 +43,23 @@ def forms : List (String × RegisteredForm) := [
     definition := .ofModel ProjectPlanner ProjectPlanner.form ProjectPlanner.initial
     submitUrl := "/api/submit" }),
   ("shared-state", {
-    definition := .ofModel (List (Item Nat)) SharedState.form SharedState.initial
+    definition := .ofModel (Collection Nat) SharedState.form SharedState.initial
     submitUrl := "/api/submit" }),
   ("outputs", {
     definition := .ofModel Nat Outputs.single 10
     submitUrl := "/api/submit" }),
   ("nested-outputs", {
-    definition := .ofModel (List (Item Nat)) Outputs.nested Outputs.initial
+    definition := .ofModel (Collection Nat) Outputs.nested Outputs.initial
     submitUrl := "/api/submit" }),
   ("present-table", {
-    definition := .ofModel (List (Item String)) Presentation.tableSummary Outputs.descriptions
+    definition := .ofModel (Collection String) Presentation.tableSummary Outputs.descriptions
      
     submitUrl := "/api/submit" }),
   ("present-tabs", {
     definition := .ofModel Nat Presentation.sharedTabs 0
     submitUrl := "/api/submit" }),
   ("present-notes", {
-    definition := .ofModel (List (Item String)) Presentation.notes Presentation.initialNotes
+    definition := .ofModel (Collection String) Presentation.notes Presentation.initialNotes
      
     submitUrl := "/api/submit" }),
   ("scalars", {

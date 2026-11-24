@@ -6,8 +6,7 @@ public import Mathlib.Data.List.SplitLengths
 /-!
 # Fresh item ids
 
-New collection items get their UUIDs from a `MonadFreshId`: `Supply` at runtime and `IdGen` in
-example data.
+New collection items get their UUIDs from a `MonadFreshId`, which is `Supply` at runtime.
 
 The *only* requirement is that the generated UUIDs are unique. Nothing relies on them being
 unpredictable or statistically random.
@@ -75,19 +74,6 @@ class MonadFreshId (m : Type → Type) where
   freshId : m Uuid
 
 export MonadFreshId (freshId)
-
-structure IdGen (α : Type) where
-  toStateM : StateM Nat α
-
-instance : Monad IdGen where
-  pure value := ⟨pure value⟩
-  bind gen next := ⟨gen.toStateM >>= fun value => (next value).toStateM⟩
-
-instance : MonadFreshId IdGen where
-  freshId := ⟨modifyGet fun count => (.ofNat (count + 1), count + 1)⟩
-
-def IdGen.run {α : Type} (gen : IdGen α) : α :=
-  (gen.toStateM.run' 0).run
 
 /-- The xoshiro256** generator state; see the module docstring. -/
 structure Supply where

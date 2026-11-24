@@ -104,6 +104,8 @@ def button
 inductive ActionError where
   | decode (error : DecodeError)
   | invalid (error : Model.InvocationError)
+  /-- A new entry drew an id its collection already uses. -/
+  | idCollision (id : Uuid)
 
 def noArgument
   {m : Type → Type}
@@ -248,11 +250,10 @@ def renderCollection
   {Γ : Context}
   {α β : Type}
   {views : Nat}
-  [HasUuid β]
   (display : CollectionDisplay Γ α β views)
   (value : α)
   (env : Env Γ)
-  (items : List β)
+  (items : List (Item β))
   (label : String)
   (rowViews : List (Vector Display.View views))
   (content : List Display.View)
@@ -260,14 +261,14 @@ def renderCollection
   : Display.View :=
   match display with
   | .list =>
-    let rows := items.zipWith (fun item row => .keyed (HasUuid.id item) row[0]) rowViews
+    let rows := items.zipWith (fun item row => .keyed item.id row[0]) rowViews
     .list label (rows ++ content) messages
   | .table headers rowLabel selected =>
     let rows := items.mapFinIdx fun index item bound (cells : Vector Display.View views) =>
       let rowEnv := Env.row items ⟨index, bound⟩ env
-      ({ key := HasUuid.id item
-         label := rowLabel.eval item rowEnv
-         selected := selected.map (·.eval item rowEnv)
+      ({ key := item.id
+         label := rowLabel.eval item.value rowEnv
+         selected := selected.map (·.eval item.value rowEnv)
          cells := cells.toList } : Display.TableRow)
     .table label (headers.eval value env).toList (rows.zipWith (· ·) rowViews) (.ofList content)
       messages
@@ -338,7 +339,9 @@ def evaluateNode
         | [] => do
           if disabled then throw (.invalid .disabled)
           noArgument argument ()
-          action.run value env
+          match ← (action.run value env).run with
+          | .ok updated => pure updated
+          | .error collision => throw (.idCollision collision.id)
         | _ => absent }
   | .tabBar (n := n) label active tabs =>
     { output := ()
@@ -468,16 +471,17 @@ def evaluateNode
     (evaluatePresentation body value env ambient locals target location disabled
       (nomatch ·)).mapView
       fun views _ => views[0]
-  | .collection (hasUuid := _) path label row display =>
-    let items := path.get value
+  | .collection path label row display =>
+    let collection := path.get value
+    let items := collection.entries
     let location := location ++ path.erase
     let rows := items.mapFinIdx fun index item bound =>
-      evaluatePresentation row item (Env.row items ⟨index, bound⟩ env) ambient
-        (locals.getD (HasUuid.id item) row.initialState) (target.child index)
-        (location ++ [.item (HasUuid.id item)])
+      evaluatePresentation row item.value (Env.row items ⟨index, bound⟩ env) ambient
+        (locals.getD item.id row.initialState) (target.child index)
+        (location ++ [.item item.id])
         disabled (nomatch ·)
     let states := Std.HashMap.ofList <|
-      items.zipWith (fun item row => (HasUuid.id item, row.locals)) rows
+      items.zipWith (fun item row => (item.id, row.locals)) rows
     let render views (content : Vector (List Display.View) 1) :=
       renderCollection display value env items (label.eval value env) views content[0]
         (ambient.messagesAt location)
@@ -493,13 +497,13 @@ def evaluateNode
           let env := updated.state.tail.tail
           if updated.state.tail.value then
             return {
-              value := path.set (items.eraseIdx index) value
+              value := path.set (collection.eraseAt index) value
               state := env
-              locals := states.erase (HasUuid.id item) }
+              locals := states.erase item.id }
           return { updated with
-            value := path.set (items.set index updated.value) value
+            value := path.set (collection.modifyAt index fun _ => updated.value) value
             state := env
-            locals := states.insert (HasUuid.id item) updated.locals }
+            locals := states.insert item.id updated.locals }
         | _ => absent }
 
 def evaluatePresentation

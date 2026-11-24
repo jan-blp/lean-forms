@@ -65,17 +65,17 @@ def explicitConsumer
 example {Γ : Context} (shared : Var Γ Nat) :
     Forms.ExampleForms.SharedState.consumer shared = explicitConsumer shared := rfl
 
-def explicitSharedForm : Component [] (List (Item Nat)) :=
+def explicitSharedForm : Component [] (Collection Nat) :=
   .bind (0 : Nat) <|
     .group "Shared local state" [
       Component.void <| .list .self "Consumers" (.numbered "Consumer") "Add consumer"
-          (Item.mkWithoutUuid 0) (.zoom path[Item.Field.value] (explicitConsumer .here)),
+          0 (explicitConsumer .here),
       .computed "Shared count outside the list" { inputs := inputs[.ui .here], run := toString },
       .button "Clear shared" (.set .here (.const 0))]
 
 example : Forms.ExampleForms.SharedState.form = explicitSharedForm := rfl
 
-def explicitTableSummary : Component [] (List (Item String)) String :=
+def explicitTableSummary : Component [] (Collection String) String :=
   .present <|
     .own Forms.ExampleForms.Outputs.selectionTable <|
       .own (Forms.ExampleForms.Presentation.summary .here) <|
@@ -138,30 +138,28 @@ def nestedPresentation : Component [] Nat Nat := named%
 
 example : (nestedPresentation.evaluate 0 Env.nil).output = 7 := by decide
 
-def rows : Component [] (List (Item Nat)) (List Nat) := named%
+def rows : Component [] (Collection Nat) (List Nat) := named%
   state% shared := (7 : Nat);
   .list .self "Rows"
     (row% current, _ => {
       inputs := inputs[ref[shared], ref[current]]
       run := fun shared row => s!"Row {row.index.val + 1} ({shared})" })
-    "Add row" (Item.mkWithoutUuid 0)
-    (.zoom path[Item.Field.value] <|
-      state% own := (3 : Nat);
+    "Add row" 0
+    (state% own := (3 : Nat);
       .output {
         inputs := inputs[ref[shared], ref[own], path[]]
         run := fun shared own value => shared + own + value })
 
-def explicitRows : Component [] (List (Item Nat)) (List Nat) :=
+def explicitRows : Component [] (Collection Nat) (List Nat) :=
   .bind (7 : Nat) <|
     .list .self "Rows"
       { inputs := inputs[.ui (.there (.there .here)), .ui Ref.row]
         run := fun shared row => s!"Row {row.index.val + 1} ({shared})" }
-      "Add row" (Item.mkWithoutUuid 0)
-      (.zoom path[Item.Field.value] <|
-        .bind (3 : Nat) <|
-          .output {
-            inputs := inputs[.ui (.there .here), .ui .here, path[]]
-            run := fun shared own value => shared + own + value })
+      "Add row" 0
+      (.bind (3 : Nat) <|
+        .output {
+          inputs := inputs[.ui (.there .here), .ui .here, path[]]
+          run := fun shared own value => shared + own + value })
 
 example : rows = explicitRows := rfl
 
@@ -186,7 +184,7 @@ example {Γ : Context} (shared : Var Γ Nat) :
 def collectionRows
   {Γ : Context}
   (shared : Var Γ Nat)
-  : Component Γ (List (Item Nat)) (List Nat) 1 := named%[shared]
+  : Component Γ (Collection Nat) (List Nat) 1 := named%[shared]
   .collection .self "Rows"
     (presentation% row% current, removed =>
       own% value := .output {

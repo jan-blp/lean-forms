@@ -42,14 +42,13 @@ def pair {Γ : Context} : Component Γ Nat Nat := named%
     inputs := inputs[ref[first], ref[second]], run := Nat.add }
   .withOutput (.computed "Pair sum" (toString <$> total)) total
 
-def rows : Component [] (List (Item Nat)) (List Nat) :=
-  .list .self "Pairs" (.numbered "Pair") "Add pair"
-      (Item.mkWithoutUuid 0) (.zoom path[Item.Field.value] pair)
+def rows : Component [] (Collection Nat) (List Nat) :=
+  .list .self "Pairs" (.numbered "Pair") "Add pair" 0 pair
 
-def nested : Component [] (List (Item Nat)) Nat := named%
+def nested : Component [] (Collection Nat) Nat := named%
   .labeled "Nested outputs" <|
   observe% totals := rows;
-  let total : Computation _ (List (Item Nat)) Nat := {
+  let total : Computation _ (Collection Nat) Nat := {
     inputs := inputs[ref[totals]], run := List.sum }
   .withOutput (.group "Outer observers" [
     .computed "Pair totals" {
@@ -57,21 +56,20 @@ def nested : Component [] (List (Item Nat)) Nat := named%
       run := fun values => String.intercalate ", " (values.map toString) },
     .computed "Overall sum" (toString <$> total)]) total
 
-def initial : List (Item Nat) := IdGen.run ([10, 20].mapM Item.fresh)
+def initial : Collection Nat := .numbered [10, 20]
 
 structure RowOutput where
   description : String
   selected : Bool
   deriving BEq, Repr
 
-def descriptionCell {Γ : Context} : Component Γ (Item String) String :=
-  .zoom path[Item.Field.value] <|
-    .withOutput (.field .self "Description" .text) { inputs := inputs[path[]], run := id }
+def descriptionCell {Γ : Context} : Component Γ String String :=
+  .withOutput (.field .self "Description" .text) { inputs := inputs[path[]], run := id }
 
 def selectionCell
   {Γ : Context}
   (description : InputRef Γ String)
-  : Component Γ (Item String) Bool := named%[description]
+  : Component Γ String Bool := named%[description]
   state% selected := false;
   .withOutput
     (.group "" [
@@ -81,7 +79,7 @@ def selectionCell
         inputs := inputs[ref[selected]], run := Bool.not })])
     { inputs := inputs[ref[selected]], run := id }
 
-def selectionColumns {Γ : Context} : Columns Γ (Item String) RowOutput := named%
+def selectionColumns {Γ : Context} : Columns Γ String RowOutput := named%
   ⟨#v["Description", "Selected"],
     presentation%
       own% description := descriptionCell;
@@ -91,11 +89,9 @@ def selectionColumns {Γ : Context} : Columns Γ (Item String) RowOutput := name
           run := fun description selected => { description, selected } }
         (.const #v[.place view[description], .place view[selected]])⟩
 
-def selectionTable : Component [] (List (Item String)) (List RowOutput) :=
-  .table .self "Items" (.numbered "Item") "Add item"
-      (Item.mkWithoutUuid "New item") selectionColumns
+def selectionTable : Component [] (Collection String) (List RowOutput) :=
+  .table .self "Items" (.numbered "Item") "Add item" "New item" selectionColumns
 
-def descriptions : List (Item String) :=
-  IdGen.run (["Apples", "Bread", "Milk"].mapM Item.fresh)
+def descriptions : Collection String := .numbered ["Apples", "Bread", "Milk"]
 
 end Forms.ExampleForms.Outputs

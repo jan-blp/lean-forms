@@ -156,13 +156,12 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       {α : Type}
       (reports : Computation Γ α (List ReportMessage))
       : ComponentNode Γ α Unit Unit 0
-  /-- Shows `row` for each item at `path` as `display` says, then the content of its hole.
-  Row state is kept by item id. -/
+  /-- Shows `row` for each entry at `path` as `display` says, then the content of its hole.
+  A row edits its entry's content; its id is in the row context. Row state is kept by id. -/
   | collection {Γ : Context}
       {α β γ rowState : Type}
       {views : Nat}
-      [hasUuid : HasUuid β]
-      (path : Path α (List β))
+      (path : Path α (Collection β))
       (label : Computation Γ α String)
       (row : PresentationNode [] (Context.row β Γ) β rowState γ views)
       (display : CollectionDisplay Γ α β views)

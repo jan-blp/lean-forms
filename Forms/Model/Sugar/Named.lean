@@ -63,7 +63,7 @@ abbrev ownComponent
 abbrev rowComputation
   {Γ : Context}
   {α β : Type}
-  (body : InputRef (Context.row α Γ) (PointedList α) → Var (Context.row α Γ) Bool →
+  (body : InputRef (Context.row α Γ) (PointedList (Item α)) → Var (Context.row α Γ) Bool →
     Computation (Context.row α Γ) α β)
   : Computation (Context.row α Γ) α β :=
   body Ref.row Ref.rowRemoved
@@ -72,7 +72,7 @@ abbrev rowPresentation
   {Γ : Context}
   {α β : Type}
   {views : Nat}
-  (body : InputRef (Context.row α Γ) (PointedList α) → Var (Context.row α Γ) Bool →
+  (body : InputRef (Context.row α Γ) (PointedList (Item α)) → Var (Context.row α Γ) Bool →
     Presentation [] (Context.row α Γ) α β views)
   : Presentation [] (Context.row α Γ) α β views :=
   body Ref.row Ref.rowRemoved

@@ -38,18 +38,16 @@ private def apply
   IO.ofExcept (ModelForm.execute (model := model) form state
     (.apply (← control state label nth) argument))
 
-@[expose] def row : Component [] (List (Item Nat)) := .bind RowSelection.none
+@[expose] def row : Component [] (Collection Nat) := .bind RowSelection.none
   (Component.void <| .table .self "Choices" (.numbered "Choice") "Add choice"
-    (Item.mkWithoutUuid 0)
-    columns["Number" => .computed "Number" { inputs := inputs[path[Item.Field.value]], run := toString }]
+    0 columns["Number" => .computed "Number" { inputs := inputs[path[]], run := toString }]
     (some .here))
 
-@[expose] def rows : Component [] (List (Item (List (Item Nat)))) :=
-  Component.void <| .list .self "Rows" (.numbered "Row") "Add row" (Item.mkWithoutUuid [])
-    (.zoom path[Item.Field.value] row)
+@[expose] def rows : Component [] (Collection (Collection Nat)) :=
+  Component.void <| .list .self "Rows" (.numbered "Row") "Add row" .empty row
 
 private def rowSelection (state : ModelForm.State rows) (index : Nat) : RowSelection :=
-  let local? := state.value[index]?.bind (state.locals.producer.producer[·.id]?)
+  let local? := state.value.entries[index]?.bind (state.locals.producer.producer[·.id]?)
   ((local?.map (·.producer)).getD row.initialState).value
 
 private def loadedBody : Status Bool → Component [] ExpenseReport.Raw
@@ -67,30 +65,28 @@ private def mode : Component [] ExpenseReport.Raw := .group "Local load" [
     loadedBody]
 
 def run : IO Unit := do
-  let value : List (Item (List (Item Nat))) := [
-    ⟨firstId, [⟨firstId, 10⟩, ⟨secondId, 20⟩]⟩,
-    ⟨secondId, [⟨firstId, 30⟩, ⟨secondId, 40⟩]⟩]
-  let opened := ModelForm.openState (model := List (Item (List (Item Nat)))) (supply := supply) rows
+  let value : Collection (Collection Nat) := .numbered [.numbered [10, 20], .numbered [30, 40]]
+  let opened := ModelForm.openState (model := Collection (Collection Nat)) (supply := supply) rows
     value Env.nil
-  let selected ← apply (model := List (Item (List (Item Nat)))) rows opened "Select" none 3
+  let selected ← apply (model := Collection (Collection Nat)) rows opened "Select" none 3
   check "LocalListRowsHaveIndependentBindings"
     (rowSelection selected 0 == .none && rowSelection selected 1 == .row secondId &&
       selected.value == opened.value)
-  let removed ← apply (model := List (Item (List (Item Nat)))) rows selected "Remove" none 2
+  let removed ← apply (model := Collection (Collection Nat)) rows selected "Remove" none 2
   check "LocalListBindingFollowsRowRemoval"
-    (removed.value.map (·.value.map (·.value)) == [[30, 40]] && rowSelection removed 0 == .row secondId)
-  let added ← apply (model := List (Item (List (Item Nat)))) rows removed "Add row"
+    (removed.value.values.map (·.values) == [[30, 40]] && rowSelection removed 0 == .row secondId)
+  let added ← apply (model := Collection (Collection Nat)) rows removed "Add row"
   check "LocalListNewRowStartsFresh"
     (rowSelection added 0 == .row secondId && rowSelection added 1 == .none)
-  let reset ← IO.ofExcept (ModelForm.execute (model := List (Item (List (Item Nat)))) rows added .reset)
+  let reset ← IO.ofExcept (ModelForm.execute (model := Collection (Collection Nat)) rows added .reset)
   check "LocalListResetRestoresInitialBindings"
     (reset.value == opened.value && rowSelection reset 0 == .none && rowSelection reset 1 == .none)
-  let nested : Component [] (List (Item Nat)) := .bind RowSelection.none (.bind RowSelection.none
+  let nested : Component [] (Collection Nat) := .bind RowSelection.none (.bind RowSelection.none
     (Component.void <| .table .self "Nested" (.numbered "Number") "Add number"
-        (Item.mkWithoutUuid 0) columns[] (some (.there .here))))
-  let nestedOpened := ModelForm.openState (model := List (Item Nat)) (supply := supply) nested
-    [⟨firstId, 10⟩, ⟨secondId, 20⟩] Env.nil
-  let nestedSelected ← apply (model := List (Item Nat)) nested nestedOpened "Select"
+        0 columns[] (some (.there .here))))
+  let nestedOpened := ModelForm.openState (model := Collection Nat) (supply := supply) nested
+    (.numbered [10, 20]) Env.nil
+  let nestedSelected ← apply (model := Collection Nat) nested nestedOpened "Select"
   check "LocalNestedBindingCanReferenceOuterVariable"
     (nestedSelected.locals.value == .row firstId && nestedSelected.locals.tail.producer.value == .none)
   let initial := { ExpenseReport.initial with employee := "table" }

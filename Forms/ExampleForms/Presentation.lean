@@ -9,8 +9,8 @@ open Forms.Model Forms.Model.Sugar Forms.ExampleForms.Outputs
 def summary
   {Γ : Context}
   (table : InputRef Γ (List RowOutput))
-  : Component Γ (List (Item String)) String :=
-  let text : Computation Γ (List (Item String)) String := {
+  : Component Γ (Collection String) String :=
+  let text : Computation Γ (Collection String) String := {
     inputs := inputs[.ui table]
     run := fun rows => String.intercalate ", " ((rows.filter (·.selected)).map (·.description)) }
   .withOutput (.computed "Selected descriptions" text) text
@@ -24,7 +24,7 @@ def tableAbove : Layout [0, 0] :=
 /-- Owns the table and its summary; `arrangement` only decides where they appear. -/
 def tableSummary
   (arrangement : Layout [0, 0] := summaryAbove)
-  : Component [] (List (Item String)) String := named%
+  : Component [] (Collection String) String := named%
   present%
     own% table := selectionTable;
     own% summary := summary ref[table];
@@ -70,16 +70,14 @@ def noteTabs {Γ : Context} : Component Γ String := named%
         #v[.place view[edit], .place view[preview]][active]] }
 
 /-- An outer presentation that owns rows with their own presentations. -/
-def notes : Component [] (List (Item String)) Nat := named%
+def notes : Component [] (Collection String) Nat := named%
   present%
-    own% list := Component.void (.list .self "Notes" (.numbered "Note") "Add note"
-      (Item.mkWithoutUuid "")
-      (.zoom path[Item.Field.value] noteTabs));
+    own% list := Component.void (.list .self "Notes" (.numbered "Note") "Add note" "" noteTabs);
     own% count := .computed "Note count" {
       inputs := inputs[path[]], run := fun notes => toString notes.length };
-    .layout { inputs := inputs[path[]], run := List.length }
+    .layout { inputs := inputs[path[]], run := Collection.length }
       (.const (.group none [.place view[count], .place view[list]]))
 
-def initialNotes : List (Item String) := IdGen.run (["First note", "Second note"].mapM Item.fresh)
+def initialNotes : Collection String := .numbered ["First note", "Second note"]
 
 end Forms.ExampleForms.Presentation

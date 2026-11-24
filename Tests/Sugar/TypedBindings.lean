@@ -63,7 +63,7 @@ example :
             #v[.place view[edit], .place view[preview]][active]] }) := rfl
 
 def rowLabel {Γ : Context} : Computation (Context.row Nat Γ) Nat String := named%
-  row% (current : PointedList Nat), (_ : Bool) => {
+  row% (current : PointedList (Item Nat)), (_ : Bool) => {
     inputs := inputs[ref[current]]
     run := fun row => s!"Row {row.index.val + 1}" }
 
@@ -72,7 +72,7 @@ example {Γ : Context} :
     (named%
       row% current, _ => {
         inputs := inputs[ref[current]]
-        run := fun (row : PointedList Nat) => s!"Row {row.index.val + 1}" }) := rfl
+        run := fun (row : PointedList (Item Nat)) => s!"Row {row.index.val + 1}" }) := rfl
 
 /--
 error: Type mismatch

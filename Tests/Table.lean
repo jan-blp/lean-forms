@@ -54,7 +54,7 @@ def run : IO Unit := do
     | _ => false)
   let edited ← apply opened "Description" (some (.text "Taxi")) 1
   check "TableEditsOnlyTargetRow"
-    (edited.value.expenses.map (·.description) == ["Train to Bern", "Taxi"])
+    (edited.value.expenses.values.map (·.description) == ["Train to Bern", "Taxi"])
   let invalid ← apply edited "Amount (CHF)" (some (.text "-1"))
   check "TableRejectsInvalidInput"
     (invalid.ui.rejection == some "Enter a non-negative whole number." &&
@@ -71,7 +71,7 @@ def run : IO Unit := do
   let last ← key opened "Description" 1
   let removed ← apply edited "Remove" none 1
   check "TableRemovesOnlyTargetRow"
-    (removed.value.expenses.map (·.description) == ["Train to Bern"])
+    (removed.value.expenses.values.map (·.description) == ["Train to Bern"])
   let stale ← execute removed (.apply last (some (.text "Stale")))
   check "TableRemovedRowRejectsStaleEdit"
     (stale.ui.rejection == some (toString InvocationError.absent) &&
@@ -83,7 +83,8 @@ def run : IO Unit := do
     | _ => false)
   let added ← apply empty "Add expense" none
   check "TableAddsInitialRow"
-    (toJson added.value.expenses == toJson ([⟨supply.next.id, "", 0, false⟩] : List Expense.Raw))
+    (toJson added.value.expenses ==
+      toJson ([{ id := supply.next.id, value := Expense.initial }] : List (Item Expense.Raw)))
   let validated ← execute added .submit
   check "TableValidatesCells"
     ((ModelForm.snapshot ExpenseReport.form validated).errors.map (·.message) ==
@@ -97,26 +98,14 @@ def run : IO Unit := do
           Source.fetch (request amount) (fromJson? (α := String)) }
       (fun details => .computed "Details" (.const details))]
   check "TableRequestsEveryRow" (loading.requests {} opened.value Env.nil == [request 58, request 180])
-  let duplicated : ExpenseReport.Raw := { ExpenseReport.initial with
-    expenses := [⟨firstId, "Train to Bern", 58, false⟩, ⟨firstId, "Hotel", 180, true⟩] }
+  let shared : List (Item Expense.Raw) :=
+    ExpenseReport.initial.expenses.entries.map ({ · with id := firstId })
+  let duplicated := (toJson ExpenseReport.initial).setObjVal! "expenses" (toJson shared)
   let definition := FormDefinition.ofModel ExpenseReport ExpenseReport.form ExpenseReport.initial
   check "OpeningRejectsDuplicateItemIds"
-    ((match definition.openState (toJson duplicated) supply with
-      | .error message => message == duplicateIdsMessage [firstId]
+    ((match definition.openState duplicated supply with
+      | .error message => message.endsWith (Collection.duplicateIdsMessage [firstId])
       | .ok _ => false) &&
       (definition.openState (toJson ExpenseReport.initial) supply).toOption.isSome)
-  let pending := ModelForm.submit
-    (ModelForm.openState (model := ExpenseReport) (supply := supply) ExpenseReport.form
-      ExpenseReport.initial Env.nil)
-  let corrupt ← IO.ofExcept (ModelForm.execute (model := ExpenseReport) ExpenseReport.form pending
-    (.submitted (.accepted duplicated)))
-  check "CorruptSavedDocumentIsNotAdopted"
-    (corrupt.value.expenses.map (·.id) == ExpenseReport.initial.expenses.map (·.id) &&
-      corrupt.initial.expenses.map (·.id) == ExpenseReport.initial.expenses.map (·.id) &&
-      !corrupt.ui.pending &&
-      (match corrupt.ui.notice with
-        | .error message =>
-          message == "Your form was saved, but an internal error occurred. Please contact BLP."
-        | .info _ => false))
 
 end Tests.Table
