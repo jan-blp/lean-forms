@@ -31,11 +31,9 @@ inductive Evidence where
   | linked (evidence : Model.Evidence) (stale : Bool)
   deriving DecidableEq
 
-/-- A lookup's matches for its search text. -/
 inductive SearchResults where
   | loading
   | failed (message : String)
-  /-- `more` when the server left some matches out. -/
   | found (options : List ChoiceOption) (more : Bool)
   deriving DecidableEq
 
@@ -56,7 +54,6 @@ inductive Editor where
   | field (value : Value) (evidence : Evidence)
   /-- `selected` is the active option's `value`, or empty when no option matches. -/
   | choice (selected : String) (options : List ChoiceOption)
-  /-- Picks a server record; `search` is present while searching. -/
   | lookup (picked : Option ChoiceOption) (search : Option Search)
   /-- A button; its argument is ignored. -/
   | action

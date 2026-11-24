@@ -9,7 +9,6 @@ public import Batteries.Data.List.Pairwise
 namespace Forms.Model
 open Lean
 
-/-- A server record picked by a lookup: its id and the text shown for it. -/
 structure Reference (κ : Type) where
   id : κ
   label : String
@@ -29,7 +28,7 @@ instance {κ : Type} : Validation (Reference κ) where
 instance {κ : Type} : Reports (Reference κ) where
   reports _ := []
 
-/-- The server's matches for a search text; `more` when it left some out. -/
+/-- `more` when the server left some matches out. -/
 structure LookupResults (κ : Type) [ToJson κ] where
   found : List (Reference κ)
   more : Bool
@@ -38,8 +37,7 @@ structure LookupResults (κ : Type) [ToJson κ] where
 def LookupResults.empty {κ : Type} [ToJson κ] : LookupResults κ :=
   { found := [], more := false, keys_nodup := List.nodup_nil }
 
-/-- The first `limit` of `records` that `keep`, without repeated ids; `more` when some were left
-out. -/
+/-- Drops repeated ids. -/
 def LookupResults.select
   {κ : Type}
   [ToJson κ]
@@ -56,7 +54,6 @@ def LookupResults.select
 instance {κ : Type} [ToJson κ] : ToJson (LookupResults κ) where
   toJson results := Json.mkObj [("found", toJson results.found), ("more", toJson results.more)]
 
-/-- Refuses results that repeat an id. -/
 instance {κ : Type} [ToJson κ] [FromJson κ] : FromJson (LookupResults κ) where
   fromJson? json := do
     let found : List (Reference κ) ← json.getObjValAs? _ "found"

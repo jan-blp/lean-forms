@@ -138,8 +138,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (options : Computation Γ α (SelectOptions κ β))
       (selected : β → κ)
       : ComponentNode Γ α Unit Unit 0
-  /-- Picks the value at `path` from the server's matches for a search text, which `search`
-  turns into a request. The text is local state, `none` while not searching. -/
+  /-- The search text is local state, `none` while closed. -/
   | lookup {Γ : Context}
       {α κ : Type}
       [toJson : Lean.ToJson κ]

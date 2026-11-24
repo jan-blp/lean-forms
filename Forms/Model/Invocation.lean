@@ -13,7 +13,6 @@ inductive InvocationError where
   | absent
   /-- No option of the select has the requested key. -/
   | unavailableBranch (key : String)
-  /-- The lookup's current matches have no record with the key. -/
   | unlistedMatch (key : String)
   deriving DecidableEq, Repr
 

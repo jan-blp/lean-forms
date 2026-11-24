@@ -11,9 +11,9 @@ inductive Input where
   | boolean (value : Bool)
   | texts (values : List String)
   | pick (evidence : Model.Evidence)
-  /-- Sets a lookup's search text; `none` stops searching. -/
+  /-- `none` stops searching. -/
   | search (text : Option String)
-  /-- Picks the lookup match with this key; `none` clears the value. -/
+  /-- `none` clears the value. -/
   | choose (key : Option String)
 
 /-- Whether the input is text the user typed, which stays in the field as a draft when rejected. -/

@@ -241,7 +241,6 @@ export function Choices(
   );
 }
 
-/** How long typing pauses before the search text is sent. */
 const searchPause = 300;
 
 function foundOptions(search: FormsReact.Search | null): FormsReact.ChoiceOption[] {
@@ -260,7 +259,6 @@ function SearchNote({ search }: { search: FormsReact.Search }) {
   return null;
 }
 
-/** Typed text goes to Lean after a pause; the input shows the picked record otherwise. */
 export function Lookup({ name, label, picked, search, disabled, errors, onChange }: FormsReact.Lookup) {
   const form = useLeanForm();
   const feedback = useId();

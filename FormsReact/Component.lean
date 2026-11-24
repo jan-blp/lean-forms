@@ -121,7 +121,6 @@ structure Choices where
 inductive SearchResults where
   | loading
   | failed (message : String)
-  /-- `more` when the server left some matches out. -/
   | found (options : List ChoiceOption) (more : Bool)
   deriving ToJson, FromJson, BEq, Repr
 
@@ -130,9 +129,7 @@ structure Search where
   results : SearchResults
   deriving ToJson, FromJson, BEq, Repr
 
-/-- Picks a server record; `search` is present while searching. `onChange` receives
-`{ "search": text }`, `{ "search": null }` to stop, `{ "choose": value }`, or `{ "choose": null }`
-to clear. -/
+/-- `onChange` receives `{ "search": text | null }` or `{ "choose": value | null }`. -/
 structure Lookup where
   name : String
   label : String

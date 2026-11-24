@@ -33,7 +33,6 @@ private def fetches (state : State) : List HttpRequest :=
     | .submit => none
     | .focus _ => none
 
-/-- Answers every queued request through the fake server. -/
 private def settle (state : State) : IO State :=
   (fetches state).foldlM (init := state) fun state request =>
     execute state (.loaded request ((Delivery.serve request).elim (.error "Not found.") .ok))

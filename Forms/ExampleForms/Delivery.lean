@@ -52,11 +52,9 @@ def cities : String → List (Reference String)
   | "FR" => [⟨"LYS", "Lyon"⟩, ⟨"MRS", "Marseille"⟩, ⟨"PAR", "Paris"⟩]
   | _ => []
 
-/-- Case-insensitive. -/
 def mentions (text : String) (record : Reference String) : Bool :=
   record.label.toLower.contains text.toLower
 
-/-- A fake server that answers at most five matches. -/
 def answer
   : (named : DeliveryEndpoint) → named.signature.Input → Option named.signature.Output
   | .countries, text => some (LookupResults.select countries (mentions text) 5)
