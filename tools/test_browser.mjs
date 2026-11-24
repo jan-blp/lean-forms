@@ -504,6 +504,33 @@ try {
     const { page, cellIds, text } = submitted().issuedEvidence;
     check(page === 1 && cellIds.join() === '6' && text === '2026-11-03', 'The picked cells were not submitted');
   `);
+  await example('delivery', `
+    const key = value => input('Country').dispatchEvent(
+      new KeyboardEvent('keydown', { key: value, bubbles: true }));
+    input('Country').focus();
+    await type(input('Country'), 'an');
+    await wait(() => field('Country').querySelector('[role=option]')?.textContent === 'Germany');
+    await type(input('Country'), 'spa');
+    key('Enter');
+    await tick();
+    check(input('Country').value === 'spa' && input('City').disabled,
+      'Enter selected a result from the previous query');
+    check(!field('Country').querySelector('[role=option]'), 'The previous matches remained selectable');
+    await wait(() => field('Country').querySelector('[role=option]')?.textContent === 'Spain');
+    key('Enter');
+    await tick();
+    check(input('Country').value === 'Spain' && !input('City').disabled, 'The current match was not picked');
+    input('City').focus();
+    await type(input('City'), 'bar');
+    await wait(() => field('City').querySelector('[role=option]')?.textContent === 'Barcelona');
+    field('City').querySelector('[role=option]').click();
+    await tick();
+    check(input('City').value === 'Barcelona', 'The city was not picked');
+    field('Country').querySelector('.clear').click();
+    await tick();
+    check(input('Country').value === '' && input('City').value === '' && input('City').disabled,
+      'Clearing the country retained the city');
+  `);
   const marker = `const marker = () => document.querySelector('.status-marker');
     const issues = () => [...document.querySelectorAll('output')].find(output =>
       output.parentElement.firstChild.textContent === 'Current issues').textContent;

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type InputHTMLAttributes, type KeyboardEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type InputHTMLAttributes, type KeyboardEvent } from 'react';
 import { useLeanForm, type Components } from './context.js';
 import type * as FormsReact from './protocol/FormsReact.js';
 import { Children, Render } from './render.js';
@@ -113,7 +113,7 @@ function useEvidence(
   const focus = (on: boolean) => { pointer.current.focused = on; host?.focus(on ? linked : null); };
   // A pick or an edit can change the cells, or their staleness, while the field is shown.
   const linkedKey = JSON.stringify(linked);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (pointer.current.hovered) hostRef.current?.hover(linked);
     if (pointer.current.focused) hostRef.current?.focus(linked);
   }, [linkedKey]);
@@ -266,7 +266,8 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
   const [typed, setTyped] = useState<string | null>(null);
   const [active, setActive] = useState(0);
   const timer = useRef<number | undefined>(undefined);
-  const options = foundOptions(search);
+  const current = typed === null || typed === search?.text;
+  const options = current ? foundOptions(search) : [];
   const optionKeys = options.map(option => option.value).join('\n');
   useEffect(() => setActive(0), [optionKeys]);
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -293,7 +294,7 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       if (search === null) send({ search: typed ?? '' });
-      else setActive(Math.min(active + 1, options.length - 1));
+      else setActive(Math.max(0, Math.min(active + 1, options.length - 1)));
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       setActive(Math.max(active - 1, 0));
@@ -331,7 +332,8 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
               onMouseEnter={() => setActive(index)}
               onClick={() => choose(option.value)}>{option.label}</li>)}
         </ul>
-        <SearchNote search={search} />
+        {current ? <SearchNote search={search} />
+          : <p className="lookup-note" role="status">Searching…</p>}
       </div>}
       <Feedback id={feedback} errors={errors} />
     </div>

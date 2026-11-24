@@ -102,7 +102,7 @@ def button
     messages := [] }
 
 def option {κ : Type} [Lean.ToJson κ] (reference : Reference κ) : Display.ChoiceOption :=
-  { value := reference.key, label := reference.label }
+  { value := reference.wireKey, label := reference.label }
 
 def searchResults {κ : Type} [Lean.ToJson κ] : Status (LookupResults κ) → Display.SearchResults
   | .loading => .loading
@@ -383,6 +383,11 @@ def evaluateNode
         | .hidden => throw (.invalid .hidden)
         | .disabled => throw (.invalid .disabled)
         | .enabled => body.apply route argument }
+  | .onChange update body =>
+    let body := evaluateNode body value env ambient locals target location disabled
+    { body with apply := fun route argument => do
+        let updated ← body.apply route argument
+        return { updated with value := update value updated.value } }
   | .select (decidableEq := _) (key := _) path label options selected =>
     let options := (options.eval value env).options
     let selected := selected (path.get value)
@@ -436,7 +441,7 @@ def evaluateNode
           | some (.choose none) => return { value := path.set none value, state := env, locals := none }
           | some (.choose (some key)) =>
             let found := match locals.map status with
-              | some (.ready results) => results.found.find? (Reference.key · == key)
+              | some (.ready results) => results.found.find? (Reference.wireKey · == key)
               | some .loading
               | some (.failed _)
               | none => none

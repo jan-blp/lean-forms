@@ -24,7 +24,10 @@ endpoints DeliveryEndpoint where
 
 def Delivery.form : Component [] Delivery.Raw :=
   .group "Delivery" [
-    .lookup path[Delivery.Field.country] "Country" (.const (Api.source DeliveryEndpoint.countries)),
+    .onChange (fun before after =>
+      if before.country.map (·.id) == after.country.map (·.id) then after
+      else { after with city := none }) <|
+      .lookup path[Delivery.Field.country] "Country" (.const (Api.source DeliveryEndpoint.countries)),
     .disabledWhen { inputs := inputs[path[Delivery.Field.country]], run := Option.isNone } <|
       .lookup path[Delivery.Field.city] "City"
         { inputs := inputs[path[Delivery.Field.country]]
@@ -57,9 +60,9 @@ def mentions (text : String) (record : Reference String) : Bool :=
 
 def answer
   : (named : DeliveryEndpoint) → named.signature.Input → Option named.signature.Output
-  | .countries, text => some (LookupResults.select countries (mentions text) 5)
+  | .countries, text => (LookupResults.select countries (mentions text) 5).toOption
   | .cities, (search : CitySearch) =>
-    some (LookupResults.select (cities search.country) (mentions search.text) 5)
+    (LookupResults.select (cities search.country) (mentions search.text) 5).toOption
 
 def serve : HttpRequest → Option Json :=
   Api.serve answer

@@ -85,6 +85,16 @@ private def countries (text : String) : HttpRequest := Api.request DeliveryEndpo
 
 private def germany : Reference String := ⟨"DE", "Germany"⟩
 
+example : (LookupResults.select [germany, germany] (fun _ => true) 1).map (·.found) =
+    .error .duplicateKeys := by
+  simp [LookupResults.select, LookupResults.ofList, germany, Reference.wireKey, Except.map]
+
+example : (LookupResults.select [germany] (fun _ => true) 1).map (·.found) = .ok [germany] := by
+  simp [LookupResults.select, LookupResults.ofList, germany, Reference.wireKey, Except.map]
+
+example : (LookupResults.select [germany] (fun _ => true) 0).map (·.more) = .ok true := by
+  simp [LookupResults.select, LookupResults.ofList, germany, Reference.wireKey, Except.map]
+
 def run : IO Unit := do
   check "LookupDuplicateIdsRejected"
     (fromJson? (α := LookupResults String) (Json.mkObj [
@@ -108,15 +118,15 @@ def run : IO Unit := do
     | some .loading
     | some (.failed _)
     | none => false)
-  let unlisted ← apply found "Country" (.choose (some (Reference.key ⟨"IT", "Italy"⟩)))
+  let unlisted ← apply found "Country" (.choose (some (Reference.wireKey ⟨"IT", "Italy"⟩)))
   check "LookupUnlistedRejected"
     ((snapshot unlisted).ui.rejection == some (toString (InvocationError.unlistedMatch "\"IT\"")))
-  let chosen ← apply found "Country" (.choose (some germany.key))
+  let chosen ← apply found "Country" (.choose (some germany.wireKey))
   check "LookupChooseStores" (chosen.value.country == some germany)
   check "LookupChooseCloses" ((← search? chosen "Country").isNone && (fetches chosen).isEmpty)
   let other ← settle (← apply chosen "Country" (.search (some "spa")))
   check "LookupPickedShownWhileSearching"
-    ((← picked? other "Country") == some { value := germany.key, label := "Germany" } &&
+    ((← picked? other "Country") == some { value := germany.wireKey, label := "Germany" } &&
       ((← search? other "Country").map (labels ·.results)) == some ["Spain"])
   let again ← apply other "Country" (.search (some "an"))
   check "LookupRevisitIsCached" ((fetches again).isEmpty &&
@@ -127,6 +137,21 @@ def run : IO Unit := do
   let cities ← settle cities
   check "LookupDependentMatches"
     (((← search? cities "City").map (labels ·.results)) == some ["Berlin", "Hamburg", "Munich"])
+  let berlin : Reference String := { id := "BER", label := "Berlin" }
+  let pickedCity ← apply cities "City" (.choose (some berlin.wireKey))
+  let searchingCountry ← apply pickedCity "Country" (.search (some "an"))
+  check "LookupSearchPreservesDependentValue" (searchingCountry.value.city == some berlin)
+  let sameCountry ← apply searchingCountry "Country" (.choose (some germany.wireKey))
+  check "LookupSameCountryPreservesCity" (sameCountry.value.city == some berlin)
+  let spainResults ← settle (← apply pickedCity "Country" (.search (some "spa")))
+  let spain : Reference String := { id := "ES", label := "Spain" }
+  let changedCountry ← apply spainResults "Country" (.choose (some spain.wireKey))
+  check "LookupCountryChangeClearsCity"
+    (changedCountry.value.country == some spain && changedCountry.value.city.isNone)
+  let clearedCountry ← apply pickedCity "Country" (.choose none)
+  check "LookupCountryClearClearsCity"
+    (clearedCountry.value.country.isNone && clearedCountry.value.city.isNone &&
+      (← control clearedCountry "City").disabled)
   let stopped ← apply cities "City" (.search none)
   check "LookupStopSearching" ((← search? stopped "City").isNone && stopped.value.city.isNone)
   let cleared ← apply chosen "Country" (.choose none)

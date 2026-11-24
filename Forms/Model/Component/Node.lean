@@ -126,6 +126,12 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (availability : Computation Γ α Availability)
       (body : ComponentNode Γ α state β holes)
       : ComponentNode Γ α state β holes
+  | onChange {Γ : Context}
+      {α β state : Type}
+      {holes : Nat}
+      (update : α → α → α)
+      (body : ComponentNode Γ α state β holes)
+      : ComponentNode Γ α state β holes
   /-- A choice among `options` for the value at `path`.
   The option with key `selected value` is marked selected, if there is one.
   Choosing a different option sets the value to its `start`. -/

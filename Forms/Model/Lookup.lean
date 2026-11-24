@@ -3,7 +3,6 @@ module
 public import Forms.Model.Remote
 public import Forms.Model.Report
 public import Mathlib.Data.List.Nodup
-public import Batteries.Data.List.Pairwise
 
 @[expose] public section
 namespace Forms.Model
@@ -14,8 +13,7 @@ structure Reference (κ : Type) where
   label : String
   deriving DecidableEq, Repr, ToJson, FromJson
 
-/-- Names the reference on the wire. -/
-def Reference.key {κ : Type} [ToJson κ] (reference : Reference κ) : String :=
+def Reference.wireKey {κ : Type} [ToJson κ] (reference : Reference κ) : String :=
   (toJson reference.id).compress
 
 @[reducible] instance {κ : Type} : FormModel (Reference κ) where
@@ -32,24 +30,40 @@ instance {κ : Type} : Reports (Reference κ) where
 structure LookupResults (κ : Type) [ToJson κ] where
   found : List (Reference κ)
   more : Bool
-  keys_nodup : (found.map Reference.key).Nodup
+  keys_nodup : (found.map Reference.wireKey).Nodup
 
 def LookupResults.empty {κ : Type} [ToJson κ] : LookupResults κ :=
   { found := [], more := false, keys_nodup := List.nodup_nil }
 
-/-- Drops repeated ids. -/
+inductive LookupError where
+  | duplicateKeys
+  deriving DecidableEq, Repr
+
+instance : ToString LookupError where
+  toString
+    | .duplicateKeys => "Lookup results repeat an id."
+
+def LookupResults.ofList
+  {κ : Type}
+  [ToJson κ]
+  (found : List (Reference κ))
+  (more : Bool)
+  : Except LookupError (LookupResults κ) :=
+  if distinct : (found.map Reference.wireKey).Nodup then
+    .ok { found, more, keys_nodup := distinct }
+  else .error .duplicateKeys
+
 def LookupResults.select
   {κ : Type}
   [ToJson κ]
   (records : List (Reference κ))
   (keep : Reference κ → Bool)
   (limit : Nat)
-  : LookupResults κ :=
-  let distinct := (records.filter keep).pwFilter (·.key ≠ ·.key)
-  { found := distinct.take limit
-    more := limit < distinct.length
-    keys_nodup := List.Nodup.sublist ((List.take_sublist _ _).map _)
-      (List.pairwise_map.mpr (List.pairwise_pwFilter _)) }
+  : Except LookupError (LookupResults κ) := do
+  let results ← LookupResults.ofList (records.filter keep) false
+  return { found := results.found.take limit
+           more := limit < results.found.length
+           keys_nodup := List.Nodup.sublist ((List.take_sublist _ _).map _) results.keys_nodup }
 
 instance {κ : Type} [ToJson κ] : ToJson (LookupResults κ) where
   toJson results := Json.mkObj [("found", toJson results.found), ("more", toJson results.more)]
@@ -58,8 +72,6 @@ instance {κ : Type} [ToJson κ] [FromJson κ] : FromJson (LookupResults κ) whe
   fromJson? json := do
     let found : List (Reference κ) ← json.getObjValAs? _ "found"
     let more ← json.getObjValAs? Bool "more"
-    if distinct : (found.map Reference.key).Nodup then
-      return { found, more, keys_nodup := distinct }
-    throw "Lookup results repeat an id."
+    (LookupResults.ofList found more).mapError toString
 
 end Forms.Model
