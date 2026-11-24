@@ -30,7 +30,7 @@ instance : FromJson LookupKey where
 
 structure Reference (κ : Type) where
   id : κ
-  label : String
+  displayText : String
   deriving DecidableEq, Repr, ToJson, FromJson
 
 def Reference.wireKey {κ : Type} [ToJson κ] (reference : Reference κ) : LookupKey :=

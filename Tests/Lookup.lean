@@ -98,7 +98,7 @@ example : (LookupResults.select [germany] (fun _ => true) 0).map (·.more) = .ok
 def run : IO Unit := do
   check "LookupDuplicateIdsRejected"
     (fromJson? (α := LookupResults String) (Json.mkObj [
-      ("found", toJson [germany, { germany with label := "Deutschland" }]),
+      ("found", toJson [germany, { germany with displayText := "Deutschland" }]),
       ("more", toJson false)]) |>.isOk |> not)
   let definition := FormDefinition.ofModel Delivery Delivery.form Delivery.initial
   let (opened, _) ← IO.ofExcept (definition.openState (toJson Delivery.initial) supply)
@@ -138,14 +138,14 @@ def run : IO Unit := do
   let cities ← settle cities
   check "LookupDependentMatches"
     (((← search? cities "City").map (labels ·.results)) == some ["Berlin", "Hamburg", "Munich"])
-  let berlin : Reference String := { id := "BER", label := "Berlin" }
+  let berlin : Reference String := { id := "BER", displayText := "Berlin" }
   let pickedCity ← apply cities "City" (.choose (some berlin.wireKey))
   let searchingCountry ← apply pickedCity "Country" (.search (some "an"))
   check "LookupSearchPreservesDependentValue" (searchingCountry.value.city == some berlin)
   let sameCountry ← apply searchingCountry "Country" (.choose (some germany.wireKey))
   check "LookupSameCountryPreservesCity" (sameCountry.value.city == some berlin)
   let spainResults ← settle (← apply pickedCity "Country" (.search (some "spa")))
-  let spain : Reference String := { id := "ES", label := "Spain" }
+  let spain : Reference String := { id := "ES", displayText := "Spain" }
   let changedCountry ← apply spainResults "Country" (.choose (some spain.wireKey))
   check "LookupCountryChangeClearsCity"
     (changedCountry.value.country == some spain && changedCountry.value.city.isNone)

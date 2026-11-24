@@ -102,7 +102,7 @@ def button
     messages := [] }
 
 def option {κ : Type} [Lean.ToJson κ] (reference : Reference κ) : Display.ChoiceOption :=
-  { value := reference.wireKey.value, label := reference.label }
+  { value := reference.wireKey.value, label := reference.displayText }
 
 def searchResults {κ : Type} [Lean.ToJson κ] : Status (LookupResults κ) → Display.SearchResults
   | .loading => .loading

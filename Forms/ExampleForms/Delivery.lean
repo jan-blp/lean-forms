@@ -56,7 +56,7 @@ def cities : String → List (Reference String)
   | _ => []
 
 def mentions (text : String) (record : Reference String) : Bool :=
-  record.label.toLower.contains text.toLower
+  record.displayText.toLower.contains text.toLower
 
 def answer
   : (named : DeliveryEndpoint) → named.signature.Input → Option named.signature.Output
