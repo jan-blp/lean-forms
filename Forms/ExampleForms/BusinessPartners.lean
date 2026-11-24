@@ -41,7 +41,8 @@ def initial : BusinessPartnerSelection.Raw := { partner := none }
 
 def candidates : List (LookupCandidate String BusinessPartnerData) := [
   { reference := { id := "alpine", displayText := "Alpine Supplies" }
-    data := { city := "Girona", vatNumber := "VAT-100", status := .blocked "Account is blocked." } },
+    data := { city := "Girona", vatNumber := "VAT-100"
+              status := .blocked "Account is blocked." } },
   { reference := { id := "barcelona", displayText := "Barcelona Office" }
     data := { city := "Barcelona", vatNumber := "VAT-200", status := .active } },
   { reference := { id := "girona", displayText := "Girona Goods" }
@@ -58,7 +59,8 @@ def mentions (text : String) (candidate : LookupCandidate String BusinessPartner
   (searchText candidate).toLower.contains text.toLower = true
 
 instance (text : String) : DecidablePred (mentions text) :=
-  fun candidate => inferInstanceAs (Decidable ((searchText candidate).toLower.contains text.toLower = true))
+  fun candidate =>
+    inferInstanceAs (Decidable ((searchText candidate).toLower.contains text.toLower = true))
 
 def serve : HttpRequest → Option Json :=
   Api.serve (endpoint := BusinessPartnersEndpoint) fun

@@ -28,7 +28,8 @@ private def execute
   (state : State)
   (event : ModelForm.Event BusinessPartnerSelection.Raw)
   : IO State :=
-  IO.ofExcept (ModelForm.execute (model := BusinessPartnerSelection) BusinessPartners.form state event)
+  IO.ofExcept
+    (ModelForm.execute (model := BusinessPartnerSelection) BusinessPartners.form state event)
 
 private def apply (state : State) (command : LookupInput) : IO State := do
   let lookup := (← control BusinessPartners.form state "Business partner").key
@@ -42,7 +43,8 @@ private def snapshot (state : State) := ModelForm.snapshot BusinessPartners.form
 private def settle (state : State) : IO State :=
   state.outbox.foldlM (init := state) fun state effect => match effect with
     | .fetch request =>
-      execute state (.loaded request ((BusinessPartners.serve request).elim (.error "Not found.") .ok))
+      execute state
+        (.loaded request ((BusinessPartners.serve request).elim (.error "Not found.") .ok))
     | .submit => pure state
     | .focus _ => pure state
 
@@ -64,7 +66,8 @@ private def restrictedForm : Component [] Restricted.Raw :=
 def run : IO Unit := do
   let results ← IO.ofExcept
     ((LookupResults.select BusinessPartners.candidates (fun _ => True) 5).mapError toString)
-  let decoded ← IO.ofExcept (fromJson? (α := LookupResults String BusinessPartnerData) (toJson results))
+  let decoded ← IO.ofExcept
+    (fromJson? (α := LookupResults String BusinessPartnerData) (toJson results))
   check "CandidatePayloadRoundtrip" (decoded.found == results.found)
   let some candidate := results.found.head? | throw (IO.userError "FAIL missing candidate")
   let duplicate := { candidate with data := { candidate.data with status := .active } }
@@ -91,8 +94,9 @@ def run : IO Unit := do
     | .action
     | .tabs .. => throw (IO.userError "FAIL missing candidate options")
   check "CandidateDisabledReasonProjected"
-    (options.map (·.disabledReason) == [some "Account is blocked.", none, some "Account is closed.", none,
-      some "Account is blocked."])
+    (options.map (·.disabledReason) ==
+      [some "Account is blocked.", none, some "Account is closed.", none,
+        some "Account is blocked."])
   let wire := (snapshot found).toWire "business-partners" "test" "/api/submit"
   check "CandidatePayloadNotSentToReact" (!(toJson wire.view).compress.contains "VAT-200")
   let rejected ← apply found (.choose (key "alpine"))

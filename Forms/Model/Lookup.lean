@@ -60,6 +60,12 @@ inductive LookupAvailability where
   | disabled (reason : String)
   deriving DecidableEq, Repr
 
+def LookupAvailability.always
+  {κ payload : Type}
+  (_candidate : LookupCandidate κ payload)
+  : LookupAvailability :=
+  .enabled
+
 inductive LookupSelectionError where
   | unlisted (key : LookupKey)
   | disabled (key : LookupKey) (reason : String)
