@@ -1,8 +1,8 @@
 module
 
 public import Forms.Model.Component
+public import Forms.Model.Endpoints
 public meta import Forms.Model.Derive
-public meta import Forms.Deriving.FinEnum
 
 @[expose] public section
 namespace Forms.ExampleForms
@@ -18,21 +18,9 @@ structure CitySearch where
   text : String
   deriving ToJson, FromJson
 
-inductive DeliveryEndpoint where
-  | countries
-  | cities
-  deriving DecidableEq, FinEnum, Repr
-
-def DeliveryEndpoint.signature : DeliveryEndpoint → Api.Signature
-  | .countries => { Input := String, Output := LookupResults String }
-  | .cities => { Input := CitySearch, Output := LookupResults String }
-
-instance : Api DeliveryEndpoint where
-  signature := DeliveryEndpoint.signature
-  path
-    | .countries => "/api/countries"
-    | .cities => "/api/cities"
-  distinct := by decide
+endpoints DeliveryEndpoint where
+  | countries : String → LookupResults String at "/api/countries"
+  | cities : CitySearch → LookupResults String at "/api/cities"
 
 def Delivery.form : Component [] Delivery.Raw :=
   .group "Delivery" [
