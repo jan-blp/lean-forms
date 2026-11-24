@@ -2,6 +2,7 @@ module
 
 public import Forms.ExampleForms.Registry
 public import Tests.FreshId
+public meta import Forms.Model.Lookup.Theorems
 
 public section
 namespace Tests.Lookup

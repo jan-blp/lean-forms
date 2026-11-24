@@ -64,9 +64,9 @@ instance (text : String) : DecidablePred (mentions text) :=
 def answer
   : (named : DeliveryEndpoint) → named.signature.Input → Option named.signature.Output
   | .countries, (text : String) =>
-    (LookupResults.select countries (mentions text) 5).toOption.map (·.toLookupResults)
+    (LookupResults.select countries (mentions text) 5).toOption
   | .cities, (search : CitySearch) =>
-    (LookupResults.select (cities search.country) (mentions search.text) 5).toOption.map (·.toLookupResults)
+    (LookupResults.select (cities search.country) (mentions search.text) 5).toOption
 
 def serve : HttpRequest → Option Json :=
   Api.serve answer
