@@ -1,7 +1,6 @@
 module
 
 public import Forms.Model.Diagnostic
-public import Forms.Model.Item
 public import Forms.Model.ReadOnly
 
 @[expose] public section
@@ -70,15 +69,11 @@ instance {α : Type} [FormModel α] [Reports α] : Reports (Option α) where
     | some raw => (Reports.reports (model := α) raw).map
       (Report.inConstructor (α := Option (Raw α)) OptionConstructor.some)
 
-instance {α : Type} [FormModel α] [Reports α] [HasUuid (Raw α)] : Reports (List α) where
-  reports raw := raw.attach.flatMap fun ⟨item, member⟩ =>
-    (Reports.reports (model := α) item).map (Report.mapLocations (.item item member))
+instance {α : Type} [FormModel α] [Reports α] : Reports (Collection α) where
+  reports raw := raw.entries.attach.flatMap fun ⟨entry, member⟩ =>
+    (Reports.reports (model := α) entry.value).map (Report.mapLocations (.item entry member))
 
 instance {α : Type} [FormModel α] [AlwaysValid α] : Reports { items : List α // items.Nodup } :=
   ⟨fun _ => []⟩
-
-instance {β : Type} [FormModel β] [Reports β] : Reports (Item β) where
-  reports raw :=
-    (Reports.reports (model := β) raw.value).map (Report.lift (value := raw) Item.Field.value)
 
 end Forms.Model

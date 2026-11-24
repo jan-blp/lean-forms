@@ -11,7 +11,6 @@ open Forms.Model Forms.Model.Sugar
 /-! Rules are named: auto-generated names can clash with other example forms. -/
 
 structure Expense where
-  id : Uuid
   description : String
   amount : Nat
   receipt : Bool
@@ -38,17 +37,17 @@ instance Expense.receipt_valid_rule : ConstraintRule Expense.Constraint.receipt_
     else .invalid (proof := h) (message := "Attach a receipt for CHF 100 or more.")
       (targets := locations[Expense.Field.receipt])
 
-deriving instance HasUuid for Expense.Raw
-
-def Expense.initial : HasUuid.WithoutUuid Expense.Raw :=
-  Expense.Raw.mkWithoutUuid (description := "") (amount := 0) (receipt := false)
+def Expense.initial : Expense.Raw where
+  description := ""
+  amount := 0
+  receipt := false
 
 structure ExpenseReport where
   employee : String
-  expenses : List Expense
+  expenses : Collection Expense
   employee_valid : employee ≠ ""
   expenses_valid : 0 < expenses.length
-  limit_valid : (expenses.map (·.amount)).sum ≤ 5000
+  limit_valid : (expenses.values.map (·.amount)).sum ≤ 5000
   deriving FormModel
 
 instance ExpenseReport.employee_valid_rule
@@ -67,15 +66,15 @@ instance ExpenseReport.expenses_valid_rule
 
 instance ExpenseReport.limit_valid_rule : ConstraintRule ExpenseReport.Constraint.limit_valid where
   check parts :=
-    if h : (parts.expenses.map (·.amount)).sum ≤ 5000 then .valid h
+    if h : (parts.expenses.values.map (·.amount)).sum ≤ 5000 then .valid h
     else .invalid (proof := h) (message := "A report is limited to CHF 5'000.")
       (targets := locations[ExpenseReport.Field.expenses])
 
-def ExpenseReport.initial : ExpenseReport.Raw :=
-  IdGen.run do
-    pure ⟨"Ada Lovelace", [
-      ⟨← freshId, "Train to Bern", 58, false⟩,
-      ⟨← freshId, "Hotel", 180, true⟩]⟩
+def ExpenseReport.initial : ExpenseReport.Raw where
+  employee := "Ada Lovelace"
+  expenses := .numbered [
+    { description := "Train to Bern", amount := 58, receipt := false },
+    { description := "Hotel", amount := 180, receipt := true }]
 
 def Expense.columns {Γ : Context} : Columns Γ Expense.Raw := columns[
   "Description" => .field
@@ -101,7 +100,7 @@ def ExpenseReport.withItems {Γ : Context} (items : Component Γ ExpenseReport.R
       (label := "Total")
       (value := {
         inputs := inputs[path[ExpenseReport.Field.expenses]]
-        run := fun expenses => s!"CHF {swiss (expenses.map (·.amount)).sum}"
+        run := fun expenses => s!"CHF {swiss (expenses.values.map (·.amount)).sum}"
       })])
 
 def ExpenseReport.listForm {Γ : Context} : Component Γ ExpenseReport.Raw :=
@@ -150,7 +149,7 @@ def ExpenseReport.focusForm : Component [] ExpenseReport.Raw := named%
       (body := Expense.columns.group "Selected expense"),
     .computed (label := "Total") (value := {
       inputs := inputs[path[ExpenseReport.Field.expenses]]
-      run := fun expenses => s!"CHF {swiss (expenses.map (·.amount)).sum}"
+      run := fun expenses => s!"CHF {swiss (expenses.values.map (·.amount)).sum}"
     })])
 
 end Forms.ExampleForms

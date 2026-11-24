@@ -7,17 +7,12 @@ namespace Forms.Model
 
 private theorem modify_eq_self_of_fixed
   {α : Type}
-  (value : List α)
+  (entries : List (Item α))
   (position : Nat)
   (f : α → α)
-  (fixed : ∀ child, value[position]? = some child → f child = child)
-  : value.modify position f = value := by
-  apply List.ext_getElem?
-  intro index
-  rw [List.getElem?_modify]
-  split
-  · cases child : value[index]? <;> simp_all
-  · simp
+  (fixed : ∀ child, entries[position]? = some child → f child.value = child.value)
+  : entries.modify position (Item.mapValue f) = entries := by
+  induction entries generalizing position <;> cases position <;> simp_all [Item.mapValue]
 
 theorem PartialPath.set_get
   {α β : Type}
@@ -35,12 +30,12 @@ theorem PartialPath.set_get
     grind [get?, set, LawfulConstructors.inject_project]
   | item id rest ih =>
     simp only [get?, set, List.find?_eq_bind_findIdx?_getElem?] at present ⊢
-    cases found : value.findIdx? (HasUuid.id · == id) with
+    cases found : value.entries.findIdx? (·.id == id) with
     | none => rfl
     | some position =>
       simp only [found, Option.bind_some] at present ⊢
-      exact modify_eq_self_of_fixed _ _ _ fun child here =>
-        ih child old (by simpa [here] using present)
+      exact Collection.ext <| modify_eq_self_of_fixed _ _ _ fun child here =>
+        ih child.value old (by simpa [here] using present)
 
 theorem PartialPath.set_absent
   {α β : Type}
@@ -58,12 +53,25 @@ theorem PartialPath.set_absent
     grind [get?, set, LawfulConstructors.inject_project]
   | item id rest ih =>
     simp only [get?, set, List.find?_eq_bind_findIdx?_getElem?] at absent ⊢
-    cases found : value.findIdx? (HasUuid.id · == id) with
+    cases found : value.entries.findIdx? (·.id == id) with
     | none => rfl
     | some position =>
       simp only [found, Option.bind_some] at absent ⊢
-      exact modify_eq_self_of_fixed _ _ _ fun child here =>
-        ih child new (by simpa [here] using absent)
+      exact Collection.ext <| modify_eq_self_of_fixed _ _ _ fun child here =>
+        ih child.value new (by simpa [here] using absent)
+
+/-- Writing through an entry never changes the ids of the collection. -/
+theorem PartialPath.ids_set_item
+  {α β : Type}
+  (id : Uuid)
+  (rest : PartialPath α β)
+  (new : β)
+  (value : Collection α)
+  : ((PartialPath.item id rest).set new value).ids = value.ids := by
+  simp only [set]
+  split
+  · rfl
+  · exact Collection.ids_modifyAt ..
 
 theorem PartialPath.erase_ofPath
   {α β : Type}

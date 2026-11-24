@@ -18,7 +18,7 @@ private def check (name : String) (ok : Bool) : IO Unit := do
 
 structure Payments where
   primary : Option PaymentMethod
-  others : List (Item PaymentMethod)
+  others : Collection PaymentMethod
   deriving FormModel
 
 @[report_rule] structure Flagged where
@@ -33,13 +33,13 @@ structure UsesFlagged where
 
 private def nested : Payments.Raw where
   primary := some PaymentMethod.initial
-  others := [⟨firstId, PaymentMethod.initial⟩]
+  others := .numbered [PaymentMethod.initial]
 
 private def primary : Diagnostic.Targets :=
   .locations [.field "primary", .constructor "some", .field "value"] []
 
 private def other : Diagnostic.Targets :=
-  .locations [.field "others", .item firstId, .field "value", .field "value"] []
+  .locations [.field "others", .item firstId, .field "value"] []
 
 example : (ModelForm.reports (model := Payments) nested true).map (·.targets) =
     [primary, primary, other, other] := by
@@ -52,7 +52,7 @@ private def info (state : Diagnostic.ReportState) (outdated : Bool) : Diagnostic
   { state, severity := .info, outdated }
 
 private def claimed : Receipts.Raw :=
-  ⟨[⟨firstId, "R-1", ⟨true⟩⟩, ⟨secondId, "R-2", ⟨false⟩⟩]⟩
+  ⟨.numbered [⟨"R-1", ⟨true⟩⟩, ⟨"R-2", ⟨false⟩⟩]⟩
 
 example : (ModelForm.reports (model := Receipts) claimed false).map (·.kind) =
     [.report (warning .unresolved true)] := by

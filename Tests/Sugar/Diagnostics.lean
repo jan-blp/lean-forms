@@ -218,12 +218,12 @@ in the application
   Member.there shared✝
 -/
 #guard_msgs (positions := true) in
-example : Component [] (List (Item Nat)) (List Unit) := named%
+example : Component [] (Collection Nat) (List Unit) := named%
   state% shared := (0 : Nat);
   state% _ := false;
   .list .self "Rows"
     { inputs := inputs[.ui ref[shared]], run := toString }
-    "Add" (Item.mkWithoutUuid 0) (.computed "Row" "value")
+    "Add" 0 (.computed "Row" "value")
 
 /-- error: presentation% is only valid inside named% -/
 #guard_msgs in

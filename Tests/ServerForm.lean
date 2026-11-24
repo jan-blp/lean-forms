@@ -14,10 +14,10 @@ private def check (name : String) (ok : Bool) : IO Unit := do
   IO.println s!"PASS {name}"
 
 private def alreadySubmitted (raw : Receipts.Raw) : List Bool :=
-  raw.receipts.map (·.alreadySubmitted.value)
+  raw.receipts.values.map (·.alreadySubmitted.value)
 
 private def repeated : Receipts.Raw :=
-  ⟨[⟨firstId, "R-1", ⟨false⟩⟩, ⟨secondId, "R-2", ⟨false⟩⟩, ⟨thirdId, "R-1", ⟨false⟩⟩]⟩
+  ⟨.numbered [⟨"R-1", ⟨false⟩⟩, ⟨"R-2", ⟨false⟩⟩, ⟨"R-1", ⟨false⟩⟩]⟩
 
 example : (ModelForm.validationErrors (model := Receipts) repeated).map (·.targets) = [
     .locations [.field "receipts", .item firstId, .field "number"]
@@ -49,11 +49,12 @@ def run : IO Unit := do
       (·.name) == some "Stored" && (← stores.get) == 1)
 
   let state ← Receipts.ServerState.init
-  let first : Receipt.Raw := ⟨firstId, "R-1", ⟨false⟩⟩
-  let copy := { first with id := secondId }
-  let submitted ← Receipts.serverCheck state ⟨[first]⟩
-  let resubmitted ← Receipts.serverCheck state ⟨[first]⟩
-  let replaced ← Receipts.serverCheck state ⟨[copy]⟩
+  let receipt : Receipt.Raw := ⟨"R-1", ⟨false⟩⟩
+  let first : Collection Receipt.Raw := { entries := [{ id := firstId, value := receipt }] }
+  let copy : Collection Receipt.Raw := { entries := [{ id := secondId, value := receipt }] }
+  let submitted ← Receipts.serverCheck state ⟨first⟩
+  let resubmitted ← Receipts.serverCheck state ⟨first⟩
+  let replaced ← Receipts.serverCheck state ⟨copy⟩
   check "OnlyNumbersClaimedOutsideTheSubmissionWereAlreadySubmitted"
     (alreadySubmitted submitted == [false] && alreadySubmitted resubmitted == [false] &&
       alreadySubmitted replaced == [true])

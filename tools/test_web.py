@@ -121,7 +121,7 @@ def receipts_session():
             status, _, body = request('/api/submit', {**submission, 'value': value})
             assert status == 200, (status, body)
             stored = json.loads(body)['value']['receipts']
-            return [receipt['alreadySubmitted'] for receipt in stored]
+            return [receipt['value']['alreadySubmitted'] for receipt in stored]
 
         assert already_submitted([first]) == [False]
         assert already_submitted([first]) == [False]
@@ -135,20 +135,26 @@ def expenses_session():
         initial = {'form': 'expenses', 'fingerprint': start['fingerprint'], 'value': start['value']}
         assert request('/api/submit', initial)[0] == 200
         value = start['value']
-        taxi = {'id': '00000000-0000-4000-8000-000000000099', 'description': 'Taxi', 'amount': 150,
-                'receipt': False}
+        taxi = {'id': '00000000-0000-4000-8000-000000000099',
+                'value': {'description': 'Taxi', 'amount': 150, 'receipt': False}}
         train = value['expenses'][0]
         for changes, message, steps in [
             ({'expenses': []}, 'Add at least one expense.', ['expenses']),
             ({'expenses': [*value['expenses'], taxi]}, 'Attach a receipt for CHF 100 or more.',
              ['expenses', ('item', taxi['id']), 'receipt']),
-            ({'expenses': [train, {**train, 'description': 'Copy'}]},
-             f"These UUIDs are shared by more than one item: {train['id']}. "
-             'This is a bug in the form data; please contact BLP.', ['expenses']),
-            ({'expenses': [{**taxi, 'amount': 6000, 'receipt': True}]}, "A report is limited to CHF 5'000.",
+            ({'expenses': [{**taxi, 'value': {**taxi['value'], 'amount': 6000, 'receipt': True}}]},
+             "A report is limited to CHF 5'000.",
              ['expenses']),
         ]:
             validation_error(request, {**initial, 'value': {**value, **changes}}, message, steps)
+        copy = {**train, 'value': {**train['value'], 'description': 'Copy'}}
+        status, _, body = request('/api/submit', {
+            **initial, 'value': {**value, 'expenses': [train, copy]}})
+        assert status == 422, (status, body)
+        error = json.loads(body)['invalidRequest']
+        assert error['message'].endswith(
+            f"These ids are shared by more than one item: {train['id']}. "
+            'This is a bug in the form data; please contact BLP.'), error
 
 
 def session(example):

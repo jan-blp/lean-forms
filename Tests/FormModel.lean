@@ -74,7 +74,6 @@ inductive Choice where
   deriving FormModel
 
 structure Line where
-  id : Uuid
   amount : Nat
   amount_valid : 1 ≤ amount
   deriving FormModel
@@ -85,10 +84,8 @@ instance : ConstraintRule Line.Constraint.amount_valid where
     else .invalid (proof := h) (message := "Enter an amount.")
       (targets := locations[Line.Field.amount])
 
-deriving instance HasUuid for Line.Raw
-
 structure Basket where
-  lines : List Line
+  lines : Collection Line
   lines_valid : 0 < lines.length
   deriving FormModel
 
@@ -328,14 +325,27 @@ public def run : IO Unit := do
   check "ModelPathLensUpdate"
     (LeanLens.view street.toLens (LeanLens.set street.toLens "Road" good) == "Road")
   check "ModelListValid"
-    ((Basket.validate ⟨[⟨firstId, 1⟩, ⟨secondId, 2⟩]⟩).toOption.any (·.val.lines.length == 2))
+    ((Basket.validate ⟨.numbered [⟨1⟩, ⟨2⟩]⟩).toOption.any (·.val.lines.length == 2))
   check "ModelListItemErrorsUseItemIds"
-    ((errors (Basket.validate ⟨[⟨firstId, 1⟩, ⟨secondId, 0⟩, ⟨thirdId, 0⟩]⟩)).map targetKeys ==
+    ((errors (Basket.validate ⟨.numbered [⟨1⟩, ⟨0⟩, ⟨0⟩]⟩)).map targetKeys ==
       [[["lines", secondId.value, "amount"]], [["lines", thirdId.value, "amount"]]])
+  let shared : List (Item Line.Raw) := [
+    { id := firstId, value := ⟨1⟩ },
+    { id := firstId, value := ⟨2⟩ }]
   check "ModelListRejectsDuplicateIds"
-    ((errors (Basket.validate ⟨[⟨firstId, 1⟩, ⟨firstId, 2⟩]⟩)).map (·.message) ==
-      [duplicateIdsMessage [firstId]])
-  check "ModelListConstraint" ((errors (Basket.validate ⟨[]⟩)).map targetKeys == [[["lines"]]])
+    (match (Lean.fromJson? (Lean.toJson shared) : Except String (Collection Line.Raw)) with
+      | .error message => message == Collection.duplicateIdsMessage [firstId]
+      | .ok _ => false)
+  check "ModelListConstraint" ((errors (Basket.validate ⟨.empty⟩)).map targetKeys == [[["lines"]]])
+  let upstream := Lean.Json.mkObj [("uuid", Lean.toJson firstId), ("amount", Lean.toJson (3 : Nat))]
+  check "FlatItemRoundTrip"
+    (match Item.flatFromJson? (β := Line.Raw) "uuid" upstream with
+      | .ok entry =>
+        entry.id == firstId && entry.value.amount == 3 &&
+          (Item.flatToJson? "uuid" entry).toOption == some upstream
+      | .error _ => false)
+  check "FlatItemRejectsClashingKey"
+    (Item.flatToJson? "amount" ({ id := firstId, value := ⟨3⟩ } : Item Line.Raw) matches .error _)
   check "DeriveProjectActiveConstructor"
     ((Constructors.project Delivery.Constructor.campus (Delivery.Raw.campus ⟨20⟩)).map (·.age) == some 20)
   check "DeriveProjectOtherConstructor"
@@ -396,7 +406,7 @@ inductive Recursive where
 deriving instance FormModel for Recursive
 
 structure Container where
-  values : List (Item String)
+  values : Collection String
   deriving FormModel
 
 structure PlainList where

@@ -30,7 +30,7 @@ private def press
   (label : String)
   (nth : Nat := 0)
   : IO (ModelForm.State form) := do
-  IO.ofExcept (ModelForm.execute (model := List (Item Nat)) form state (.apply (← key state label nth) none))
+  IO.ofExcept (ModelForm.execute (model := Collection Nat) form state (.apply (← key state label nth) none))
 
 mutual
 private def outputs (label : String) : Display.View → List String
@@ -56,7 +56,7 @@ private def values (state : ModelForm.State form) (label : String) : List String
   outputs label (ModelView.render form state.value state.cache [] state.env state.locals).view
 
 def run : IO Unit := do
-  let opened := ModelForm.openState (model := List (Item Nat)) (supply := supply) form initial Env.nil
+  let opened := ModelForm.openState (model := Collection Nat) (supply := supply) form initial Env.nil
   let first ← press opened "Increment shared"
   check "SharedStateUpdatesEveryConsumer"
     (values first "Shared count" == ["1", "1"] &&
@@ -70,43 +70,43 @@ def run : IO Unit := do
     (values privateAgain "Private count" == ["1", "2"] && values privateAgain "Shared count" == ["2", "2"])
   let removed ← press privateAgain "Remove"
   check "RemovingConsumerPreservesOwnerAndOtherConsumer"
-    (removed.value.map (·.value) == [20] && values removed "Shared count" == ["2"] && values removed "Private count" == ["2"])
+    (removed.value.values == [20] && values removed "Shared count" == ["2"] && values removed "Private count" == ["2"])
   let empty ← press removed "Remove"
   check "SharedOwnerOutlivesAllConsumers"
-    (empty.value.isEmpty && values empty "Shared count outside the list" == ["2"])
+    (empty.value.length == 0 && values empty "Shared count outside the list" == ["2"])
   let added ← press empty "Add consumer"
   check "NewConsumerReadsSharedStateAndStartsPrivateState"
     (values added "Shared count" == ["2"] && values added "Private count" == ["0"])
   let cleared ← press added "Clear shared"
   check "SiblingCanUpdateSharedState" (values cleared "Shared count" == ["0"])
-  let reset ← IO.ofExcept (ModelForm.execute (model := List (Item Nat)) form privateAgain .reset)
+  let reset ← IO.ofExcept (ModelForm.execute (model := Collection Nat) form privateAgain .reset)
   check "ResetRestoresSharedAndPrivateState"
     (reset.value == initial && values reset "Shared count" == ["0", "0"] &&
       values reset "Private count" == ["0", "0"])
 
   let independent := Component.group "Independent owners" [form, form]
-  let independentOpened := ModelForm.openState (model := List (Item Nat)) (supply := supply) independent initial Env.nil
-  let independentChanged ← IO.ofExcept (ModelForm.execute (model := List (Item Nat)) independent independentOpened
+  let independentOpened := ModelForm.openState (model := Collection Nat) (supply := supply) independent initial Env.nil
+  let independentChanged ← IO.ofExcept (ModelForm.execute (model := Collection Nat) independent independentOpened
     (.apply (← key independentOpened "Increment shared" 2) none))
   check "RepeatedOwnersKeepSeparateSharedState"
     (outputs "Shared count outside the list"
       (ModelView.render independent independentChanged.value {} [] Env.nil independentChanged.locals).view == ["0", "1"])
 
   -- Both tables use the same binding; it holds an item id, so removing another row keeps it.
-  let tables : Component [] (List (Item Nat)) := .bind RowSelection.none <|
+  let tables : Component [] (Collection Nat) := .bind RowSelection.none <|
     .group "Two views" [
       Component.void <| .table .self "First" (.numbered "Item") "Add item"
-        (Item.mkWithoutUuid 0) columns[] (some .here),
+        0 columns[] (some .here),
       Component.void <| .table .self "Second" (.numbered "Item") "Add item"
-        (Item.mkWithoutUuid 0) columns[] (some .here),
+        0 columns[] (some .here),
       .computed "Selection" {
         inputs := inputs[.ui (Ref.here : Var _ RowSelection)]
         run := fun selection => match selection with
           | .none => "None"
           | .row id => id.value }]
-  let tablesOpened := ModelForm.openState (model := List (Item Nat)) (supply := supply) tables
-    [⟨firstId, 10⟩, ⟨secondId, 20⟩] Env.nil
-  let selected ← IO.ofExcept (ModelForm.execute (model := List (Item Nat)) tables tablesOpened
+  let tablesOpened := ModelForm.openState (model := Collection Nat) (supply := supply) tables
+    (.numbered [10, 20]) Env.nil
+  let selected ← IO.ofExcept (ModelForm.execute (model := Collection Nat) tables tablesOpened
     (.apply (← key tablesOpened "Select" 1) none))
   check "ExistingTablesShareSelectionBinding" (match
       (ModelView.render tables selected.value {} [] Env.nil selected.locals).view with
@@ -114,10 +114,10 @@ def run : IO Unit := do
       first.map (·.selected) == [some false, some true] &&
       second.map (·.selected) == [some false, some true]
     | _ => false)
-  let removedFromTable ← IO.ofExcept (ModelForm.execute (model := List (Item Nat)) tables selected
+  let removedFromTable ← IO.ofExcept (ModelForm.execute (model := Collection Nat) tables selected
     (.apply (← key selected "Remove") none))
   check "ExistingTableOperationUpdatesModelAndSharedState"
-    (removedFromTable.value.map (·.value) == [20] && removedFromTable.locals.value == .row secondId &&
+    (removedFromTable.value.values == [20] && removedFromTable.locals.value == .row secondId &&
       outputs "Selection" (ModelView.render tables removedFromTable.value {} [] Env.nil
         removedFromTable.locals).view == [secondId.value])
 

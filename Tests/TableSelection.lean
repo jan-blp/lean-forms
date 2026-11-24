@@ -47,7 +47,7 @@ def run : IO Unit := do
   let description ← browserKey selected "Description"
   let edited ← browse selected (.apply description (some (.text "Updated hotel")))
   check "TableDetailsEditSelectedItem"
-    (edited.value.expenses.map (·.description) == ["Train to Bern", "Updated hotel"])
+    (edited.value.expenses.values.map (·.description) == ["Train to Bern", "Updated hotel"])
   let switched ← browse edited (.apply first none)
   let stale ← browse switched (.apply description (some (.text "Stale")))
   check "TableOldDetailsRejectStaleEdit"
@@ -57,11 +57,11 @@ def run : IO Unit := do
   let removedEarlier ← browse selectedAgain (.apply (← browserKey selectedAgain "Remove") none)
   check "TableRemoveEarlierKeepsSelectedItem"
     (selection removedEarlier == .row secondId &&
-      removedEarlier.value.expenses.map (·.description) == ["Updated hotel"])
+      removedEarlier.value.expenses.values.map (·.description) == ["Updated hotel"])
   let remainingDetail ← browserKey removedEarlier "Description"
   let removedSelected ← browse removedEarlier (.apply (← browserKey removedEarlier "Remove") none)
   check "TableRemoveSelectedClearsSelection"
-    (selection removedSelected == .none && removedSelected.value.expenses.isEmpty)
+    (selection removedSelected == .none && removedSelected.value.expenses.length == 0)
   let staleAfterRemove ← browse removedSelected (.apply remainingDetail (some (.text "Stale")))
   check "TableRemovedDetailsRejectStaleEdit"
     (staleAfterRemove.ui.rejection == some (toString InvocationError.absent))

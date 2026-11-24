@@ -1,7 +1,6 @@
 module
 
 public import Forms.Model.RowSelection
-public import Forms.Model.Item
 public import Forms.Model.Report
 public import Forms.Model.Component.Rename
 
@@ -58,8 +57,7 @@ abbrev Component.statusMarker
 
 def RowSelection.itemPath
   {α β : Type}
-  [HasUuid β]
-  (items : Path α (List β))
+  (items : Path α (Collection β))
   : RowSelection → Option (PartialPath α β)
   | .none => Option.none
   | .row id => some ((PartialPath.ofPath items).trans (.item id .self))
@@ -129,8 +127,7 @@ abbrev Component.collection
   {Γ : Context}
   {α β γ : Type}
   {views : Nat}
-  [HasUuid β]
-  (path : Path α (List β))
+  (path : Path α (Collection β))
   (label : Computation Γ α String)
   (row : Presentation [] (Context.row β Γ) β γ views)
   (display : CollectionDisplay Γ α β views)
@@ -522,10 +519,9 @@ abbrev Component.void
 abbrev Component.withAddButton
   {Γ : Context}
   {α β γ : Type}
-  [HasUuid β]
-  (path : Path α (List β))
+  (path : Path α (Collection β))
   (caption : Computation Γ α String)
-  (initial : HasUuid.WithoutUuid β)
+  (initial : β)
   (collection : Component Γ α γ (holes := 1))
   : Component Γ α γ :=
   .present <|
@@ -545,12 +541,11 @@ abbrev Computation.numbered
 abbrev Component.list
   {Γ : Context}
   {α β γ : Type}
-  [HasUuid β]
-  (path : Path α (List β))
+  (path : Path α (Collection β))
   (label : Computation Γ α String)
   (rowLabel : Computation (Context.row β Γ) β String)
   (addCaption : Computation Γ α String)
-  (initial : HasUuid.WithoutUuid β)
+  (initial : β)
   (body : Component Γ β γ)
   : Component Γ α (List γ) :=
   let rowLabel := rowLabel.rename fun ref => .there (.there ref)
@@ -565,12 +560,11 @@ abbrev Component.list
 abbrev Component.table
   {Γ : Context}
   {α β γ : Type}
-  [HasUuid β]
-  (path : Path α (List β))
+  (path : Path α (Collection β))
   (label : Computation Γ α String)
   (rowLabel : Computation (Context.row β Γ) β String)
   (addCaption : Computation Γ α String)
-  (initial : HasUuid.WithoutUuid β)
+  (initial : β)
   (columns : Columns Γ β γ)
   (selection : Option (Var Γ RowSelection) := none)
   : Component Γ α (List γ) :=

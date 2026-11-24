@@ -20,15 +20,15 @@ def consumer
     .button "Increment private" (.set ref[own] {
       inputs := inputs[ref[own]], run := fun count => count + 1 })]
 
-def form : Component [] (List (Item Nat)) := named%
+def form : Component [] (Collection Nat) := named%
   state% shared := (0 : Nat);
   .group "Shared local state" [
-    Component.void <| .list .self "Consumers" (.numbered "Consumer") "Add consumer"
-        (Item.mkWithoutUuid 0) (.zoom path[Item.Field.value] (consumer ref[shared])),
+    Component.void <| .list .self "Consumers" (.numbered "Consumer") "Add consumer" 0
+        (consumer ref[shared]),
     .computed "Shared count outside the list" {
       inputs := inputs[ref[shared]], run := toString },
     .button "Clear shared" (.set ref[shared] (.const 0))]
 
-def initial : List (Item Nat) := IdGen.run ([10, 20].mapM Item.fresh)
+def initial : Collection Nat := .numbered [10, 20]
 
 end Forms.ExampleForms.SharedState

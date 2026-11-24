@@ -360,7 +360,7 @@ test('expenses adds, removes, and validates items', async () => {
   try {
     assert.match(outputs(), /CHF 238/);
     apply('Add expense', null);
-    const { id: added, ...fields } = expenses().at(-1);
+    const { id: added, value: fields } = expenses().at(-1);
     assert.match(added, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     assert.deepEqual(fields, { description: '', amount: 0, receipt: false });
     const items = page(model).body[0].group.children[1];
@@ -383,7 +383,7 @@ test('expenses adds, removes, and validates items', async () => {
     apply('Receipt attached', true);
     assert.deepEqual(messages(model.snapshot().view), ["A report is limited to CHF 5'000."]);
     apply('Remove', null, 0);
-    assert.deepEqual(expenses().map(e => e.description), ['Hotel', 'Taxi']);
+    assert.deepEqual(expenses().map(e => e.value.description), ['Hotel', 'Taxi']);
     assert.match(outputs(), /CHF 5'180/);
     apply('Remove', null, 1);
     apply('Remove', null, 0);
@@ -423,7 +423,7 @@ test('table selection edits the selected item and follows row removal', async ()
     const oldDescription = key('Description');
     assert.ok(model.snapshot().draftFields.includes(oldDescription));
     apply('Description', 'Hotel Zürich');
-    assert.deepEqual(value().expenses.map(expense => expense.description), ['Train to Bern', 'Hotel Zürich']);
+    assert.deepEqual(value().expenses.map(expense => expense.value.description), ['Train to Bern', 'Hotel Zürich']);
     assert.equal(table().rows[1].cells[0].output.value, 'Hotel Zürich');
     send(first);
     const before = value();
@@ -437,9 +437,9 @@ test('table selection edits the selected item and follows row removal', async ()
     assert.equal(table().rows[0].cells[0].output.value, 'Hotel Zürich');
     apply('Amount (CHF)', 'abc');
     assert.match(model.snapshot().rejection, /non-negative whole number/);
-    assert.equal(value().expenses[0].amount, 180);
+    assert.equal(value().expenses[0].value.amount, 180);
     apply('Amount (CHF)', '200');
-    assert.equal(value().expenses[0].amount, 200);
+    assert.equal(value().expenses[0].value.amount, 200);
     apply('Remove');
     assert.equal(selection(), -1);
     assert.equal(table().rows.length, 0);
@@ -484,8 +484,8 @@ test('project planner keeps task selections local to each project', async () => 
     assert.equal(table(0).footer.button.label, 'Add task');
     send(field('Task title'), 'Build keyboard navigation');
     send(field('Completed'), true);
-    assert.equal(value().projects[0].tasks[1].title, 'Build keyboard navigation');
-    assert.equal(value().projects[1].tasks[0].title, 'Draft the welcome email');
+    assert.equal(value().projects[0].value.tasks[1].value.title, 'Build keyboard navigation');
+    assert.equal(value().projects[1].value.tasks[0].value.title, 'Draft the welcome email');
     assert.equal(table(0).rows[1].cells[0].output.value, 'Build keyboard navigation');
     assert.match(JSON.stringify(body(0)), /2 \/ 3 tasks complete/);
     const staleTitle = field('Task title');
@@ -503,7 +503,7 @@ test('project planner keeps task selections local to each project', async () => 
     select(1, 1);
     assert.deepEqual([selected(0), selected(1)], [1, 1]);
     removeProject(0);
-    assert.equal(value().projects[0].name, 'Customer onboarding');
+    assert.equal(value().projects[0].value.name, 'Customer onboarding');
     assert.equal(selected(0), 1);
     assert.ok(details(0));
     addProject();
@@ -517,7 +517,7 @@ test('project planner keeps task selections local to each project', async () => 
     send(buttonKey(rowButton(0, 1, 'Remove')));
     assert.deepEqual([selected(0), selected(1)], [-1, 0]);
     assert.equal(details(0), undefined);
-    assert.equal(value().projects[1].tasks[0].title, 'Plan follow-up');
+    assert.equal(value().projects[1].value.tasks[0].value.title, 'Plan follow-up');
     model.send('reset');
     assert.deepEqual(value(), initialValue);
     assert.deepEqual([selected(0), selected(1)], [-1, -1]);
@@ -527,16 +527,17 @@ test('project planner keeps task selections local to each project', async () => 
     assert.deepEqual(messages(model.snapshot().view), ['Give the task a title.']);
     assert.deepEqual(model.snapshot().errors[0].targets.locations[0], [
       { kind: 'field', name: 'projects' }, { kind: 'item', id: initialValue.projects[0].id },
-      { kind: 'field', name: 'tasks' }, { kind: 'item', id: initialValue.projects[0].tasks[0].id },
+      { kind: 'field', name: 'tasks' }, { kind: 'item', id: initialValue.projects[0].value.tasks[0].id },
       { kind: 'field', name: 'title' },
     ]);
     send(field('Task title'), 'Map the new navigation');
     model.send('submit');
     const submitted = JSON.parse(model.snapshot().effects[0].submit.request.body).value;
     assert.deepEqual(Object.keys(submitted).sort(), ['name', 'projects']);
-    assert.deepEqual(Object.keys(submitted.projects[0]).sort(), ['id', 'name', 'tasks']);
-    assert.deepEqual(Object.keys(submitted.projects[0].tasks[0]).sort(),
-      ['completed', 'hours', 'id', 'notes', 'owner', 'title']);
+    assert.deepEqual(Object.keys(submitted.projects[0]).sort(), ['id', 'value']);
+    assert.deepEqual(Object.keys(submitted.projects[0].value).sort(), ['name', 'tasks']);
+    assert.deepEqual(Object.keys(submitted.projects[0].value.tasks[0].value).sort(),
+      ['completed', 'hours', 'notes', 'owner', 'title']);
   } finally { model.dispose(); }
 });
 

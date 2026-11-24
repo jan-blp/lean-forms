@@ -106,7 +106,7 @@ def request : HttpRequest := { method := .get, url := "/hidden-value", body := n
       .layout { inputs := inputs[.ui (Ref.here : InputRef _ Nat)], run := id } (.const (.group none []))
 
 def run : IO Unit := do
-  let initial := items ["same", "same", "other"]
+  let initial := Collection.numbered ["same", "same", "other"]
   let opened := (tableSummary).evaluate initial Env.nil
   check "PresentationSummaryPrecedesItsProducer"
     (order opened.view == ["Selected descriptions", "Items"] && opened.output == "")
@@ -133,7 +133,7 @@ def run : IO Unit := do
   let summaryOnly := (tableSummary (.place .here)).evaluate edited.value Env.nil {} edited.locals
   check "PresentationUnplacedControlsRejectStaleActions"
     (summaryOnly.view.controls.isEmpty && !((summaryOnly.applyKey tableLast.key none).run' supply).toBool)
-  let refreshed := (tableSummary (.place .here)).evaluate (items ["same", "Fresh", "other"]) Env.nil {}
+  let refreshed := (tableSummary (.place .here)).evaluate (Collection.numbered ["same", "Fresh", "other"]) Env.nil {}
     edited.locals
   check "PresentationUnplacedOwnersStillProduceFreshOutputs"
     (refreshed.output == "Fresh" && texts "Selected descriptions" refreshed.view == ["Fresh"])
@@ -142,11 +142,11 @@ def run : IO Unit := do
   let duplicated := (tableSummary duplicate).evaluate edited.value Env.nil {} edited.locals
   check "PresentationDuplicatePlacementKeepsOneEditableControl"
     (duplicated.view.controls.length == edited.view.controls.length)
-  let some reviewed := initial[1]? | throw (IO.userError "Missing second item")
+  let some reviewed := initial.entries[1]? | throw (IO.userError "Missing second item")
   let errors : List Diagnostic := [
     { kind := .error
       message := "Review this item"
-      targets := .locations [.item reviewed.id, .field "value"] [] }]
+      targets := .locations [.item reviewed.id] [] }]
   let feedback := (regroupedForm.evaluate edited.value Env.nil {} edited.locals errors).view
   let some described := (feedback.controls.filter (·.label == "Description"))[1]?
     | throw (IO.userError "Missing described control")
@@ -188,7 +188,7 @@ def run : IO Unit := do
   let loaded := unplaced.evaluate 0 Env.nil cache pending.locals
   check "PresentationUnplacedLoadUpdatesItsOutput" (loaded.output == 7)
 
-  let opened := notes.evaluate (items ["a", "b"]) Env.nil
+  let opened := notes.evaluate (Collection.numbered ["a", "b"]) Env.nil
   check "NestedPresentationsRenderInsideTheirOwner"
     (opened.output == 2 && order opened.view == ["Note count"] &&
       (opened.view.controls.filter (·.label == "Text")).length == 2)
@@ -198,14 +198,14 @@ def run : IO Unit := do
       (preview.view.controls.filter (·.label == "Text")).length == 1)
   let edited ← press notes preview "Text" 0 (some (.text "x"))
   check "NestedRowActionsReachTheirRow"
-    (edited.value.map (·.value) == ["x", "b"] && texts "Preview" edited.view == ["«b»"])
+    (edited.value.values == ["x", "b"] && texts "Preview" edited.view == ["«b»"])
   let removed ← press notes edited "Remove" 0
   check "NestedRowRemovalKeepsRemainingRowState"
-    (removed.value.map (·.value) == ["b"] && removed.output == 1 && texts "Preview" removed.view == ["«b»"] &&
+    (removed.value.values == ["b"] && removed.output == 1 && texts "Preview" removed.view == ["«b»"] &&
       (removed.view.controls.filter (·.label == "Text")).isEmpty)
   let added ← press notes removed "Add note"
   check "NestedNewRowsStartOnTheirFirstTab"
-    (added.value.map (·.value) == ["b", ""] && texts "Preview" added.view == ["«b»"] &&
+    (added.value.values == ["b", ""] && texts "Preview" added.view == ["«b»"] &&
       (added.view.controls.filter (·.label == "Text")).length == 1)
 
 end Tests.Presentation

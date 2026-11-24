@@ -8,7 +8,6 @@ namespace Forms.ExampleForms
 open Forms.Model Forms.Model.Sugar
 
 structure PlannerTask where
-  id : Uuid
   title : String
   owner : String
   hours : Nat
@@ -37,15 +36,12 @@ instance PlannerTask.hours_valid_rule : ConstraintRule PlannerTask.Constraint.ho
     else .invalid (proof := h) (message := "Estimate at least one hour.")
       (targets := locations[PlannerTask.Field.hours])
 
-deriving instance HasUuid for PlannerTask.Raw
-
-def PlannerTask.initial : HasUuid.WithoutUuid PlannerTask.Raw :=
-  PlannerTask.Raw.mkWithoutUuid
-    (title := "New task")
-    (owner := "Unassigned")
-    (hours := 1)
-    (completed := false)
-    (notes := "")
+def PlannerTask.initial : PlannerTask.Raw where
+  title := "New task"
+  owner := "Unassigned"
+  hours := 1
+  completed := false
+  notes := ""
 
 def PlannerTask.details {Γ : Context} : Component Γ PlannerTask.Raw :=
   .group "Task details" [
@@ -64,9 +60,8 @@ def PlannerTask.columns {Γ : Context} : Columns Γ PlannerTask.Raw := columns[
     inputs := inputs[path[PlannerTask.Field.completed]], run := fun completed => if completed then "Done" else "To do" }]
 
 structure PlannerProject where
-  id : Uuid
   name : String
-  tasks : List PlannerTask
+  tasks : Collection PlannerTask
   name_valid : name ≠ ""
   deriving FormModel
 
@@ -76,10 +71,9 @@ instance PlannerProject.name_valid_rule : ConstraintRule PlannerProject.Constrai
     else .invalid (proof := h) (message := "Give the project a name.")
       (targets := locations[PlannerProject.Field.name])
 
-deriving instance HasUuid for PlannerProject.Raw
-
-def PlannerProject.initial : HasUuid.WithoutUuid PlannerProject.Raw :=
-  PlannerProject.Raw.mkWithoutUuid (name := "New project") (tasks := [])
+def PlannerProject.initial : PlannerProject.Raw where
+  name := "New project"
+  tasks := .empty
 
 /-- Every project instance owns its selection. The table and editor share only that local variable. -/
 def PlannerProject.form {Γ : Context} : Component Γ PlannerProject.Raw := named%
@@ -89,6 +83,7 @@ def PlannerProject.form {Γ : Context} : Component Γ PlannerProject.Raw := name
     .computed "Progress" {
       inputs := inputs[path[PlannerProject.Field.tasks]]
       run := fun tasks =>
+        let tasks := tasks.values
         s!"{(tasks.filter (·.completed)).length} / {tasks.length} tasks complete · {(tasks.map (·.hours)).sum} h planned" },
     Component.void <| .table path[PlannerProject.Field.tasks] "Tasks"
         (.numbered "Task") "Add task" PlannerTask.initial PlannerTask.columns
@@ -106,7 +101,7 @@ def PlannerProject.form {Γ : Context} : Component Γ PlannerProject.Raw := name
 
 structure ProjectPlanner where
   name : String
-  projects : List PlannerProject
+  projects : Collection PlannerProject
   name_valid : name ≠ ""
   deriving FormModel
 
@@ -116,17 +111,18 @@ instance ProjectPlanner.name_valid_rule : ConstraintRule ProjectPlanner.Constrai
     else .invalid (proof := h) (message := "Give the plan a name.")
       (targets := locations[ProjectPlanner.Field.name])
 
-def ProjectPlanner.initial : ProjectPlanner.Raw := IdGen.run do
-  pure ⟨"Team launch plan", [
-    ⟨← freshId, "Website refresh", [
-      ⟨← freshId, "Map the new navigation", "Ada", 3, true, "Agree on the page hierarchy before wireframes."⟩,
-      ⟨← freshId, "Build accessible navigation", "Grace", 5, false,
+def ProjectPlanner.initial : ProjectPlanner.Raw where
+  name := "Team launch plan"
+  projects := .numbered [
+    ⟨"Website refresh", .numbered [
+      ⟨"Map the new navigation", "Ada", 3, true, "Agree on the page hierarchy before wireframes."⟩,
+      ⟨"Build accessible navigation", "Grace", 5, false,
         "Keyboard support, focus states, and the mobile menu."⟩,
-      ⟨← freshId, "Check the release", "Linus", 2, false, "Run smoke tests and prepare the rollout."⟩]⟩,
-    ⟨← freshId, "Customer onboarding", [
-      ⟨← freshId, "Draft the welcome email", "Maya", 2, false,
+      ⟨"Check the release", "Linus", 2, false, "Run smoke tests and prepare the rollout."⟩]⟩,
+    ⟨"Customer onboarding", .numbered [
+      ⟨"Draft the welcome email", "Maya", 2, false,
         "Keep it short and include the first useful action."⟩,
-      ⟨← freshId, "Measure activation", "Sam", 3, false, "Choose an activation event and add a dashboard."⟩]⟩]⟩
+      ⟨"Measure activation", "Sam", 3, false, "Choose an activation event and add a dashboard."⟩]⟩]
 
 def ProjectPlanner.counted (count : Nat) (noun : String) : String :=
   s!"{count} {noun}{if count == 1 then "" else "s"}"
@@ -137,7 +133,8 @@ def ProjectPlanner.form : Component [] ProjectPlanner.Raw := .group "Project pla
   .computed "Overview" {
     inputs := inputs[path[ProjectPlanner.Field.projects]]
     run := fun projects =>
-      let tasks := projects.flatMap (·.tasks)
+      let projects := projects.values
+      let tasks := projects.flatMap (·.tasks.values)
       s!"{ProjectPlanner.counted projects.length "project"} · {ProjectPlanner.counted tasks.length "task"} · {(tasks.filter (·.completed)).length} complete · {(tasks.map (·.hours)).sum} h planned" },
   Component.void <| .list path[ProjectPlanner.Field.projects] "Projects"
       (.numbered "Project") "Add project" PlannerProject.initial PlannerProject.form]

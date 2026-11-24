@@ -3,7 +3,6 @@ module
 public import Forms.Model.Computation
 public import Forms.Model.Invocation
 public import Forms.Model.FreshId
-public import Forms.Model.HasUuid
 
 @[expose] public section
 namespace Forms.Model
@@ -14,9 +13,8 @@ inductive Action.Step (Γ : Context) (α : Type) where
       (value : Computation Γ α β)
       : Action.Step Γ α
   | append {β : Type}
-      [hasUuid : HasUuid β]
-      (path : Path α (List β))
-      (item : Computation Γ α (HasUuid.WithoutUuid β))
+      (path : Path α (Collection β))
+      (item : Computation Γ α β)
       : Action.Step Γ α
   | write {β : Type}
       (path : Path α β)
@@ -40,12 +38,12 @@ def set
   : Action Γ α :=
   FreeMonoid.of (.set ref value)
 
+/-- Adds `item` to the collection at `path`, with a fresh id. -/
 def append
   {Γ : Context}
   {α β : Type}
-  [HasUuid β]
-  (path : Path α (List β))
-  (item : Computation Γ α (HasUuid.WithoutUuid β))
+  (path : Path α (Collection β))
+  (item : Computation Γ α β)
   : Action Γ α :=
   FreeMonoid.of (.append path item)
 
@@ -63,7 +61,7 @@ def Step.rename
   (rename : Renaming Γ Δ)
   : Step Γ α → Step Δ α
   | .set ref value => .set (rename ref) (value.rename rename)
-  | .append (hasUuid := _) path item => .append path (item.rename rename)
+  | .append path item => .append path (item.rename rename)
   | .write path value => .write path (value.rename rename)
   | .visit target => .visit (target.rename rename)
 
@@ -84,16 +82,13 @@ def Step.run
   (step : Step Γ α)
   (value : α)
   (env : Env Γ)
-  : m (ComponentUpdate Γ α Unit) :=
+  : ExceptT Collection.IdCollision m (ComponentUpdate Γ α Unit) :=
   match step with
   | .set ref computed =>
     pure { value, state := ref.set (computed.eval value env) env, locals := () }
-  | .append (hasUuid := _) path item => do
-    let id ← freshId
-    return {
-      value := path.set (path.get value ++ [HasUuid.withUuid id (item.eval value env)]) value
-      state := env
-      locals := () }
+  | .append path item => do
+    let updated ← (path.get value).appendFresh (item.eval value env)
+    return { value := path.set updated value, state := env, locals := () }
   | .write path computed =>
     pure { value := path.set (computed.eval value env) value, state := env, locals := () }
   | .visit target =>
@@ -108,7 +103,7 @@ def run
   (action : Action Γ α)
   (value : α)
   (env : Env Γ)
-  : m (ComponentUpdate Γ α Unit) :=
+  : ExceptT Collection.IdCollision m (ComponentUpdate Γ α Unit) :=
   action.toList.foldlM (fun updated step => do
     let next ← step.run updated.value updated.state
     return { next with visit := next.visit.orElse fun _ => updated.visit })

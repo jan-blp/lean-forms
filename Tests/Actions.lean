@@ -108,43 +108,42 @@ def run : IO Unit := do
   check "ActionSiblingBindingsAreIndependent"
     (siblingUpdated.locals.producer.value == 0 &&
       siblingUpdated.locals.consumers.producer.value == 1)
-  let rows : Component [] (List (Item Nat)) := Component.void <| Component.list .self "Counters"
-      (.numbered "Counter") "Add counter" (Item.mkWithoutUuid 0)
-      (.zoom path[Item.Field.value] next)
-  let rowUpdated ← press (model := List (Item Nat))
-    (ModelForm.openState (model := List (Item Nat)) (supply := supply) rows
-      [⟨firstId, 10⟩, ⟨secondId, 20⟩] Env.nil) "Increment" 1
-  let removed ← press (model := List (Item Nat)) rowUpdated "Remove"
+  let rows : Component [] (Collection Nat) := Component.void <| Component.list .self "Counters"
+      (.numbered "Counter") "Add counter" 0 next
+  let rowUpdated ← press (model := Collection Nat)
+    (ModelForm.openState (model := Collection Nat) (supply := supply) rows
+      (.numbered [10, 20]) Env.nil) "Increment" 1
+  let removed ← press (model := Collection Nat) rowUpdated "Remove"
   let states : Std.HashMap Uuid (ObservationState (Binding Nat (ObservationState Unit Unit))
       (ObservationState Unit Unit)) :=
     removed.locals.producer.producer
   check "ActionRowStateFollowsRemoval"
-    (removed.value.map (·.value) == [20] && states.size == 1 &&
+    (removed.value.values == [20] && states.size == 1 &&
       states[secondId]?.map (·.producer.value) == some 1)
-  let adder : Component [] (List (Item Nat)) :=
-    .button "Add" (.append .self (.const (Item.mkWithoutUuid 0)))
-  let added ← press (model := List (Item Nat))
-    (ModelForm.openState (model := List (Item Nat)) (supply := supply) adder [] Env.nil) "Add"
-  let addedTwice ← press (model := List (Item Nat)) added "Add"
+  let adder : Component [] (Collection Nat) :=
+    .button "Add" (.append .self (.const 0))
+  let added ← press (model := Collection Nat)
+    (ModelForm.openState (model := Collection Nat) (supply := supply) adder .empty Env.nil) "Add"
+  let addedTwice ← press (model := Collection Nat) added "Add"
   let firstDrawn := supply.next
   check "AppendFreshDrawsSeededDistinctIds"
-    (addedTwice.value.map (·.id) == [firstDrawn.id, firstDrawn.supply.next.id] &&
+    (addedTwice.value.ids == [firstDrawn.id, firstDrawn.supply.next.id] &&
       firstDrawn.id != firstDrawn.supply.next.id)
   let functions : Component [] Nat := .bind (fun n : Nat => n)
     (.button "Use successor" (.set .here (.const (fun n : Nat => n + 1))))
   let functionUpdated ← press (model := Nat)
     (ModelForm.openState (model := Nat) (supply := supply) functions 10 Env.nil) "Use successor"
   check "ActionsSupportValuesWithoutCodecs" (functionUpdated.locals.value 41 == 42)
-  let focused : Component [] (List (Item Nat)) := .bind firstId (Component.void <| .zoom?
+  let focused : Component [] (Collection Nat) := .bind firstId (Component.void <| .zoom?
     { inputs := inputs[.ui (Ref.here)], run := fun id => some (.item id .self) }
     (.button "Next item" (.set .here (.const secondId))))
-  let first := ModelForm.openState (model := List (Item Nat)) (supply := supply) focused
-    [⟨firstId, 10⟩, ⟨secondId, 20⟩] Env.nil
+  let first := ModelForm.openState (model := Collection Nat) (supply := supply) focused
+    (.numbered [10, 20]) Env.nil
   let firstKey ← key first "Next item"
-  let second ← press (model := List (Item Nat)) first "Next item"
+  let second ← press (model := Collection Nat) first "Next item"
   let secondKey ← key second "Next item"
   let stale ← IO.ofExcept
-    (ModelForm.execute (model := List (Item Nat)) focused second (.apply firstKey none))
+    (ModelForm.execute (model := Collection Nat) focused second (.apply firstKey none))
   check "ActionZoomRejectsStaleLocation"
     (firstKey != secondKey && stale.locals.value == secondId &&
       stale.ui.rejection == some (toString InvocationError.absent))
