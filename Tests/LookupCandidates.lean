@@ -24,11 +24,15 @@ private def control
 
 private abbrev State := ModelForm.State BusinessPartners.form
 
-private def execute (state : State) (event : ModelForm.Event BusinessPartnerSelection.Raw) : IO State :=
+private def execute
+  (state : State)
+  (event : ModelForm.Event BusinessPartnerSelection.Raw)
+  : IO State :=
   IO.ofExcept (ModelForm.execute (model := BusinessPartnerSelection) BusinessPartners.form state event)
 
 private def apply (state : State) (command : LookupInput) : IO State := do
-  execute state (.apply (← control BusinessPartners.form state "Business partner").key (some (.lookup command)))
+  let lookup := (← control BusinessPartners.form state "Business partner").key
+  execute state (.apply lookup (some (.lookup command)))
 
 private def key (id : String) : LookupKey :=
   Reference.wireKey { id, displayText := "" }
@@ -37,7 +41,8 @@ private def snapshot (state : State) := ModelForm.snapshot BusinessPartners.form
 
 private def settle (state : State) : IO State :=
   state.outbox.foldlM (init := state) fun state effect => match effect with
-    | .fetch request => execute state (.loaded request ((BusinessPartners.serve request).elim (.error "Not found.") .ok))
+    | .fetch request =>
+      execute state (.loaded request ((BusinessPartners.serve request).elim (.error "Not found.") .ok))
     | .submit => pure state
     | .focus _ => pure state
 
@@ -53,10 +58,12 @@ private def restrictedForm : Component [] Restricted.Raw :=
       (.const (Api.source BusinessPartnersEndpoint.search))
       { inputs := inputs[path[Restricted.Field.locked]]
         run := fun locked candidate =>
-          if locked then .disabled "Selection is locked." else BusinessPartners.availability candidate }]
+          if locked then .disabled "Selection is locked."
+          else BusinessPartners.availability candidate }]
 
 def run : IO Unit := do
-  let results ← IO.ofExcept ((LookupResults.select BusinessPartners.candidates (fun _ => True) 5).mapError toString)
+  let results ← IO.ofExcept
+    ((LookupResults.select BusinessPartners.candidates (fun _ => True) 5).mapError toString)
   let decoded ← IO.ofExcept (fromJson? (α := LookupResults String BusinessPartnerData) (toJson results))
   check "CandidatePayloadRoundtrip" (decoded.found == results.found)
   let some candidate := results.found.head? | throw (IO.userError "FAIL missing candidate")
@@ -66,7 +73,8 @@ def run : IO Unit := do
   check "CandidateDuplicateJsonRejected"
     ((fromJson? (α := LookupResults String BusinessPartnerData) (Json.mkObj [
       ("found", toJson [candidate, duplicate]), ("more", toJson false)])).isOk |> not)
-  let definition := FormDefinition.ofModel BusinessPartnerSelection BusinessPartners.form BusinessPartners.initial
+  let definition :=
+    FormDefinition.ofModel BusinessPartnerSelection BusinessPartners.form BusinessPartners.initial
   let (opened, _) ← IO.ofExcept (definition.openState (toJson BusinessPartners.initial) supply)
   let searching ← apply opened (.search "")
   let early ← apply searching (.choose (key "barcelona"))
@@ -89,15 +97,18 @@ def run : IO Unit := do
   check "CandidatePayloadNotSentToReact" (!(toJson wire.view).compress.contains "VAT-200")
   let rejected ← apply found (.choose (key "alpine"))
   check "CandidateForgedDisabledChoiceRejected"
-    ((snapshot rejected).ui.rejection == some (toString (InvocationError.disabledMatch (key "alpine") "Account is blocked.")) &&
+    ((snapshot rejected).ui.rejection ==
+      some (toString (InvocationError.disabledMatch (key "alpine") "Account is blocked.")) &&
       rejected.value.partner.isNone && rejected.locals.isSome)
   let chosen ← apply found (.choose (key "barcelona"))
   check "CandidateChooseStoresOnlyReference"
     (chosen.value.partner == some { id := "barcelona", displayText := "Barcelona Office" } &&
-      toJson chosen.value == Json.mkObj [("partner", Json.mkObj [("id", "barcelona"), ("displayText", "Barcelona Office")])])
+      toJson chosen.value == Json.mkObj [
+        ("partner", Json.mkObj [("id", "barcelona"), ("displayText", "Barcelona Office")])])
   let reopened ← settle (← apply chosen (.search ""))
   let rejected ← apply reopened (.choose (key "girona"))
-  check "CandidateDisabledChoicePreservesSelection" (rejected.value.partner == chosen.value.partner && rejected.locals.isSome)
+  check "CandidateDisabledChoicePreservesSelection"
+    (rejected.value.partner == chosen.value.partner && rejected.locals.isSome)
   let byVat ← settle (← apply chosen (.search "VAT-400"))
   let byVat ← apply byVat (.choose (key "vic"))
   check "CandidateSearchUsesTypedPayload" (byVat.value.partner.map (·.id) == some "vic")
@@ -108,12 +119,14 @@ def run : IO Unit := do
   let initial : Restricted.Raw := { partner := none, locked := false }
   let definition := FormDefinition.ofModel Restricted restrictedForm initial
   let (opened, _) ← IO.ofExcept (definition.openState (toJson initial) supply)
-  let execute state event := IO.ofExcept (ModelForm.execute (model := Restricted) restrictedForm state event)
+  let execute state event :=
+    IO.ofExcept (ModelForm.execute (model := Restricted) restrictedForm state event)
   let lookup := (← control restrictedForm opened "Business partner").key
   let searching ← execute opened (.apply lookup (some (.lookup (.search ""))))
   let request := Api.request BusinessPartnersEndpoint.search ""
   let found ← execute searching (.loaded request (.ok (toJson results)))
-  let locked ← execute found (.apply (← control restrictedForm found "Locked").key (some (.boolean true)))
+  let locked ← execute found
+    (.apply (← control restrictedForm found "Locked").key (some (.boolean true)))
   let rejected ← execute locked (.apply lookup (some (.lookup (.choose (key "barcelona")))))
   check "CandidateAvailabilityReevaluated"
     ((ModelForm.snapshot restrictedForm rejected).ui.rejection ==

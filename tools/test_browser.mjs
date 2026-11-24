@@ -551,6 +551,11 @@ try {
     check(options().filter(option => option.getAttribute('aria-disabled') === 'true').length === 3,
       'Blocked partners were not displayed as disabled');
     check(options()[0].textContent.includes('Account is blocked.'), 'Disabled reason was not shown');
+    check(options()[0].getAttribute('aria-label') === 'Alpine Supplies',
+      'Disabled reason was included in the option name');
+    const reason = document.getElementById(options()[0].getAttribute('aria-describedby'));
+    check(reason?.textContent.trim() === 'Account is blocked.',
+      'Disabled reason was not linked to the option');
     check(active()?.textContent === 'Barcelona Office', 'Initial active option was disabled');
     options()[0].click();
     await tick();

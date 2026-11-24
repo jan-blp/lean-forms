@@ -271,7 +271,7 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
   const optionKeys = JSON.stringify(options.map(option => [option.value, option.disabledReason]));
   const firstEnabled = options.findIndex(option => option.disabledReason === null);
   const activeIndex = options[active]?.disabledReason === null ? active : firstEnabled;
-  useEffect(() => setActive(firstEnabled), [optionKeys]);
+  useEffect(() => setActive(firstEnabled), [optionKeys, firstEnabled]);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   const send = (command: FormsReact.LookupInput) => {
     window.clearTimeout(timer.current);
@@ -342,12 +342,17 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
         <ul id={list} role="listbox" aria-label={label}>
           {options.map((option, index) =>
             <li key={option.value} id={optionId(index)} role="option"
+              aria-label={option.label}
+              aria-describedby={option.disabledReason !== null ? `${optionId(index)}-reason` : undefined}
               aria-selected={index === activeIndex}
               aria-disabled={option.disabledReason !== null || disabled}
               onMouseDown={event => event.preventDefault()}
               onMouseEnter={() => { if (option.disabledReason === null) setActive(index); }}
               onClick={() => choose(option)}>{option.label}
-              {option.disabledReason !== null && <span className="lookup-disabled-reason">{option.disabledReason}</span>}
+              {option.disabledReason !== null &&
+                <span id={`${optionId(index)}-reason`} className="lookup-disabled-reason">
+                  {option.disabledReason}
+                </span>}
             </li>)}
         </ul>
         {current ? <SearchNote search={search} label={label} />
