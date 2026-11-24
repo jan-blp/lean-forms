@@ -101,6 +101,14 @@ def button
     input := .action
     messages := [] }
 
+def option {κ : Type} [Lean.ToJson κ] (reference : Reference κ) : Display.ChoiceOption :=
+  { value := reference.wireKey.value, label := reference.displayText }
+
+def searchResults {κ : Type} [Lean.ToJson κ] : Status (LookupResults κ) → Display.SearchResults
+  | .loading => .loading
+  | .failed message => .failed message
+  | .ready results => .found (results.found.map option) results.more
+
 inductive ActionError where
   | decode (error : DecodeError)
   | invalid (error : Model.InvocationError)
@@ -311,7 +319,8 @@ def evaluateNode
             | .unsupported => throw (.decode (.clientBug .noEvidence))
           | .text _
           | .boolean _
-          | .texts _ =>
+          | .texts _
+          | .lookup _ =>
             let updated ← MonadExcept.ofExcept ((Input.decode widget input).mapError .decode)
             return {
               value := path.set updated value
@@ -373,6 +382,11 @@ def evaluateNode
         | .hidden => throw (.invalid .hidden)
         | .disabled => throw (.invalid .disabled)
         | .enabled => body.apply route argument }
+  | .onChange update body =>
+    let body := evaluateNode body value env ambient locals target location disabled
+    { body with apply := fun route argument => do
+        let updated ← body.apply route argument
+        return { updated with value := update value updated.value } }
   | .select (decidableEq := _) (key := _) path label options selected =>
     let options := (options.eval value env).options
     let selected := selected (path.get value)
@@ -403,6 +417,43 @@ def evaluateNode
         | [], some _ => throw (.decode (.clientBug (.wrongArgument "an option")))
         | [], none => throw (.decode (.clientBug .missingArgument))
         | _, _ => absent }
+  | .lookup (toJson := _) path label search =>
+    let location := location ++ path.erase
+    let search := search.eval value env
+    let status (text : String) := (search text).resolve ambient.cache
+    let control : Display.Control := {
+      key := .edit location
+      target, location, disabled
+      label := label.eval value env
+      messages := ambient.messagesAt location
+      input := .lookup ((path.get value).map option)
+        (locals.map fun text => { text, results := searchResults (status text) }) }
+    { output := ()
+      locals
+      view := fun _ => .control control
+      requests := (locals.bind (search · |>.request?)).toList
+      apply := fun route argument => match route with
+        | [] => do
+          if disabled then throw (.invalid .disabled)
+          match argument with
+          | some (.lookup input) => match input with
+            | .search text => return { value, state := env, locals := some text }
+            | .close => return { value, state := env, locals := none }
+            | .clear => return { value := path.set none value, state := env, locals := none }
+            | .choose key =>
+              let found := match locals.map status with
+                | some (.ready results) => results.found.find? (Reference.wireKey · == key)
+                | some .loading
+                | some (.failed _)
+                | none => none
+              let some reference := found | throw (.invalid (.unlistedMatch key))
+              return { value := path.set (some reference) value, state := env, locals := none }
+          | some (.text _)
+          | some (.boolean _)
+          | some (.texts _)
+          | some (.pick _) => throw (.decode (.clientBug (.wrongArgument "a lookup command")))
+          | none => throw (.decode (.clientBug .missingArgument))
+        | _ => absent }
   | .output computation =>
     { output := computation.eval value env
       locals := ()

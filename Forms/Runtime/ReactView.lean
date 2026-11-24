@@ -98,6 +98,12 @@ def Display.Evidence.toReact : Evidence → FormsReact.Evidence
   | .missing => .missing
   | .linked evidence stale => .linked evidence.page evidence.cellIds stale
 
+def Display.SearchResults.toReact : SearchResults → FormsReact.SearchResults
+  | .loading => .loading
+  | .failed message => .failed message
+  | .found options more =>
+    .found (options.map fun option => { value := option.value, label := option.label }) more
+
 def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Component :=
   let name := ControlKeyProtocol.toString c.key
   let disabled := pending || c.disabled
@@ -136,6 +142,14 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       errors := Model.Message.errors c.messages
       evidence := evidence.toReact
       onChange := .apply name }
+  | .lookup picked search => .lookup {
+      name
+      label := c.label
+      picked := picked.map fun option => { value := option.value, label := option.label }
+      search := search.map fun { text, results } => { text, results := results.toReact }
+      disabled
+      errors := Model.Message.errors c.messages
+      onChange := .apply name }
   | .action => .button { label := c.label, variant := .secondary, disabled, onClick := .press name }
   | .tabs active labels =>
     .tabBar { name, label := c.label, active, labels, disabled, onChange := .apply name }
@@ -167,6 +181,7 @@ def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
     | .checkbox _
     | .choice _
     | .choices _
+    | .lookup _
     | .output _
     | .button _
     | .tabBar _

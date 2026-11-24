@@ -31,6 +31,7 @@ private def evidence (control : Display.Control) : Display.Evidence :=
   match control.input with
   | .field _ evidence => evidence
   | .choice .. => .unsupported
+  | .lookup .. => .unsupported
   | .action => .unsupported
   | .tabs .. => .unsupported
 
@@ -88,6 +89,7 @@ def run : IO Unit := do
     | .ok (.text _)
     | .ok (.boolean _)
     | .ok (.texts _)
+    | .ok (.lookup _)
     | .error _ => false)
 
 end Tests.Evidence

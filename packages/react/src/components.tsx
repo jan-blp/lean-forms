@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type InputHTMLAttributes } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type InputHTMLAttributes, type KeyboardEvent } from 'react';
 import { useLeanForm, type Components } from './context.js';
 import type * as FormsReact from './protocol/FormsReact.js';
 import { Children, Render } from './render.js';
@@ -113,7 +113,7 @@ function useEvidence(
   const focus = (on: boolean) => { pointer.current.focused = on; host?.focus(on ? linked : null); };
   // A pick or an edit can change the cells, or their staleness, while the field is shown.
   const linkedKey = JSON.stringify(linked);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (pointer.current.hovered) hostRef.current?.hover(linked);
     if (pointer.current.focused) hostRef.current?.focus(linked);
   }, [linkedKey]);
@@ -241,6 +241,109 @@ export function Choices(
   );
 }
 
+const searchPause = 300;
+
+function foundOptions(search: FormsReact.Search | null): FormsReact.ChoiceOption[] {
+  return search !== null && typeof search.results === 'object' && 'found' in search.results
+    ? search.results.found.options : [];
+}
+
+function SearchNote({ search, label }: { search: FormsReact.Search; label: string }) {
+  const { results } = search;
+  if (results === 'loading') return <p className="lookup-note" role="status">Searching…</p>;
+  if ('failed' in results) {
+    return <p className="lookup-note validation-error">Could not search: {results.failed.message}</p>;
+  }
+  if (results.found.more) return <p className="lookup-note">Keep typing to narrow the list.</p>;
+  if (results.found.options.length === 0) return <p className="lookup-note">No matches. Choose a listed {label.toLowerCase()}.</p>;
+  return null;
+}
+
+export function Lookup({ name, label, picked, search, disabled, errors, onChange }: FormsReact.Lookup) {
+  const form = useLeanForm();
+  const feedback = useId();
+  const list = useId();
+  const [typed, setTyped] = useState<string | null>(null);
+  const [active, setActive] = useState(0);
+  const timer = useRef<number | undefined>(undefined);
+  const current = typed === null || typed === search?.text;
+  const options = current ? foundOptions(search) : [];
+  const optionKeys = options.map(option => option.value).join('\n');
+  useEffect(() => setActive(0), [optionKeys]);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const send = (command: FormsReact.LookupInput) => {
+    window.clearTimeout(timer.current);
+    form.run(onChange, { lookup: command });
+  };
+  const type = (text: string) => {
+    setTyped(text);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => send({ search: { text } }), searchPause);
+  };
+  const choose = (key: string) => {
+    setTyped(null);
+    send({ choose: { key } });
+  };
+  const clear = () => {
+    setTyped(null);
+    send('clear');
+  };
+  const close = () => {
+    setTyped(null);
+    if (search === null) window.clearTimeout(timer.current);
+    else send('close');
+  };
+  const optionId = (index: number) => `${list}-${index}`;
+  const keyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (search === null) send({ search: { text: typed ?? '' } });
+      else setActive(Math.max(0, Math.min(active + 1, options.length - 1)));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActive(Math.max(active - 1, 0));
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      const option = options[active];
+      if (option) choose(option.value);
+    } else if (event.key === 'Escape' && (search !== null || typed !== null)) {
+      event.preventDefault();
+      close();
+    }
+  };
+  const open = search !== null;
+  return (
+    <div className="editor lookup">
+      <label>{label}<input ref={element => form.registerTarget(name, element)} type="text"
+        role="combobox" aria-expanded={open} aria-controls={list} aria-autocomplete="list"
+        aria-activedescendant={open && options[active] ? optionId(active) : undefined}
+        autoComplete="off" spellCheck={false} disabled={disabled}
+        value={typed ?? search?.text ?? picked?.label ?? ''}
+        placeholder={picked === null ? 'Type to search' : undefined}
+        {...described(errors, feedback)}
+        onFocus={event => event.currentTarget.select()}
+        onChange={event => type(event.currentTarget.value)}
+        onKeyDown={keyDown}
+        onBlur={close} /></label>
+      {picked !== null && !disabled &&
+        <button type="button" className="clear" onClick={clear}>Clear</button>}
+      {open && <div className="lookup-results">
+        <ul id={list} role="listbox" aria-label={label}>
+          {options.map((option, index) =>
+            <li key={option.value} id={optionId(index)} role="option"
+              aria-selected={index === active}
+              onMouseDown={event => event.preventDefault()}
+              onMouseEnter={() => setActive(index)}
+              onClick={() => choose(option.value)}>{option.label}</li>)}
+        </ul>
+        {current ? <SearchNote search={search} label={label} />
+          : <p className="lookup-note" role="status">Searching…</p>}
+      </div>}
+      <Feedback id={feedback} errors={errors} />
+    </div>
+  );
+}
+
 export function Output({ label, value }: FormsReact.Output) {
   return <div className="computed"><label>{label}<output>{value}</output></label></div>;
 }
@@ -319,6 +422,7 @@ export const defaultComponents: Components = {
   checkbox: Checkbox,
   choice: Choice,
   choices: Choices,
+  lookup: Lookup,
   output: Output,
   button: Button,
   tabBar: TabBar,

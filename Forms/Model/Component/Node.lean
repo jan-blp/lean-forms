@@ -3,6 +3,7 @@ module
 public import Forms.Model.Action
 public import Forms.Model.Evidence
 public import Forms.Model.Format
+public import Forms.Model.Lookup
 public import Forms.Model.PartialPath
 public import Forms.Model.Component.State
 public import Forms.Model.Component.Layout
@@ -125,6 +126,12 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (availability : Computation Γ α Availability)
       (body : ComponentNode Γ α state β holes)
       : ComponentNode Γ α state β holes
+  | onChange {Γ : Context}
+      {α β state : Type}
+      {holes : Nat}
+      (update : α → α → α)
+      (body : ComponentNode Γ α state β holes)
+      : ComponentNode Γ α state β holes
   /-- A choice among `options` for the value at `path`.
   The option with key `selected value` is marked selected, if there is one.
   Choosing a different option sets the value to its `start`. -/
@@ -137,6 +144,14 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (options : Computation Γ α (SelectOptions κ β))
       (selected : β → κ)
       : ComponentNode Γ α Unit Unit 0
+  /-- The search text is local state, `none` while closed. -/
+  | lookup {Γ : Context}
+      {α κ : Type}
+      [toJson : Lean.ToJson κ]
+      (path : Path α (Option (Reference κ)))
+      (label : Computation Γ α String)
+      (search : Computation Γ α (String → Source (LookupResults κ)))
+      : ComponentNode Γ α (Option String) Unit 0
   | output {Γ : Context}
       {α β : Type}
       (value : Computation Γ α β)

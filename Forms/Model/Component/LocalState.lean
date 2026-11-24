@@ -22,7 +22,9 @@ def ComponentNode.initialState
   | .reports .. => ()
   | .statusMarker .. => ()
   | .withAvailability _ body => body.initialState
+  | .onChange _ body => body.initialState
   | .select (decidableEq := _) (key := _) .. => ()
+  | .lookup (toJson := _) .. => none
   | .collection .. => {}
   | .zoom? _ body => body.initialState
   | .zoom _ body => body.initialState

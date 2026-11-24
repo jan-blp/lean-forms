@@ -2,6 +2,7 @@ module
 
 public import Forms.Model.Context
 public import Forms.Model.Diagnostic
+public import Forms.Model.Lookup
 
 @[expose] public section
 namespace Forms.Model
@@ -13,6 +14,7 @@ inductive InvocationError where
   | absent
   /-- No option of the select has the requested key. -/
   | unavailableBranch (key : String)
+  | unlistedMatch (key : LookupKey)
   deriving DecidableEq, Repr
 
 instance : ToString InvocationError where
@@ -22,6 +24,7 @@ instance : ToString InvocationError where
       | .disabled => "the control is disabled"
       | .absent => "the control is no longer shown"
       | .unavailableBranch key => s!"branch '{key}' is no longer available"
+      | .unlistedMatch key => s!"{key.value} is no longer among the matches"
     s!"This action is unavailable: {reason}."
 
 structure ComponentUpdate (Γ : Context) (α localState : Type) where

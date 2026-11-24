@@ -19,6 +19,7 @@ private def argument : Display.Editor → Option Input
   | .field (.checkbox value) _ => some (.boolean !value)
   | .field (.choices selected _) _ => some (.texts selected)
   | .choice selected _ => some (.text selected)
+  | .lookup .. => some (.lookup (.search "x"))
   | .action => none
   | .tabs active labels => some (.text (toString ((active + 1) % labels.length.max 1)))
 

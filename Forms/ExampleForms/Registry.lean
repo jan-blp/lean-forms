@@ -13,6 +13,7 @@ public import Forms.ExampleForms.Navigation
 public import Forms.ExampleForms.PaymentMethod
 public import Forms.ExampleForms.Receipts
 public import Forms.ExampleForms.InvoiceEvidence
+public import Forms.ExampleForms.Delivery
 public import Forms.Runtime.FormDefinition
 public import Std.Data.HashMap
 
@@ -75,10 +76,13 @@ def forms : List (String × RegisteredForm) := [
   ("receipts", receipts),
   ("evidence", {
     definition := .ofModel InvoiceHeader InvoiceHeader.form InvoiceHeader.initial
+    submitUrl := "/api/submit" }),
+  ("delivery", {
+    definition := .ofModel Delivery Delivery.form Delivery.initial
     submitUrl := "/api/submit" })]
 
 def api : Model.HttpRequest → Option Lean.Json :=
-  fun _ => none
+  Delivery.serve
 
 def registeredForms : Std.HashMap String RegisteredForm := .ofList forms
 

@@ -32,8 +32,11 @@ def ComponentNode.rename
   | .tabBar label active tabs => .tabBar (label.rename rename) (rename active) (tabs.rename rename)
   | .withAvailability availability body =>
     .withAvailability (availability.rename rename) (body.rename rename)
+  | .onChange update body => .onChange update (body.rename rename)
   | .select (decidableEq := _) (key := _) path label options selected =>
     .select path (label.rename rename) (options.rename rename) selected
+  | .lookup (toJson := _) path label search =>
+    .lookup path (label.rename rename) (search.rename rename)
   | .output value => .output (value.rename rename)
   | .issues => .issues
   | .reports path => .reports path

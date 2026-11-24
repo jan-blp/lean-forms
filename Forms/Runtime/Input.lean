@@ -6,11 +6,19 @@ public import Forms.Model.Component
 
 namespace Forms.Runtime
 
+inductive LookupInput where
+  | search (text : String)
+  | close
+  | choose (key : Model.LookupKey)
+  | clear
+  deriving DecidableEq, Repr, Lean.ToJson, Lean.FromJson
+
 inductive Input where
   | text (value : String)
   | boolean (value : Bool)
   | texts (values : List String)
   | pick (evidence : Model.Evidence)
+  | lookup (input : LookupInput)
 
 /-- Whether the input is text the user typed, which stays in the field as a draft when rejected. -/
 def Input.typed : Input → Bool
@@ -18,6 +26,7 @@ def Input.typed : Input → Bool
   | .boolean _ => false
   | .texts _ => false
   | .pick _ => false
+  | .lookup _ => false
 
 inductive ClientBug where
   | missingArgument

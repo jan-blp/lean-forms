@@ -123,6 +123,16 @@ abbrev Component.withAvailability
   : Component Γ α β holes :=
   { LocalState := body.LocalState, node := .withAvailability availability body.node }
 
+/-- Adjusts a successful edit using the previous and updated model. -/
+abbrev Component.onChange
+  {Γ : Context}
+  {α β : Type}
+  {holes : Nat}
+  (update : α → α → α)
+  (body : Component Γ α β holes)
+  : Component Γ α β holes :=
+  { LocalState := body.LocalState, node := .onChange update body.node }
+
 abbrev Component.collection
   {Γ : Context}
   {α β γ : Type}
@@ -191,6 +201,16 @@ abbrev Component.select
   (selected : β → κ)
   : Component Γ α :=
   { LocalState := Unit, node := .select path label options selected }
+
+abbrev Component.lookup
+  {Γ : Context}
+  {α κ : Type}
+  [Lean.ToJson κ]
+  (path : Path α (Option (Reference κ)))
+  (label : Computation Γ α String)
+  (search : Computation Γ α (String → Source (LookupResults κ)))
+  : Component Γ α :=
+  { LocalState := Option String, node := .lookup path label search }
 
 structure Labelled (β : Type) where
   value : β

@@ -26,6 +26,7 @@ import Tests.Reports
 import Tests.ServerForm
 import Tests.Evidence
 import Tests.Endpoints
+import Tests.Lookup
 
 meta import Forms.Model.Computation.Theorems
 meta import Forms.Runtime.ModelView.Theorems
@@ -54,3 +55,4 @@ public def main : IO Unit := do
   Tests.Reports.run
   Tests.ServerForm.run
   Tests.Evidence.run
+  Tests.Lookup.run

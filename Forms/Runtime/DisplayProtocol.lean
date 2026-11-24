@@ -22,6 +22,7 @@ def widgetName : Editor → String
   | .field (.checkbox _) _ => "checkbox"
   | .field (.choices ..) _ => "choices"
   | .choice .. => "choice"
+  | .lookup .. => "lookup"
   | .action => "action"
   | .tabs .. => "tabs"
 

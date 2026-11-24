@@ -200,3 +200,11 @@ main.wide { max-width: 1320px; }
 .evidence-status.linked { color: var(--success); }
 .evidence-status.stale { color: var(--warning); }
 .evidence .pick { min-height: 24px; padding: 0 var(--space-s); font-size: 12px; }
+
+.lookup { position: relative; }
+.lookup .clear { min-height: 32px; }
+.lookup-results { flex-basis: 100%; border: 1px solid var(--border); border-radius: var(--radius-s); background: var(--surface); }
+.lookup-results > ul { list-style: none; margin: 0; padding: 0; max-height: 16rem; overflow-y: auto; }
+.lookup-results li { padding: 4px var(--space-xs); cursor: pointer; overflow-wrap: anywhere; }
+.lookup-results li[aria-selected="true"] { background: var(--primary-light); }
+.lookup-note { margin: 0; padding: 4px var(--space-xs); color: var(--text-secondary); font-size: 12px; }
