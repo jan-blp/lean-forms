@@ -4,6 +4,7 @@ public import Forms.ExampleForms.Registry
 public import Forms.Model.Endpoints
 meta import Forms.Model.Derive
 public import Tests.FreshId
+public import Tests.Fetch
 
 public section
 namespace Tests.Remote
@@ -73,7 +74,7 @@ private def apply (state : State) (label : String) (argument : Input) : IO State
 
 private def fetches (state : State) : List HttpRequest :=
   state.outbox.filterMap fun
-    | .fetch request => some request
+    | .fetch fetch => some fetch.request
     | .submit => none
     | .focus _ => none
 
@@ -87,7 +88,7 @@ private def settle (state : State) : IO State := do
   for _ in [0:10] do
     let mut queued := []
     for request in pending do
-      state ← execute state (.loaded request (answer request))
+      state ← execute state (.loaded (← pendingFetch state request) (answer request))
       queued := queued ++ fetches state
     pending := queued
   return state
@@ -149,8 +150,9 @@ def run : IO Unit := do
   check "RemoteApiRejects" ([{ suppliers with method := .get }, { suppliers with url := "/api/missing" },
     { supplier "acme" with body := some "1" }].all (Api.parse (endpoint := SupplierEndpoint) · |>.isNone))
   check "RemoteUnitUsesCoreCodec" (suppliers.body == some "{}")
-  check "RemoteFetchEffectRoundtrip" (match fetchEffect (supplier "acme") with
-    | .fetch id _ => (fetchedRequest id).toOption == some (supplier "acme")
+  let fetch : HttpFetch := { request := supplier "acme", generation := 7 }
+  check "RemoteFetchEffectRoundtrip" (match fetchEffect fetch with
+    | .fetch id _ => (fetchedRequest id).toOption == some fetch
     | .submit _ => false
     | .focus _ => false)
   let definition := FormDefinition.ofModel Lookup Lookup.form Lookup.initial
@@ -170,7 +172,7 @@ def run : IO Unit := do
   check "RemoteDetailDrivesVisibility" (control? globex "Purchase order").isNone
   let back ← apply globex "Supplier" (.text "acme")
   check "RemoteRevisitIsCached" (fetches back).isEmpty
-  let failed ← execute opened (.loaded (supplier "acme") (.error "offline"))
+  let failed ← execute opened (.loaded (← pendingFetch opened (supplier "acme")) (.error "offline"))
   check "RemoteFailureShown" (match (snapshot failed).view with
     | .stack (children := [_, failure]) .. => failure == .computed "" "Could not load: offline"
     | _ => false)
@@ -204,7 +206,7 @@ def run : IO Unit := do
     | .choice _ options => options.any (·.value == "pickup")
     | _ => false)
   let shippingState ← IO.ofExcept (ModelForm.execute (model := Order) shippingChoices shippingState
-    (.loaded layoutRequest (.ok (toJson true))))
+    (.loaded (← pendingFetch shippingState layoutRequest) (.ok (toJson true))))
   check "RemoteLoadedChoiceKeepsKey"
     ((ModelView.render shippingChoices shippingState.value shippingState.cache [] Env.nil).controls.any fun control =>
       control.key == shipping.key && match control.input with
@@ -224,7 +226,8 @@ def run : IO Unit := do
     (rendered.controls.map (·.label) == ["Name"] && match rendered.view with
       | .stack (children := [.control _, .computed "Name" note]) .. => note == Display.duplicateNote
       | _ => false)
-  let late ← execute loaded (.loaded (supplier "initech") (.ok Json.null))
+  let late ← execute loaded
+    (.loaded { request := supplier "initech", generation := 0 } (.ok Json.null))
   check "RemoteUnrequestedResponseIgnored" !(late.cache.contains (supplier "initech"))
 
 end Tests.Remote

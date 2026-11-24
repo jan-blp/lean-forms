@@ -19,6 +19,22 @@ structure HttpRequest where
   body : Option String
   deriving BEq, Hashable, Repr, ToJson, FromJson
 
+inductive RequestScope where
+  | request (request : HttpRequest)
+  | endpoint (method : HttpMethod) (url : String)
+  deriving BEq, Repr
+
+def RequestScope.contains (scope : RequestScope) (request : HttpRequest) : Bool :=
+  match scope with
+  | .request target => target == request
+  | .endpoint method url => request.method == method && request.url == url
+
+/-- Identifies one attempt, so responses from before invalidation can be ignored. -/
+structure HttpFetch where
+  request : HttpRequest
+  generation : Nat
+  deriving BEq, Repr, ToJson, FromJson
+
 inductive Source (α : Type) where
   | pure (value : α)
   | fetch (request : HttpRequest) (decode : Json → Except String α)
@@ -28,7 +44,7 @@ def Source.request? {α : Type} : Source α → Option HttpRequest
   | .fetch request _ => some request
 
 inductive HttpRequest.Response where
-  | loading
+  | loading (generation : Nat)
   | loaded (response : Json)
   | failed (message : String)
 
@@ -45,7 +61,7 @@ def Source.resolve {α : Type} (cache : HttpRequest.Cache) : Source α → Statu
   | .fetch request decode =>
     match cache[request]? with
     | none => .loading
-    | some .loading => .loading
+    | some (.loading _) => .loading
     | some (.failed message) => .failed message
     | some (.loaded response) =>
       match decode response with
@@ -96,6 +112,14 @@ def Api.source
   (input : (Api.signature named).Input)
   : Source (Api.signature named).Output :=
   .fetch (Api.request named input) fromJson?
+
+def Api.scope
+  {endpoint : Type}
+  [FinEnum endpoint]
+  [Api endpoint]
+  (named : endpoint)
+  : RequestScope :=
+  .endpoint .post (Api.path named)
 
 def Api.parse
   {endpoint : Type}

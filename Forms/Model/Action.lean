@@ -22,6 +22,8 @@ inductive Action.Step (Γ : Context) (α : Type) where
       : Action.Step Γ α
   | visit (target : Computation Γ α (Option Destination))
       : Action.Step Γ α
+  | invalidate (scope : Computation Γ α RequestScope)
+      : Action.Step Γ α
 
 abbrev Action (Γ : Context) (α : Type) := FreeMonoid (Action.Step Γ α)
 
@@ -64,6 +66,7 @@ def Step.rename
   | .append path item => .append path (item.rename rename)
   | .write path value => .write path (value.rename rename)
   | .visit target => .visit (target.rename rename)
+  | .invalidate scope => .invalidate (scope.rename rename)
 
 def rename
   {Γ Δ : Context}
@@ -85,14 +88,18 @@ def Step.run
   : ExceptT Collection.IdCollision m (ComponentUpdate Γ α Unit) :=
   match step with
   | .set ref computed =>
-    pure { value, state := ref.set (computed.eval value env) env, locals := () }
+    pure { value, state := ref.set (computed.eval value env) env, locals := (), invalidations := [] }
   | .append path item => do
     let updated ← (path.get value).appendFresh (item.eval value env)
-    return { value := path.set updated value, state := env, locals := () }
+    return { value := path.set updated value, state := env, locals := (), invalidations := [] }
   | .write path computed =>
-    pure { value := path.set (computed.eval value env) value, state := env, locals := () }
+    pure {
+      value := path.set (computed.eval value env) value
+      state := env, locals := (), invalidations := [] }
   | .visit target =>
-    pure { value, state := env, locals := (), visit := target.eval value env }
+    pure { value, state := env, locals := (), invalidations := [], visit := target.eval value env }
+  | .invalidate scope =>
+    pure { value, state := env, locals := (), invalidations := [scope.eval value env] }
 
 def run
   {Γ : Context}
@@ -106,8 +113,10 @@ def run
   : ExceptT Collection.IdCollision m (ComponentUpdate Γ α Unit) :=
   action.toList.foldlM (fun updated step => do
     let next ← step.run updated.value updated.state
-    return { next with visit := next.visit.orElse fun _ => updated.visit })
-    { value, state := env, locals := () }
+    return { next with
+      visit := next.visit.orElse fun _ => updated.visit
+      invalidations := updated.invalidations ++ next.invalidations })
+    { value, state := env, locals := (), invalidations := [] }
 
 /-- Focuses `target` after the action runs. -/
 def visit
@@ -116,6 +125,14 @@ def visit
   (target : Computation Γ α (Option Destination))
   : Action Γ α :=
   FreeMonoid.of (.visit target)
+
+/-- Drops matching cached responses; active sources are fetched again after the action. -/
+def invalidate
+  {Γ : Context}
+  {α : Type}
+  (scope : Computation Γ α RequestScope)
+  : Action Γ α :=
+  FreeMonoid.of (.invalidate scope)
 
 end Action
 

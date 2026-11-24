@@ -2,6 +2,7 @@ module
 
 public import Forms.ExampleForms.Registry
 public import Tests.FreshId
+public import Tests.Fetch
 public meta import Forms.Model.Lookup.Theorems
 
 public section
@@ -40,11 +41,19 @@ private def key (id : String) : LookupKey :=
 
 private def snapshot (state : State) := ModelForm.snapshot BusinessPartners.form state
 
+private def searchOpen (state : State) : Bool :=
+  (snapshot state).controls.any fun control => match control.input with
+    | .lookup _ search => search.isSome
+    | .field ..
+    | .choice ..
+    | .action
+    | .tabs .. => false
+
 private def settle (state : State) : IO State :=
   state.outbox.foldlM (init := state) fun state effect => match effect with
-    | .fetch request =>
+    | .fetch fetch =>
       execute state
-        (.loaded request ((BusinessPartners.serve request).elim (.error "Not found.") .ok))
+        (.loaded fetch ((BusinessPartners.serve fetch.request).elim (.error "Not found.") .ok))
     | .submit => pure state
     | .focus _ => pure state
 
@@ -103,7 +112,7 @@ def run : IO Unit := do
   check "CandidateForgedDisabledChoiceRejected"
     ((snapshot rejected).ui.rejection ==
       some (toString (InvocationError.disabledMatch (key "alpine") "Account is blocked.")) &&
-      rejected.value.partner.isNone && rejected.locals.isSome)
+      rejected.value.partner.isNone && searchOpen rejected)
   let chosen ← apply found (.choose (key "barcelona"))
   check "CandidateChooseStoresOnlyReference"
     (chosen.value.partner == some { id := "barcelona", displayText := "Barcelona Office" } &&
@@ -112,7 +121,7 @@ def run : IO Unit := do
   let reopened ← settle (← apply chosen (.search ""))
   let rejected ← apply reopened (.choose (key "girona"))
   check "CandidateDisabledChoicePreservesSelection"
-    (rejected.value.partner == chosen.value.partner && rejected.locals.isSome)
+    (rejected.value.partner == chosen.value.partner && searchOpen rejected)
   let byVat ← settle (← apply chosen (.search "VAT-400"))
   let byVat ← apply byVat (.choose (key "vic"))
   check "CandidateSearchUsesTypedPayload" (byVat.value.partner.map (·.id) == some "vic")
@@ -128,7 +137,7 @@ def run : IO Unit := do
   let lookup := (← control restrictedForm opened "Business partner").key
   let searching ← execute opened (.apply lookup (some (.lookup (.search ""))))
   let request := Api.request BusinessPartnersEndpoint.search ""
-  let found ← execute searching (.loaded request (.ok (toJson results)))
+  let found ← execute searching (.loaded (← pendingFetch searching request) (.ok (toJson results)))
   let locked ← execute found
     (.apply (← control restrictedForm found "Locked").key (some (.boolean true)))
   let rejected ← execute locked (.apply lookup (some (.lookup (.choose (key "barcelona")))))

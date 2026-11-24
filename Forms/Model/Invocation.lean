@@ -33,6 +33,7 @@ structure ComponentUpdate (Γ : Context) (α localState : Type) where
   value : α
   state : Env Γ
   locals : localState
+  invalidations : List RequestScope
   visit : Option Destination := none
 
 def ComponentUpdate.mapValue

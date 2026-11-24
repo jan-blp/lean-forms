@@ -596,6 +596,35 @@ try {
     await wait(() => options()[0]?.textContent === 'Vic Components');
     options()[0].click();
     await tick();
+    // Simulate changed server data for the same search request.
+    const originalFetch = window.fetch;
+    let refreshedRequests = 0;
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      if (!String(args[0]).endsWith('/api/business-partners')) return response;
+      refreshedRequests++;
+      const body = await response.json();
+      for (const candidate of body.found) {
+        if (candidate.reference.id === 'vic') {
+          candidate.details.status = { blocked: { reason: 'Blocked after refresh.' } };
+        }
+      }
+      return new Response(JSON.stringify(body), { status: response.status,
+        headers: { 'Content-Type': 'application/json' } });
+    };
+    await type(partner(), 'VAT-400');
+    await wait(() => options()[0]?.textContent === 'Vic Components');
+    check(refreshedRequests === 0, 'Reopening a search unexpectedly bypassed its cache');
+    const refresh = [...document.querySelectorAll('button')].find(button => button.textContent === 'Refresh partners');
+    refresh.click();
+    await wait(() => options()[0]?.getAttribute('aria-disabled') === 'true');
+    check(refreshedRequests === 1 && options()[0].textContent.includes('Blocked after refresh.'),
+      'Refreshing did not reload the current search with updated availability');
+    key('Enter');
+    key('Escape');
+    await tick();
+    check(partner().value === 'Vic Components', 'Refreshing cleared the saved selection');
+    window.fetch = originalFetch;
     await submit();
     const saved = submitted().partner;
     check(saved.id === 'vic' && Object.keys(saved).sort().join(',') === 'displayText,id',

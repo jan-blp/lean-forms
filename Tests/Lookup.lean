@@ -2,6 +2,7 @@ module
 
 public import Forms.ExampleForms.Registry
 public import Tests.FreshId
+public import Tests.Fetch
 public meta import Forms.Model.Lookup.Theorems
 
 public section
@@ -30,13 +31,14 @@ private def apply (state : State) (label : String) (argument : Input) : IO State
 
 private def fetches (state : State) : List HttpRequest :=
   state.outbox.filterMap fun
-    | .fetch request => some request
+    | .fetch fetch => some fetch.request
     | .submit => none
     | .focus _ => none
 
 private def settle (state : State) : IO State :=
-  (fetches state).foldlM (init := state) fun state request =>
-    execute state (.loaded request ((Delivery.serve request).elim (.error "Not found.") .ok))
+  (fetches state).foldlM (init := state) fun state request => do
+    execute state (.loaded (← pendingFetch state request)
+      ((Delivery.serve request).elim (.error "Not found.") .ok))
 
 private def search? (state : State) (label : String) : IO (Option Display.Search) := do
   match (← control state label).input with
@@ -160,10 +162,12 @@ def run : IO Unit := do
   check "LookupStopSearching" ((← search? stopped "City").isNone && stopped.value.city.isNone)
   let cleared ← apply chosen "Country" (.lookup .clear)
   check "LookupClear" cleared.value.country.isNone
-  let failed ← execute searching (.loaded (countries "an") (.error "offline"))
+  let failed ← execute searching
+    (.loaded (← pendingFetch searching (countries "an")) (.error "offline"))
   check "LookupFailureShown"
     (((← search? failed "Country").map (·.results)) == some (.failed "offline"))
-  let duplicated ← execute searching (.loaded (countries "an") (.ok (Json.mkObj [
+  let duplicated ← execute searching
+    (.loaded (← pendingFetch searching (countries "an")) (.ok (Json.mkObj [
     ("found", toJson [germanyCandidate, germanyCandidate]),
     ("more", toJson false)])))
   let duplicatedResults ← results? duplicated "Country"

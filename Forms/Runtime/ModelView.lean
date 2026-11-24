@@ -324,7 +324,7 @@ def evaluateNode
               return {
                 value := slot.path.set (some picked) (path.set updated value)
                 state := env
-                locals := () }
+                locals := (), invalidations := [] }
             | .unsupported => throw (.decode (.clientBug .noEvidence))
           | .text _
           | .boolean _
@@ -334,7 +334,7 @@ def evaluateNode
             return {
               value := path.set updated value
               state := env
-              locals := () }
+              locals := (), invalidations := [] }
         | _ => absent }
   | .computed label computation =>
     { output := ()
@@ -376,7 +376,7 @@ def evaluateNode
           let some (.text chosen) := argument | throw (.decode (.clientBug (.wrongArgument "text")))
           let some index := chosen.toNat? | throw (.decode (.clientBug .unknownOption))
           if h : index < n then
-            return { value, state := active.set ⟨index, h⟩ env, locals := () }
+            return { value, state := active.set ⟨index, h⟩ env, locals := (), invalidations := [] }
           throw (.decode (.clientBug .unknownOption))
         | _ => absent }
   | .withAvailability availability body =>
@@ -418,11 +418,12 @@ def evaluateNode
         | [], some (.text key) =>
           let some option := (Key.decode key).bind fun key => options.find? (·.key == key)
             | throw (.invalid (.unavailableBranch key))
-          if option.key == selected then return { value, state := env, locals := () }
+          if option.key == selected then
+            return { value, state := env, locals := (), invalidations := [] }
           return {
             value := path.set option.start value
             state := env
-            locals := () }
+            locals := (), invalidations := [] }
         | [], some _ => throw (.decode (.clientBug (.wrongArgument "an option")))
         | [], none => throw (.decode (.clientBug .missingArgument))
         | _, _ => absent }
@@ -447,9 +448,12 @@ def evaluateNode
           if disabled then throw (.invalid .disabled)
           match argument with
           | some (.lookup input) => match input with
-            | .search text => return { value, state := env, locals := some text }
-            | .close => return { value, state := env, locals := none }
-            | .clear => return { value := path.set none value, state := env, locals := none }
+            | .search text =>
+              return { value, state := env, locals := some text, invalidations := [] }
+            | .close => return { value, state := env, locals := none, invalidations := [] }
+            | .clear =>
+              return { value := path.set none value, state := env
+                       locals := none, invalidations := [] }
             | .choose key =>
               let some results := (match locals.map status with
                 | some (.ready results) => some results
@@ -460,7 +464,8 @@ def evaluateNode
                 | .ok reference => pure reference
                 | .error (.unlisted key) => throw (.invalid (.unlistedMatch key))
                 | .error (.disabled key reason) => throw (.invalid (.disabledMatch key reason))
-              return { value := path.set (some reference) value, state := env, locals := none }
+              return { value := path.set (some reference) value, state := env
+                       locals := none, invalidations := [] }
           | some (.text _)
           | some (.boolean _)
           | some (.texts _)
@@ -559,7 +564,7 @@ def evaluateNode
           let updated ← row.apply rest argument
           let env := updated.state.tail.tail
           if updated.state.tail.value then
-            return {
+            return { updated with
               value := path.set (collection.eraseAt index) value
               state := env
               locals := states.erase item.id }

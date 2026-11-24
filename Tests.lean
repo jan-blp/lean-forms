@@ -28,6 +28,7 @@ import Tests.Evidence
 import Tests.Endpoints
 import Tests.Lookup
 import Tests.LookupCandidates
+import Tests.Invalidation
 
 meta import Forms.Model.Computation.Theorems
 meta import Forms.Runtime.ModelView.Theorems
@@ -58,3 +59,4 @@ public def main : IO Unit := do
   Tests.Evidence.run
   Tests.Lookup.run
   Tests.LookupCandidates.run
+  Tests.Invalidation.run
