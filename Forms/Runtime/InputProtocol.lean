@@ -20,11 +20,10 @@ def fromJson : Json → Except String Input
     | .obj _ => .error "Expected a list of texts."
   | json@(.obj _) =>
     if let .ok evidence := json.getObjVal? "pick" then .pick <$> fromJson? evidence
-    else if let .ok text := json.getObjVal? "search" then .search <$> fromJson? text
-    else if let .ok key := json.getObjVal? "choose" then .choose <$> fromJson? key
-    else .error "Expected a pick, search or choice."
+    else if let .ok input := json.getObjVal? "lookup" then .lookup <$> fromJson? input
+    else .error "Expected a pick or lookup command."
   | .null
-  | .num _ => .error "Expected a text, boolean, list of texts, pick, search or choice."
+  | .num _ => .error "Expected a text, boolean, list of texts, pick or lookup command."
 
 def argumentFromJson : Option Json → Except String (Option Input)
   | none => .ok none

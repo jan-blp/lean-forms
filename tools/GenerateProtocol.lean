@@ -12,7 +12,8 @@ def routesModule : String :=
 /-- Each output directory is replaced wholesale by its files. -/
 def outputs : List (System.FilePath × List (System.FilePath × String)) := [
   ("packages/react/src/protocol",
-    (typescript% [Request, Success, Failure, FormsReact.Component, Forms.Model.Evidence]).modules.map
+    (typescript% [Request, Success, Failure, FormsReact.Component, FormsReact.LookupInput,
+      Forms.Model.Evidence]).modules.map
       fun module => (module.file, module.pretty)),
   ("web/generated", ("routes.ts", routesModule) ::
     (typescript% [Viewer.Document]).modules.map fun module => (module.file, module.pretty))]

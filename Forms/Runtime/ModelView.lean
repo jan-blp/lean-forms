@@ -320,8 +320,7 @@ def evaluateNode
           | .text _
           | .boolean _
           | .texts _
-          | .search _
-          | .choose _ =>
+          | .lookup _ =>
             let updated ← MonadExcept.ofExcept ((Input.decode widget input).mapError .decode)
             return {
               value := path.set updated value
@@ -437,20 +436,22 @@ def evaluateNode
         | [] => do
           if disabled then throw (.invalid .disabled)
           match argument with
-          | some (.search text) => return { value, state := env, locals := text }
-          | some (.choose none) => return { value := path.set none value, state := env, locals := none }
-          | some (.choose (some key)) =>
-            let found := match locals.map status with
-              | some (.ready results) => results.found.find? (Reference.wireKey · == key)
-              | some .loading
-              | some (.failed _)
-              | none => none
-            let some reference := found | throw (.invalid (.unlistedMatch key))
-            return { value := path.set (some reference) value, state := env, locals := none }
+          | some (.lookup input) => match input with
+            | .search text => return { value, state := env, locals := some text }
+            | .close => return { value, state := env, locals := none }
+            | .clear => return { value := path.set none value, state := env, locals := none }
+            | .choose key =>
+              let found := match locals.map status with
+                | some (.ready results) => results.found.find? (Reference.wireKey · == key)
+                | some .loading
+                | some (.failed _)
+                | none => none
+              let some reference := found | throw (.invalid (.unlistedMatch key))
+              return { value := path.set (some reference) value, state := env, locals := none }
           | some (.text _)
           | some (.boolean _)
           | some (.texts _)
-          | some (.pick _) => throw (.decode (.clientBug (.wrongArgument "a search or a choice")))
+          | some (.pick _) => throw (.decode (.clientBug (.wrongArgument "a lookup command")))
           | none => throw (.decode (.clientBug .missingArgument))
         | _ => absent }
   | .output computation =>

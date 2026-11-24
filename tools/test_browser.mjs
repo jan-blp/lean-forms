@@ -526,6 +526,13 @@ try {
     field('City').querySelector('[role=option]').click();
     await tick();
     check(input('City').value === 'Barcelona', 'The city was not picked');
+    input('Country').focus();
+    await type(input('Country'), 'an');
+    await wait(() => field('Country').querySelector('[role=option]')?.textContent === 'Germany');
+    key('Escape');
+    await tick();
+    check(input('Country').value === 'Spain' && input('City').value === 'Barcelona' &&
+      !field('Country').querySelector('[role=listbox]'), 'Closing the search changed the selection');
     field('Country').querySelector('.clear').click();
     await tick();
     check(input('Country').value === '' && input('City').value === '' && input('City').disabled,

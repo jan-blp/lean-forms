@@ -129,7 +129,14 @@ structure Search where
   results : SearchResults
   deriving ToJson, FromJson, BEq, Repr
 
-/-- `onChange` receives `{ "search": text | null }` or `{ "choose": value | null }`. -/
+inductive LookupInput where
+  | search (text : String)
+  | close
+  | choose (key : String)
+  | clear
+  deriving ToJson, FromJson, BEq, Repr
+
+/-- `onChange` receives `{ "lookup": command }` with a `LookupInput` command. -/
 structure Lookup where
   name : String
   label : String

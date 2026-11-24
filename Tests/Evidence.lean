@@ -89,8 +89,7 @@ def run : IO Unit := do
     | .ok (.text _)
     | .ok (.boolean _)
     | .ok (.texts _)
-    | .ok (.search _)
-    | .ok (.choose _)
+    | .ok (.lookup _)
     | .error _ => false)
 
 end Tests.Evidence

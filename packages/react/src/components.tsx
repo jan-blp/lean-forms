@@ -271,29 +271,33 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
   const optionKeys = options.map(option => option.value).join('\n');
   useEffect(() => setActive(0), [optionKeys]);
   useEffect(() => () => window.clearTimeout(timer.current), []);
-  const send = (argument: { search: string | null } | { choose: string | null }) => {
+  const send = (command: FormsReact.LookupInput) => {
     window.clearTimeout(timer.current);
-    form.run(onChange, argument);
+    form.run(onChange, { lookup: command });
   };
   const type = (text: string) => {
     setTyped(text);
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => form.run(onChange, { search: text }), searchPause);
+    timer.current = window.setTimeout(() => send({ search: { text } }), searchPause);
   };
-  const choose = (value: string | null) => {
+  const choose = (key: string) => {
     setTyped(null);
-    send({ choose: value });
+    send({ choose: { key } });
+  };
+  const clear = () => {
+    setTyped(null);
+    send('clear');
   };
   const close = () => {
     setTyped(null);
     if (search === null) window.clearTimeout(timer.current);
-    else send({ search: null });
+    else send('close');
   };
   const optionId = (index: number) => `${list}-${index}`;
   const keyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      if (search === null) send({ search: typed ?? '' });
+      if (search === null) send({ search: { text: typed ?? '' } });
       else setActive(Math.max(0, Math.min(active + 1, options.length - 1)));
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
@@ -322,7 +326,7 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
         onKeyDown={keyDown}
         onBlur={close} /></label>
       {picked !== null && !disabled &&
-        <button type="button" className="clear" onClick={() => choose(null)}>Clear</button>}
+        <button type="button" className="clear" onClick={clear}>Clear</button>}
       {open && <div className="lookup-results">
         <ul id={list} role="listbox" aria-label={label}>
           {options.map((option, index) =>

@@ -53,25 +53,17 @@ private def picked? (state : State) (label : String) : IO (Option Display.Choice
   | .action
   | .tabs .. => throw (IO.userError s!"FAIL {label} is no lookup")
 
-private def searched (json : Json) : Option (Option String) :=
+private def lookupOf (json : Json) : Option LookupInput :=
   match InputProtocol.fromJson json with
-  | .ok (.search text) => some text
-  | .ok (.choose _)
+  | .ok (.lookup input) => some input
   | .ok (.text _)
   | .ok (.boolean _)
   | .ok (.texts _)
   | .ok (.pick _)
   | .error _ => none
 
-private def choiceOf (json : Json) : Option (Option LookupKey) :=
-  match InputProtocol.fromJson json with
-  | .ok (.choose key) => some key
-  | .ok (.search _)
-  | .ok (.text _)
-  | .ok (.boolean _)
-  | .ok (.texts _)
-  | .ok (.pick _)
-  | .error _ => none
+private def command (input : FormsReact.LookupInput) : Json :=
+  Json.mkObj [("lookup", toJson input)]
 
 private def results? (state : State) (label : String) : IO (Option Display.SearchResults) :=
   return (← search? state label).map (·.results)
@@ -105,57 +97,57 @@ def run : IO Unit := do
   let opened : State := opened
   check "LookupClosedFetchesNothing" (fetches opened).isEmpty
   check "LookupDependentDisabled" (← control opened "City").disabled
-  let searching ← apply opened "Country" (.search (some "an"))
+  let searching ← apply opened "Country" (.lookup (.search "an"))
   check "LookupSearchFetches" (fetches searching == [countries "an"])
   check "LookupLoadingShown" ((← search? searching "Country") == some ⟨"an", .loading⟩)
   let found ← settle searching
   let some results := (← search? found "Country") | throw (IO.userError "FAIL search closed")
   check "LookupMatchesShown" (labels results.results == ["Germany", "France", "Netherlands"])
-  let all ← settle (← apply found "Country" (.search (some "")))
+  let all ← settle (← apply found "Country" (.lookup (.search "")))
   let allResults ← results? all "Country"
   check "LookupMoreShown" (match allResults with
     | some (.found options more) => options.length == 5 && more
     | some .loading
     | some (.failed _)
     | none => false)
-  let unlisted ← apply found "Country" (.choose (some (Reference.wireKey ⟨"IT", "Italy"⟩)))
+  let unlisted ← apply found "Country" (.lookup (.choose (Reference.wireKey ⟨"IT", "Italy"⟩)))
   check "LookupUnlistedRejected"
     ((snapshot unlisted).ui.rejection ==
       some (toString (InvocationError.unlistedMatch { value := "\"IT\"" })))
-  let chosen ← apply found "Country" (.choose (some germany.wireKey))
+  let chosen ← apply found "Country" (.lookup (.choose germany.wireKey))
   check "LookupChooseStores" (chosen.value.country == some germany)
   check "LookupChooseCloses" ((← search? chosen "Country").isNone && (fetches chosen).isEmpty)
-  let other ← settle (← apply chosen "Country" (.search (some "spa")))
+  let other ← settle (← apply chosen "Country" (.lookup (.search "spa")))
   check "LookupPickedShownWhileSearching"
     ((← picked? other "Country") == some { value := germany.wireKey.value, label := "Germany" } &&
       ((← search? other "Country").map (labels ·.results)) == some ["Spain"])
-  let again ← apply other "Country" (.search (some "an"))
+  let again ← apply other "Country" (.lookup (.search "an"))
   check "LookupRevisitIsCached" ((fetches again).isEmpty &&
     ((← search? again "Country").map (labels ·.results)) == some ["Germany", "France", "Netherlands"])
-  let cities ← apply chosen "City" (.search (some ""))
+  let cities ← apply chosen "City" (.lookup (.search ""))
   check "LookupDependencyInRequest"
     (fetches cities == [Api.request DeliveryEndpoint.cities ({ country := "DE", text := "" } : CitySearch)])
   let cities ← settle cities
   check "LookupDependentMatches"
     (((← search? cities "City").map (labels ·.results)) == some ["Berlin", "Hamburg", "Munich"])
   let berlin : Reference String := { id := "BER", displayText := "Berlin" }
-  let pickedCity ← apply cities "City" (.choose (some berlin.wireKey))
-  let searchingCountry ← apply pickedCity "Country" (.search (some "an"))
+  let pickedCity ← apply cities "City" (.lookup (.choose berlin.wireKey))
+  let searchingCountry ← apply pickedCity "Country" (.lookup (.search "an"))
   check "LookupSearchPreservesDependentValue" (searchingCountry.value.city == some berlin)
-  let sameCountry ← apply searchingCountry "Country" (.choose (some germany.wireKey))
+  let sameCountry ← apply searchingCountry "Country" (.lookup (.choose germany.wireKey))
   check "LookupSameCountryPreservesCity" (sameCountry.value.city == some berlin)
-  let spainResults ← settle (← apply pickedCity "Country" (.search (some "spa")))
+  let spainResults ← settle (← apply pickedCity "Country" (.lookup (.search "spa")))
   let spain : Reference String := { id := "ES", displayText := "Spain" }
-  let changedCountry ← apply spainResults "Country" (.choose (some spain.wireKey))
+  let changedCountry ← apply spainResults "Country" (.lookup (.choose spain.wireKey))
   check "LookupCountryChangeClearsCity"
     (changedCountry.value.country == some spain && changedCountry.value.city.isNone)
-  let clearedCountry ← apply pickedCity "Country" (.choose none)
+  let clearedCountry ← apply pickedCity "Country" (.lookup .clear)
   check "LookupCountryClearClearsCity"
     (clearedCountry.value.country.isNone && clearedCountry.value.city.isNone &&
       (← control clearedCountry "City").disabled)
-  let stopped ← apply cities "City" (.search none)
+  let stopped ← apply cities "City" (.lookup .close)
   check "LookupStopSearching" ((← search? stopped "City").isNone && stopped.value.city.isNone)
-  let cleared ← apply chosen "Country" (.choose none)
+  let cleared ← apply chosen "Country" (.lookup .clear)
   check "LookupClear" cleared.value.country.isNone
   let failed ← execute searching (.loaded (countries "an") (.error "offline"))
   check "LookupFailureShown"
@@ -173,12 +165,17 @@ def run : IO Unit := do
   check "LookupTextIsClientBug"
     (match ModelForm.execute (model := Delivery) Delivery.form opened
         (.apply country.key (some (.text "Germany"))) with
-    | .error message => message == "Expected a search or a choice."
+    | .error message => message == "Expected a lookup command."
     | .ok _ => false)
   check "LookupProtocolDecodes"
-    (searched (Json.mkObj [("search", "an")]) == some (some "an") &&
-      searched (Json.mkObj [("search", Json.null)]) == some none &&
-      choiceOf (Json.mkObj [("choose", "\"DE\"")]) == some (some { value := "\"DE\"" }) &&
-      choiceOf (Json.mkObj [("choose", Json.null)]) == some none)
+    (lookupOf (command (.search "an")) == some (.search "an") &&
+      lookupOf (command .close) == some .close &&
+      lookupOf (command (.choose "\"DE\"")) == some (.choose { value := "\"DE\"" }) &&
+      lookupOf (command .clear) == some .clear)
+  check "LookupProtocolRejectsNullableCommands"
+    ((lookupOf (Json.mkObj [("search", "an")])).isNone &&
+      (lookupOf (Json.mkObj [("choose", Json.null)])).isNone &&
+      (lookupOf (Json.mkObj [("lookup", Json.mkObj [("search", Json.null)])])).isNone &&
+      (lookupOf (Json.mkObj [("lookup", Json.mkObj [("choose", Json.null)])])).isNone)
 
 end Tests.Lookup

@@ -17,7 +17,7 @@ private def actionArgument (input : Display.Editor) : Json :=
   | .field (.checkbox value) _ => toJson (!value)
   | .action => Json.null
   | .tabs active labels => toJson (toString ((active + 1) % labels.length.max 1))
-  | .lookup .. => Json.mkObj [("search", toJson "a")]
+  | .lookup .. => Json.mkObj [("lookup", toJson (LookupInput.search "a"))]
   | .choice selected options => toJson ((options.find? (·.value != selected)).map (·.value) |>.getD selected)
   | .field (.choices selected options) _ =>
     let toggled := (options.head?.map (·.value)).getD ""
