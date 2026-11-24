@@ -55,14 +55,18 @@ def cities : String → List (Reference String)
   | "FR" => [⟨"LYS", "Lyon"⟩, ⟨"MRS", "Marseille"⟩, ⟨"PAR", "Paris"⟩]
   | _ => []
 
-def mentions (text : String) (record : Reference String) : Bool :=
-  record.displayText.toLower.contains text.toLower
+def mentions (text : String) (record : Reference String) : Prop :=
+  record.displayText.toLower.contains text.toLower = true
+
+instance (text : String) : DecidablePred (mentions text) :=
+  fun record => inferInstanceAs (Decidable (record.displayText.toLower.contains text.toLower = true))
 
 def answer
   : (named : DeliveryEndpoint) → named.signature.Input → Option named.signature.Output
-  | .countries, text => (LookupResults.select countries (mentions text) 5).toOption
+  | .countries, (text : String) =>
+    (LookupResults.select countries (mentions text) 5).toOption.map (·.toLookupResults)
   | .cities, (search : CitySearch) =>
-    (LookupResults.select (cities search.country) (mentions search.text) 5).toOption
+    (LookupResults.select (cities search.country) (mentions search.text) 5).toOption.map (·.toLookupResults)
 
 def serve : HttpRequest → Option Json :=
   Api.serve answer

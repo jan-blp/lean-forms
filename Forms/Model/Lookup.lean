@@ -73,17 +73,60 @@ def LookupResults.ofList
     .ok { found, more, keys_nodup := distinct }
   else .error .duplicateKeys
 
+structure LookupResults.Selection
+  {κ : Type}
+  [ToJson κ]
+  (records : List (Reference κ))
+  (keep : Reference κ → Prop)
+  [DecidablePred keep]
+  (limit : Nat)
+  extends LookupResults κ where
+  found_eq : found = (records.filter (fun record => decide (keep record))).take limit
+  kept : ∀ record ∈ found, keep record := (by
+    rw [found_eq]
+    intro record member
+    exact of_decide_eq_true (List.mem_filter.mp (List.mem_of_mem_take member)).2)
+  length_le : found.length ≤ limit := (by
+    rw [found_eq]
+    exact List.length_take_le _ _)
+  more_iff : more = true ↔ limit < (records.filter (fun record => decide (keep record))).length
+  more_omitted : more = true → ∃ record ∈ records, keep record ∧ record ∉ found
+
+private theorem LookupResults.exists_omitted
+  {κ : Type}
+  [ToJson κ]
+  (filtered : List (Reference κ))
+  (limit : Nat)
+  (distinct : (filtered.map Reference.wireKey).Nodup)
+  (longer : limit < filtered.length)
+  : ∃ record ∈ filtered, record ∉ filtered.take limit := by
+  by_contra! all_returned
+  have length_le := (List.Nodup.of_map Reference.wireKey distinct).length_le_of_subset
+    (fun _ member => all_returned _ member)
+  have := List.length_take_le limit filtered
+  omega
+
 def LookupResults.select
   {κ : Type}
   [ToJson κ]
   (records : List (Reference κ))
-  (keep : Reference κ → Bool)
+  (keep : Reference κ → Prop)
+  [DecidablePred keep]
   (limit : Nat)
-  : Except LookupError (LookupResults κ) := do
-  let results ← LookupResults.ofList (records.filter keep) false
-  return { found := results.found.take limit
-           more := limit < results.found.length
-           keys_nodup := List.Nodup.sublist ((List.take_sublist _ _).map _) results.keys_nodup }
+  : Except LookupError (LookupResults.Selection records keep limit) :=
+  let filtered := records.filter (fun record => decide (keep record))
+  if distinct : (filtered.map Reference.wireKey).Nodup then
+    .ok {
+      found := filtered.take limit
+      more := decide (limit < filtered.length)
+      keys_nodup := List.Nodup.sublist ((List.take_sublist _ _).map _) distinct
+      found_eq := rfl
+      more_iff := decide_eq_true_iff
+      more_omitted := by
+        intro more
+        simpa [filtered, and_assoc] using
+          exists_omitted filtered limit distinct (of_decide_eq_true more) }
+  else .error .duplicateKeys
 
 instance {κ : Type} [ToJson κ] : ToJson (LookupResults κ) where
   toJson results := Json.mkObj [("found", toJson results.found), ("more", toJson results.more)]

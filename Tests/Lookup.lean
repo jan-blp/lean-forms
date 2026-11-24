@@ -85,15 +85,15 @@ private def countries (text : String) : HttpRequest := Api.request DeliveryEndpo
 
 private def germany : Reference String := ⟨"DE", "Germany"⟩
 
-example : (LookupResults.select [germany, germany] (fun _ => true) 1).map (·.found) =
+example : (LookupResults.select [germany, germany] (fun _ => True) 1).map (·.found) =
     .error .duplicateKeys := by
-  simp [LookupResults.select, LookupResults.ofList, germany, Reference.wireKey, Except.map]
+  simp [LookupResults.select, germany, Reference.wireKey, Except.map]
 
-example : (LookupResults.select [germany] (fun _ => true) 1).map (·.found) = .ok [germany] := by
-  simp [LookupResults.select, LookupResults.ofList, germany, Reference.wireKey, Except.map]
+example : (LookupResults.select [germany] (fun _ => True) 1).map (·.found) = .ok [germany] := by
+  simp [LookupResults.select, germany, Reference.wireKey, Except.map]
 
-example : (LookupResults.select [germany] (fun _ => true) 0).map (·.more) = .ok true := by
-  simp [LookupResults.select, LookupResults.ofList, germany, Reference.wireKey, Except.map]
+example : (LookupResults.select [germany] (fun _ => True) 0).map (·.more) = .ok true := by
+  simp [LookupResults.select, germany, Reference.wireKey, Except.map]
 
 def run : IO Unit := do
   check "LookupDuplicateIdsRejected"
