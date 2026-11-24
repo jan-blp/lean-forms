@@ -39,8 +39,9 @@ def ModelForm.SubmitOutcome.ofFailure
   | some error => .rejected error
   | none => .unreachable s!"Submission failed (HTTP {status})."
 
-def fetchEffect (request : Model.HttpRequest) : Wire.Effect :=
-  .fetch (toJson request).compress {
+def fetchEffect (fetch : Model.HttpFetch) : Wire.Effect :=
+  let request := fetch.request
+  .fetch (toJson fetch).compress {
     url := request.url
     method := match request.method with
       | .get => .GET
@@ -48,7 +49,7 @@ def fetchEffect (request : Model.HttpRequest) : Wire.Effect :=
     headers := { «Content-Type» := "application/json" }
     body := request.body }
 
-def fetchedRequest (id : String) : Except String Model.HttpRequest :=
+def fetchOfId (id : String) : Except String Model.HttpFetch :=
   Json.parse id >>= fromJson?
 
 def ModelForm.Snapshot.toWire
@@ -96,6 +97,6 @@ def ModelForm.Event.fromWire
       | .response status body => if 200 ≤ status && status < 300 then Json.parse body
         else .error s!"The server responded with status {status}."
       | .unreachable message => .error message
-    pure (.loaded (← fetchedRequest id) response)
+    pure (.loaded (← fetchOfId id) response)
 
 end Forms.Runtime

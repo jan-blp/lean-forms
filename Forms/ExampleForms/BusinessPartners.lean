@@ -34,8 +34,10 @@ def availability (candidate : LookupCandidate String BusinessPartnerData) : Look
   | .blocked reason => .disabled reason
 
 def form : Component [] BusinessPartnerSelection.Raw :=
-  .lookup path[BusinessPartnerSelection.Field.partner] "Business partner"
-    (.const (Api.source BusinessPartnersEndpoint.search)) (.const availability)
+  .group "Business partners" [
+    .lookup path[BusinessPartnerSelection.Field.partner] "Business partner"
+      (.const (Api.source BusinessPartnersEndpoint.search)) (.const availability),
+    .button "Refresh partners" (.invalidate (.const (Api.scope BusinessPartnersEndpoint.search)))]
 
 def initial : BusinessPartnerSelection.Raw := { partner := none }
 

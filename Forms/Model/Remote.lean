@@ -19,6 +19,21 @@ structure HttpRequest where
   body : Option String
   deriving BEq, Hashable, Repr, ToJson, FromJson
 
+inductive RequestScope where
+  | request (request : HttpRequest)
+  | endpoint (method : HttpMethod) (url : String)
+  deriving BEq, Repr
+
+def RequestScope.contains (scope : RequestScope) (request : HttpRequest) : Bool :=
+  match scope with
+  | .request target => target == request
+  | .endpoint method url => request.method == method && request.url == url
+
+structure HttpFetch where
+  request : HttpRequest
+  generation : Nat
+  deriving BEq, Repr, ToJson, FromJson
+
 inductive Source (α : Type) where
   | pure (value : α)
   | fetch (request : HttpRequest) (decode : Json → Except String α)
@@ -28,7 +43,7 @@ def Source.request? {α : Type} : Source α → Option HttpRequest
   | .fetch request _ => some request
 
 inductive HttpRequest.Response where
-  | loading
+  | loading (generation : Nat)
   | loaded (response : Json)
   | failed (message : String)
 
@@ -45,7 +60,7 @@ def Source.resolve {α : Type} (cache : HttpRequest.Cache) : Source α → Statu
   | .fetch request decode =>
     match cache[request]? with
     | none => .loading
-    | some .loading => .loading
+    | some (.loading _) => .loading
     | some (.failed message) => .failed message
     | some (.loaded response) =>
       match decode response with
@@ -75,6 +90,8 @@ class Api (endpoint : Type) [FinEnum endpoint] where
   path : endpoint → String
   distinct : FinEnum.toList endpoint |>.map path |>.Nodup
 
+def Api.method : HttpMethod := .post
+
 structure Api.Call (endpoint : Type) [FinEnum endpoint] [Api endpoint] where
   named : endpoint
   input : (Api.signature named).Input
@@ -86,7 +103,7 @@ def Api.request
   (named : endpoint)
   (input : (Api.signature named).Input)
   : HttpRequest :=
-  { method := .post, url := Api.path named, body := some (toJson input).compress }
+  { method := Api.method, url := Api.path named, body := some (toJson input).compress }
 
 def Api.source
   {endpoint : Type}
@@ -97,13 +114,21 @@ def Api.source
   : Source (Api.signature named).Output :=
   .fetch (Api.request named input) fromJson?
 
+def Api.scope
+  {endpoint : Type}
+  [FinEnum endpoint]
+  [Api endpoint]
+  (named : endpoint)
+  : RequestScope :=
+  .endpoint Api.method (Api.path named)
+
 def Api.parse
   {endpoint : Type}
   [FinEnum endpoint]
   [Api endpoint]
   (request : HttpRequest)
   : Option (Api.Call endpoint) := do
-  guard (request.method == .post)
+  guard (request.method == Api.method)
   let named ← (FinEnum.toList endpoint).find? (Api.path · == request.url)
   let input ← (Json.parse (request.body.getD "") >>= fromJson?).toOption
   return ⟨named, input⟩

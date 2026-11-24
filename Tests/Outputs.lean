@@ -3,6 +3,7 @@ module
 public import Forms.ExampleForms.Outputs
 public import Forms.Runtime.ModelForm
 public import Tests.FreshId
+public import Tests.Fetch
 
 public section
 namespace Tests.Outputs
@@ -181,12 +182,15 @@ def run : IO Unit := do
       (fun value => .computed "Loaded output" (.const (toString value))))
   let remoteOpened := start (model := Nat) remote 10
   check "ConsumerRequestsReadInitialOutput"
-    (remoteOpened.outbox == [.fetch { method := .get, url := "/count/0", body := none }])
+    (remoteOpened.outbox == [.fetch {
+      request := { method := .get, url := "/count/0", body := none }, generation := 0 }])
   let remoteChanged ← press (model := Nat) remoteOpened "Increment"
   check "ConsumerRequestsReadUpdatedOutput"
-    (remoteChanged.outbox == [.fetch { method := .get, url := "/count/1", body := none }])
+    (remoteChanged.outbox == [.fetch {
+      request := { method := .get, url := "/count/1", body := none }, generation := 1 }])
   let remoteLoaded ← IO.ofExcept (ModelForm.execute (model := Nat) remote remoteChanged
-    (.loaded { method := .get, url := "/count/1", body := none } (.ok (Lean.toJson (13 : Nat)))))
+    (.loaded (← pendingFetch remoteChanged { method := .get, url := "/count/1", body := none })
+      (.ok (Lean.toJson (13 : Nat)))))
   check "ObservedConsumersUseNormalLoadLifecycle" (texts remoteLoaded "Loaded output" == ["13"])
 
   let outer : Component [] Nat := .bind (0 : Nat) <|

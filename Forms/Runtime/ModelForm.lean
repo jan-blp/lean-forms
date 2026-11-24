@@ -10,7 +10,7 @@ namespace Forms.Runtime.ModelForm
 
 inductive Effect where
   | submit
-  | fetch (request : Model.HttpRequest)
+  | fetch (fetch : Model.HttpFetch)
   | focus (key : ControlKey)
   deriving BEq
 
@@ -38,6 +38,7 @@ structure State {Γ : Model.Context} {α β : Type} (form : Model.Component Γ �
   validationDiagnostics : List Model.Diagnostic
   reportDiagnostics : List Model.Diagnostic
   supply : Model.Supply
+  nextFetch : Nat
   draftDiagnostics : List DraftDiagnostic := []
 
 variable {Γ : Model.Context} {α β : Type} {form : Model.Component Γ α β}
@@ -73,7 +74,10 @@ def checked
   : Bool :=
   Lean.toJson value == Lean.toJson initial
 
-def openState
+/-- `nextFetch` must be 0 for a new form or the existing counter when restarting one.
+Do not recompute it from the cache: removed requests may still return with old IDs.
+This precondition is the caller's responsibility and is not checked here. -/
+private def openWithCache
   {Γ : Model.Context}
   {model β : Type}
   [FormModel model]
@@ -83,7 +87,8 @@ def openState
   (value : Model.Raw model)
   (env : Model.Env Γ)
   (supply : Model.Supply)
-  (cache : Model.HttpRequest.Cache := {})
+  (cache : Model.HttpRequest.Cache)
+  (nextFetch : Nat)
   : State form :=
   let validationDiagnostics := validationErrors (model := model) value
   let reportDiagnostics := reports (model := model) value true
@@ -96,7 +101,21 @@ def openState
     outbox := []
     validationDiagnostics
     reportDiagnostics
-    supply }
+    supply
+    nextFetch }
+
+@[no_expose] def openState
+  {Γ : Model.Context}
+  {model β : Type}
+  [FormModel model]
+  [Model.Validation model]
+  [Model.Reports model]
+  (form : Model.Component Γ (Model.Raw model) β)
+  (value : Model.Raw model)
+  (env : Model.Env Γ)
+  (supply : Model.Supply)
+  : State form :=
+  openWithCache (model := model) form value env supply {} 0
 
 def refresh
   {Γ : Model.Context}
@@ -121,16 +140,19 @@ def load
   : State form :=
   let missing := (state.evaluation.requests.filter (!state.cache.contains ·)).eraseDups
   if missing.isEmpty then state else
-    let cache := missing.foldl (fun cache request => cache.insert request .loading) state.cache
+    let cache := missing.foldl
+      (fun cache request => cache.insert request (.loading state.nextFetch)) state.cache
     let evaluation := ModelView.evaluate form state.value cache state.env state.locals
       state.evaluation.diagnostics
     let outbox := state.outbox.filter (·.applies evaluation.view)
     { state with
       evaluation
-      outbox := outbox ++ missing.map .fetch }
+      nextFetch := state.nextFetch + 1
+      outbox := outbox ++ missing.map fun request =>
+        .fetch { request, generation := state.nextFetch } }
 
 /-- Starts over from `initial`, keeping loaded responses; failed requests are retried. -/
-def restart
+@[no_expose] def restart
   {Γ : Model.Context}
   {model β : Type}
   [FormModel model]
@@ -141,9 +163,10 @@ def restart
   : State form :=
   let cache := state.cache.filter fun _ response => match response with
     | .failed _ => false
-    | .loading => true
+    | .loading _ => true
     | .loaded _ => true
-  openState (model := model) form state.initial state.initialEnv state.supply cache
+  openWithCache (model := model) form state.initial state.initialEnv state.supply cache
+    state.nextFetch
 
 inductive SubmitOutcome (α : Type) where
   /-- `saved` is the document the server stored. -/
@@ -158,7 +181,7 @@ inductive Event (α : Type) where
   | submit
   | reset
   | submitted (outcome : SubmitOutcome α)
-  | loaded (request : Model.HttpRequest) (response : Except String Lean.Json)
+  | loaded (fetch : Model.HttpFetch) (response : Except String Lean.Json)
 
 -- Message from Lean to Ts (see `Wire.Snapshot` for the serialized type)
 structure Snapshot (α : Type) where
@@ -244,7 +267,9 @@ def applyUpdate
     reports (model := model) updated.value (checked (model := model) state.initial updated.value)
   let diagnostics := state.draftDiagnostics.map (·.diagnostic) ++ validationDiagnostics ++
     reportDiagnostics
-  let evaluation := ModelView.evaluate form updated.value state.cache updated.state updated.locals
+  let cache := if updated.invalidations.isEmpty then state.cache else
+    state.cache.filter fun request _ => !updated.invalidations.any (·.contains request)
+  let evaluation := ModelView.evaluate form updated.value cache updated.state updated.locals
     diagnostics
   let focus := updated.visit.bind (evaluation.view.resolve ·.locations)
   { state with
@@ -354,22 +379,24 @@ def event {Γ : Model.Context}
     | .accepted saved =>
       -- The saved document becomes the new starting point; UI state is kept.
       let state := applyUpdate (model := model) form { state with initial := saved }
-        { value := saved, state := state.env, locals := state.locals }
+        { value := saved, state := state.env, locals := state.locals, invalidations := [] }
       pure { state with ui := { state.ui with
         pending := false, resultVisible := true, notice := .info "Submitted successfully." } }
     | .rejected feedback => pure (refresh form { state with
         serverFeedback := some feedback
         ui := { (state.ui.announce feedback.message true) with pending := false } })
     | .unreachable message => pure (unreachable message)
-  | .loaded request response =>
-    match state.cache[request]? with
-    | some .loading =>
+  | .loaded fetch response =>
+    match state.cache[fetch.request]? with
+    | some (.loading generation) =>
+      if generation != fetch.generation then return state
       let cached := match response with
         | .ok json => .loaded json
         | .error message => .failed message
       pure { state with
         evaluation := ModelView.evaluate form state.value
-          (state.cache.insert request cached) state.env state.locals state.evaluation.diagnostics }
+          (state.cache.insert fetch.request cached) state.env state.locals
+          state.evaluation.diagnostics }
     | none
     | some (.loaded _)
     | some (.failed _) => pure state
