@@ -29,7 +29,7 @@ export async function checkTransport() {
     return fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}` } });
   };
   const country = () => host.querySelector<HTMLInputElement>('input')!;
-  const search = async (text: string) => {
+  const search = (text: string) => {
     country().focus();
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(country(), text);
     country().dispatchEvent(new Event('input', { bubbles: true }));
@@ -47,7 +47,7 @@ export async function checkTransport() {
   const status = () => host.querySelector('#status')?.textContent;
   try {
     await render(authenticated('first-token'));
-    await search('cat');
+    search('cat');
     await choose('Catalonia');
     check(calls.some(call => call.request.url === '/api/countries' &&
       call.request.body === '"cat"' && call.token === 'first-token'), 'Lookup bypassed the transport');
@@ -55,7 +55,7 @@ export async function checkTransport() {
     await render(authenticated('rotated-token'));
     phase = 'rotated lookup';
     check(country().value === 'Catalonia', 'Changing the transport reset the form');
-    await search('ger');
+    search('ger');
     await choose('Germany');
     check(calls.at(-1)?.token === 'rotated-token', 'Lookup used the previous transport');
     phase = 'submission';
@@ -70,7 +70,7 @@ export async function checkTransport() {
       return new Response('', { status: 401 });
     });
     phase = 'unauthorized lookup';
-    await search('denied');
+    search('denied');
     await wait(() => host.textContent?.includes('Could not search:'));
     check(!host.querySelector('[role=option]'), 'An unauthorized lookup showed options');
     phase = 'unauthorized submission';
@@ -82,7 +82,7 @@ export async function checkTransport() {
       throw new Error('Host session unavailable');
     });
     phase = 'unreachable lookup';
-    await search('offline');
+    search('offline');
     await wait(() => host.textContent?.includes('Could not search: Host session unavailable'));
     phase = 'unreachable submission';
     await submit();
