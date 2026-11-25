@@ -49,20 +49,6 @@ inductive Exclusion (Fallback : Type) where
   | forbidden
   | allowed (policy : ExclusionPolicy Fallback) (whenNew : NewFieldState)
 
-def ExclusionPolicy.map
-  {Fallback Fallback' : Type}
-  (f : Fallback → Fallback')
-  : ExclusionPolicy Fallback → ExclusionPolicy Fallback'
-  | .keep => .keep
-  | .reset fallback => .reset (f fallback)
-
-def Exclusion.map
-  {Fallback Fallback' : Type}
-  (f : Fallback → Fallback')
-  : Exclusion Fallback → Exclusion Fallback'
-  | .forbidden => .forbidden
-  | .allowed policy whenNew => .allowed (policy.map f) whenNew
-
 /-- Whether settings may exclude a field, and its state while they do not mention it. -/
 inductive Excludability where
   | forbidden
@@ -72,13 +58,6 @@ inductive Excludability where
 def Exclusion.excludability {Fallback : Type} : Exclusion Fallback → Excludability
   | .forbidden => .forbidden
   | .allowed _ whenNew => .allowed whenNew
-
-theorem Exclusion.excludability_map
-  {Fallback Fallback' : Type}
-  (f : Fallback → Fallback')
-  (exclusion : Exclusion Fallback)
-  : (exclusion.map f).excludability = exclusion.excludability := by
-  cases exclusion <;> rfl
 
 /-- What settings may change about a field, independent of the model. -/
 structure Capabilities where
@@ -129,12 +108,17 @@ def Placement.initial (can : Capabilities) : Placement can :=
   | .allowed .shown => .shown
   | .allowed .excluded => .excluded (by simp [Capabilities.excludable, excludability])
 
-/-- What the author lets settings change about one field of `α`, named by a key of type `K`. -/
+/-- Settings for field -/
 structure FieldTag (α K : Type) where
+  /-- Names the field in settings. -/
   key : K
-  label : String
-  scope : ErasedLocation
-  exclusion : Exclusion (α → α)
+  {Field : Type}
+  /-- Where the field lives: a reset writes its fallback here, and diagnostics inside it are
+  moved or dropped while it is excluded. -/
+  path : Path α Field
+  /-- Whether settings may exclude the field, and what then happens to its value. -/
+  exclusion : Exclusion Field
+  /-- Whether settings may make the field read-only. -/
   lockable : Bool
 
 def FieldTag.capabilities {α K : Type} (tag : FieldTag α K) : Capabilities where
@@ -147,9 +131,8 @@ def FieldTag.zoom
   (tag : FieldTag β K)
   : FieldTag α K where
   key := tag.key
-  label := tag.label
-  scope := path.erase ++ tag.scope
-  exclusion := tag.exclusion.map fun reset value => path.set (reset (path.get value)) value
+  path := path.trans tag.path
+  exclusion := tag.exclusion
   lockable := tag.lockable
 
 def FieldTag.mapKey
@@ -163,8 +146,8 @@ theorem FieldTag.capabilities_zoom
   {α β K : Type}
   (path : Path α β)
   (tag : FieldTag β K)
-  : (tag.zoom path).capabilities = tag.capabilities := by
-  simp [FieldTag.capabilities, FieldTag.zoom, Exclusion.excludability_map]
+  : (tag.zoom path).capabilities = tag.capabilities :=
+  rfl
 
 /-- The value of a field the placement excludes, under the tag's policy. -/
 def FieldTag.fallback
@@ -179,7 +162,7 @@ def FieldTag.fallback
         simp [Capabilities.excludable, FieldTag.capabilities, Exclusion.excludability, exclusion]
           at excludable : False)
     | .allowed .keep _ => id
-    | .allowed (.reset fallback) _ => fallback
+    | .allowed (.reset fallback) _ => tag.path.set fallback
 
 /-- Settings checked against a form's keys: every key has a placement its capabilities allow. -/
 structure Resolution (K : Type) (can : K → Capabilities) where
@@ -196,12 +179,45 @@ def Resolution.comap
   position := resolution.position ∘ f
   placement key := resolution.placement (f key)
 
+/-- Decodes by looking names up among all keys; the names must be distinct and non-empty. -/
+@[instance_reducible] def Key.ofFinEnum
+  {K : Type}
+  [FinEnum K]
+  (encode : K → String)
+  (distinct : ((FinEnum.toList K).map encode).Nodup := by decide +kernel)
+  (named : ∀ key ∈ FinEnum.toList K, encode key ≠ "" := by decide +kernel)
+  : Key K where
+  encode
+  decode name := (FinEnum.toList K).find? (encode · == name)
+  decode_encode key := Key.find?_encode encode _ key (FinEnum.mem_toList key) distinct
+  encode_ne_empty key := named key (FinEnum.mem_toList key)
+
+class FieldKey (K : Type) extends Key K, FinEnum K where
+  /-- Names the field in errors raised while it is excluded. -/
+  fieldName : K → String
+
 /-- The keys of a form with nothing to configure. -/
-instance : Key Empty where
+instance : FieldKey Empty where
   encode := nofun
   decode _ := none
   decode_encode := nofun
   encode_ne_empty := nofun
+  toFinEnum := inferInstance
+  fieldName := nofun
+
+/-- No location is a prefix of another's, so no two keys name overlapping fields. -/
+def PrefixFree {K : Type} [FinEnum K] (location : K → ErasedLocation) : Prop :=
+  ∀ a ∈ FinEnum.toList K, ∀ b ∈ FinEnum.toList K, a ≠ b → (location a).isPrefixOf (location b) = false
+
+instance {K : Type} [FinEnum K] (location : K → ErasedLocation) : Decidable (PrefixFree location) :=
+  inferInstanceAs (Decidable (∀ _ ∈ _, _))
+
+/-- Where each key's field lives in `α`. -/
+class FieldPaths (α K : Type) [FinEnum K] where
+  Field : K → Type
+  path : (key : K) → Path α (Field key)
+  -- Quadratic in the keys; if slow, switch this and the other `decide +kernel` checks to `native_decide`.
+  prefixFree : PrefixFree fun key => (path key).erase := by decide +kernel
 
 /-- A setting whose key decoded, with a placement its capabilities allow. -/
 structure Accepted (K : Type) (can : K → Capabilities) where
@@ -212,8 +228,7 @@ structure Accepted (K : Type) (can : K → Capabilities) where
 take their initial placement, after the keys they order. -/
 def Settings.resolve
   {K : Type}
-  [DecidableEq K]
-  [Key K]
+  [FieldKey K]
   (settings : Settings)
   (can : K → Capabilities)
   : Resolution K can × List String :=
@@ -331,24 +346,32 @@ def Slot.render
     | .readOnly _ => some (.withAvailability (.const .disabled) component)
     | .excluded _ => none
 
-/-- A tagged slot whose field lives at `path`. -/
+/-- A tagged slot for the field `key` names. -/
 def Slot.configurable
   {Γ : Context}
-  {α β K : Type}
+  {α K : Type}
+  [FieldKey K]
+  [FieldPaths α K]
   (key : K)
-  (label : String)
-  (path : Path α β)
-  (exclusion : Exclusion β)
+  (exclusion : Exclusion (FieldPaths.Field α key))
   (lockable : Bool)
   (component : Component Γ α)
   : Slot Γ α K :=
-  .tagged
-    { key
-      label
-      scope := path.erase
-      exclusion := exclusion.map path.set
-      lockable }
-    component
+  .tagged { key, path := FieldPaths.path key, exclusion, lockable } component
+
+/-- A tagged editor for the field `key` names, labelled with its field name. -/
+def Slot.field
+  {Γ : Context}
+  {α K : Type}
+  [FieldKey K]
+  [FieldPaths α K]
+  (key : K)
+  (editor : Editor (FieldPaths.Field α key))
+  (exclusion : Exclusion (FieldPaths.Field α key))
+  (lockable : Bool)
+  : Slot Γ α K :=
+  .configurable key exclusion lockable
+    (.field (FieldPaths.path key) (FieldKey.fieldName key) editor)
 
 /-- Tagged slots take the positions of tagged slots, in the order the settings give. -/
 def Slot.arrange
@@ -417,11 +440,21 @@ def Configured.mapKey
     part.build (fun tag tagged => agree (tag.mapKey f) (List.mem_map_of_mem tagged))
       (resolution.comap f)
 
+/-- A part of the sub-record at `path`, whose keys `wrap` makes keys of the whole form. -/
+def Configured.nest
+  {Γ : Context}
+  {α β K K' : Type}
+  (wrap : K' → K)
+  (path : Path α β)
+  (part : Configured Γ β K')
+  : Configured Γ α K :=
+  .mapKey wrap (.zoom path part)
+
 /-- The capabilities of the tag that uses `key`. -/
 def Configured.capabilities
   {Γ : Context}
   {α K : Type}
-  [DecidableEq K]
+  [FieldKey K]
   (form : Configured Γ α K)
   (key : K)
   : Capabilities :=
@@ -429,35 +462,38 @@ def Configured.capabilities
   | some tag => tag.capabilities
   | none => { excludability := .forbidden, lockable := false }
 
-/-- Every key is used by exactly one tag, and `capabilities` agrees with each tag. -/
+/-- Every key is used by exactly one tag, `capabilities` agrees with each tag, and each tag's
+field is where its key says. -/
 def Configured.WellKeyed
   {Γ : Context}
   {α K : Type}
-  [DecidableEq K]
-  [FinEnum K]
+  [FieldKey K]
+  [FieldPaths α K]
   (form : Configured Γ α K)
   : Prop :=
   (form.tags.map (·.key)).Perm (FinEnum.toList K) ∧
-    ∀ tag ∈ form.tags, form.capabilities tag.key = tag.capabilities
+    (∀ tag ∈ form.tags, form.capabilities tag.key = tag.capabilities) ∧
+    ∀ tag ∈ form.tags, tag.path.erase = (FieldPaths.path (α := α) tag.key).erase
 
 instance
     {Γ : Context}
     {α K : Type}
-    [DecidableEq K]
-    [FinEnum K]
+    [FieldKey K]
+    [FieldPaths α K]
     (form : Configured Γ α K)
     : Decidable form.WellKeyed :=
-  inferInstanceAs (Decidable (_ ∧ _))
+  inferInstanceAs (Decidable (_ ∧ _ ∧ _))
 
 def Configured.excluded
   {Γ : Context}
   {α K : Type}
   {can : K → Capabilities}
+  [FieldKey K]
   (form : Configured Γ α K)
   (resolution : Resolution K can)
   : List ExcludedField :=
   (form.tags.filter fun tag => (resolution.placement tag.key).state == .excluded).map fun tag =>
-    { scope := tag.scope, label := tag.label }
+    { scope := tag.path.erase, label := FieldKey.fieldName tag.key }
 
 /-- Applies the fallback of every excluded field whose policy resets it. -/
 def Configured.applyFallbacks

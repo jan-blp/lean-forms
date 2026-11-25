@@ -33,7 +33,6 @@ def Fields.set
   : β → α → α :=
   LeanLens.set (Fields.lens field)
 
-/-- Keys sent to the client and decoded back; `""` is reserved for no selection. -/
 class Key (Value : Type) where
   encode : Value → String
   decode : String → Option Value

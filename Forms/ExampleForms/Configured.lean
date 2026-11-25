@@ -36,57 +36,71 @@ instance : ConstraintRule TenantInvoice.Constraint.reference_valid where
     else .invalid (proof := h) (message := "Enter the reference.")
       (targets := locations[TenantInvoice.Field.reference])
 
-inductive SupplierAddress.Configurable where
+inductive SupplierAddress.FieldKey where
   | city
-  deriving DecidableEq
+  deriving DecidableEq, FinEnum
 
-def SupplierAddress.form {Γ : Context} : Configured Γ SupplierAddress.Raw SupplierAddress.Configurable :=
+instance : FieldKey SupplierAddress.FieldKey where
+  toKey := .ofFinEnum fun
+    | .city => "city"
+  fieldName
+    | .city => "City"
+
+instance : FieldPaths SupplierAddress.Raw SupplierAddress.FieldKey where
+  Field
+    | .city => String
+  path
+    | .city => path[SupplierAddress.Field.city]
+
+def SupplierAddress.form {Γ : Context} : Configured Γ SupplierAddress.Raw SupplierAddress.FieldKey :=
   .group "Supplier address" [
     .fixed (.field path[SupplierAddress.Field.street] "Street" .text),
-    .configurable .city "City" path[SupplierAddress.Field.city]
-      (.allowed (.reset "") .shown) (lockable := false)
-      (.field path[SupplierAddress.Field.city] "City" .text)]
+    .field .city .text (.allowed (.reset "") .shown) (lockable := false)]
 
-inductive TenantInvoice.Configurable where
+inductive TenantInvoice.FieldKey where
   | supplier
   | reference
   | vatDate
   | postingDate
-  | city
+  | address (key : SupplierAddress.FieldKey)
   deriving DecidableEq, FinEnum
 
-/-- Stored in settings: renaming a constructor keeps these. -/
-def TenantInvoice.Configurable.encode : TenantInvoice.Configurable → String
-  | .supplier => "supplier"
-  | .reference => "reference"
-  | .vatDate => "vatDate"
-  | .postingDate => "postingDate"
-  | .city => "city"
+instance : FieldKey TenantInvoice.FieldKey where
+  toKey := .ofFinEnum fun
+    | .supplier => "supplier"
+    | .reference => "reference"
+    | .vatDate => "vatDate"
+    | .postingDate => "postingDate"
+    | .address key => "address." ++ Key.encode key
+  fieldName
+    | .supplier => "Supplier"
+    | .reference => "Reference"
+    | .vatDate => "VAT date"
+    | .postingDate => "Posting date"
+    | .address key => FieldKey.fieldName key
 
-instance : Key TenantInvoice.Configurable :=
-  .ofSorted [.city, .postingDate, .reference, .supplier, .vatDate]
-    TenantInvoice.Configurable.encode
-    (by intro key; cases key <;> decide)
-    (by decide)
-    (by decide)
+instance : FieldPaths TenantInvoice.Raw TenantInvoice.FieldKey where
+  Field
+    | .supplier => String
+    | .reference => String
+    | .vatDate => Option Std.Time.PlainDate
+    | .postingDate => Option Std.Time.PlainDate
+    | .address key => FieldPaths.Field SupplierAddress.Raw key
+  path
+    | .supplier => path[TenantInvoice.Field.supplier]
+    | .reference => path[TenantInvoice.Field.reference]
+    | .vatDate => path[TenantInvoice.Field.vatDate]
+    | .postingDate => path[TenantInvoice.Field.postingDate]
+    | .address key => path[TenantInvoice.Field.address].trans (FieldPaths.path key)
 
-def TenantInvoice.form {Γ : Context} : Configured Γ TenantInvoice.Raw TenantInvoice.Configurable :=
+def TenantInvoice.form {Γ : Context} : Configured Γ TenantInvoice.Raw TenantInvoice.FieldKey :=
   .group "Invoice" [
     .fixed (.field path[TenantInvoice.Field.number] "Invoice number" .text),
-    .configurable .supplier "Supplier" path[TenantInvoice.Field.supplier]
-      .forbidden (lockable := true)
-      (.field path[TenantInvoice.Field.supplier] "Supplier" .text),
-    .configurable .reference "Reference" path[TenantInvoice.Field.reference]
-      (.allowed .keep .shown) (lockable := true)
-      (.field path[TenantInvoice.Field.reference] "Reference" .text),
-    .configurable .vatDate "VAT date" path[TenantInvoice.Field.vatDate]
-      (.allowed (.reset none) .shown) (lockable := true)
-      (.field path[TenantInvoice.Field.vatDate] "VAT date" (.optional .date)),
-    .configurable .postingDate "Posting date" path[TenantInvoice.Field.postingDate]
-      (.allowed .keep .excluded) (lockable := false)
-      (.field path[TenantInvoice.Field.postingDate] "Posting date" (.optional .date)),
-    .nested <| .zoom path[TenantInvoice.Field.address] <|
-      .mapKey (fun | .city => TenantInvoice.Configurable.city) SupplierAddress.form]
+    .field .supplier .text .forbidden (lockable := true),
+    .field .reference .text (.allowed .keep .shown) (lockable := true),
+    .field .vatDate (.optional .date) (.allowed (.reset none) .shown) (lockable := true),
+    .field .postingDate (.optional .date) (.allowed .keep .excluded) (lockable := false),
+    .nested (.nest .address path[TenantInvoice.Field.address] SupplierAddress.form)]
 
 def TenantInvoice.initial : TenantInvoice.Raw := {
   number := "INV-1"
@@ -104,7 +118,7 @@ def TenantInvoice.tenantSettings : Settings where
     { key := "supplier", state := .readOnly },
     { key := "reference", state := .excluded },
     { key := "vatDate", state := .excluded },
-    { key := "city", state := .excluded },
+    { key := "address.city", state := .excluded },
     { key := "legacyField", state := .shown }]
 
 end Forms.ExampleForms

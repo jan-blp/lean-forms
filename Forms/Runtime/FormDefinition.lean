@@ -75,29 +75,28 @@ def FormDefinition.ofConfigured
   [ToJson (Model.Raw model)]
   [FromJson (Model.Raw model)]
   {K : Type}
-  [DecidableEq K]
-  [FinEnum K]
-  [Model.Key K]
+  [Model.FieldKey K]
+  [Model.FieldPaths (Model.Raw model) K]
   (form : Model.Configured [] (Model.Raw model) K)
   (initial : Model.Raw model)
-  (wellKeyed : form.WellKeyed := by decide)
+  (wellKeyed : form.WellKeyed := by decide +kernel)
   : FormDefinition where
   State := (resolution : Model.Resolution K form.capabilities) ×
-    ModelForm.State (form.build wellKeyed.2 resolution)
+    ModelForm.State (form.build wellKeyed.2.1 resolution)
   Raw := Model.Raw model
   initial := toJson initial
   openState value settings supply := do
     let value ← fromJson? value
     let (resolution, warnings) := settings.resolve form.capabilities
-    let component := form.build wellKeyed.2 resolution
-    let value := form.applyFallbacks wellKeyed.2 resolution value
+    let component := form.build wellKeyed.2.1 resolution
+    let value := form.applyFallbacks wellKeyed.2.1 resolution value
     let state := ModelForm.load component
       (ModelForm.openExcluding (model := model) component value Model.Env.nil supply
         (form.excluded resolution))
     pure { state := ⟨resolution, state⟩, snapshot := ModelForm.snapshot component state, warnings }
   execute
     | ⟨resolution, state⟩, input => do
-      let component := form.build wellKeyed.2 resolution
+      let component := form.build wellKeyed.2.1 resolution
       let state ← ModelForm.execute (model := model) component state input
       pure (⟨resolution, state⟩, ModelForm.snapshot component state)
   validate := validateModel model

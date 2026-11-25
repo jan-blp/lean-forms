@@ -2,6 +2,7 @@ module
 
 public import Forms.ExampleForms.Registry
 public import Tests.FreshId
+public meta import Forms.Deriving.FinEnum
 
 public section
 namespace Tests.Configuration
@@ -21,18 +22,28 @@ private def excludedCity : List ExcludedField :=
 private def error (message : String) (targets : Diagnostic.Targets) : Diagnostic :=
   { kind := .error, message, targets }
 
-private def capabilities : TenantInvoice.Configurable → Capabilities :=
+private def capabilities : TenantInvoice.FieldKey → Capabilities :=
   (TenantInvoice.form (Γ := [])).capabilities
 
-private def supplier (key : TenantInvoice.Configurable) : Slot [] TenantInvoice.Raw TenantInvoice.Configurable :=
-  .configurable key "Supplier" path[TenantInvoice.Field.supplier] .forbidden (lockable := false)
-    (.field path[TenantInvoice.Field.supplier] "Supplier" .text)
+private def supplier : Slot [] TenantInvoice.Raw TenantInvoice.FieldKey :=
+  .field .supplier .text .forbidden (lockable := false)
 
 /-- A key used twice, and keys left unused, are rejected when the form is registered. -/
-example : ¬ (Configured.group (Γ := []) "Twice" [supplier .supplier, supplier .supplier]).WellKeyed := by
+example : ¬ (Configured.group (Γ := []) "Twice" [supplier, supplier]).WellKeyed := by
   decide
 
-example : ¬ (Configured.group (Γ := []) "Partial" [supplier .supplier]).WellKeyed := by
+example : ¬ (Configured.group (Γ := []) "Partial" [supplier]).WellKeyed := by
+  decide
+
+private inductive Overlapping where
+  | address
+  | city
+  deriving DecidableEq, FinEnum
+
+/-- Keys whose fields overlap are rejected when their paths are declared. -/
+example : ¬ PrefixFree fun
+    | Overlapping.address => [.field "address"]
+    | Overlapping.city => [.field "address", .field "city"] := by
   decide
 
 example : (TenantInvoice.form (Γ := [])).WellKeyed := by
