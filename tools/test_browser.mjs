@@ -4,14 +4,22 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { build } from 'esbuild';
 
 const cwd = fileURLToPath(new URL('..', import.meta.url));
+const react18 = process.argv.includes('--react18');
+const require18 = createRequire(new URL('../tests/react18/package.json', import.meta.url));
+const alias = react18 ? {
+  react: dirname(require18.resolve('react/package.json')),
+  'react-dom': dirname(require18.resolve('react-dom/package.json')),
+} : {};
+let originalBundle;
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function freePort() {
@@ -48,6 +56,14 @@ const firefox = spawn('firefox', ['--headless', '--no-remote', '--profile', prof
   '--remote-debugging-port', String(debugPort)], { stdio: 'ignore' });
 let socket;
 try {
+  if (react18) {
+    const app = await build({
+      entryPoints: [join(cwd, 'web/app.tsx')], bundle: true, write: false, format: 'esm',
+      jsx: 'automatic', alias,
+    });
+    originalBundle = await readFile(join(cwd, 'web/dist/app.js'));
+    await writeFile(join(cwd, 'web/dist/app.js'), app.outputFiles[0].contents);
+  }
   // Cold Firefox on CI can take over 10s.
   socket = await retry('Firefox', firefox, 60000, () => new Promise((resolve, reject) => {
     const candidate = new WebSocket(`ws://127.0.0.1:${debugPort}/session`);
@@ -633,7 +649,7 @@ try {
   `);
   const fixture = await build({
     entryPoints: [join(cwd, 'tools/fixtures/Transport.tsx')],
-    bundle: true, write: false, format: 'esm', jsx: 'automatic',
+    bundle: true, write: false, format: 'esm', jsx: 'automatic', alias,
   });
   const fixtureUrl = `data:text/javascript;base64,${Buffer.from(fixture.outputFiles[0].contents).toString('base64')}`;
   await example('delivery', '', async evaluate => {
@@ -736,6 +752,7 @@ try {
   });
 
 } finally {
+  if (originalBundle) await writeFile(join(cwd, 'web/dist/app.js'), originalBundle);
   socket?.close();
   await stop(firefox);
   await rm(profile, { recursive: true, force: true });

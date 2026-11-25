@@ -191,7 +191,7 @@ function OpenForm({ model, components, evidence, transport, onSnapshot, onFailur
       });
     },
   };
-  return <Context value={context}><Render component={snapshot.view} /></Context>;
+  return <Context.Provider value={context}><Render component={snapshot.view} /></Context.Provider>;
 }
 
 function withDraft(
