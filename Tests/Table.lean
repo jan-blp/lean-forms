@@ -17,7 +17,7 @@ private def execute (state : State) (input : ModelForm.Event ExpenseReport.Raw) 
   IO.ofExcept (ModelForm.execute (model := ExpenseReport) ExpenseReport.form state input)
 
 private def rendered (state : State) : ModelView.Rendered :=
-  ModelView.render ExpenseReport.form state.value state.cache [] Env.nil state.locals
+  ModelView.render ExpenseReport.form state.value state.fetchState [] Env.nil state.locals
 
 private def key (state : State) (label : String) (nth : Nat := 0) : IO ControlKey := do
   let some control := ((rendered state).controls.filter (·.label == label))[nth]?

@@ -12,10 +12,10 @@ theorem render_keys_nodup
   {α β : Type}
   (component : Model.Component Γ α β)
   (value : α)
-  (cache : Model.HttpRequest.Cache)
+  (fetchState : FetchState)
   (errors : List Model.Diagnostic)
   (state : Model.Env Γ)
-  : ((render component value cache errors state).controls.map (·.key)).Nodup := by
+  : ((render component value fetchState errors state).controls.map (·.key)).Nodup := by
   unfold render evaluate
   exact Display.View.dedupe_keys_nodup _
 

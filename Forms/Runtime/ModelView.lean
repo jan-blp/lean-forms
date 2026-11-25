@@ -4,6 +4,7 @@ public import Forms.Model.Component.LocalState
 public import Forms.Model.Invocation
 public import Forms.Runtime.Input
 public import Forms.Runtime.Display
+public import Forms.Runtime.FetchState
 
 @[expose] public section
 namespace Forms.Runtime.ModelView
@@ -151,15 +152,17 @@ structure NodeEvaluation
 /-- Runtime facts shared by one evaluation; unlike `Env`, components cannot bind or set them.
 Build with `Ambient.of`, which derives `messages` from `diagnostics`. -/
 structure Ambient where
-  cache : HttpRequest.Cache
+  fetchState : FetchState
   diagnostics : List Diagnostic
   messages : Std.HashMap ErasedLocation (List Message)
 
 def Ambient.of
-  (cache : HttpRequest.Cache)
+  (fetchState : FetchState)
   (diagnostics : List Diagnostic)
   : Ambient :=
-  { cache, diagnostics, messages := Diagnostic.messageIndex diagnostics }
+  { fetchState, diagnostics, messages := Diagnostic.messageIndex diagnostics }
+
+abbrev Ambient.cache (ambient : Ambient) : HttpRequest.Cache := ambient.fetchState.cache
 
 def Ambient.messagesAt (ambient : Ambient) (location : ErasedLocation) : List Message :=
   ambient.messages.getD location []
@@ -617,12 +620,12 @@ def evaluate
   {α β : Type}
   (component : Model.Component Γ α β)
   (value : α)
-  (cache : HttpRequest.Cache)
+  (fetchState : FetchState)
   (env : Env Γ)
   (locals : component.LocalState := component.initialState)
   (diagnostics : List Diagnostic := [])
   : Evaluated Γ α component.LocalState β :=
-  let ambient := Ambient.of cache diagnostics
+  let ambient := Ambient.of fetchState diagnostics
   let evaluated := (evaluateNode component.node value env ambient locals {} []).closed
   { toNodeEvaluation := { evaluated with view := evaluated.view.dedupe }
     toAmbient := ambient
@@ -647,26 +650,26 @@ def render
   {α β : Type}
   (component : Model.Component Γ α β)
   (value : α)
-  (cache : HttpRequest.Cache)
+  (fetchState : FetchState)
   (errors : List Diagnostic := [])
   (env : Env Γ)
   (locals : component.LocalState := component.initialState)
   : Rendered :=
-  let view := (evaluate component value cache env locals errors).view
+  let view := (evaluate component value fetchState env locals errors).view
   ⟨view, view.controls⟩
 
 def decodeKey
   {Γ : Context}
   {α β : Type}
   (component : Model.Component Γ α β)
-  (cache : HttpRequest.Cache)
+  (fetchState : FetchState)
   (value : α)
   (key : ControlKey)
   (argument : Option Input)
   (env : Env Γ)
   (locals : component.LocalState := component.initialState)
   : StateT Supply (Except ActionError) (ComponentUpdate Γ α component.LocalState) :=
-  (evaluate component value cache env locals).applyKey key argument
+  (evaluate component value fetchState env locals).applyKey key argument
 
 end Forms.Runtime.ModelView
 
@@ -678,10 +681,10 @@ def Component.evaluate
   (component : Component Γ α β)
   (value : α)
   (env : Env Γ)
-  (cache : HttpRequest.Cache := {})
+  (fetchState : Runtime.FetchState := {})
   (locals : component.LocalState := component.initialState)
   (diagnostics : List Diagnostic := [])
   : Runtime.ModelView.Evaluated Γ α component.LocalState β :=
-  Runtime.ModelView.evaluate component value cache env locals diagnostics
+  Runtime.ModelView.evaluate component value fetchState env locals diagnostics
 
 end Forms.Model

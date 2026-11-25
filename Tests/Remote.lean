@@ -129,19 +129,19 @@ private def labels
   {α : Type}
   (form : Component [] α)
   (value : α)
-  (cache : HttpRequest.Cache)
+  (fetchState : FetchState)
   : List String :=
-  (ModelView.render form value cache [] Env.nil).controls.map (·.label)
+  (ModelView.render form value fetchState [] Env.nil).controls.map (·.label)
 
 private def performIn
   {α : Type}
   (form : Component [] α)
-  (cache : HttpRequest.Cache)
+  (fetchState : FetchState)
   (value : α)
   (key : ControlKey)
   (argument : Option Input)
   : Except ModelForm.Rejection α := do
-  let invocation ← ((ModelView.decodeKey form cache value key argument Env.nil).run' supply).mapError .ofAction
+  let invocation ← ((ModelView.decodeKey form fetchState value key argument Env.nil).run' supply).mapError .ofAction
   return invocation.value
 
 def run : IO Unit := do
@@ -183,8 +183,7 @@ def run : IO Unit := do
   check "RemoteBindBuildsFromData"
     (labels (ordered (.pure ["age", "name"])) person {} == ["Age", "Name"])
   let pending := ordered (.fetch layoutRequest fromJson?)
-  let loadedLayout : HttpRequest.Cache := ({} : HttpRequest.Cache).insert layoutRequest
-    (.loaded (toJson ["age", "name"]))
+  let loadedLayout := respond {} layoutRequest (toJson ["age", "name"])
   check "RemoteFallbackWhileLoading" (labels pending person {} == ["Name"])
   let some fallbackName := (ModelView.render pending person {} [] Env.nil).controls.find? (·.label == "Name")
     | throw (IO.userError "FAIL no fallback control")
@@ -193,15 +192,14 @@ def run : IO Unit := do
     ((performIn pending {} person fallbackName (some (.text "Grace"))).toOption.map (·.name)
       == some "Grace")
   check "RemoteBodyAfterLoad" (labels pending person loadedLayout == ["Age", "Name"])
-  let renamed (cache : HttpRequest.Cache) : Option String :=
-    (performIn pending cache person fallbackName (some (.text "Grace"))).toOption.map (·.name)
+  let renamed (fetchState : FetchState) : Option String :=
+    (performIn pending fetchState person fallbackName (some (.text "Grace"))).toOption.map (·.name)
   check "RemoteKeySurvivesLoad" (renamed loadedLayout == some "Grace")
-  let otherLayout : HttpRequest.Cache := ({} : HttpRequest.Cache).insert layoutRequest
-    (.loaded (toJson ["name", "age"]))
+  let otherLayout := respond {} layoutRequest (toJson ["name", "age"])
   check "RemoteReorderedKeepsField" (renamed otherLayout == some "Grace")
   let shippingState := ModelForm.load shippingChoices
     (ModelForm.openState (model := Order) (supply := supply) shippingChoices Order.initial Env.nil)
-  let some shipping := (ModelView.render shippingChoices shippingState.value shippingState.cache [] Env.nil).controls.head?
+  let some shipping := (ModelView.render shippingChoices shippingState.value shippingState.fetchState [] Env.nil).controls.head?
     | throw (IO.userError "FAIL no shipping choice")
   check "RemoteFallbackOffersPickup" (match shipping.input with
     | .choice _ options => options.any (·.value == "pickup")
@@ -209,7 +207,7 @@ def run : IO Unit := do
   let shippingState ← IO.ofExcept (ModelForm.execute (model := Order) shippingChoices shippingState
     (.loaded (← pendingFetch shippingState layoutRequest) (.ok (toJson true))))
   check "RemoteLoadedChoiceKeepsKey"
-    ((ModelView.render shippingChoices shippingState.value shippingState.cache [] Env.nil).controls.any fun control =>
+    ((ModelView.render shippingChoices shippingState.value shippingState.fetchState [] Env.nil).controls.any fun control =>
       control.key == shipping.key && match control.input with
         | .choice _ options => options.map (·.value) == ["standard"]
         | _ => false)
