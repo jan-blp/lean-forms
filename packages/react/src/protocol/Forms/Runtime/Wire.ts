@@ -1,12 +1,13 @@
 // Generated from Lean. Run npm --prefix web run generate.
+import type * as Model from "../Model.js";
 import type * as FormsReact from "../../FormsReact.js";
 
 export type Request = { "open": { "start": FormStart; "seed": string } } | { "send": { "handle": string; "event": Event } } | { "dispose": { "handle": string } };
-export type FormStart = { "form": string; "fingerprint": string; "value": unknown };
+export type FormStart = { "form": string; "fingerprint": string; "value": unknown; "settings": Model.Settings };
 export type Event = { "apply": { "key": string; "argument": unknown } } | { "draft": { "key": string; "message": string | null } } | "submit" | "reset" | { "submitted": { "outcome": HttpOutcome } } | { "fetched": { "id": string; "outcome": HttpOutcome } };
 export type HttpOutcome = { "response": { "status": number; "body": string } } | { "unreachable": { "message": string } };
 export type Success = { "ok": boolean; "value": Response };
-export type Response = { "opened": { "handle": string; "snapshot": Snapshot } } | { "updated": { "snapshot": Snapshot } } | "disposed";
+export type Response = { "opened": { "handle": string; "snapshot": Snapshot; "warnings": string[] } } | { "updated": { "snapshot": Snapshot } } | "disposed";
 export type Snapshot = { "title": string; "view": FormsReact.Component; "rejection": string | null; "draftFields": string[]; "pickFields": string[]; "effects": Effect[]; "controls": unknown[]; "submission": unknown; "errors": unknown[] };
 export type Effect = { "focus": { "key": string } } | { "submit": { "request": HttpEffect } } | { "fetch": { "id": string; "request": HttpEffect } };
 export type HttpEffect = { "url": string; "method": HttpMethod; "headers": HttpHeaders; "body": string | null };

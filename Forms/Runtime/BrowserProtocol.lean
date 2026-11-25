@@ -38,10 +38,12 @@ def execute
     unless start.fingerprint == fingerprint do
       throw "Compiled form version differs from the server. Rebuild Wasm, restart forms-web, then reload."
     let some supply := Model.Supply.ofSeed? seed | throw "Invalid seed"
-    let (state, snapshot) ← form.open start.form fingerprint start.value supply
+    let opened ← form.open start.form fingerprint start.value start.settings supply
     let handle := store.next
-    let store := { store with next := ⟨handle.value + 1⟩, models := store.models.insert handle state }
-    pure (store, .opened (toString handle.value) snapshot)
+    let store := { store with
+      next := ⟨handle.value + 1⟩
+      models := store.models.insert handle opened.form }
+    pure (store, .opened (toString handle.value) opened.snapshot opened.warnings)
   | .send text event =>
     let .ok handle := modelHandle text | throw "Invalid form handle"
     let some state := store.models[handle]? | throw "Unknown or disposed form handle"

@@ -212,6 +212,23 @@ try {
     window.fetch = originalFetch;
   `);
 
+  const labels = `[...document.querySelectorAll('.editor label')].map(label => label.firstChild.textContent).join()`;
+
+  await example('configured', `
+    check(${labels} === 'Invoice number,Supplier,Reference,VAT date,Street,City',
+      'Default settings changed the fields');
+  `);
+
+  await example('configured-tenant', `
+    check(${labels} === 'Invoice number,Posting date,Supplier,Street',
+      'Tenant settings did not reorder and exclude the fields');
+    check(input('Supplier').disabled, 'Tenant settings did not lock the supplier');
+    await click('[data-action=submit]');
+    await wait(() => status() === 'Submitted successfully.');
+    check(submitted().vatDate === null && submitted().reference === 'PO-7' &&
+      submitted().address.city === '', 'Excluded fields did not follow their policies');
+  `);
+
   await example('order', `
     const choose = async option => {
       [...document.querySelectorAll('.choice input[type=radio]')]

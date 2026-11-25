@@ -87,7 +87,7 @@ def run : IO Unit := do
       ("found", toJson [candidate, duplicate]), ("more", toJson false)])).isOk |> not)
   let definition :=
     FormDefinition.ofModel BusinessPartnerSelection BusinessPartners.form BusinessPartners.initial
-  let (opened, _) ← IO.ofExcept (definition.openState (toJson BusinessPartners.initial) supply)
+  let opened := (← IO.ofExcept (definition.openState (toJson BusinessPartners.initial) .empty supply)).state
   let searching ← apply opened (.search "")
   let early ← apply searching (.choose (key "barcelona"))
   check "CandidateChooseBeforeLoadingRejected" ((snapshot early).ui.rejection.isSome)
@@ -131,7 +131,7 @@ def run : IO Unit := do
 
   let initial : Restricted.Raw := { partner := none, locked := false }
   let definition := FormDefinition.ofModel Restricted restrictedForm initial
-  let (opened, _) ← IO.ofExcept (definition.openState (toJson initial) supply)
+  let opened := (← IO.ofExcept (definition.openState (toJson initial) .empty supply)).state
   let execute state event :=
     IO.ofExcept (ModelForm.execute (model := Restricted) restrictedForm state event)
   let lookup := (← control restrictedForm opened "Business partner").key

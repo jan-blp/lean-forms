@@ -104,6 +104,33 @@ def Diagnostic.issues
       if locations.isEmpty then none
       else some { message := diagnostic.message, destination? := some { locations } }
 
+/-- A field that the form's settings excluded. -/
+structure ExcludedField where
+  scope : ErasedLocation
+  label : String
+  deriving BEq, DecidableEq
+
+/-- Drops the locations inside excluded fields. A report left without locations is dropped; an
+error becomes global and names the fields, since nothing shows them. -/
+def Diagnostic.excluding
+  (excluded : List ExcludedField)
+  (diagnostic : Diagnostic)
+  : Option Diagnostic :=
+  let field? (location : ErasedLocation) := excluded.find? (·.scope.isPrefixOf location)
+  match diagnostic.targets with
+  | .global => some diagnostic
+  | .locations first rest =>
+    match (first :: rest).filter (field? · |>.isNone) with
+    | shown :: others => some { diagnostic with targets := .locations shown others }
+    | [] =>
+      match diagnostic.kind with
+      | .report _ => none
+      | .error =>
+        let labels := ((first :: rest).filterMap field?).map (·.label) |>.eraseDups
+        some { diagnostic with
+          message := s!"{", ".intercalate labels}: {diagnostic.message}"
+          targets := .global }
+
 def Diagnostic.summary (diagnostics : List Diagnostic) : String :=
   String.intercalate "\n" (diagnostics.map (·.message))
 

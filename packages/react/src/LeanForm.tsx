@@ -29,6 +29,7 @@ export function LeanForm({ start, moduleUrl, components, evidence, transport, on
     let opened: FormModel | undefined;
     let cancelled = false;
     openForm(start, url).then(model => {
+      for (const warning of model.warnings) console.warn(`${start.form}: ${warning}`);
       if (cancelled) model.dispose();
       else setModel(opened = model);
     }, error => { if (!cancelled) setFailure(message(error)); });
