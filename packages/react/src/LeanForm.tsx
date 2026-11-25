@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { defaultComponents } from './components.js';
 import { Context, type Components, type EvidenceHost, type LeanFormContext } from './context.js';
 import type * as Wire from './protocol/Forms/Runtime/Wire.js';
@@ -65,7 +65,7 @@ function OpenForm({ model, components, evidence, transport, onSnapshot, onFailur
   const currentDrafts = useRef(drafts);
   const targets = useRef(new Map<string, HTMLElement>());
   const currentTransport = useRef(transport);
-  currentTransport.current = transport;
+  useLayoutEffect(() => { currentTransport.current = transport; }, [transport]);
   const picking = useRef<string | null>(null);
   useEffect(() => onSnapshot?.(snapshot), [snapshot, onSnapshot]);
   // The opened snapshot may already request data; Lean ignores repeated responses.

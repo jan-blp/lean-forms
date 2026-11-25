@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -19,7 +19,7 @@ const alias = react18 ? {
   react: dirname(require18.resolve('react/package.json')),
   'react-dom': dirname(require18.resolve('react-dom/package.json')),
 } : {};
-let originalBundle;
+let site = cwd;
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function freePort() {
@@ -61,8 +61,12 @@ try {
       entryPoints: [join(cwd, 'web/app.tsx')], bundle: true, write: false, format: 'esm',
       jsx: 'automatic', alias,
     });
-    originalBundle = await readFile(join(cwd, 'web/dist/app.js'));
-    await writeFile(join(cwd, 'web/dist/app.js'), app.outputFiles[0].contents);
+    // The server reads web/ relative to its cwd; serve the React 18 bundle from a copy.
+    site = await mkdtemp(join(tmpdir(), 'forms-react18-'));
+    await mkdir(join(site, 'web/dist'), { recursive: true });
+    for (const path of ['web/index.html', 'web/style.css', 'web/dist/wasm'])
+      await symlink(join(cwd, path), join(site, path));
+    await writeFile(join(site, 'web/dist/app.js'), app.outputFiles[0].contents);
   }
   // Cold Firefox on CI can take over 10s.
   socket = await retry('Firefox', firefox, 60000, () => new Promise((resolve, reject) => {
@@ -99,7 +103,8 @@ try {
   /** Loads `name` in Firefox, runs `body`, then submits through the real server. */
   async function example(name, body, interact) {
     const port = await freePort();
-    const server = spawn('.lake/build/bin/forms-web', [name, '--port', String(port)], { cwd, stdio: 'ignore' });
+    const server = spawn(join(cwd, '.lake/build/bin/forms-web'), [name, '--port', String(port)],
+      { cwd: site, stdio: 'ignore' });
     try {
       await retry(`Server ${name}`, server, 10000, () => fetch(`http://127.0.0.1:${port}/api/form-start`));
       await call('browsingContext.navigate', { context, url: `http://127.0.0.1:${port}/`, wait: 'complete' });
@@ -752,7 +757,7 @@ try {
   });
 
 } finally {
-  if (originalBundle) await writeFile(join(cwd, 'web/dist/app.js'), originalBundle);
+  if (site !== cwd) await rm(site, { recursive: true, force: true });
   socket?.close();
   await stop(firefox);
   await rm(profile, { recursive: true, force: true });
