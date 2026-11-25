@@ -1,4 +1,4 @@
-// Browser-only behavior: Wasm under cross-origin isolation, React drafts and focus, escaping, layout.
+// Browser-only behavior: Wasm without cross-origin isolation, React drafts and focus, escaping, layout.
 // Validation rules live in web/compiled.test.mjs and tools/test_web.py.
 // Requires Firefox and Node.js 22+. Run after lake build forms-web.
 import assert from 'node:assert/strict';
@@ -117,7 +117,7 @@ try {
           await wait(() => status() === 'Submitted successfully.');
         };
         await wait(() => document.querySelector('[data-action=submit]')?.disabled === false);
-        check(crossOriginIsolated, 'Shared-memory runtime requires cross-origin isolation');
+        check(!crossOriginIsolated, 'Expected a page without cross-origin isolation');
         check(document.querySelector('[data-runtime=compiled]'), 'Compiled form runtime was not loaded');
         ${body}
       })()` });

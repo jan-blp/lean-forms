@@ -87,9 +87,6 @@ def respond
   let bytes := body.bytes
   logger.write (TrafficLog.response request status.toCode.toNat (contentType.getD "") bytes)
   let response := Response.new.status status |>.header! "Cache-Control" "no-store"
-  -- Lean's upstream Emscripten runtime uses shared WebAssembly memory.
-  let response := response.header! "Cross-Origin-Opener-Policy" "same-origin"
-    |>.header! "Cross-Origin-Embedder-Policy" "require-corp"
   let response := match contentType with
     | none => response
     | some contentType => response.header! "Content-Type" contentType
