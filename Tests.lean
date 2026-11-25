@@ -2,6 +2,7 @@ module
 
 import Tests.FormModel
 import Tests.DerivingNames
+import Tests.FinEnum
 import Tests.LocalBind
 import Tests.Context
 import Tests.Sugar
