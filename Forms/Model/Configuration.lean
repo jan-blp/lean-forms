@@ -110,10 +110,9 @@ def Placement.initial (can : Capabilities) : Placement can :=
 
 /-- Settings for field -/
 structure FieldTag (α K : Type) where
-  /-- Names the field in settings. -/
   key : K
-  /-- Names the field in errors raised while it is excluded. -/
-  label : String
+  /-- Shown in errors raised while the field is excluded. -/
+  displayName : String
   {Field : Type}
   /-- Where the field lives: a reset writes its fallback here, and diagnostics inside it are
   moved or dropped while it is excluded. -/
@@ -133,7 +132,7 @@ def FieldTag.zoom
   (tag : FieldTag β K)
   : FieldTag α K where
   key := tag.key
-  label := tag.label
+  displayName := tag.displayName
   path := path.trans tag.path
   exclusion := tag.exclusion
   lockable := tag.lockable
@@ -353,12 +352,12 @@ def Slot.configurable
   [FieldKey K]
   [FieldPaths α K]
   (key : K)
-  (label : String)
+  (displayName : String)
   (exclusion : Exclusion (FieldPaths.Field α key))
   (lockable : Bool)
   (component : Component Γ α)
   : Slot Γ α K :=
-  .tagged { key, label, path := FieldPaths.path key, exclusion, lockable } component
+  .tagged { key, displayName, path := FieldPaths.path key, exclusion, lockable } component
 
 /-- A tagged editor for the field `key` names. -/
 def Slot.field
@@ -367,12 +366,12 @@ def Slot.field
   [FieldKey K]
   [FieldPaths α K]
   (key : K)
-  (label : String)
+  (displayName : String)
   (editor : Editor (FieldPaths.Field α key))
   (exclusion : Exclusion (FieldPaths.Field α key))
   (lockable : Bool)
   : Slot Γ α K :=
-  .configurable key label exclusion lockable (.field (FieldPaths.path key) label editor)
+  .configurable key displayName exclusion lockable (.field (FieldPaths.path key) displayName editor)
 
 /-- Tagged slots take the positions of tagged slots, in the order the settings give. -/
 def Slot.arrange
@@ -493,7 +492,7 @@ def Configured.excluded
   (resolution : Resolution K can)
   : List ExcludedField :=
   (form.tags.filter fun tag => (resolution.placement tag.key).state == .excluded).map fun tag =>
-    { scope := tag.path.erase, label := tag.label }
+    { scope := tag.path.erase, label := tag.displayName }
 
 /-- Applies the fallback of every excluded field whose policy resets it. -/
 def Configured.applyFallbacks
