@@ -27,7 +27,7 @@ private def key
   (label : String)
   (nth : Nat := 0)
   : IO ControlKey := do
-  let controls := (ModelView.render form state.value state.cache [] state.env state.locals).controls
+  let controls := (ModelView.render form state.value state.fetchState [] state.env state.locals).controls
   let some found := (controls.filter (·.label == label))[nth]?
     | throw (IO.userError s!"FAIL missing button {label} {nth}")
   return found.key

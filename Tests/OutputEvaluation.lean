@@ -3,6 +3,7 @@ module
 public import Forms.ExampleForms.Outputs
 public import Forms.Runtime.ModelForm
 public import Tests.FreshId
+public import Tests.Fetch
 
 public section
 namespace Tests.OutputEvaluation
@@ -147,15 +148,15 @@ def run : IO Unit := do
   let increment ← press waiting "Increment"
   let waiting := remote.evaluate increment.value increment.state {} increment.locals
   check "EvaluationRequestsRefreshAfterActions" (waiting.requests == [request 1])
-  let cache : HttpRequest.Cache := ({} : HttpRequest.Cache).insert (request 1) (.loaded (Lean.toJson (13 : Nat)))
-  let ready := remote.evaluate increment.value increment.state cache waiting.locals
+  let ready := remote.evaluate increment.value increment.state
+    (respond {} (request 1) (Lean.toJson (13 : Nat))) waiting.locals
   check "EvaluationRefreshesAfterCacheChanges" (ready.output == 13 && waiting.output == 0)
 
-  let initialCache : HttpRequest.Cache := ({} : HttpRequest.Cache).insert (request 0) (.loaded (Lean.toJson (1 : Nat)))
+  let initialCache := respond {} (request 0) (Lean.toJson (1 : Nat))
   let loaded := loadedCounter.evaluate 0 Env.nil initialCache
   let increment ← press loaded "Increment"
   let retained := loadedCounter.evaluate increment.value increment.state initialCache increment.locals
-  let changedCache := initialCache.insert (request 0) (.loaded (Lean.toJson (2 : Nat)))
+  let changedCache := respond initialCache (request 0) (Lean.toJson (2 : Nat))
   let reset := loadedCounter.evaluate increment.value increment.state changedCache retained.locals
   check "EvaluationLoadedStateRetainsAndResets" (retained.output == 1 && reset.output == 0)
 
@@ -274,7 +275,7 @@ def run : IO Unit := do
   check "EvaluationColumnRequestsUseEarlierCellOutputs"
     (remoteRows.requests.map (·.url) == ["/row/one", "/row/two"] && remoteRows.output == [0, 0])
   let some firstRequest := remoteRows.requests.head? | throw (IO.userError "Missing row request")
-  let rowCache := ({} : HttpRequest.Cache).insert firstRequest (.loaded (Lean.toJson (21 : Nat)))
+  let rowCache := respond {} firstRequest (Lean.toJson (21 : Nat))
   let loadedRows :=
     remoteTable.evaluate (Collection.numbered ["one", "two"]) Env.nil rowCache remoteRows.locals
   check "EvaluationColumnOutputsRefreshAfterLoading" (loadedRows.output == [21, 0])

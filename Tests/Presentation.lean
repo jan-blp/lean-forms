@@ -4,6 +4,7 @@ public import Forms.ExampleForms.Presentation
 public import Forms.Runtime.ModelForm
 public import Forms.Runtime.ControlKeyProtocol
 public import Tests.FreshId
+public import Tests.Fetch
 
 public section
 namespace Tests.Presentation
@@ -184,7 +185,7 @@ def run : IO Unit := do
   let pending := unplaced.evaluate 0 Env.nil
   check "PresentationPlacementDoesNotSuppressOwnedRequests"
     (pending.requests == [request] && pending.view.controls.isEmpty && pending.output == 0)
-  let cache := ({} : HttpRequest.Cache).insert request (.loaded (Lean.toJson (7 : Nat)))
+  let cache := respond {} request (Lean.toJson (7 : Nat))
   let loaded := unplaced.evaluate 0 Env.nil cache pending.locals
   check "PresentationUnplacedLoadUpdatesItsOutput" (loaded.output == 7)
 

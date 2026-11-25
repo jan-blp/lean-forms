@@ -18,7 +18,7 @@ private def control
   (label : String)
   (nth : Nat := 0)
   : IO ControlKey := do
-  let controls := (ModelView.render form state.value state.cache [] Env.nil state.locals).controls
+  let controls := (ModelView.render form state.value state.fetchState [] Env.nil state.locals).controls
   let some found := (controls.filter (·.label == label))[nth]?
     | throw (IO.userError s!"FAIL missing local control {label} {nth}")
   return found.key
@@ -95,14 +95,14 @@ def run : IO Unit := do
   let picked ← apply (model := ExpenseReport) mode loaded "Select" none 1
   let same ← apply (model := ExpenseReport) mode picked "Mode" (some (.text "table"))
   check "LocalLoadRetainsStateForSameStatus"
-    ((ModelView.render mode same.value same.cache [] Env.nil same.locals).controls.any (·.label == "Selected"))
+    ((ModelView.render mode same.value same.fetchState [] Env.nil same.locals).controls.any (·.label == "Selected"))
   let changed ← apply (model := ExpenseReport) mode same "Mode" (some (.text "function"))
-  check "LocalLoadCanChangeBindingTypes" (match (ModelView.render mode changed.value changed.cache [] Env.nil changed.locals).view with
+  check "LocalLoadCanChangeBindingTypes" (match (ModelView.render mode changed.value changed.fetchState [] Env.nil changed.locals).view with
     | .stack (children := [_, .computed "Function" "42"]) .. => true
     | _ => false)
   let back ← apply (model := ExpenseReport) mode changed "Mode" (some (.text "table"))
   check "LocalLoadResetsBindingsWhenStatusChanges"
-    (!(ModelView.render mode back.value back.cache [] Env.nil back.locals).controls.any (·.label == "Selected") &&
+    (!(ModelView.render mode back.value back.fetchState [] Env.nil back.locals).controls.any (·.label == "Selected") &&
       toJson back.value.expenses == toJson initial.expenses)
 
 end Tests.LocalBind

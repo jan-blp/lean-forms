@@ -20,7 +20,7 @@ private def key
   (label : String)
   (nth : Nat := 0)
   : IO ControlKey := do
-  let controls := (ModelView.render component state.value state.cache [] state.env state.locals).controls
+  let controls := (ModelView.render component state.value state.fetchState [] state.env state.locals).controls
   let some control := (controls.filter (·.label == label))[nth]?
     | throw (IO.userError s!"FAIL missing {label} {nth}")
   return control.key
@@ -53,7 +53,7 @@ private def outputsRows (label : String) : List Display.TableRow → List String
 end
 
 private def values (state : ModelForm.State form) (label : String) : List String :=
-  outputs label (ModelView.render form state.value state.cache [] state.env state.locals).view
+  outputs label (ModelView.render form state.value state.fetchState [] state.env state.locals).view
 
 def run : IO Unit := do
   let opened := ModelForm.openState (model := Collection Nat) (supply := supply) form initial Env.nil
