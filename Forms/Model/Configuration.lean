@@ -206,19 +206,6 @@ def FieldTag.fallback
     | .allowed .keep _ => id
     | .allowed (.reset fallback) _ => tag.path.set fallback
 
-/-- The sub-record at `path`, whose keys `wrap` makes keys of the whole form. The whole form's
-`FieldPaths` must agree with the sub-record's. -/
-structure Nesting (α β K K' : Type) [FieldKey K] [FieldKey K'] [FieldPaths α K] [FieldPaths β K']
-    where
-  wrap : K' → K
-  path : Path α β
-  field_wrap : ∀ key, FieldPaths.Field α (wrap key) = FieldPaths.Field β key := by
-    intro _
-    rfl
-  path_wrap : ∀ key ∈ FinEnum.toList K',
-      (FieldPaths.path (α := α) (wrap key)).erase = (path.trans (FieldPaths.path key)).erase := by
-    decide +kernel
-
 theorem Exclusion.excludability_cast
   {A B : Type}
   (same : A = B)
@@ -233,12 +220,13 @@ def FieldTag.nest
   [FieldKey K']
   [FieldPaths α K]
   [FieldPaths β K']
-  (nesting : Nesting α β K K')
+  (wrap : K' → K)
+  (field_wrap : ∀ key, FieldPaths.Field α (wrap key) = FieldPaths.Field β key)
   (tag : FieldTag β K')
   : FieldTag α K where
-  key := nesting.wrap tag.key
+  key := wrap tag.key
   displayName := tag.displayName
-  exclusion := cast (congrArg Exclusion (nesting.field_wrap tag.key).symm) tag.exclusion
+  exclusion := cast (congrArg Exclusion (field_wrap tag.key).symm) tag.exclusion
   lockable := tag.lockable
 
 theorem FieldTag.capabilities_nest
@@ -247,11 +235,12 @@ theorem FieldTag.capabilities_nest
   [FieldKey K']
   [FieldPaths α K]
   [FieldPaths β K']
-  (nesting : Nesting α β K K')
+  (wrap : K' → K)
+  (field_wrap : ∀ key, FieldPaths.Field α (wrap key) = FieldPaths.Field β key)
   (tag : FieldTag β K')
-  : (tag.nest nesting).capabilities = tag.capabilities := by
+  : (tag.nest wrap field_wrap).capabilities = tag.capabilities := by
   simp only [FieldTag.capabilities, FieldTag.nest]
-  rw [Exclusion.excludability_cast (nesting.field_wrap tag.key).symm]
+  rw [Exclusion.excludability_cast (field_wrap tag.key).symm]
 
 /-- A setting whose key decoded, with a placement its capabilities allow. -/
 structure Accepted (K : Type) (can : K → Capabilities) where
@@ -473,7 +462,8 @@ def Configured.group
         agree tag (List.mem_flatMap.mpr
           ⟨slot, (Slot.arrange_perm resolution slots).mem_iff.mp placed, tagged⟩)
 
-/-- A part of a sub-record, used in the whole form through `nesting`. -/
+/-- A part of the sub-record at `path`, whose keys `wrap` makes keys of the whole form. The whole
+form's `FieldPaths` must agree with the sub-record's. -/
 def Configured.nest
   {Γ : Context}
   {α β K K' : Type}
@@ -481,16 +471,20 @@ def Configured.nest
   [FieldKey K']
   [FieldPaths α K]
   [FieldPaths β K']
-  (nesting : Nesting α β K K')
+  (wrap : K' → K)
+  (path : Path α β)
   (part : Configured Γ β K')
+  (field_wrap : ∀ key, FieldPaths.Field α (wrap key) = FieldPaths.Field β key := by intro _; rfl)
+  (_path_wrap : ∀ key ∈ FinEnum.toList K',
+      (FieldPaths.path (α := α) (wrap key)).erase = (path.trans (FieldPaths.path key)).erase := by decide +kernel)
   : Configured Γ α K where
-  tags := part.tags.map (FieldTag.nest nesting)
+  tags := part.tags.map (FieldTag.nest wrap field_wrap)
   build agree resolution :=
-    .zoom nesting.path <| part.build
+    .zoom path <| part.build
       (fun tag tagged =>
-        (agree (tag.nest nesting) (List.mem_map_of_mem tagged)).trans
-          (FieldTag.capabilities_nest nesting tag))
-      (resolution.comap nesting.wrap)
+        (agree (tag.nest wrap field_wrap) (List.mem_map_of_mem tagged)).trans
+          (FieldTag.capabilities_nest wrap field_wrap tag))
+      (resolution.comap wrap)
 
 /-- The capabilities of the tag that uses `key`. -/
 def Configured.capabilities

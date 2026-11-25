@@ -52,7 +52,8 @@ example : (TenantInvoice.form (Γ := [])).WellKeyed := by
 /-- A nesting whose keys land on another field of the same type is rejected. -/
 example : ¬ ∀ key ∈ FinEnum.toList SupplierAddress.FieldKey,
     (FieldPaths.path (α := TenantInvoice.Raw) TenantInvoice.FieldKey.supplier).erase =
-      (TenantInvoice.addressKeys.path.trans (FieldPaths.path key)).erase := by
+      ((path[TenantInvoice.Field.address] : Path TenantInvoice.Raw SupplierAddress.Raw).trans
+        (FieldPaths.path key)).erase := by
   decide
 
 private def opened
