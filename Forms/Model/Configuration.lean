@@ -112,6 +112,8 @@ def Placement.initial (can : Capabilities) : Placement can :=
 structure FieldTag (α K : Type) where
   /-- Names the field in settings. -/
   key : K
+  /-- Names the field in errors raised while it is excluded. -/
+  label : String
   {Field : Type}
   /-- Where the field lives: a reset writes its fallback here, and diagnostics inside it are
   moved or dropped while it is excluded. -/
@@ -131,6 +133,7 @@ def FieldTag.zoom
   (tag : FieldTag β K)
   : FieldTag α K where
   key := tag.key
+  label := tag.label
   path := path.trans tag.path
   exclusion := tag.exclusion
   lockable := tag.lockable
@@ -192,9 +195,7 @@ def Resolution.comap
   decode_encode key := Key.find?_encode encode _ key (FinEnum.mem_toList key) distinct
   encode_ne_empty key := named key (FinEnum.mem_toList key)
 
-class FieldKey (K : Type) extends Key K, FinEnum K where
-  /-- Names the field in errors raised while it is excluded. -/
-  fieldName : K → String
+class FieldKey (K : Type) extends Key K, FinEnum K
 
 /-- The keys of a form with nothing to configure. -/
 instance : FieldKey Empty where
@@ -203,7 +204,6 @@ instance : FieldKey Empty where
   decode_encode := nofun
   encode_ne_empty := nofun
   toFinEnum := inferInstance
-  fieldName := nofun
 
 /-- No location is a prefix of another's, so no two keys name overlapping fields. -/
 def PrefixFree {K : Type} [FinEnum K] (location : K → ErasedLocation) : Prop :=
@@ -353,25 +353,26 @@ def Slot.configurable
   [FieldKey K]
   [FieldPaths α K]
   (key : K)
+  (label : String)
   (exclusion : Exclusion (FieldPaths.Field α key))
   (lockable : Bool)
   (component : Component Γ α)
   : Slot Γ α K :=
-  .tagged { key, path := FieldPaths.path key, exclusion, lockable } component
+  .tagged { key, label, path := FieldPaths.path key, exclusion, lockable } component
 
-/-- A tagged editor for the field `key` names, labelled with its field name. -/
+/-- A tagged editor for the field `key` names. -/
 def Slot.field
   {Γ : Context}
   {α K : Type}
   [FieldKey K]
   [FieldPaths α K]
   (key : K)
+  (label : String)
   (editor : Editor (FieldPaths.Field α key))
   (exclusion : Exclusion (FieldPaths.Field α key))
   (lockable : Bool)
   : Slot Γ α K :=
-  .configurable key exclusion lockable
-    (.field (FieldPaths.path key) (FieldKey.fieldName key) editor)
+  .configurable key label exclusion lockable (.field (FieldPaths.path key) label editor)
 
 /-- Tagged slots take the positions of tagged slots, in the order the settings give. -/
 def Slot.arrange
@@ -488,12 +489,11 @@ def Configured.excluded
   {Γ : Context}
   {α K : Type}
   {can : K → Capabilities}
-  [FieldKey K]
   (form : Configured Γ α K)
   (resolution : Resolution K can)
   : List ExcludedField :=
   (form.tags.filter fun tag => (resolution.placement tag.key).state == .excluded).map fun tag =>
-    { scope := tag.path.erase, label := FieldKey.fieldName tag.key }
+    { scope := tag.path.erase, label := tag.label }
 
 /-- Applies the fallback of every excluded field whose policy resets it. -/
 def Configured.applyFallbacks

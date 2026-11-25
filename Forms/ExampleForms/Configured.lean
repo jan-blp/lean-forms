@@ -43,8 +43,6 @@ inductive SupplierAddress.FieldKey where
 instance : FieldKey SupplierAddress.FieldKey where
   toKey := .ofFinEnum fun
     | .city => "city"
-  fieldName
-    | .city => "City"
 
 instance : FieldPaths SupplierAddress.Raw SupplierAddress.FieldKey where
   Field
@@ -55,7 +53,7 @@ instance : FieldPaths SupplierAddress.Raw SupplierAddress.FieldKey where
 def SupplierAddress.form {Γ : Context} : Configured Γ SupplierAddress.Raw SupplierAddress.FieldKey :=
   .group "Supplier address" [
     .fixed (.field path[SupplierAddress.Field.street] "Street" .text),
-    .field .city .text (.allowed (.reset "") .shown) (lockable := false)]
+    .field .city "City" .text (.allowed (.reset "") .shown) (lockable := false)]
 
 inductive TenantInvoice.FieldKey where
   | supplier
@@ -72,12 +70,6 @@ instance : FieldKey TenantInvoice.FieldKey where
     | .vatDate => "vatDate"
     | .postingDate => "postingDate"
     | .address key => "address." ++ Key.encode key
-  fieldName
-    | .supplier => "Supplier"
-    | .reference => "Reference"
-    | .vatDate => "VAT date"
-    | .postingDate => "Posting date"
-    | .address key => FieldKey.fieldName key
 
 instance : FieldPaths TenantInvoice.Raw TenantInvoice.FieldKey where
   Field
@@ -96,10 +88,10 @@ instance : FieldPaths TenantInvoice.Raw TenantInvoice.FieldKey where
 def TenantInvoice.form {Γ : Context} : Configured Γ TenantInvoice.Raw TenantInvoice.FieldKey :=
   .group "Invoice" [
     .fixed (.field path[TenantInvoice.Field.number] "Invoice number" .text),
-    .field .supplier .text .forbidden (lockable := true),
-    .field .reference .text (.allowed .keep .shown) (lockable := true),
-    .field .vatDate (.optional .date) (.allowed (.reset none) .shown) (lockable := true),
-    .field .postingDate (.optional .date) (.allowed .keep .excluded) (lockable := false),
+    .field .supplier "Supplier" .text .forbidden (lockable := true),
+    .field .reference "Reference" .text (.allowed .keep .shown) (lockable := true),
+    .field .vatDate "VAT date" (.optional .date) (.allowed (.reset none) .shown) (lockable := true),
+    .field .postingDate "Posting date" (.optional .date) (.allowed .keep .excluded) (lockable := false),
     .nested (.nest .address path[TenantInvoice.Field.address] SupplierAddress.form)]
 
 def TenantInvoice.initial : TenantInvoice.Raw := {

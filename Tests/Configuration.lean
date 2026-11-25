@@ -26,7 +26,7 @@ private def capabilities : TenantInvoice.FieldKey → Capabilities :=
   (TenantInvoice.form (Γ := [])).capabilities
 
 private def supplier : Slot [] TenantInvoice.Raw TenantInvoice.FieldKey :=
-  .field .supplier .text .forbidden (lockable := false)
+  .field .supplier "Supplier" .text .forbidden (lockable := false)
 
 /-- A key used twice, and keys left unused, are rejected when the form is registered. -/
 example : ¬ (Configured.group (Γ := []) "Twice" [supplier, supplier]).WellKeyed := by
