@@ -108,64 +108,6 @@ def Placement.initial (can : Capabilities) : Placement can :=
   | .allowed .shown => .shown
   | .allowed .excluded => .excluded (by simp [Capabilities.excludable, excludability])
 
-/-- Settings for field -/
-structure FieldTag (α K : Type) where
-  key : K
-  /-- Shown in errors raised while the field is excluded. -/
-  displayName : String
-  {Field : Type}
-  /-- Where the field lives: a reset writes its fallback here, and diagnostics inside it are
-  moved or dropped while it is excluded. -/
-  path : Path α Field
-  /-- Whether settings may exclude the field, and what then happens to its value. -/
-  exclusion : Exclusion Field
-  /-- Whether settings may make the field read-only. -/
-  lockable : Bool
-
-def FieldTag.capabilities {α K : Type} (tag : FieldTag α K) : Capabilities where
-  excludability := tag.exclusion.excludability
-  lockable := tag.lockable
-
-def FieldTag.zoom
-  {α β K : Type}
-  (path : Path α β)
-  (tag : FieldTag β K)
-  : FieldTag α K where
-  key := tag.key
-  displayName := tag.displayName
-  path := path.trans tag.path
-  exclusion := tag.exclusion
-  lockable := tag.lockable
-
-def FieldTag.mapKey
-  {α K K' : Type}
-  (f : K' → K)
-  (tag : FieldTag α K')
-  : FieldTag α K :=
-  { tag with key := f tag.key }
-
-theorem FieldTag.capabilities_zoom
-  {α β K : Type}
-  (path : Path α β)
-  (tag : FieldTag β K)
-  : (tag.zoom path).capabilities = tag.capabilities :=
-  rfl
-
-/-- The value of a field the placement excludes, under the tag's policy. -/
-def FieldTag.fallback
-  {α K : Type}
-  (tag : FieldTag α K)
-  : Placement tag.capabilities → α → α
-  | .shown => id
-  | .readOnly _ => id
-  | .excluded excludable =>
-    match exclusion : tag.exclusion with
-    | .forbidden => nomatch (by
-        simp [Capabilities.excludable, FieldTag.capabilities, Exclusion.excludability, exclusion]
-          at excludable : False)
-    | .allowed .keep _ => id
-    | .allowed (.reset fallback) _ => tag.path.set fallback
-
 /-- Settings checked against a form's keys: every key has a placement its capabilities allow. -/
 structure Resolution (K : Type) (can : K → Capabilities) where
   /-- Where a field goes among the configurable fields of its group. -/
@@ -217,6 +159,99 @@ class FieldPaths (α K : Type) [FinEnum K] where
   path : (key : K) → Path α (Field key)
   -- TODO: Quadratic in the keys; if slow, switch this and the other `decide +kernel` checks to `native_decide`.
   prefixFree : PrefixFree fun key => (path key).erase := by decide +kernel
+
+/-- Settings for field -/
+structure FieldTag (α K : Type) [FieldKey K] [FieldPaths α K] where
+  key : K
+  /-- Shown in errors raised while the field is excluded. -/
+  displayName : String
+  /-- Whether settings may exclude the field, and what then happens to its value. -/
+  exclusion : Exclusion (FieldPaths.Field α key)
+  /-- Whether settings may make the field read-only. -/
+  lockable : Bool
+
+/-- Where the field lives: a reset writes its fallback here, and diagnostics inside it are moved
+or dropped while it is excluded. -/
+def FieldTag.path
+  {α K : Type}
+  [FieldKey K]
+  [FieldPaths α K]
+  (tag : FieldTag α K)
+  : Path α (FieldPaths.Field α tag.key) :=
+  FieldPaths.path tag.key
+
+def FieldTag.capabilities
+  {α K : Type}
+  [FieldKey K]
+  [FieldPaths α K]
+  (tag : FieldTag α K)
+  : Capabilities where
+  excludability := tag.exclusion.excludability
+  lockable := tag.lockable
+
+/-- The value of a field the placement excludes, under the tag's policy. -/
+def FieldTag.fallback
+  {α K : Type}
+  [FieldKey K]
+  [FieldPaths α K]
+  (tag : FieldTag α K)
+  : Placement tag.capabilities → α → α
+  | .shown => id
+  | .readOnly _ => id
+  | .excluded excludable =>
+    match exclusion : tag.exclusion with
+    | .forbidden => nomatch (by
+        simp [Capabilities.excludable, FieldTag.capabilities, Exclusion.excludability, exclusion]
+          at excludable : False)
+    | .allowed .keep _ => id
+    | .allowed (.reset fallback) _ => tag.path.set fallback
+
+/-- The sub-record at `path`, whose keys `wrap` makes keys of the whole form. The whole form's
+`FieldPaths` must agree with the sub-record's. -/
+structure Nesting (α β K K' : Type) [FieldKey K] [FieldKey K'] [FieldPaths α K] [FieldPaths β K']
+    where
+  wrap : K' → K
+  path : Path α β
+  field_wrap : ∀ key, FieldPaths.Field α (wrap key) = FieldPaths.Field β key := by
+    intro _
+    rfl
+  path_wrap : ∀ key ∈ FinEnum.toList K',
+      (FieldPaths.path (α := α) (wrap key)).erase = (path.trans (FieldPaths.path key)).erase := by
+    decide +kernel
+
+theorem Exclusion.excludability_cast
+  {A B : Type}
+  (same : A = B)
+  (exclusion : Exclusion A)
+  : (cast (congrArg Exclusion same) exclusion).excludability = exclusion.excludability := by
+  subst same
+  rfl
+
+def FieldTag.nest
+  {α β K K' : Type}
+  [FieldKey K]
+  [FieldKey K']
+  [FieldPaths α K]
+  [FieldPaths β K']
+  (nesting : Nesting α β K K')
+  (tag : FieldTag β K')
+  : FieldTag α K where
+  key := nesting.wrap tag.key
+  displayName := tag.displayName
+  exclusion := cast (congrArg Exclusion (nesting.field_wrap tag.key).symm) tag.exclusion
+  lockable := tag.lockable
+
+theorem FieldTag.capabilities_nest
+  {α β K K' : Type}
+  [FieldKey K]
+  [FieldKey K']
+  [FieldPaths α K]
+  [FieldPaths β K']
+  (nesting : Nesting α β K K')
+  (tag : FieldTag β K')
+  : (tag.nest nesting).capabilities = tag.capabilities := by
+  simp only [FieldTag.capabilities, FieldTag.nest]
+  rw [Exclusion.excludability_cast (nesting.field_wrap tag.key).symm]
 
 /-- A setting whose key decoded, with a placement its capabilities allow. -/
 structure Accepted (K : Type) (can : K → Capabilities) where
@@ -296,7 +331,7 @@ theorem fillPositions_perm
 
 /-- A component of `α` whose fields its settings can exclude, reorder, or make read-only.
 `build` needs the capabilities of each key to agree with the tags that use it. -/
-structure Configured (Γ : Context) (α K : Type) where
+structure Configured (Γ : Context) (α K : Type) [FieldKey K] [FieldPaths α K] where
   tags : List (FieldTag α K)
   build
     : {can : K → Capabilities}
@@ -304,18 +339,28 @@ structure Configured (Γ : Context) (α K : Type) where
     → Resolution K can
     → Component Γ α
 
-inductive Slot (Γ : Context) (α K : Type) where
+inductive Slot (Γ : Context) (α K : Type) [FieldKey K] [FieldPaths α K] where
   | fixed (component : Component Γ α)
   | tagged (tag : FieldTag α K) (component : Component Γ α)
   /-- Keeps its position; its own fields follow the settings. -/
   | nested (part : Configured Γ α K)
 
-def Slot.tags {Γ : Context} {α K : Type} : Slot Γ α K → List (FieldTag α K)
+def Slot.tags
+  {Γ : Context}
+  {α K : Type}
+  [FieldKey K]
+  [FieldPaths α K]
+  : Slot Γ α K → List (FieldTag α K)
   | .fixed _ => []
   | .tagged tag _ => [tag]
   | .nested part => part.tags
 
-def Slot.isTagged {Γ : Context} {α K : Type} : Slot Γ α K → Bool
+def Slot.isTagged
+  {Γ : Context}
+  {α K : Type}
+  [FieldKey K]
+  [FieldPaths α K]
+  : Slot Γ α K → Bool
   | .fixed _ => false
   | .tagged _ _ => true
   | .nested _ => false
@@ -323,6 +368,8 @@ def Slot.isTagged {Γ : Context} {α K : Type} : Slot Γ α K → Bool
 def Slot.position
   {Γ : Context}
   {α K : Type}
+  [FieldKey K]
+  [FieldPaths α K]
   {can : K → Capabilities}
   (resolution : Resolution K can)
   : Slot Γ α K → Nat
@@ -333,6 +380,8 @@ def Slot.position
 def Slot.render
   {Γ : Context}
   {α K : Type}
+  [FieldKey K]
+  [FieldPaths α K]
   {can : K → Capabilities}
   (resolution : Resolution K can)
   : (slot : Slot Γ α K) → (∀ tag ∈ slot.tags, can tag.key = tag.capabilities) →
@@ -357,7 +406,7 @@ def Slot.configurable
   (lockable : Bool)
   (component : Component Γ α)
   : Slot Γ α K :=
-  .tagged { key, displayName, path := FieldPaths.path key, exclusion, lockable } component
+  .tagged { key, displayName, exclusion, lockable } component
 
 /-- A tagged editor for the field `key` names. -/
 def Slot.field
@@ -377,6 +426,8 @@ def Slot.field
 def Slot.arrange
   {Γ : Context}
   {α K : Type}
+  [FieldKey K]
+  [FieldPaths α K]
   {can : K → Capabilities}
   (resolution : Resolution K can)
   (slots : List (Slot Γ α K))
@@ -388,6 +439,8 @@ def Slot.arrange
 theorem Slot.arrange_perm
   {Γ : Context}
   {α K : Type}
+  [FieldKey K]
+  [FieldPaths α K]
   {can : K → Capabilities}
   (resolution : Resolution K can)
   (slots : List (Slot Γ α K))
@@ -397,6 +450,8 @@ theorem Slot.arrange_perm
 def Configured.ofComponent
   {Γ : Context}
   {α K : Type}
+  [FieldKey K]
+  [FieldPaths α K]
   (component : Component Γ α)
   : Configured Γ α K where
   tags := []
@@ -405,6 +460,8 @@ def Configured.ofComponent
 def Configured.group
   {Γ : Context}
   {α K : Type}
+  [FieldKey K]
+  [FieldPaths α K]
   (label : Computation Γ α String)
   (slots : List (Slot Γ α K))
   : Configured Γ α K where
@@ -416,45 +473,31 @@ def Configured.group
         agree tag (List.mem_flatMap.mpr
           ⟨slot, (Slot.arrange_perm resolution slots).mem_iff.mp placed, tagged⟩)
 
-def Configured.zoom
-  {Γ : Context}
-  {α β K : Type}
-  (path : Path α β)
-  (body : Configured Γ β K)
-  : Configured Γ α K where
-  tags := body.tags.map (FieldTag.zoom path)
-  build agree resolution :=
-    .zoom path <| body.build (fun tag tagged =>
-      (agree (tag.zoom path) (List.mem_map_of_mem tagged)).trans (FieldTag.capabilities_zoom path tag))
-      resolution
-
-/-- Uses a part whose keys are `K'` in a form whose keys are `K`. -/
-def Configured.mapKey
-  {Γ : Context}
-  {α K K' : Type}
-  (f : K' → K)
-  (part : Configured Γ α K')
-  : Configured Γ α K where
-  tags := part.tags.map (FieldTag.mapKey f)
-  build agree resolution :=
-    part.build (fun tag tagged => agree (tag.mapKey f) (List.mem_map_of_mem tagged))
-      (resolution.comap f)
-
-/-- A part of the sub-record at `path`, whose keys `wrap` makes keys of the whole form. -/
+/-- A part of a sub-record, used in the whole form through `nesting`. -/
 def Configured.nest
   {Γ : Context}
   {α β K K' : Type}
-  (wrap : K' → K)
-  (path : Path α β)
+  [FieldKey K]
+  [FieldKey K']
+  [FieldPaths α K]
+  [FieldPaths β K']
+  (nesting : Nesting α β K K')
   (part : Configured Γ β K')
-  : Configured Γ α K :=
-  .mapKey wrap (.zoom path part)
+  : Configured Γ α K where
+  tags := part.tags.map (FieldTag.nest nesting)
+  build agree resolution :=
+    .zoom nesting.path <| part.build
+      (fun tag tagged =>
+        (agree (tag.nest nesting) (List.mem_map_of_mem tagged)).trans
+          (FieldTag.capabilities_nest nesting tag))
+      (resolution.comap nesting.wrap)
 
 /-- The capabilities of the tag that uses `key`. -/
 def Configured.capabilities
   {Γ : Context}
   {α K : Type}
   [FieldKey K]
+  [FieldPaths α K]
   (form : Configured Γ α K)
   (key : K)
   : Capabilities :=
@@ -462,8 +505,7 @@ def Configured.capabilities
   | some tag => tag.capabilities
   | none => { excludability := .forbidden, lockable := false }
 
-/-- Every key is used by exactly one tag, `capabilities` agrees with each tag, and each tag's
-field is where its key says. -/
+/-- Every key is used by exactly one tag, and `capabilities` agrees with each tag. -/
 def Configured.WellKeyed
   {Γ : Context}
   {α K : Type}
@@ -472,8 +514,7 @@ def Configured.WellKeyed
   (form : Configured Γ α K)
   : Prop :=
   (form.tags.map (·.key)).Perm (FinEnum.toList K) ∧
-    (∀ tag ∈ form.tags, form.capabilities tag.key = tag.capabilities) ∧
-    ∀ tag ∈ form.tags, tag.path.erase = (FieldPaths.path (α := α) tag.key).erase
+    ∀ tag ∈ form.tags, form.capabilities tag.key = tag.capabilities
 
 instance
     {Γ : Context}
@@ -482,11 +523,13 @@ instance
     [FieldPaths α K]
     (form : Configured Γ α K)
     : Decidable form.WellKeyed :=
-  inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+  inferInstanceAs (Decidable (_ ∧ _))
 
 def Configured.excluded
   {Γ : Context}
   {α K : Type}
+  [FieldKey K]
+  [FieldPaths α K]
   {can : K → Capabilities}
   (form : Configured Γ α K)
   (resolution : Resolution K can)
@@ -498,6 +541,8 @@ def Configured.excluded
 def Configured.applyFallbacks
   {Γ : Context}
   {α K : Type}
+  [FieldKey K]
+  [FieldPaths α K]
   {can : K → Capabilities}
   (form : Configured Γ α K)
   (agree : ∀ tag ∈ form.tags, can tag.key = tag.capabilities)

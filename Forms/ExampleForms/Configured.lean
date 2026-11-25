@@ -85,14 +85,20 @@ instance : FieldPaths TenantInvoice.Raw TenantInvoice.FieldKey where
     | .postingDate => path[TenantInvoice.Field.postingDate]
     | .address key => path[TenantInvoice.Field.address].trans (FieldPaths.path key)
 
+def TenantInvoice.addressKeys : Nesting TenantInvoice.Raw SupplierAddress.Raw TenantInvoice.FieldKey
+    SupplierAddress.FieldKey where
+  wrap := .address
+  path := path[TenantInvoice.Field.address]
+
 def TenantInvoice.form {Γ : Context} : Configured Γ TenantInvoice.Raw TenantInvoice.FieldKey :=
   .group "Invoice" [
     .fixed (.field path[TenantInvoice.Field.number] "Invoice number" .text),
     .field .supplier "Supplier" .text .forbidden (lockable := true),
     .field .reference "Reference" .text (.allowed .keep .shown) (lockable := true),
     .field .vatDate "VAT date" (.optional .date) (.allowed (.reset none) .shown) (lockable := true),
-    .field .postingDate "Posting date" (.optional .date) (.allowed .keep .excluded) (lockable := false),
-    .nested (.nest .address path[TenantInvoice.Field.address] SupplierAddress.form)]
+    .field .postingDate "Posting date" (.optional .date) (.allowed .keep .excluded)
+      (lockable := false),
+    .nested (.nest TenantInvoice.addressKeys SupplierAddress.form)]
 
 def TenantInvoice.initial : TenantInvoice.Raw := {
   number := "INV-1"
