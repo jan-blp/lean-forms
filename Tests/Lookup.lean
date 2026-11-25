@@ -106,7 +106,7 @@ def run : IO Unit := do
         LookupCandidate.ofReference { germany with displayText := "Deutschland" }]),
       ("more", toJson false)]) |>.isOk |> not)
   let definition := FormDefinition.ofModel Delivery Delivery.form Delivery.initial
-  let (opened, _) ← IO.ofExcept (definition.openState (toJson Delivery.initial) supply)
+  let opened := (← IO.ofExcept (definition.openState (toJson Delivery.initial) .empty supply)).state
   let opened : State := opened
   check "LookupClosedFetchesNothing" (fetches opened).isEmpty
   check "LookupDependentDisabled" (← control opened "City").disabled

@@ -2,6 +2,7 @@ module
 
 public import Lean.Data.Json
 public import FormsReact.Component
+public import Forms.Model.Configuration
 
 @[expose] public section
 namespace Forms.Runtime.Wire
@@ -25,6 +26,7 @@ structure FormStart where
   form : String
   fingerprint : String
   value : Json
+  settings : Forms.Model.Settings
   deriving ToJson, FromJson
 
 inductive Request where
@@ -73,7 +75,8 @@ structure Snapshot where
   deriving ToJson, FromJson
 
 inductive Response where
-  | opened (handle : String) (snapshot : Snapshot)
+  /-- `warnings` describe the settings that were ignored. -/
+  | opened (handle : String) (snapshot : Snapshot) (warnings : List String)
   | updated (snapshot : Snapshot)
   | disposed
   deriving ToJson, FromJson

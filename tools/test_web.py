@@ -51,7 +51,7 @@ def serve(example):
             raise AssertionError('HTTP server did not start')
         assert status == 200
         start = json.loads(body)
-        assert set(start) == {'form', 'fingerprint', 'value'}
+        assert set(start) == {'form', 'fingerprint', 'value', 'settings'}
         assert start['form'] == example
         assert start['fingerprint'].startswith('compiled-2-')
         yield request, start, traffic_log
@@ -63,6 +63,16 @@ def serve(example):
             process.kill()
             process.communicate()
         traffic_log.close()
+
+
+def configured_tenant_session():
+    with serve('configured-tenant') as (request, start, _):
+        keys = [field['key'] for field in start['settings']['fields']]
+        assert keys[:2] == ['postingDate', 'supplier'], keys
+        submission = {'form': 'configured-tenant', 'fingerprint': start['fingerprint'], 'value': start['value']}
+        assert request('/api/submit', submission)[0] == 200
+        blank = {**submission, 'value': {**start['value'], 'reference': ''}}
+        validation_error(request, blank, 'Enter the reference.', ['reference'])
 
 
 def validation_error(request, submission, message, steps):
@@ -335,6 +345,7 @@ browser_flag(1)
 
 
 session('person')
+configured_tenant_session()
 order_session()
 expenses_session()
 payment_method_session()

@@ -15,6 +15,7 @@ public import Forms.ExampleForms.Receipts
 public import Forms.ExampleForms.InvoiceEvidence
 public import Forms.ExampleForms.Delivery
 public import Forms.ExampleForms.BusinessPartners
+public import Forms.ExampleForms.Configured
 public import Forms.Runtime.FormDefinition
 public import Std.Data.HashMap
 
@@ -24,6 +25,10 @@ open Forms.Runtime Forms.Model
 
 def paymentMethod : RegisteredForm where
   definition := .ofModel PaymentMethod PaymentMethod.form PaymentMethod.initial
+  submitUrl := "/api/submit"
+
+def tenantInvoice : RegisteredForm where
+  definition := .ofConfigured TenantInvoice TenantInvoice.form TenantInvoice.initial
   submitUrl := "/api/submit"
 
 def receipts : RegisteredForm where
@@ -83,7 +88,13 @@ def forms : List (String × RegisteredForm) := [
     submitUrl := "/api/submit" }),
   ("business-partners", {
     definition := .ofModel BusinessPartnerSelection BusinessPartners.form BusinessPartners.initial
-    submitUrl := "/api/submit" })]
+    submitUrl := "/api/submit" }),
+  ("configured", tenantInvoice),
+  ("configured-tenant", tenantInvoice)]
+
+/-- The settings the example server opens each form with. -/
+def settingsFor (name : String) : Settings :=
+  if name == "configured-tenant" then TenantInvoice.tenantSettings else .empty
 
 def api (request : Model.HttpRequest) : Option Lean.Json :=
   (Delivery.serve request).orElse fun () => BusinessPartners.serve request

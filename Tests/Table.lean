@@ -103,9 +103,9 @@ def run : IO Unit := do
   let duplicated := (toJson ExpenseReport.initial).setObjVal! "expenses" (toJson shared)
   let definition := FormDefinition.ofModel ExpenseReport ExpenseReport.form ExpenseReport.initial
   check "OpeningRejectsDuplicateItemIds"
-    ((match definition.openState duplicated supply with
+    ((match definition.openState duplicated .empty supply with
       | .error message => message.endsWith (Collection.duplicateIdsMessage [firstId])
       | .ok _ => false) &&
-      (definition.openState (toJson ExpenseReport.initial) supply).toOption.isSome)
+      (definition.openState (toJson ExpenseReport.initial) .empty supply).toOption.isSome)
 
 end Tests.Table

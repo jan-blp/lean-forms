@@ -30,19 +30,20 @@ private def seed : String :=
 /-- The initial snapshot, and the snapshot after applying an argument to each control. -/
 private def fixture (name : String) (form : RegisteredForm) : Except String Json := do
   let some supply := Model.Supply.ofSeed? seed | throw "Invalid seed"
-  let (_, typed) ← form.definition.openState form.definition.initial supply
-  let (opened, initial) ← form.open name formFingerprint form.definition.initial supply
+  let settings := settingsFor name
+  let typed := (← form.definition.openState form.definition.initial settings supply).snapshot
+  let opened ← form.open name formFingerprint form.definition.initial settings supply
   let cases ← typed.controls.mapM fun control => do
     let argument := actionArgument control.input
     let key := ControlKeyProtocol.toString control.key
-    let (_, expected) ← opened.execute (.apply key argument)
+    let (_, expected) ← opened.form.execute (.apply key argument)
     pure (Json.mkObj [
       ("action", Json.mkObj [("key", toJson key), ("argument", argument)]),
       ("expected", toJson expected)])
   pure (Json.mkObj [
-    ("start", toJson (form.start name formFingerprint)),
+    ("start", toJson (form.start name formFingerprint settings)),
     ("seed", toJson seed),
-    ("initial", toJson initial),
+    ("initial", toJson opened.snapshot),
     ("cases", toJson cases)])
 
 public def main : IO Unit := do

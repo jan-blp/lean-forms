@@ -222,7 +222,8 @@ def run
   if let some binary := wasmBinary then checkWasmFingerprint binary
   let state ← form.init
   let app : Application := {
-    formStart := Lean.toJson (form.form.start name ExampleForms.formFingerprint)
+    formStart := Lean.toJson (form.form.start name ExampleForms.formFingerprint
+      (ExampleForms.settingsFor name))
     logger := ← TrafficLog.Logger.create
     form := { submit := form.submit state name ExampleForms.formFingerprint }
     html := ← IO.FS.readFile "web/index.html"

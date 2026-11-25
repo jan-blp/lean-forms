@@ -7,6 +7,8 @@ interface WasmModule {
 interface Runtime { form(request: Wire.Request): Wire.Response }
 
 export interface FormModel {
+  /** The settings `start` gave that the form ignored, and why. */
+  readonly warnings: readonly string[];
   snapshot(): Wire.Snapshot;
   send(event: Wire.Event): Wire.Snapshot;
   dispose(): void;
@@ -27,11 +29,12 @@ export async function openForm(
   const { form } = await runtime;
   const opened = form({ open: { start, seed } });
   if (typeof opened !== 'object' || !('opened' in opened)) throw new Error('Expected an opened form.');
-  const { handle } = opened.opened;
+  const { handle, warnings } = opened.opened;
   let snapshot = opened.opened.snapshot;
   let disposed = false;
   function check() { if (disposed) throw new Error('Form model is disposed.'); }
   return {
+    warnings,
     snapshot() { check(); return structuredClone(snapshot); },
     send(event) {
       check();

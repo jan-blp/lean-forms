@@ -39,6 +39,8 @@ structure State {Γ : Model.Context} {α β : Type} (form : Model.Component Γ �
   validationDiagnostics : List Model.Diagnostic
   reportDiagnostics : List Model.Diagnostic
   supply : Model.Supply
+  /-- Fields the form's settings excluded; diagnostics inside them are moved or dropped. -/
+  excluded : List Model.ExcludedField
   draftDiagnostics : List DraftDiagnostic := []
 
 variable {Γ : Model.Context} {α β : Type} {form : Model.Component Γ α β}
@@ -66,6 +68,12 @@ def reports
   : List Model.Diagnostic :=
   (Model.Reports.reports (model := model) value).map (ModelView.report checked)
 
+def excluding
+  (excluded : List Model.ExcludedField)
+  (diagnostics : List Model.Diagnostic)
+  : List Model.Diagnostic :=
+  diagnostics.filterMap (Model.Diagnostic.excluding excluded)
+
 /-- The server's checks describe the document last opened or saved. -/
 def checked
   {model : Type}
@@ -86,10 +94,11 @@ private def openWith
   (value : Model.Raw model)
   (env : Model.Env Γ)
   (supply : Model.Supply)
+  (excluded : List Model.ExcludedField)
   (fetchState : FetchState)
   : State form :=
-  let validationDiagnostics := validationErrors (model := model) value
-  let reportDiagnostics := reports (model := model) value true
+  let validationDiagnostics := excluding excluded (validationErrors (model := model) value)
+  let reportDiagnostics := excluding excluded (reports (model := model) value true)
   { evaluation := ModelView.evaluate form value fetchState env form.initialState
       (validationDiagnostics ++ reportDiagnostics)
     initial := value
@@ -99,7 +108,22 @@ private def openWith
     outbox := []
     validationDiagnostics
     reportDiagnostics
-    supply }
+    supply
+    excluded }
+
+@[no_expose] def openExcluding
+  {Γ : Model.Context}
+  {model β : Type}
+  [FormModel model]
+  [Model.Validation model]
+  [Model.Reports model]
+  (form : Model.Component Γ (Model.Raw model) β)
+  (value : Model.Raw model)
+  (env : Model.Env Γ)
+  (supply : Model.Supply)
+  (excluded : List Model.ExcludedField)
+  : State form :=
+  openWith (model := model) form value env supply excluded .empty
 
 @[no_expose] def openState
   {Γ : Model.Context}
@@ -112,7 +136,7 @@ private def openWith
   (env : Model.Env Γ)
   (supply : Model.Supply)
   : State form :=
-  openWith (model := model) form value env supply .empty
+  openExcluding (model := model) form value env supply []
 
 def refresh
   {Γ : Model.Context}
@@ -154,7 +178,7 @@ def load
   {form : Model.Component Γ (Model.Raw model) β}
   (state : State form)
   : State form :=
-  openWith (model := model) form state.initial state.initialEnv state.supply
+  openWith (model := model) form state.initial state.initialEnv state.supply state.excluded
     state.fetchState.retryFailed
 
 theorem restart_fetchState
@@ -263,9 +287,10 @@ def applyUpdate
   (state : State form)
   (updated : Model.ComponentUpdate Γ (Model.Raw model) form.LocalState)
   : State form :=
-  let validationDiagnostics := validationErrors (model := model) updated.value
-  let reportDiagnostics :=
-    reports (model := model) updated.value (checked (model := model) state.initial updated.value)
+  let validationDiagnostics :=
+    excluding state.excluded (validationErrors (model := model) updated.value)
+  let reportDiagnostics := excluding state.excluded
+    (reports (model := model) updated.value (checked (model := model) state.initial updated.value))
   let diagnostics := state.draftDiagnostics.map (·.diagnostic) ++ validationDiagnostics ++
     reportDiagnostics
   let fetchState := state.fetchState.invalidate updated.invalidations

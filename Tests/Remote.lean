@@ -157,7 +157,7 @@ def run : IO Unit := do
     | .submit _ => false
     | .focus _ => false)
   let definition := FormDefinition.ofModel Lookup Lookup.form Lookup.initial
-  let (opened, _) ← IO.ofExcept (definition.openState (toJson Lookup.initial) supply)
+  let opened := (← IO.ofExcept (definition.openState (toJson Lookup.initial) .empty supply)).state
   let opened : State := opened
   check "RemoteOpenFetches" (fetches opened == [supplier "acme"])
   check "RemoteDetailsLoading" (control? opened "Purchase order").isNone
