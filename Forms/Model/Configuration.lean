@@ -216,7 +216,7 @@ instance {K : Type} [FinEnum K] (location : K → ErasedLocation) : Decidable (P
 class FieldPaths (α K : Type) [FinEnum K] where
   Field : K → Type
   path : (key : K) → Path α (Field key)
-  -- Quadratic in the keys; if slow, switch this and the other `decide +kernel` checks to `native_decide`.
+  -- TODO: Quadratic in the keys; if slow, switch this and the other `decide +kernel` checks to `native_decide`.
   prefixFree : PrefixFree fun key => (path key).erase := by decide +kernel
 
 /-- A setting whose key decoded, with a placement its capabilities allow. -/
