@@ -9,6 +9,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 
 const cwd = fileURLToPath(new URL('..', import.meta.url));
 
@@ -630,6 +631,14 @@ try {
     check(saved.id === 'vic' && Object.keys(saved).sort().join(',') === 'displayText,id',
       'Submission persisted candidate data instead of the reference');
   `);
+  const fixture = await build({
+    entryPoints: [join(cwd, 'tools/fixtures/Transport.tsx')],
+    bundle: true, write: false, format: 'esm', jsx: 'automatic',
+  });
+  const fixtureUrl = `data:text/javascript;base64,${Buffer.from(fixture.outputFiles[0].contents).toString('base64')}`;
+  await example('delivery', '', async evaluate => {
+    await evaluate(`await (await import(${JSON.stringify(fixtureUrl)})).checkTransport();`);
+  });
   const marker = `const marker = () => document.querySelector('.status-marker');
     const issues = () => [...document.querySelectorAll('output')].find(output =>
       output.parentElement.firstChild.textContent === 'Current issues').textContent;

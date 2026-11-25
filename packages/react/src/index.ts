@@ -1,4 +1,4 @@
-export { LeanForm, type LeanFormProps } from './LeanForm.js';
+export { LeanForm, type HttpTransport, type LeanFormProps } from './LeanForm.js';
 export {
   useLeanForm, type Components, type EvidenceHost, type Kind, type LeanFormContext, type LinkedEvidence, type Props,
 } from './context.js';

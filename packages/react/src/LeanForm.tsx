@@ -6,18 +6,22 @@ import type * as FormsReact from './protocol/FormsReact.js';
 import { Render } from './render.js';
 import { openForm, type FormModel } from './runtime.js';
 
+export type HttpTransport = (request: Wire.HttpEffect) => Promise<Response>;
+
 export interface LeanFormProps {
   start: Wire.FormStart;
   /** URL of the app's compiled `forms.mjs`. */
   moduleUrl: string | URL;
   components?: Partial<Components>;
   evidence?: EvidenceHost;
+  /** Handles lookup and submission requests using the host app's authentication. */
+  transport?: HttpTransport;
   onSnapshot?(snapshot: Wire.Snapshot): void;
 }
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 
-export function LeanForm({ start, moduleUrl, components, evidence, onSnapshot }: LeanFormProps) {
+export function LeanForm({ start, moduleUrl, components, evidence, transport, onSnapshot }: LeanFormProps) {
   const [model, setModel] = useState<FormModel>();
   const [failure, setFailure] = useState<string>();
   const url = String(moduleUrl);
@@ -33,13 +37,15 @@ export function LeanForm({ start, moduleUrl, components, evidence, onSnapshot }:
   if (failure !== undefined) return <p className="error" role="alert">{failure}</p>;
   if (!model) return <p role="status">Loading…</p>;
   return <OpenForm model={model} components={{ ...defaultComponents, ...components }}
-    evidence={evidence ?? null} onSnapshot={onSnapshot} onFailure={error => setFailure(message(error))} />;
+    evidence={evidence ?? null} transport={transport} onSnapshot={onSnapshot}
+    onFailure={error => setFailure(message(error))} />;
 }
 
 interface OpenFormProps {
   model: FormModel;
   components: Components;
   evidence: EvidenceHost | null;
+  transport?: HttpTransport;
   onSnapshot?(snapshot: Wire.Snapshot): void;
   onFailure(error: unknown): void;
 }
@@ -49,11 +55,17 @@ interface Draft {
   error?: string;
 }
 
-function OpenForm({ model, components, evidence, onSnapshot, onFailure }: OpenFormProps) {
+async function defaultTransport({ url, ...request }: Wire.HttpEffect): Promise<Response> {
+  return fetch(url, request);
+}
+
+function OpenForm({ model, components, evidence, transport, onSnapshot, onFailure }: OpenFormProps) {
   const [snapshot, setSnapshot] = useState(() => model.snapshot());
   const [drafts, setDrafts] = useState<ReadonlyMap<string, Draft>>(new Map());
   const currentDrafts = useRef(drafts);
   const targets = useRef(new Map<string, HTMLElement>());
+  const currentTransport = useRef(transport);
+  currentTransport.current = transport;
   const picking = useRef<string | null>(null);
   useEffect(() => onSnapshot?.(snapshot), [snapshot, onSnapshot]);
   // The opened snapshot may already request data; Lean ignores repeated responses.
@@ -90,10 +102,10 @@ function OpenForm({ model, components, evidence, onSnapshot, onFailure }: OpenFo
   }
 
   async function perform(effect: Exclude<Wire.Effect, { focus: unknown }>) {
-    const { url, ...request } = 'submit' in effect ? effect.submit.request : effect.fetch.request;
+    const request = 'submit' in effect ? effect.submit.request : effect.fetch.request;
     let outcome: Wire.HttpOutcome;
     try {
-      const response = await fetch(url, request);
+      const response = await (currentTransport.current ?? defaultTransport)(request);
       outcome = { response: { status: response.status, body: await response.text() } };
     } catch (error) { outcome = { unreachable: { message: message(error) } }; }
     const event: Wire.Event = 'submit' in effect ? { submitted: { outcome } } : { fetched: { id: effect.fetch.id, outcome } };
