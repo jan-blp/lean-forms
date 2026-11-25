@@ -63,4 +63,7 @@ jobs:
         run: python3 tools/test_web.py
 
       - name: Browser
-        run: node tools/test_browser.mjs
+        run: |
+          npm run check --workspace=lean-forms-react18-tests
+          node tools/test_browser.mjs
+          node tools/test_browser.mjs --react18

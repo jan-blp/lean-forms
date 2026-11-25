@@ -37,6 +37,7 @@ const summaries: Record<FormsReact.Tone, (checks: FormsReact.Checks) => string> 
 export function StatusMarker(checks: FormsReact.Checks) {
   const popover = useId();
   const marker = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLSpanElement>(null);
   const items = (texts: string[], info: boolean) => texts.map(text => ({ text, info }));
   const sections = [
     { title: 'Open', items: items(checks.unresolved, false) },
@@ -46,24 +47,32 @@ export function StatusMarker(checks: FormsReact.Checks) {
     { title: 'Approved', items: items(checks.approved, false) },
     { title: 'Optional', items: items(checks.info, false) },
   ].filter(section => section.items.length > 0);
-  // Top-layer popovers aren't anchored; measure at the left edge, where it doesn't shrink.
-  const place = (panel: HTMLElement) => {
-    const { left, top, bottom } = marker.current!.getBoundingClientRect();
-    panel.style.left = '0px';
-    panel.style.top = '16px';
-    const { clientWidth: width, clientHeight: height } = document.documentElement;
-    panel.style.left = `${Math.max(16, Math.min(left, width - panel.offsetWidth - 16))}px`;
-    const panelHeight = panel.offsetHeight;
-    const preferredTop = bottom + 4 + panelHeight <= height - 16
-      ? bottom + 4 : top - 4 - panelHeight;
-    panel.style.top = `${Math.max(16, Math.min(preferredTop, height - panelHeight - 16))}px`;
-  };
+  useLayoutEffect(() => {
+    const element = panel.current!;
+    // Use native popover attributes and events for React 18 compatibility.
+    marker.current!.setAttribute('popovertarget', popover);
+    element.setAttribute('popover', 'auto');
+    const place = () => {
+      if (!element.matches(':popover-open')) return;
+      const { left, top, bottom } = marker.current!.getBoundingClientRect();
+      // Measure at the left edge, where the panel does not shrink.
+      element.style.left = '0px';
+      element.style.top = '16px';
+      const { clientWidth: width, clientHeight: height } = document.documentElement;
+      element.style.left = `${Math.max(16, Math.min(left, width - element.offsetWidth - 16))}px`;
+      const panelHeight = element.offsetHeight;
+      const preferredTop = bottom + 4 + panelHeight <= height - 16
+        ? bottom + 4 : top - 4 - panelHeight;
+      element.style.top = `${Math.max(16, Math.min(preferredTop, height - panelHeight - 16))}px`;
+    };
+    element.addEventListener('toggle', place);
+    return () => element.removeEventListener('toggle', place);
+  }, [popover]);
   return (
     <div className="status">
-      <button ref={marker} type="button" className={`status-marker ${checks.tone}`}
-        popoverTarget={popover}>Checks: {summaries[checks.tone](checks)}</button>
-      <span id={popover} popover="auto" className="checks"
-        onToggle={event => { if (event.newState === 'open') place(event.currentTarget); }}>
+      <button ref={marker} type="button" className={`status-marker ${checks.tone}`}>
+        Checks: {summaries[checks.tone](checks)}</button>
+      <span ref={panel} id={popover} className="checks">
         {sections.map(({ title, items }) => <span key={title} className="checks-section">
           <span className="checks-title">{title}</span>
           <span role="list">{items.map(({ text, info }, index) =>
@@ -137,7 +146,7 @@ export function TextField(
     { name, label, kind, value, disabled, errors, evidence, onCommit }: FormsReact.TextField) {
   const form = useLeanForm();
   const { tracking, status } = useEvidence(name, evidence, disabled, onCommit);
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLInputElement | null>(null);
   const feedback = useId();
   const draft = form.draft(name);
   const draftError = form.draftError(name);

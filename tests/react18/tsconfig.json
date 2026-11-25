@@ -1,0 +1,12 @@
+{
+  "extends": "../../packages/react/tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"]
+    },
+    "typeRoots": ["./node_modules/@types"]
+  },
+  "include": ["../../packages/react/src"]
+}

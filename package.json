@@ -3,6 +3,7 @@
   "private": true,
   "workspaces": [
     "packages/react",
-    "web"
+    "web",
+    "tests/react18"
   ]
 }
