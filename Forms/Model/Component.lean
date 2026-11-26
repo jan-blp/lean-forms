@@ -162,7 +162,8 @@ abbrev Component.zoom
   : Component Γ α γ holes :=
   { LocalState := body.LocalState, node := .zoom path body.node }
 
-/-- Loaded subtree state persists while its resolved status is equal. -/
+/-- Loaded subtree state persists while its resolved status is equal.
+To keep state across statuses, observe `Component.loadStatus` instead. -/
 abbrev Component.load
   {Γ : Context}
   {α β data : Type}
@@ -282,6 +283,16 @@ def Component.loadOr
     | .ready data => body data
     | .loading => fallback
     | .failed _ => fallback
+
+/-- Outputs the status of `source`.
+Unlike `Component.load`, an observer keeps its state across statuses. -/
+def Component.loadStatus
+  {Γ : Context}
+  {α data : Type}
+  [inst : DecidableEq data]
+  (source : Computation Γ α (Source data))
+  : Component Γ α (Status data) :=
+  .load source fun status => .output (.const status)
 
 abbrev Presentation.layouts
   {Δ : ViewContext}
