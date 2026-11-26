@@ -62,7 +62,7 @@ export async function checkTransport() {
     await submit();
     await wait(() => status() === 'Submitted successfully.');
     const saved = JSON.parse(calls.at(-1)!.request.body!);
-    check(saved.value.country.id === 'DE' && calls.at(-1)?.token === 'rotated-token',
+    check(saved.value.country.id === 'germany' && calls.at(-1)?.token === 'rotated-token',
       'Submission bypassed the transport or lost the selection');
 
     await render(async request => {
