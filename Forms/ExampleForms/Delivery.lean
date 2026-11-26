@@ -3,23 +3,64 @@ module
 public import Forms.Model.Component
 public import Forms.Model.Endpoints
 public meta import Forms.Model.Derive
+public meta import Forms.Deriving.FinEnum
 
 @[expose] public section
 namespace Forms.ExampleForms
 open Lean Forms.Model
 
+inductive Country where
+  | austria
+  | belgium
+  | germany
+  | catalonia
+  | france
+  | italy
+  | netherlands
+  | portugal
+  | switzerland
+  deriving DecidableEq, Repr, FinEnum, ToJson, FromJson
+
+def Country.name : Country → String
+  | .austria => "Austria"
+  | .belgium => "Belgium"
+  | .germany => "Germany"
+  | .catalonia => "Catalonia"
+  | .france => "France"
+  | .italy => "Italy"
+  | .netherlands => "Netherlands"
+  | .portugal => "Portugal"
+  | .switzerland => "Switzerland"
+
+def Country.cities : Country → List (Reference String)
+  | .austria => [⟨"VIE", "Vienna"⟩, ⟨"GRZ", "Graz"⟩, ⟨"SZG", "Salzburg"⟩]
+  | .belgium => [⟨"BRU", "Brussels"⟩, ⟨"ANR", "Antwerp"⟩, ⟨"GNE", "Ghent"⟩]
+  | .germany => [⟨"BER", "Berlin"⟩, ⟨"HAM", "Hamburg"⟩, ⟨"MUC", "Munich"⟩]
+  | .catalonia => [
+    ⟨"VIC", "Vic"⟩,
+    ⟨"GIR", "Girona"⟩,
+    ⟨"BCN", "Barcelona"⟩,
+    ⟨"TGN", "Tarragona"⟩,
+    ⟨"LLE", "Lleida"⟩,
+    ⟨"MAN", "Manresa"⟩]
+  | .france => [⟨"LYS", "Lyon"⟩, ⟨"MRS", "Marseille"⟩, ⟨"PAR", "Paris"⟩]
+  | .italy => [⟨"ROM", "Rome"⟩, ⟨"MIL", "Milan"⟩, ⟨"TRN", "Turin"⟩]
+  | .netherlands => [⟨"AMS", "Amsterdam"⟩, ⟨"RTM", "Rotterdam"⟩, ⟨"UTC", "Utrecht"⟩]
+  | .portugal => [⟨"LIS", "Lisbon"⟩, ⟨"OPO", "Porto"⟩, ⟨"BGZ", "Braga"⟩]
+  | .switzerland => [⟨"ZRH", "Zürich"⟩, ⟨"GVA", "Geneva"⟩, ⟨"BRN", "Bern"⟩]
+
 structure Delivery where
-  country : Option (Reference String)
+  country : Option (Reference Country)
   city : Option (Reference String)
   deriving FormModel
 
 structure CitySearch where
-  country : String
+  country : Country
   text : String
   deriving ToJson, FromJson
 
 endpoints DeliveryEndpoint where
-  | countries : String → LookupResults String Unit at "/api/countries"
+  | countries : String → LookupResults Country Unit at "/api/countries"
   | cities : CitySearch → LookupResults String Unit at "/api/cities"
 
 def Delivery.form : Component [] Delivery.Raw :=
@@ -41,32 +82,13 @@ def Delivery.initial : Delivery.Raw := ⟨none, none⟩
 
 namespace Delivery
 
-def countries : List (Reference String) := [
-  ⟨"AT", "Austria"⟩,
-  ⟨"BE", "Belgium"⟩,
-  ⟨"DE", "Germany"⟩,
-  ⟨"CAT", "Catalonia"⟩,
-  ⟨"FR", "France"⟩,
-  ⟨"IT", "Italy"⟩,
-  ⟨"NL", "Netherlands"⟩,
-  ⟨"PT", "Portugal"⟩]
+def countries : List (Reference Country) :=
+  (FinEnum.toList Country).map fun country => { id := country, displayText := country.name }
 
-def cities : String → List (Reference String)
-  | "DE" => [⟨"BER", "Berlin"⟩, ⟨"HAM", "Hamburg"⟩, ⟨"MUC", "Munich"⟩]
-  | "CAT" => [
-    ⟨"VIC", "Vic"⟩,
-    ⟨"GIR", "Girona"⟩,
-    ⟨"BCN", "Barcelona"⟩,
-    ⟨"TGN", "Tarragona"⟩,
-    ⟨"LLE", "Lleida"⟩,
-    ⟨"MAN", "Manresa"⟩]
-  | "FR" => [⟨"LYS", "Lyon"⟩, ⟨"MRS", "Marseille"⟩, ⟨"PAR", "Paris"⟩]
-  | _ => []
-
-def mentions (text : String) (record : LookupCandidate String Unit) : Prop :=
+def mentions {Key : Type} (text : String) (record : LookupCandidate Key Unit) : Prop :=
   record.reference.displayText.toLower.contains text.toLower = true
 
-instance (text : String) : DecidablePred (mentions text) :=
+instance {Key : Type} (text : String) : DecidablePred (mentions (Key := Key) text) :=
   fun record => inferInstanceAs (Decidable (record.reference.displayText.toLower.contains text.toLower = true))
 
 def answer
@@ -74,7 +96,7 @@ def answer
   | .countries, (text : String) =>
     (LookupResults.select (countries.map LookupCandidate.ofReference) (mentions text) 5).toOption
   | .cities, (search : CitySearch) =>
-    (LookupResults.select ((cities search.country).map LookupCandidate.ofReference) (mentions search.text) 5).toOption
+    (LookupResults.select (search.country.cities.map LookupCandidate.ofReference) (mentions search.text) 5).toOption
 
 def serve : HttpRequest → Option Json :=
   Api.serve answer
