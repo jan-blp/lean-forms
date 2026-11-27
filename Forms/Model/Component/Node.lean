@@ -120,7 +120,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (body : ComponentNode Γ α state β holes)
       : ComponentNode Γ α state β holes
   /-- Runs after every successful input in `body`, even when `old = new`, on a fresh evaluation;
-  dropped when `body` is no longer shown. Never retriggers itself. -/
+  dropped when `body` is no longer shown or has moved. Never retriggers itself. -/
   | onChange {Γ : Context}
       {α β state : Type}
       {holes : Nat}

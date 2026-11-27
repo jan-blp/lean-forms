@@ -51,7 +51,7 @@ private def press
   (argument : Option Input := none)
   : IO (Evaluated [] α component.LocalState β) := do
   let control ← control evaluated label nth
-  let updated ← IO.ofExcept (((evaluated.applyKey control.key argument).run' supply).mapError fun error =>
+  let updated ← IO.ofExcept (((evaluated.applyKey control.key argument 0).run' supply).mapError fun error =>
     toString (ModelForm.Rejection.ofAction error))
   return component.evaluate updated.value updated.state {} updated.locals
 
@@ -133,7 +133,7 @@ def run : IO Unit := do
     ((← control regrouped "Toggle selection" 1) == tableLast)
   let summaryOnly := (tableSummary (.place .here)).evaluate edited.value Env.nil {} edited.locals
   check "PresentationUnplacedControlsRejectStaleActions"
-    (summaryOnly.view.controls.isEmpty && !((summaryOnly.applyKey tableLast.key none).run' supply).toBool)
+    (summaryOnly.view.controls.isEmpty && !((summaryOnly.applyKey tableLast.key none 0).run' supply).toBool)
   let refreshed := (tableSummary (.place .here)).evaluate (Collection.numbered ["same", "Fresh", "other"]) Env.nil {}
     edited.locals
   check "PresentationUnplacedOwnersStillProduceFreshOutputs"
@@ -163,7 +163,7 @@ def run : IO Unit := do
   check "PresentationTabsShareStateAndKeepPrivateStateSeparate"
     (tabs.output == 1 && texts "Shared count" tabs.view == ["1"] && texts "Private count" tabs.view == ["0"])
   check "PresentationInactiveTabRejectsStaleActions"
-    (!((tabs.applyKey firstPrivate.key none).run' supply).toBool)
+    (!((tabs.applyKey firstPrivate.key none 0).run' supply).toBool)
   let tabs ← press sharedTabs tabs "Increment shared"
   let tabs ← press sharedTabs tabs "Increment private"
   let tabs ← press sharedTabs tabs "Increment private"
@@ -176,7 +176,7 @@ def run : IO Unit := do
     (texts "Private count" tabs.view == ["2"])
   let bar ← control tabs "Panes"
   check "TabBarShowsTheActiveTab" (bar.input == .tabs 1 ["First pane", "Second pane"])
-  check "TabBarRejectsMissingTabs" (!((tabs.applyKey bar.key (some (.text "2"))).run' supply).toBool)
+  check "TabBarRejectsMissingTabs" (!((tabs.applyKey bar.key (some (.text "2")) 0).run' supply).toBool)
   check "TabBarKeyRoundTrips"
     (match ControlKeyProtocol.fromString (ControlKeyProtocol.toString bar.key) with
       | .ok key => key == bar.key

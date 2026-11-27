@@ -39,6 +39,8 @@ structure State {Γ : Model.Context} {α β : Type} (form : Model.Component Γ �
   validationDiagnostics : List Model.Diagnostic
   reportDiagnostics : List Model.Diagnostic
   supply : Model.Supply
+  /-- Counts applied inputs. -/
+  epoch : Nat
   draftDiagnostics : List DraftDiagnostic := []
   stateDrafts : List ModelView.ControlMessage
 
@@ -101,6 +103,7 @@ private def openWith
     validationDiagnostics
     reportDiagnostics
     supply
+    epoch := 0
     stateDrafts := [] }
 
 @[no_expose] def openState
@@ -250,10 +253,11 @@ def validateAction
   (state : State form)
   (key : ControlKey)
   (argument : Option Input)
+  (epoch : Nat)
   : StateT Model.Supply (Except Rejection) (Model.ComponentUpdate Γ α form.LocalState) :=
   fun supply => do
     if state.ui.pending then throw (.stale .pending)
-    state.evaluation.applyKey key argument |>.run supply |>.mapError .ofAction
+    state.evaluation.applyKey key argument epoch |>.run supply |>.mapError .ofAction
 
 def applyUpdate
   {Γ : Model.Context}
@@ -284,8 +288,8 @@ def applyUpdate
     outbox := state.outbox ++ focus.toList.map .focus
     ui := { state.ui with notice := .info "", resultVisible := false } }
 
-/-- Runs pending reactions innermost first, each on a fresh evaluation. A reaction never makes
-another one pending, so `fuel` starts at the number pending after the input. -/
+/-- Runs the reactions `epoch` made pending, innermost first, each on a fresh evaluation.
+A reaction never makes another one pending, so `fuel` starts at the number pending after the input. -/
 def react
   {Γ : Model.Context}
   {model β : Type}
@@ -295,14 +299,15 @@ def react
   [Lean.ToJson (Model.Raw model)]
   (form : Model.Component Γ (Model.Raw model) β)
   (state : State form)
+  (epoch : Nat)
   : (fuel : Nat) → Except Rejection (State form)
   | 0 => pure state
-  | fuel + 1 => match state.evaluation.reactions with
+  | fuel + 1 => match state.evaluation.reactions.filter (·.epoch == epoch) with
     | [] => pure state
-    | route :: _ => do
+    | pending :: _ => do
       let (updated, supply) ←
-        ((state.evaluation.apply route .react).run state.supply).mapError .ofAction
-      react form (applyUpdate (model := model) form { state with supply } updated) fuel
+        ((state.evaluation.apply pending.route .react).run state.supply).mapError .ofAction
+      react form (applyUpdate (model := model) form { state with supply } updated) epoch fuel
 
 def apply
   {Γ : Model.Context}
@@ -316,13 +321,16 @@ def apply
   (key : ControlKey)
   (argument : Option Input)
   : Except Rejection (State form) := do
-  let (updated, supply) ← (validateAction form state key argument).run state.supply
+  let epoch := state.epoch + 1
+  let (updated, supply) ← (validateAction form state key argument epoch).run state.supply
   let state := { state with
     supply
+    epoch
     draftDiagnostics := state.draftDiagnostics.filter (·.control != key)
     stateDrafts := state.stateDrafts.filter (·.control != key) }
   let state := applyUpdate (model := model) form state updated
-  let state ← react (model := model) form state state.evaluation.reactions.length
+  let state ← react (model := model) form state epoch
+    (state.evaluation.reactions.filter (·.epoch == epoch)).length
   let drafts := state.draftDiagnostics.filter fun draft =>
     state.evaluation.view.controls.any (·.key == draft.control)
   return refresh form { state with draftDiagnostics := drafts }

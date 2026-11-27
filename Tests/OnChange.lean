@@ -79,6 +79,14 @@ def zoomed : Component [] Order.Raw :=
       (.onChange (fun _ _ => .write path[] (.const 77)) (.field .self "Quantity" .natural)),
     .button "Restore" (.write path[Order.Field.quantity] (.const 3))]
 
+def retargeted : Component [] Order.Raw :=
+  Component.void <| .zoom?
+    { inputs := inputs[path[Order.Field.quantity]]
+      run := fun quantity => some (if quantity == 1 then .ofPath path[Order.Field.quantity]
+        else .ofPath path[Order.Field.copied]) }
+    (.onChange (fun old new => .write path[] (.const (old + new + 100)))
+      (.field .self "Value" .natural))
+
 private def step
   {form : Component [] Order.Raw}
   (state : ModelForm.State form)
@@ -107,6 +115,9 @@ def run : IO Unit := do
   let restored ← step gone "Restore" none
   check "OnChangeDropsReactionOfMissingTarget"
     (gone.value.quantity == 0 && restored.value.quantity == 3)
+  let moved ← step (ModelForm.openState (model := Order) retargeted ⟨1, 10, false⟩ Env.nil supply)
+    "Value" (some (.text "2"))
+  check "OnChangeDropsReactionOfMovedTarget" (moved.value.quantity == 2 && moved.value.copied == 10)
   let definition := FormDefinition.ofModel Transfer form initial
   let (opened, _) ← IO.ofExcept (definition.openState (toJson initial) supply)
   let opened : State := opened

@@ -140,9 +140,17 @@ def runAction
   | .error collision => throw (.idCollision collision.id)
 
 inductive Trigger where
-  | input (argument : Option Input)
+  /-- `epoch` stamps the reactions the input makes pending. -/
+  | input (argument : Option Input) (epoch : Nat)
   /-- Runs the pending reaction of the `onChange` node at the route. -/
   | react
+
+structure PendingRoute where
+  route : List Nat
+  epoch : Nat
+
+def PendingRoute.under (index : Nat) (pending : PendingRoute) : PendingRoute :=
+  { pending with route := index :: pending.route }
 
 structure NodeEvaluation
   (Γ : Context)
@@ -152,8 +160,8 @@ structure NodeEvaluation
   locals : state
   view : viewType
   requests : List HttpRequest
-  /-- Routes of the `onChange` nodes with a pending reaction, innermost first. -/
-  reactions : List (List Nat)
+  /-- The `onChange` nodes with a pending reaction, innermost first. -/
+  reactions : List PendingRoute
   /-- Draws new item ids from the `Supply` state. -/
   apply :
     List Nat → Trigger →
@@ -221,7 +229,7 @@ def Trigger.argument
   [Monad m]
   [MonadExcept ActionError m]
   : Trigger → m (Option Input)
-  | .input argument => pure argument
+  | .input argument _ => pure argument
   | .react => absent
 
 /-- A `bind` around an evaluated `body`, which stores the bound value at its head. -/
@@ -235,7 +243,7 @@ def bound
   locals := { value := stored, tail := body.locals }
   view := body.view
   requests := body.requests
-  reactions := body.reactions.map (0 :: ·)
+  reactions := body.reactions.map (·.under 0)
   apply := fun route trigger => match route with
     | 0 :: rest => do
       let updated ← body.apply rest trigger
@@ -256,7 +264,7 @@ def observed
   locals := { producer := producer.locals, consumers := body.locals }
   view := view
   requests := producer.requests ++ body.requests
-  reactions := producer.reactions.map (0 :: ·) ++ body.reactions.map (1 :: ·)
+  reactions := producer.reactions.map (·.under 0) ++ body.reactions.map (·.under 1)
   apply := fun route trigger => match route with
     | 0 :: rest => do
       let updated ← producer.apply rest trigger
@@ -443,32 +451,35 @@ def evaluateNode
       requests := if availability == .hidden then [] else body.requests
       reactions := if availability == .hidden then [] else body.reactions
       apply := fun route trigger => match availability, trigger with
-        | .hidden, .input _
+        | .hidden, .input ..
         | .hidden, .react => throw (.invalid .hidden)
-        | .disabled, .input _ => throw (.invalid .disabled)
+        | .disabled, .input .. => throw (.invalid .disabled)
         | .disabled, .react
-        | .enabled, .input _
+        | .enabled, .input ..
         | .enabled, .react => body.apply route trigger }
   | .onChange react body =>
     let body := evaluateNode body value env ambient locals.body (target.child 0) location disabled
+    let current := locals.pending.filter (·.location == location)
     { output := body.output
-      locals := { pending := none, body := body.locals }
+      locals := { locals with body := body.locals }
       view := body.view
       requests := body.requests
-      reactions := body.reactions.map (0 :: ·) ++ (locals.pending.map fun _ => []).toList
+      reactions := body.reactions.map (·.under 0) ++
+        (current.map fun pending => { route := [], epoch := pending.epoch }).toList
       apply := fun route trigger => match route, trigger with
-        | 0 :: rest, .input argument => do
-          let updated ← body.apply rest (.input argument)
-          return updated.mapLocals fun state => { pending := some value, body := state }
+        | 0 :: rest, .input argument epoch => do
+          let updated ← body.apply rest (.input argument epoch)
+          return updated.mapLocals fun state =>
+            { pending := some { old := value, epoch, location }, body := state }
         | 0 :: rest, .react => do
           let updated ← body.apply rest .react
           return updated.mapLocals fun state => { locals with body := state }
         | [], .react => do
-          let some old := locals.pending | absent
-          let reaction ← runAction (react old value) value env
+          let some pending := current | absent
+          let reaction ← runAction (react pending.old value) value env
           return reaction.mapLocals fun () => { pending := none, body := body.locals }
-        | [], .input _
-        | (_ + 1) :: _, .input _
+        | [], .input ..
+        | (_ + 1) :: _, .input ..
         | (_ + 1) :: _, .react => absent }
   | .select (decidableEq := _) (key := _) written label options selected availability =>
     let options := options.eval value env
@@ -583,7 +594,7 @@ def evaluateNode
     | none, _
     | _, none =>
       { output := none
-        locals := body.dropReactions locals
+        locals
         view := fun _ => .hidden
         requests := []
         reactions := []
@@ -641,7 +652,7 @@ def evaluateNode
       locals := states
       view := render (rows.map (·.view))
       requests := rows.flatMap (·.requests)
-      reactions := rows.zipIdx.flatMap fun (row, index) => row.reactions.map (index :: ·)
+      reactions := rows.zipIdx.flatMap fun (row, index) => row.reactions.map (·.under index)
       apply := fun route trigger => match route with
         | index :: rest => do
           let some row := rows[index]? | absent
@@ -721,9 +732,10 @@ def Evaluated.applyKey
   (evaluated : Evaluated Γ α state β)
   (key : ControlKey)
   (argument : Option Input)
+  (epoch : Nat)
   : StateT Supply (Except ActionError) (ComponentUpdate Γ α state) := do
   let some control := evaluated.view.controls.find? (·.key == key) | absent
-  evaluated.apply control.target.indices (.input argument)
+  evaluated.apply control.target.indices (.input argument epoch)
 
 structure Rendered where
   view : Display.View
@@ -753,7 +765,7 @@ def decodeKey
   (env : Env Γ)
   (locals : component.LocalState := component.initialState)
   : StateT Supply (Except ActionError) (ComponentUpdate Γ α component.LocalState) :=
-  (evaluate component value fetchState env locals [] []).applyKey key argument
+  (evaluate component value fetchState env locals [] []).applyKey key argument 0
 
 end Forms.Runtime.ModelView
 
