@@ -28,6 +28,7 @@ import Tests.ServerForm
 import Tests.Evidence
 import Tests.Endpoints
 import Tests.Lookup
+import Tests.SearchSelect
 import Tests.LookupCandidates
 import Tests.Invalidation
 import Tests.PrivateState
@@ -61,6 +62,7 @@ public def main : IO Unit := do
   Tests.ServerForm.run
   Tests.Evidence.run
   Tests.Lookup.run
+  Tests.SearchSelect.run
   Tests.LookupCandidates.run
   Tests.Invalidation.run
   Tests.PrivateState.run

@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.Component
+public import Forms.Model.SearchSelect
 public import Forms.Model.Endpoints
 public meta import Forms.Model.Derive
 public meta import Forms.Deriving.FinEnum
@@ -68,8 +69,11 @@ def Delivery.form : Component [] Delivery.Raw :=
     .onChange (fun before after =>
       if before.country.map (·.id) == after.country.map (·.id) then after
       else { after with city := none }) <|
-      .lookup path[Delivery.Field.country] "Country" (.const (Api.source DeliveryEndpoint.countries))
-        (.const OptionAvailability.always),
+      .group "Country" [
+        .lookup path[Delivery.Field.country] "Country"
+          (.const (Api.source DeliveryEndpoint.countries)) (.const OptionAvailability.always),
+        .searchSelect path[Delivery.Field.country] "Country (composed)" "Search countries"
+          (.const (Api.source DeliveryEndpoint.countries)) (.const OptionAvailability.always)],
     .disabledWhen { inputs := inputs[path[Delivery.Field.country]], run := Option.isNone } <|
       .lookup path[Delivery.Field.city] "City"
         { inputs := inputs[path[Delivery.Field.country]]
