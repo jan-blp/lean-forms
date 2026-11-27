@@ -7,13 +7,13 @@ open Lean Forms Forms.Runtime Forms.ExampleForms
 
 private def actionArgument (input : Display.Editor) : Json :=
   match input with
-  | .field (.text .natural text) _ =>
+  | .field (.text .natural text _) _ =>
     toJson ("00" ++ toString (text.toNat! + 123456789012345678901234567890))
-  | .field (.text .plain text) _ => toJson (text ++ " 🌍\x00")
-  | .field (.text .integer text) _ => toJson (s!" {text.toInt! - 123456789012345678901234567890} ")
-  | .field (.text .decimal text) _ => toJson (text ++ "05")
-  | .field (.text .date _) _ => toJson "2024-02-29"
-  | .field (.text .uuid _) _ => toJson "123E4567-E89B-12D3-A456-426614174000"
+  | .field (.text .plain text _) _ => toJson (text ++ " 🌍\x00")
+  | .field (.text .integer text _) _ => toJson (s!" {text.toInt! - 123456789012345678901234567890} ")
+  | .field (.text .decimal text _) _ => toJson (text ++ "05")
+  | .field (.text .date _ _) _ => toJson "2024-02-29"
+  | .field (.text .uuid _ _) _ => toJson "123E4567-E89B-12D3-A456-426614174000"
   | .field (.checkbox value) _ => toJson (!value)
   | .action => Json.null
   | .tabs active labels => toJson (toString ((active + 1) % labels.length.max 1))

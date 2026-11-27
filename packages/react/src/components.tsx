@@ -142,8 +142,10 @@ function useEvidence(
   return { tracking, status };
 }
 
+const typingPause = 300;
+
 export function TextField(
-    { name, label, kind, value, disabled, errors, evidence, onCommit }: FormsReact.TextField) {
+    { name, label, kind, value, commit, disabled, errors, evidence, onCommit }: FormsReact.TextField) {
   const form = useLeanForm();
   const { tracking, status } = useEvidence(name, evidence, disabled, onCommit);
   const input = useRef<HTMLInputElement | null>(null);
@@ -151,7 +153,7 @@ export function TextField(
   const draft = form.draft(name);
   const draftError = form.draftError(name);
   const shown = draftError === undefined ? errors : [draftError];
-  const commit = () => {
+  const commitDraft = () => {
     if (form.draftError(name) === undefined && !input.current!.validity.badInput) {
       form.run(onCommit, input.current!.value);
     }
@@ -164,13 +166,18 @@ export function TextField(
     if (kind === 'date' && error === undefined && text !== '' && text !== value) form.run(onCommit, text);
   };
   useEffect(() => {
+    if (commit !== 'whileTyping' || draft === undefined) return;
+    const timer = window.setTimeout(commitDraft, typingPause);
+    return () => window.clearTimeout(timer);
+  }, [draft, commit]);
+  useEffect(() => {
     // Reset must also clear incomplete date segments, whose value is already empty.
     if (draft === undefined && input.current!.validity.badInput) input.current!.value = value;
   }, [draft, value]);
   // Enter submits the form; leaving the field applies a pending edit.
   // A picked date applies at once; the date input reports "" while a typed date is incomplete.
   return (
-    <form className="editor" noValidate onSubmit={event => { event.preventDefault(); commit(); }}
+    <form className="editor" noValidate onSubmit={event => { event.preventDefault(); commitDraft(); }}
       {...tracking}>
       <label>{label}<input ref={element => {
         input.current = element;
@@ -185,7 +192,7 @@ export function TextField(
             change(event.currentTarget);
           }
         } : undefined}
-        onBlur={() => { if (form.draft(name) !== undefined) commit(); }} /></label>
+        onBlur={() => { if (form.draft(name) !== undefined) commitDraft(); }} /></label>
       <Feedback id={feedback} errors={shown} />
       {status}
     </form>
@@ -256,8 +263,6 @@ export function Choices(
   );
 }
 
-const searchPause = 300;
-
 function foundOptions(search: FormsReact.Search | null): FormsReact.SelectableOption[] {
   return search !== null && typeof search.results === 'object' && 'found' in search.results
     ? search.results.found.options : [];
@@ -290,7 +295,7 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
   // An effect, not a timer set in the handler, so a remount (e.g. StrictMode's) re-arms it.
   useEffect(() => {
     if (current) return;
-    const timer = window.setTimeout(() => send({ search: { text: typed } }), searchPause);
+    const timer = window.setTimeout(() => send({ search: { text: typed } }), typingPause);
     return () => window.clearTimeout(timer);
   }, [typed, current]);
   const choose = (option: FormsReact.SelectableOption) => {

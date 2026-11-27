@@ -22,9 +22,9 @@ private def control
 def view : Display.View :=
   .stack (some "Person") [
     .control (control (.edit [.field "name"]) "Name"
-      (.field (.text .plain "Ada") (.linked { page := 1, cellIds := [3, 4], text := "Ada" } false))
+      (.field (.text .plain "Ada" .onLeave) (.linked { page := 1, cellIds := [3, 4], text := "Ada" } false))
       (messages := [{ kind := .error, text := "Enter your name." }])),
-    .control (control (.edit [.field "age"]) "Age" (.field (.text .natural "36") .unsupported)),
+    .control (control (.edit [.field "age"]) "Age" (.field (.text .natural "36" .onLeave) .unsupported)),
     .hidden,
     .stack (some "") [.control (control (.edit [.field "delivery"]) "Delivery"
       (.field (.checkbox true) .missing))],
@@ -39,6 +39,7 @@ def expected : FormsReact.Component :=
         label := "Name"
         kind := .plain
         value := "Ada"
+        commit := .onLeave
         disabled := false
         errors := ["Enter your name."]
         evidence := .linked 1 [3, 4] false
@@ -48,6 +49,7 @@ def expected : FormsReact.Component :=
         label := "Age"
         kind := .natural
         value := "36"
+        commit := .onLeave
         disabled := false
         errors := []
         evidence := .unsupported

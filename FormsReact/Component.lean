@@ -33,6 +33,12 @@ inductive TextKind where
   | date
   | uuid
   deriving ToJson, FromJson, BEq, Repr
+
+inductive Commit where
+  | onLeave
+  | whileTyping
+  deriving ToJson, FromJson, BEq, Repr
+
 /-- The colour of a status marker. -/
 inductive Tone where
   | attention
@@ -73,6 +79,7 @@ structure TextField where
   label : String
   kind : TextKind
   value : String
+  commit : Commit
   disabled : Bool
   errors : List String
   evidence : Evidence
