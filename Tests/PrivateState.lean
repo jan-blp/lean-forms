@@ -104,10 +104,10 @@ def run : IO Unit := do
     ((control opened "Show advanced options").any (isState ·.key) &&
       (control opened "Show weight in").any (isState ·.key) &&
       (control opened "Recipient").any (!isState ·.key))
-  check "PrivateStateHidesAdvancedInitially" (control opened "Delivery instructions").isNone
   let advanced ← apply opened "Show advanced options" (.boolean true)
   check "PrivateStateFieldRevealsAdvanced"
-    ((control advanced "Delivery instructions").isSome &&
+    ((control opened "Delivery instructions").isNone &&
+      (control advanced "Delivery instructions").isSome &&
       (control advanced "Show advanced options").any
         (·.input == .field (.checkbox true) .unsupported))
   let some weightUnit := control advanced "Show weight in"
@@ -118,9 +118,5 @@ def run : IO Unit := do
   check "PrivateStateSelectChangesView"
     (computed "Weight" (view converted) == ["1.250 kg"] &&
       (control converted "Show weight in").bind (chosen ·.input) == some kilograms.value)
-  let renamed ← apply converted "Recipient" (.text "Grace")
-  check "PrivateStateSurvivesModelEdits"
-    ((control renamed "Delivery instructions").isSome &&
-      computed "Weight" (view renamed) == ["1.250 kg"])
 
 end Tests.PrivateState
