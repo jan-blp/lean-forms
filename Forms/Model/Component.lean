@@ -210,7 +210,8 @@ abbrev Component.select
   (options : Computation Γ α (SelectOptions Key β))
   (selected : β → Key)
   : Component Γ α :=
-  { LocalState := Unit, node := .select (.path path) label options selected }
+  { LocalState := Unit
+    node := .select (.path path) label options selected (.const OptionAvailability.always) }
 
 abbrev Component.stateSelect
   {Γ : Context}
@@ -222,7 +223,21 @@ abbrev Component.stateSelect
   (options : Computation Γ α (SelectOptions Key β))
   (selected : β → Key)
   : Component Γ α :=
-  { LocalState := Unit, node := .select (.var var) label options selected }
+  { LocalState := Unit
+    node := .select (.var var) label options selected (.const OptionAvailability.always) }
+
+abbrev Component.selectWithAvailability
+  {Γ : Context}
+  {α β Key : Type}
+  [DecidableEq Key]
+  [Forms.Model.Key Key]
+  (path : Path α β)
+  (label : Computation Γ α String)
+  (options : Computation Γ α (SelectOptions Key β))
+  (selected : β → Key)
+  (availability : Computation Γ α (SelectOption Key β → OptionAvailability))
+  : Component Γ α :=
+  { LocalState := Unit, node := .select (.path path) label options selected availability }
 
 abbrev Component.lookup
   {Γ : Context}
@@ -231,7 +246,7 @@ abbrev Component.lookup
   (path : Path α (Option (Reference Key)))
   (label : Computation Γ α String)
   (search : Computation Γ α ((searchText : String) → Source (LookupResults Key Details)))
-  (availability : Computation Γ α (LookupCandidate Key Details → LookupAvailability))
+  (availability : Computation Γ α (LookupCandidate Key Details → OptionAvailability))
   : Component Γ α :=
   { LocalState := Option String, node := .lookup path label search availability }
 
@@ -262,6 +277,20 @@ def Component.enum
   (labels_nodup : (options.map (·.label)).Nodup := by decide)
   : Component Γ α :=
   .select path label (.const (.ofValues options tags_nodup labels_nodup)) Constructors.tag
+
+def Component.enumWithAvailability
+  {Γ : Context}
+  {α β : Type}
+  [Constructors β]
+  (path : Path α β)
+  (label : Computation Γ α String)
+  (options : List (Labelled β))
+  (availability : Computation Γ α (β → OptionAvailability))
+  (tags_nodup : (options.map (Constructors.tag ·.value)).Nodup := by decide)
+  (labels_nodup : (options.map (·.label)).Nodup := by decide)
+  : Component Γ α :=
+  .selectWithAvailability path label (.const (.ofValues options tags_nodup labels_nodup))
+    Constructors.tag ((fun available option => available option.start) <$> availability)
 
 def Component.enumSet
   {Γ : Context}

@@ -601,3 +601,22 @@ test('table cells expose row-local selection to an independent summary', async (
     assert.deepEqual(output(page(model)), ['']);
   } finally { model.dispose(); }
 });
+
+test('select shows disabled options with a reason and refuses them', async () => {
+  const model = await open(fixture('parcel').start);
+  const key = label => model.snapshot().controls.find(c => c.label === label).key;
+  const apply = (label, argument) => model.send({ apply: { key: key(label), argument } });
+  const choices = value => !value || typeof value !== 'object' ? [] :
+    value.choice?.label === 'Speed' ? [value.choice] : Object.values(value).flatMap(choices);
+  const express = () => choices(page(model))[0].options.find(o => o.label === 'Express');
+  try {
+    assert.equal(express().disabledReason, null);
+    apply('Weight (g)', '40000');
+    assert.equal(express().disabledReason, 'Express takes parcels up to 30 kg.');
+    assert.match(apply('Speed', express().value).rejection, /cannot be selected/);
+    assert.equal(model.snapshot().submission.value.speed, 'standard');
+    apply('Weight (g)', '1000');
+    apply('Speed', express().value);
+    assert.equal(model.snapshot().submission.value.speed, 'express');
+  } finally { model.dispose(); }
+});

@@ -21,7 +21,7 @@ theorem choose_spec
   {Key Details : Type}
   [ToJson Key]
   {results : LookupResults Key Details}
-  {availability : LookupCandidate Key Details → LookupAvailability}
+  {availability : LookupCandidate Key Details → OptionAvailability}
   {key : LookupKey}
   {reference : Reference Key}
   (chosen : results.choose availability key = .ok reference)

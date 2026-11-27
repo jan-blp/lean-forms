@@ -6,22 +6,13 @@ public import Forms.Model.Format
 public import Forms.Model.Lookup
 public import Forms.Model.PartialPath
 public import Forms.Model.Target
+public import Forms.Model.Select
 public import Forms.Model.Component.State
 public import Forms.Model.Component.Layout
 public import Std.Data.HashMap
 
 @[expose] public section
 namespace Forms.Model
-
-structure SelectOption (Key α : Type) where
-  key : Key
-  label : String
-  start : α
-
-structure SelectOptions (Key α : Type) where
-  options : List (SelectOption Key α)
-  keys_nodup : options.map SelectOption.key |>.Nodup := by simp <;> decide
-  labels_nodup : options.map SelectOption.label |>.Nodup := by simp <;> decide
 
 inductive Editor : Type → Type 1 where
   | formatted {α : Type} (format : Format α) : Editor α
@@ -135,7 +126,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       : ComponentNode Γ α state β holes
   /-- A choice among `options` for the value at `target`.
   The option with key `selected value` is marked selected, if there is one.
-  Choosing a different option sets the value to its `start`. -/
+  Choosing a different option sets the value to its `start`; `availability` can refuse it. -/
   | select {Γ : Context}
       {α β Key : Type}
       [decidableEq : DecidableEq Key]
@@ -144,6 +135,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (label : Computation Γ α String)
       (options : Computation Γ α (SelectOptions Key β))
       (selected : β → Key)
+      (availability : Computation Γ α (SelectOption Key β → OptionAvailability))
       : ComponentNode Γ α Unit Unit 0
   | lookup {Γ : Context}
       {α Key Details : Type}
@@ -151,7 +143,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (path : Path α (Option (Reference Key)))
       (label : Computation Γ α String)
       (search : Computation Γ α ((searchText : String) → Source (LookupResults Key Details)))
-      (availability : Computation Γ α (LookupCandidate Key Details → LookupAvailability))
+      (availability : Computation Γ α (LookupCandidate Key Details → OptionAvailability))
       : ComponentNode Γ α (Option String) Unit 0
   | output {Γ : Context}
       {α β : Type}

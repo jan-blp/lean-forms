@@ -218,10 +218,16 @@ export function Choice(
       element?.querySelector<HTMLInputElement>('input:checked') ?? element?.querySelector('input') ?? null)}
       className="choice" {...described(errors, feedback)}>
       <legend>{label}</legend>
-      {options.map(option =>
-        <label key={option.value}><input type="radio" name={name} value={option.value}
-          checked={option.value === value} disabled={disabled}
-          onChange={() => form.run(onChange, option.value)} />{option.label}</label>)}
+      {options.map((option, index) => {
+        const reason = option.disabledReason === null ? undefined : `${feedback}-${index}`;
+        return <label key={option.value}><input type="radio" name={name} value={option.value}
+          checked={option.value === value} disabled={disabled || reason !== undefined}
+          aria-describedby={reason}
+          onChange={() => form.run(onChange, option.value)} />{option.label}
+          {reason !== undefined &&
+            <span id={reason} className="choice-disabled-reason">{option.disabledReason}</span>}
+        </label>;
+      })}
       <Feedback id={feedback} errors={errors} />
     </fieldset>
   );
@@ -252,7 +258,7 @@ export function Choices(
 
 const searchPause = 300;
 
-function foundOptions(search: FormsReact.Search | null): FormsReact.LookupOption[] {
+function foundOptions(search: FormsReact.Search | null): FormsReact.SelectableOption[] {
   return search !== null && typeof search.results === 'object' && 'found' in search.results
     ? search.results.found.options : [];
 }
@@ -287,7 +293,7 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
     const timer = window.setTimeout(() => send({ search: { text: typed } }), searchPause);
     return () => window.clearTimeout(timer);
   }, [typed, current]);
-  const choose = (option: FormsReact.LookupOption) => {
+  const choose = (option: FormsReact.SelectableOption) => {
     if (disabled || option.disabledReason !== null) return;
     setTyped(null);
     send({ choose: { key: option.value } });

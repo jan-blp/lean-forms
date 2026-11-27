@@ -57,15 +57,12 @@ def LookupCandidate.wireKey
   : LookupKey :=
   candidate.reference.wireKey
 
-inductive LookupAvailability where
+inductive OptionAvailability where
   | enabled
   | disabled (reason : String)
   deriving DecidableEq, Repr
 
-def LookupAvailability.always
-  {Key Details : Type}
-  (_candidate : LookupCandidate Key Details)
-  : LookupAvailability :=
+def OptionAvailability.always {α : Type} (_option : α) : OptionAvailability :=
   .enabled
 
 inductive LookupSelectionError where
@@ -120,7 +117,7 @@ def LookupResults.choose
   {Key Details : Type}
   [ToJson Key]
   (results : LookupResults Key Details)
-  (availability : LookupCandidate Key Details → LookupAvailability)
+  (availability : LookupCandidate Key Details → OptionAvailability)
   (key : LookupKey)
   : Except LookupSelectionError (Reference Key) :=
   match results.found.find? (fun candidate => decide (candidate.wireKey = key)) with

@@ -96,7 +96,7 @@ def option {Key : Type} [Lean.ToJson Key] (reference : Reference Key) : Display.
 def searchResults
   {Key Details : Type}
   [Lean.ToJson Key]
-  (availability : LookupCandidate Key Details → LookupAvailability)
+  (availability : LookupCandidate Key Details → OptionAvailability)
   : Status (LookupResults Key Details) → Display.SearchResults
   | .loading => .loading
   | .failed message => .failed message
@@ -416,14 +416,19 @@ def evaluateNode
     { body with apply := fun route argument => do
         let updated ← body.apply route argument
         return { updated with value := update value updated.value } }
-  | .select (decidableEq := _) (key := _) written label options selected =>
-    let options := (options.eval value env).options
+  | .select (decidableEq := _) (key := _) written label options selected availability =>
+    let options := options.eval value env
+    let availability := availability.eval value env
     let selected := selected (written.get value env)
-    let shown := if options.any (·.key == selected) then Key.encode selected else ""
+    let shown := if options.options.any (·.key == selected) then Key.encode selected else ""
     let control := targetControl written .select ambient target location (label.eval value env)
       disabled
-      (.choice shown
-        (options.map fun option => { value := Key.encode option.key, label := option.label }))
+      (.choice shown (options.options.map fun option => {
+        value := Key.encode option.key
+        label := option.label
+        disabledReason := match availability option with
+          | .enabled => none
+          | .disabled reason => some reason }))
     { output := ()
       locals := ()
       view := fun _ => .control control
@@ -431,9 +436,12 @@ def evaluateNode
       apply := fun route argument => do
         if disabled then throw (.invalid .disabled)
         match route, argument with
-        | [], some (.text key) =>
-          let some option := (Key.decode key).bind fun key => options.find? (·.key == key)
-            | throw (.invalid (.unavailableBranch key))
+        | [], some (.text wire) =>
+          let some key := Key.decode wire | throw (.invalid (.unavailableBranch wire))
+          let option ← match options.choose availability key with
+            | .ok option => pure option
+            | .error .unlisted => throw (.invalid (.unavailableBranch wire))
+            | .error (.disabled reason) => throw (.invalid (.disabledBranch wire reason))
           if option.key == selected then
             return { value, state := env, locals := (), invalidations := [] }
           return written.set option.start value env

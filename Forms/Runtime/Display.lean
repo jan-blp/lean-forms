@@ -24,7 +24,7 @@ structure ChoiceOption where
   label : String
   deriving DecidableEq
 
-structure LookupOption where
+structure SelectableOption where
   value : String
   label : String
   disabledReason : Option String
@@ -40,7 +40,7 @@ inductive Evidence where
 inductive SearchResults where
   | loading
   | failed (message : String)
-  | found (options : List LookupOption) (more : Bool)
+  | found (options : List SelectableOption) (more : Bool)
   deriving DecidableEq
 
 structure Search where
@@ -59,7 +59,7 @@ inductive Value where
 inductive Editor where
   | field (value : Value) (evidence : Evidence)
   /-- `selected` is the active option's `value`, or empty when no option matches. -/
-  | choice (selected : String) (options : List ChoiceOption)
+  | choice (selected : String) (options : List SelectableOption)
   | lookup (picked : Option ChoiceOption) (search : Option Search)
   /-- A button; its argument is ignored. -/
   | action

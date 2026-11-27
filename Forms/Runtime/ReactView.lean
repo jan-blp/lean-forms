@@ -130,7 +130,8 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
       name
       label := c.label
       value
-      options := options.map fun option => { value := option.value, label := option.label }
+      options := options.map fun option => {
+        value := option.value, label := option.label, disabledReason := option.disabledReason }
       disabled
       errors := Model.Message.errors c.messages
       onChange := .apply name }

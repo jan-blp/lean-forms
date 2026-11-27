@@ -28,7 +28,7 @@ structure BusinessPartnerSelection where
 
 namespace BusinessPartners
 
-def availability (candidate : LookupCandidate String BusinessPartnerData) : LookupAvailability :=
+def availability (candidate : LookupCandidate String BusinessPartnerData) : OptionAvailability :=
   match candidate.details.status with
   | .active => .enabled
   | .blocked reason => .disabled reason

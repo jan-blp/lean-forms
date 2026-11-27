@@ -69,14 +69,14 @@ def Delivery.form : Component [] Delivery.Raw :=
       if before.country.map (·.id) == after.country.map (·.id) then after
       else { after with city := none }) <|
       .lookup path[Delivery.Field.country] "Country" (.const (Api.source DeliveryEndpoint.countries))
-        (.const LookupAvailability.always),
+        (.const OptionAvailability.always),
     .disabledWhen { inputs := inputs[path[Delivery.Field.country]], run := Option.isNone } <|
       .lookup path[Delivery.Field.city] "City"
         { inputs := inputs[path[Delivery.Field.country]]
           run := fun country text => match country with
             | some country => Api.source DeliveryEndpoint.cities { country := country.id, text }
             | none => .pure .empty }
-        (.const LookupAvailability.always)]
+        (.const OptionAvailability.always)]
 
 def Delivery.initial : Delivery.Raw := ⟨none, none⟩
 
