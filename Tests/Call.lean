@@ -3,6 +3,7 @@ module
 public import Forms.ExampleForms.FillFromDb
 public import Forms.Runtime.ModelForm
 public import Tests.FreshId
+public import Tests.Fetch
 meta import Forms.Model.Derive
 
 public section
@@ -45,6 +46,23 @@ def hideable : Component [] Tally.Raw :=
     .field path[Tally.Field.count] "Count" .natural,
     .visibleWhen { inputs := inputs[path[Tally.Field.count]], run := fun count => decide (count < 10) }
       (.button "Go" (.call TallyEndpoint.next count fun result => setCount result * note "late"))]
+
+private def layoutRequest : HttpRequest := { method := .get, url := "/layout", body := none }
+
+def revealed : Component [] Tally.Raw := named%
+  observe% layout := .loadStatus (data := Bool) (.const (.fetch layoutRequest fromJson?));
+  .group "Tally" [
+    .field path[Tally.Field.count] "Count" .natural,
+    .visibleWhen
+      { inputs := inputs[path[Tally.Field.count], ref[layout]]
+        run := fun count layout => decide (count < 10) || match layout with
+          | .ready shown => shown
+          | .loading
+          | .failed _ => false }
+      (.button "Go" <|
+        .call TallyEndpoint.next { inputs := inputs[path[Tally.Field.count]], run := id }
+          fun (result : Except String Nat) =>
+            .write path[Tally.Field.count] (.const (result.toOption.getD 0)))]
 
 def reacting : Component [] Tally.Raw :=
   .onChange (fun _ _ => .call TallyEndpoint.next count fun (result : Except String Nat) =>
@@ -124,6 +142,17 @@ def run : IO Unit := do
   let resubmitted ← IO.ofExcept (ModelForm.execute (model := Tally) sequenced answered .submit)
   check "CallAllowsSubmitAfterResult"
     (resubmitted.ui.pending && resubmitted.outbox.contains .submit)
+
+  let opening ← press (opened revealed 1) "Go"
+  let revealedCall ← sent opening
+  let hiddenAgain ← press opening "Count" (some (.text "50"))
+  let submitting ← IO.ofExcept (ModelForm.execute (model := Tally) revealed hiddenAgain .submit)
+  let shownAgain ← IO.ofExcept (ModelForm.execute (model := Tally) revealed submitting
+    (.loaded (← pendingFetch submitting layoutRequest) (.ok (toJson true))))
+  let duringSubmit ← answer shownAgain revealedCall
+  let goShown := (ModelForm.snapshot revealed shownAgain).controls.any (·.label == "Go")
+  check "CallDoesNotResumeDuringSubmit"
+    (submitting.ui.pending && goShown && duringSubmit.value.count == 50 && duringSubmit.ui.pending)
 
   let reset ← IO.ofExcept (ModelForm.execute (model := Tally) sequenced pressed .reset)
   let afterReset ← answer reset call

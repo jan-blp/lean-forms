@@ -471,6 +471,7 @@ def event {Γ : Model.Context}
     let finished := { state with
       evaluation := ModelView.evaluate form state.value fetchState state.env state.locals
         state.evaluation.diagnostics state.evaluation.controlMessages }
+    if state.ui.pending then return finished
     let some pending := state.evaluation.pending.find? (·.waiting == .call id) | pure finished
     match (state.evaluation.apply pending.route (.resume id result)).run state.supply with
     | .ok (updated, supply) =>
