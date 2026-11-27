@@ -70,5 +70,6 @@ def Input.decode {α : Type} (editor : Model.Editor α) (input : Input) : Except
     | _ => .error (.clientBug (.wrongArgument "a list of options"))
   | .refine editor _ parse _ => do
     (parse (← Input.decode editor input)).mapError .input
+  | .whileTyping editor => Input.decode editor input
 
 end Forms.Runtime

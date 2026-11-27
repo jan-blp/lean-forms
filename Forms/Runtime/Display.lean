@@ -48,9 +48,14 @@ structure Search where
   results : SearchResults
   deriving DecidableEq
 
+inductive Commit where
+  | onLeave
+  | whileTyping
+  deriving DecidableEq
+
 /-- How a field shows its value. -/
 inductive Value where
-  | text (kind : Model.TextKind) (value : String)
+  | text (kind : Model.TextKind) (value : String) (commit : Commit)
   | checkbox (value : Bool)
   /-- Its argument is the picked options' values. -/
   | choices (selected : List String) (options : List ChoiceOption)

@@ -11,12 +11,16 @@ namespace Forms.Runtime.ModelView
 open Forms.Model
 
 def editorValue {α : Type} : Model.Editor α → α → Display.Value
-  | .formatted format, value => .text format.kind (format.print value)
+  | .formatted format, value => .text format.kind (format.print value) .onLeave
   | .checkbox, value => .checkbox value
   | .choices (key := _) { options, .. } selected, value =>
     .choices (value.map (Key.encode ∘ selected))
       (options.map fun option => { value := Key.encode option.key, label := option.label })
   | .refine editor print .., value => editorValue editor (print value)
+  | .whileTyping editor, value => match editorValue editor value with
+    | .text kind text _ => .text kind text .whileTyping
+    | .checkbox checked => .checkbox checked
+    | .choices selected options => .choices selected options
 
 def stale
   {α : Type}

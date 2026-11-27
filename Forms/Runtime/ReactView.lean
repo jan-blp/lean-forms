@@ -21,6 +21,10 @@ def _root_.Forms.Model.TextKind.toReact : Model.TextKind → FormsReact.TextKind
   | .date => .date
   | .uuid => .uuid
 
+def Display.Commit.toReact : Commit → FormsReact.Commit
+  | .onLeave => .onLeave
+  | .whileTyping => .whileTyping
+
 def _root_.Forms.Model.ReportMessage.texts
   (keep : Model.Diagnostic.ReportKind → Bool)
   (reports : List Model.ReportMessage)
@@ -109,11 +113,12 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
   let name := ControlKeyProtocol.toString c.key
   let disabled := pending || c.disabled
   match c.input with
-  | .field (.text kind value) evidence => .textField {
+  | .field (.text kind value commit) evidence => .textField {
       name
       label := c.label
       kind := kind.toReact
       value
+      commit := commit.toReact
       disabled
       errors := Model.Message.errors c.messages
       evidence := evidence.toReact

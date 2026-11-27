@@ -13,12 +13,12 @@ namespace DisplayProtocol
 open Display
 
 def widgetName : Editor → String
-  | .field (.text .plain _) _ => "textInput"
-  | .field (.text .natural _) _ => "naturalInput"
-  | .field (.text .integer _) _ => "integerInput"
-  | .field (.text .decimal _) _ => "decimalInput"
-  | .field (.text .date _) _ => "dateInput"
-  | .field (.text .uuid _) _ => "uuidInput"
+  | .field (.text .plain _ _) _ => "textInput"
+  | .field (.text .natural _ _) _ => "naturalInput"
+  | .field (.text .integer _ _) _ => "integerInput"
+  | .field (.text .decimal _ _) _ => "decimalInput"
+  | .field (.text .date _ _) _ => "dateInput"
+  | .field (.text .uuid _ _) _ => "uuidInput"
   | .field (.checkbox _) _ => "checkbox"
   | .field (.choices ..) _ => "choices"
   | .choice .. => "choice"

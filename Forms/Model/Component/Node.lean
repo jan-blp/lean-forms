@@ -28,6 +28,7 @@ inductive Editor : Type → Type 1 where
       (parse : α → Except String β)
       (parse_print : ∀ value, parse (print value) = .ok value)
       : Editor β
+  | whileTyping {α : Type} (editor : Editor α) : Editor α
 
 abbrev Editor.text : Editor String := .formatted .plain
 
