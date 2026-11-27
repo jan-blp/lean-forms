@@ -601,3 +601,30 @@ test('table cells expose row-local selection to an independent summary', async (
     assert.deepEqual(output(page(model)), ['']);
   } finally { model.dispose(); }
 });
+
+test('private state controls change the view but not the submission', async () => {
+  const model = await open(fixture('private-state').start);
+  const control = label => model.snapshot().controls.find(c => c.label === label);
+  const apply = (label, argument) => model.send({ apply: { key: control(label).key, argument } });
+  const output = value => {
+    if (!value || typeof value !== 'object') return [];
+    if (value.output?.label === 'Weight') return [value.output.value];
+    return Object.values(value).flatMap(output);
+  };
+  try {
+    const saved = model.snapshot().submission.value;
+    assert.equal(control('Delivery instructions'), undefined);
+    apply('Show advanced options', true);
+    assert.notEqual(control('Delivery instructions'), undefined);
+    const choices = value => !value || typeof value !== 'object' ? [] :
+      value.choice?.label === 'Show weight in' ? [value.choice]
+        : Object.values(value).flatMap(choices);
+    const kilograms = choices(page(model))[0].options.find(o => o.label === 'Kilograms').value;
+    apply('Show weight in', kilograms);
+    assert.deepEqual(output(page(model)), ['1.250 kg']);
+    assert.deepEqual(model.snapshot().submission.value, saved);
+    model.send('reset');
+    assert.equal(control('Delivery instructions'), undefined);
+    assert.deepEqual(output(page(model)), ['1250 g']);
+  } finally { model.dispose(); }
+});

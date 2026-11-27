@@ -344,12 +344,11 @@ def event {Γ : Model.Context}
         | .input _ =>
           let control := if argument.any Input.typed
             then state.evaluation.view.controls.find? (·.key == key) else none
-          pure <| match control with
+          pure <| match control.bind (·.key.edits) with
           | none => state.draftDiagnostics
-          | some control =>
+          | some location =>
             { control := key
-              diagnostic :=
-                { kind := .error, message, targets := .locations control.location [] } } ::
+              diagnostic := { kind := .error, message, targets := .locations location [] } } ::
               state.draftDiagnostics.filter (·.control != key)
         | .stale _ => pure state.draftDiagnostics
       pure (refresh form { state with

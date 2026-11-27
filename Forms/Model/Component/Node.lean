@@ -5,6 +5,7 @@ public import Forms.Model.Evidence
 public import Forms.Model.Format
 public import Forms.Model.Lookup
 public import Forms.Model.PartialPath
+public import Forms.Model.Target
 public import Forms.Model.Component.State
 public import Forms.Model.Component.Layout
 public import Std.Data.HashMap
@@ -89,19 +90,19 @@ structure EvidenceSlot (α β : Type) where
   path : Path α (Option Evidence)
   read : String → Except String β
 
-inductive EvidenceSupport (α β : Type) where
-  | unsupported
-  | supported (slot : EvidenceSlot α β)
+inductive FieldEvidence {Γ : Context} {α β : Type} : Target Γ α β → Type 1 where
+  | none {target : Target Γ α β} : FieldEvidence target
+  | recordedAt {path : Path α β} (slot : EvidenceSlot α β) : FieldEvidence (.path path)
 
 mutual
 inductive ComponentNode : (Γ : Context) → (model state output : Type) → (holes : Nat) → Type 1 where
   /-- `evidence` records the document cells a value was picked from. -/
   | field {Γ : Context}
       {α β : Type}
-      (path : Path α β)
+      (target : Target Γ α β)
       (label : Computation Γ α String)
       (editor : Editor β)
-      (evidence : EvidenceSupport α β)
+      (evidence : FieldEvidence target)
       : ComponentNode Γ α Unit Unit 0
   | computed {Γ : Context}
       {α : Type}
@@ -132,14 +133,14 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (update : α → α → α)
       (body : ComponentNode Γ α state β holes)
       : ComponentNode Γ α state β holes
-  /-- A choice among `options` for the value at `path`.
+  /-- A choice among `options` for the value at `target`.
   The option with key `selected value` is marked selected, if there is one.
   Choosing a different option sets the value to its `start`. -/
   | select {Γ : Context}
       {α β Key : Type}
       [decidableEq : DecidableEq Key]
       [key : Forms.Model.Key Key]
-      (path : Path α β)
+      (target : Target Γ α β)
       (label : Computation Γ α String)
       (options : Computation Γ α (SelectOptions Key β))
       (selected : β → Key)

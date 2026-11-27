@@ -202,7 +202,7 @@ def Control.editable (control : Control) : Bool :=
 
 /-- Whether the control keeps uncommitted text, whose errors become draft diagnostics. -/
 def Control.acceptsDrafts (control : Control) : Bool :=
-  !control.disabled && match control.input with
+  !control.disabled && control.key.edits.isSome && match control.input with
     | .field (.text ..) _ => true
     | .field (.checkbox _) _ => false
     | .field (.choices ..) _ => false
@@ -216,9 +216,9 @@ def View.resolve
   (locations : List ErasedLocation)
   : Option ControlKey :=
   let controls := view.controls.filter Control.editable
-  let exact := controls.find? fun control => locations.contains control.location
+  let exact := controls.find? fun control => control.key.edits.any locations.contains
   let descendant := controls.find? fun control =>
-    locations.any (·.isPrefixOf control.location)
+    control.key.edits.any fun edited => locations.any (·.isPrefixOf edited)
   (exact.orElse fun _ => descendant).map (·.key)
 
 /-- Resolves each target list on its own, then picks the earliest result in rendered order. -/
