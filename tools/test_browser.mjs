@@ -117,6 +117,11 @@ try {
         };
         // React commits after the event; let it render before the next check.
         const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+        // React may render hover updates after a tick.
+        const eventually = async (predicate, message) => {
+          for (let i = 0; i < 100; i++) { if (predicate()) return; await new Promise(resolve => setTimeout(resolve, 10)); }
+          throw Error(message);
+        };
         // React tracks the value setter, so typing must use the native one and a bubbling event.
         const type = async (input, value) => {
           Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value);
@@ -495,10 +500,12 @@ try {
       return tick();
     };
     await pointer('mouseover', 'Invoice number');
-    check(cell(4).classList.contains('highlighted') && !cell(19).classList.contains('highlighted'),
+    await eventually(
+      () => cell(4).classList.contains('highlighted') && !cell(19).classList.contains('highlighted'),
       'Hovering the number did not show its cells over the focused total');
     await pointer('mouseout', 'Invoice number');
-    check(!cell(4).classList.contains('highlighted') && cell(19).classList.contains('highlighted'),
+    await eventually(
+      () => !cell(4).classList.contains('highlighted') && cell(19).classList.contains('highlighted'),
       'Leaving the number did not return to the focused total');
     await pointer('mouseover', 'Issued on');
     check(cell(19).classList.contains('highlighted'), 'Hovering a field without cells hid the focused total');
