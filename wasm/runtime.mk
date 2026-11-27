@@ -1,7 +1,7 @@
 # Toolchains and the Wasm Lean runtime. CI caches their output keyed on this file, so keep anything else out.
 
-LEAN_VERSION := 4.35.0
-LEAN_SHA256 := 6747b099d03d3675f2716e7cf5924a16bfbf75822b13a3d36f51f933ffcc307b
+LEAN_VERSION := 4.36.0
+LEAN_SHA256 := 9057b59c21958c68b2052fb0411e575f8ed5479b7f931a219b86be7833602eaf
 EMSDK_VERSION := 7.0.0
 EMSDK_SHA256 := b2d153874f97b3c41f76b91239407d124c8d22f60a5e1a3f0a4ebc92a44479e4
 

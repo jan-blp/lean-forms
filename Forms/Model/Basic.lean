@@ -62,6 +62,16 @@ theorem Key.find?_encode
       · exact absurd (clash ▸ List.mem_map_of_mem later) nodup.1
       · simp [clash, Forms.Model.Key.find?_encode encode rest key later nodup.2]
 
+theorem Key.isChain_of_toList
+  : ∀ {names : List String}, (names.map String.toList).IsChain (· < ·) → names.IsChain (· < ·)
+  | [], _ => .nil
+  | [_], _ => .singleton _
+  | _ :: _ :: _, .cons_cons less rest =>
+    .cons_cons
+      (String.toByteArray_lt_toByteArray_iff.mp
+        (String.toList_lt_toList_iff_toByteArray_lt_toByteArray.mp less))
+      (isChain_of_toList rest)
+
 /-- Decodes by looking names up in `all`. Its names strictly increase, so checking them takes
 one comparison per key rather than one per pair. -/
 @[instance_reducible] def Key.ofSorted
@@ -75,10 +85,10 @@ one comparison per key rather than one per pair. -/
   encode
   decode name := all.find? (encode · == name)
   decode_encode key :=
-    haveI : Trans (α := String) (· < ·) (· < ·) (· < ·) := ⟨String.lt_trans⟩
+    haveI : Trans (α := String) (· < ·) (· < ·) (· < ·) := ⟨Std.lt_trans⟩
     Forms.Model.Key.find?_encode encode all key (complete key)
       (sorted.pairwise.imp (S := (· ≠ ·)) fun {first second} (less : first < second) same =>
-        String.lt_irrefl second (same ▸ less))
+        Std.lt_irrefl (same ▸ less))
   encode_ne_empty key := named (encode key) (List.mem_map_of_mem (complete key))
 
 class Constructors (α : Type) where
