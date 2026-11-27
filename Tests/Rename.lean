@@ -40,7 +40,7 @@ private def weakeningPreserves
   let mut same := true
   for control in original.view.controls do
     let input := argument control.input
-    match (original.applyKey control.key input).run' supply, (shifted.applyKey control.key input).run' supply with
+    match (original.applyKey control.key input 0).run' supply, (shifted.applyKey control.key input 0).run' supply with
     | .ok first, .ok second =>
       let first := component.evaluate first.value first.state {} first.locals
       let second := weakened.evaluate second.value second.state {} second.locals

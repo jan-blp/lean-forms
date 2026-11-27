@@ -67,8 +67,8 @@ endpoints DeliveryEndpoint where
 def Delivery.form : Component [] Delivery.Raw :=
   .group "Delivery" [
     .onChange (fun before after =>
-      if before.country.map (·.id) == after.country.map (·.id) then after
-      else { after with city := none }) <|
+      if before.country.map (·.id) == after.country.map (·.id) then 1
+      else .write path[Delivery.Field.city] (.const none)) <|
       .group "Country" [
         .lookup path[Delivery.Field.country] "Country"
           (.const (Api.source DeliveryEndpoint.countries)) (.const OptionAvailability.always),

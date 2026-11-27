@@ -24,7 +24,7 @@ private def press
   : IO (ComponentUpdate [] α state) := do
   let some control := (evaluated.view.controls.filter (·.label == label))[nth]?
     | throw (IO.userError s!"Missing control: {label} {nth}")
-  IO.ofExcept (((evaluated.applyKey control.key argument).run' supply).mapError fun error =>
+  IO.ofExcept (((evaluated.applyKey control.key argument 0).run' supply).mapError fun error =>
     toString (ModelForm.Rejection.ofAction error))
 
 mutual

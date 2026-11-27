@@ -1,6 +1,7 @@
 module
 
 public import Forms.Model.Remote
+public import Forms.Model.ErasedLocation
 
 @[expose] public section
 namespace Forms.Model
@@ -23,5 +24,15 @@ def LoadedState.at
 structure ObservationState (producer consumers : Type) where
   producer : producer
   consumers : consumers
+
+/-- Ignored unless `epoch` is the current input and the `onChange` node is still at `location`. -/
+structure PendingReaction (α : Type) where
+  old : α
+  epoch : Nat
+  location : ErasedLocation
+
+structure ReactionState (α state : Type) where
+  pending : Option (PendingReaction α)
+  body : state
 
 end Forms.Model

@@ -119,12 +119,14 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (availability : Computation Γ α Availability)
       (body : ComponentNode Γ α state β holes)
       : ComponentNode Γ α state β holes
+  /-- Runs after every successful input in `body`, even when `old = new`, on a fresh evaluation;
+  dropped when `body` is no longer shown or has moved. Never retriggers itself. -/
   | onChange {Γ : Context}
       {α β state : Type}
       {holes : Nat}
-      (update : α → α → α)
+      (react : (old new : α) → Action Γ α)
       (body : ComponentNode Γ α state β holes)
-      : ComponentNode Γ α state β holes
+      : ComponentNode Γ α (ReactionState α state) β holes
   /-- A choice among `options` for the value at `target`.
   The option with key `selected value` is marked selected, if there is one.
   Choosing a different option sets the value to its `start`; `availability` can refuse it. -/
