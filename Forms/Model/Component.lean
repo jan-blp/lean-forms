@@ -76,7 +76,16 @@ abbrev Component.field
   (label : Computation Γ α String)
   (editor : Editor β)
   : Component Γ α :=
-  { LocalState := Unit, node := .field path label editor .unsupported }
+  { LocalState := Unit, node := .field (.path path) label editor .none }
+
+abbrev Component.stateField
+  {Γ : Context}
+  {α β : Type}
+  (var : Var Γ β)
+  (label : Computation Γ α String)
+  (editor : Editor β)
+  : Component Γ α :=
+  { LocalState := Unit, node := .field (.var var) label editor .none }
 
 abbrev Component.fieldWithEvidence
   {Γ : Context}
@@ -86,7 +95,7 @@ abbrev Component.fieldWithEvidence
   (label : Computation Γ α String)
   (editor : Editor β)
   : Component Γ α :=
-  { LocalState := Unit, node := .field path label editor (.supported evidence) }
+  { LocalState := Unit, node := .field (.path path) label editor (.recordedAt evidence) }
 
 abbrev Component.computed
   {Γ : Context}
@@ -201,7 +210,19 @@ abbrev Component.select
   (options : Computation Γ α (SelectOptions Key β))
   (selected : β → Key)
   : Component Γ α :=
-  { LocalState := Unit, node := .select path label options selected }
+  { LocalState := Unit, node := .select (.path path) label options selected }
+
+abbrev Component.stateSelect
+  {Γ : Context}
+  {α β Key : Type}
+  [DecidableEq Key]
+  [Forms.Model.Key Key]
+  (var : Var Γ β)
+  (label : Computation Γ α String)
+  (options : Computation Γ α (SelectOptions Key β))
+  (selected : β → Key)
+  : Component Γ α :=
+  { LocalState := Unit, node := .select (.var var) label options selected }
 
 abbrev Component.lookup
   {Γ : Context}

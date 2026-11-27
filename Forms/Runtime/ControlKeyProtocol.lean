@@ -29,6 +29,8 @@ def toString (key : ControlKey) : String :=
         Json.arr (location.map stepToJson).toArray]
     | .tab route location => Json.arr #[toJson ("tab" : String), toJson route,
         Json.arr (location.map stepToJson).toArray]
+    | .state route location => Json.arr #[toJson ("state" : String), toJson route,
+        Json.arr (location.map stepToJson).toArray]
   json.compress
 
 def fromJson (json : Json) : Except String ControlKey := do
@@ -39,6 +41,8 @@ def fromJson (json : Json) : Except String ControlKey := do
     pure (.press (← fromJson? route) (← (← location.getArr?).toList.mapM stepFromJson))
   | [.str "tab", route, location] =>
     pure (.tab (← fromJson? route) (← (← location.getArr?).toList.mapM stepFromJson))
+  | [.str "state", route, location] =>
+    pure (.state (← fromJson? route) (← (← location.getArr?).toList.mapM stepFromJson))
   | _ => throw "Unknown action or invalid key shape."
 
 def fromString (key : String) : Except String ControlKey :=

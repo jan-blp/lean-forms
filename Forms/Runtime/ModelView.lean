@@ -47,29 +47,17 @@ def readPick
   (read picked.text).mapError fun message => .input s!"Could not read \"{picked.text}\": {message}"
 
 def evidenceOf
+  {Γ : Context}
   {α β : Type}
+  {target : Model.Target Γ α β}
   (widget : Model.Editor β)
   (value : α)
   (current : β)
-  : EvidenceSupport α β → Display.Evidence
-  | .unsupported => .unsupported
-  | .supported slot => match slot.path.get value with
+  : FieldEvidence target → Display.Evidence
+  | .none => .unsupported
+  | .recordedAt slot => match slot.path.get value with
     | none => .missing
     | some evidence => .linked evidence (stale widget slot.read current evidence)
-
-def editor
-  {α : Type}
-  (widget : Model.Editor α)
-  (value : α)
-  (evidence : Display.Evidence)
-  (target : Display.Target)
-  (location : ErasedLocation)
-  (label : String)
-  (disabled : Bool)
-  (messages : List Message)
-  : Display.Control :=
-  { key := .edit location, target, label, disabled, location, messages
-    input := .field (editorValue widget value) evidence }
 
 def _root_.Forms.Model.Targets.erase
   {α : Type}
@@ -149,23 +137,54 @@ structure NodeEvaluation
     List Nat → Option Input →
       StateT Supply (Except ModelView.ActionError) (ComponentUpdate Γ α state)
 
+structure ControlMessage where
+  control : ControlKey
+  message : Message
+  deriving BEq
+
 /-- Runtime facts shared by one evaluation; unlike `Env`, components cannot bind or set them.
 Build with `Ambient.of`, which derives `messages` from `diagnostics`. -/
 structure Ambient where
   fetchState : FetchState
   diagnostics : List Diagnostic
   messages : Std.HashMap ErasedLocation (List Message)
+  controlMessages : List ControlMessage
 
 def Ambient.of
   (fetchState : FetchState)
   (diagnostics : List Diagnostic)
+  (controlMessages : List ControlMessage)
   : Ambient :=
-  { fetchState, diagnostics, messages := Diagnostic.messageIndex diagnostics }
+  { fetchState, diagnostics, messages := Diagnostic.messageIndex diagnostics, controlMessages }
 
 abbrev Ambient.cache (ambient : Ambient) : HttpRequest.Cache := ambient.fetchState.cache
 
 def Ambient.messagesAt (ambient : Ambient) (location : ErasedLocation) : List Message :=
   ambient.messages.getD location []
+
+def Ambient.messagesFor (ambient : Ambient) (key : ControlKey) : List Message :=
+  (ambient.controlMessages.filter (·.control == key)).map (·.message)
+
+def targetControl
+  {Γ : Context}
+  {α β : Type}
+  (written : Model.Target Γ α β)
+  (key : ErasedLocation → ControlKey)
+  (ambient : Ambient)
+  (target : Display.Target)
+  (location : ErasedLocation)
+  (label : String)
+  (disabled : Bool)
+  (input : Display.Editor)
+  : Display.Control :=
+  match written with
+  | .path path =>
+    let location := location ++ path.erase
+    { key := key location, target, location, label, disabled, input
+      messages := ambient.messagesAt location }
+  | .var _ =>
+    let key := .state target.indices location
+    { key, target, location, label, disabled, input, messages := ambient.messagesFor key }
 
 structure Evaluated (Γ : Context) (α state β : Type)
   extends NodeEvaluation Γ α state β, Ambient where
@@ -307,11 +326,11 @@ def evaluateNode
   (disabled : Bool := false)
   : NodeEvaluation Γ α state β (Hollow holes) :=
   match component with
-  | .field path label widget evidence =>
-    let location := location ++ path.erase
-    let current := path.get value
-    let control := editor widget current (evidenceOf widget value current evidence) target location
-      (label.eval value env) disabled (ambient.messagesAt location)
+  | .field written label widget evidence =>
+    let current := written.get value env
+    let control := targetControl written .edit ambient target location (label.eval value env)
+      disabled
+      (.field (editorValue widget current) (evidenceOf widget value current evidence))
     { output := ()
       locals := ()
       view := fun _ => .control control
@@ -321,23 +340,21 @@ def evaluateNode
           if disabled then throw (.invalid .disabled)
           let some input := argument | throw (.decode (.clientBug .missingArgument))
           match input with
-          | .pick picked => match evidence with
-            | .supported slot =>
+          | .pick picked => match written, evidence with
+            | .path path, .recordedAt slot =>
               let updated ← MonadExcept.ofExcept ((readPick slot.read picked).mapError .decode)
               return {
                 value := slot.path.set (some picked) (path.set updated value)
                 state := env
                 locals := (), invalidations := [] }
-            | .unsupported => throw (.decode (.clientBug .noEvidence))
+            | .path _, .none
+            | .var _, .none => throw (.decode (.clientBug .noEvidence))
           | .text _
           | .boolean _
           | .texts _
           | .lookup _ =>
             let updated ← MonadExcept.ofExcept ((Input.decode widget input).mapError .decode)
-            return {
-              value := path.set updated value
-              state := env
-              locals := (), invalidations := [] }
+            return written.set updated value env
         | _ => absent }
   | .computed label computation =>
     { output := ()
@@ -399,18 +416,14 @@ def evaluateNode
     { body with apply := fun route argument => do
         let updated ← body.apply route argument
         return { updated with value := update value updated.value } }
-  | .select (decidableEq := _) (key := _) path label options selected =>
+  | .select (decidableEq := _) (key := _) written label options selected =>
     let options := (options.eval value env).options
-    let selected := selected (path.get value)
-    let location := location ++ path.erase
+    let selected := selected (written.get value env)
     let shown := if options.any (·.key == selected) then Key.encode selected else ""
-    let control : Display.Control := {
-      key := .select location
-      target, location, disabled
-      label := label.eval value env
-      messages := ambient.messagesAt location
-      input := .choice shown
-        (options.map fun option => { value := Key.encode option.key, label := option.label }) }
+    let control := targetControl written .select ambient target location (label.eval value env)
+      disabled
+      (.choice shown
+        (options.map fun option => { value := Key.encode option.key, label := option.label }))
     { output := ()
       locals := ()
       view := fun _ => .control control
@@ -423,10 +436,7 @@ def evaluateNode
             | throw (.invalid (.unavailableBranch key))
           if option.key == selected then
             return { value, state := env, locals := (), invalidations := [] }
-          return {
-            value := path.set option.start value
-            state := env
-            locals := (), invalidations := [] }
+          return written.set option.start value env
         | [], some _ => throw (.decode (.clientBug (.wrongArgument "an option")))
         | [], none => throw (.decode (.clientBug .missingArgument))
         | _, _ => absent }
@@ -624,8 +634,9 @@ def evaluate
   (env : Env Γ)
   (locals : component.LocalState := component.initialState)
   (diagnostics : List Diagnostic := [])
+  (controlMessages : List ControlMessage := [])
   : Evaluated Γ α component.LocalState β :=
-  let ambient := Ambient.of fetchState diagnostics
+  let ambient := Ambient.of fetchState diagnostics controlMessages
   let evaluated := (evaluateNode component.node value env ambient locals {} []).closed
   { toNodeEvaluation := { evaluated with view := evaluated.view.dedupe }
     toAmbient := ambient
