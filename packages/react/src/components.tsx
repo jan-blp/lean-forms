@@ -342,7 +342,10 @@ export function Lookup({ name, label, picked, search, disabled, errors, onChange
         value={typed ?? search?.text ?? picked?.label ?? ''}
         placeholder={picked === null ? 'Type to search' : undefined}
         {...described(errors, feedback)}
-        onFocus={event => event.currentTarget.select()}
+        onFocus={event => {
+          event.currentTarget.select();
+          if (search === null) send({ search: { text: '' } });
+        }}
         onChange={event => setTyped(event.currentTarget.value)}
         onKeyDown={keyDown}
         onBlur={close} /></label>
