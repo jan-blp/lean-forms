@@ -39,18 +39,27 @@ def ModelForm.SubmitOutcome.ofFailure
   | some error => .rejected error
   | none => .unreachable s!"Submission failed (HTTP {status})."
 
-def fetchEffect (fetch : Model.HttpFetch) : Wire.Effect :=
-  let request := fetch.request
-  .fetch (toJson fetch).compress {
-    url := request.url
+def httpEffect (request : Model.HttpRequest) : Wire.HttpEffect :=
+  { url := request.url
     method := match request.method with
       | .get => .GET
       | .post => .POST
     headers := { «Content-Type» := "application/json" }
     body := request.body }
 
+def fetchEffect (fetch : Model.HttpFetch) : Wire.Effect :=
+  .fetch (toJson fetch).compress (httpEffect fetch.request)
+
 def fetchOfId (id : String) : Except String Model.HttpFetch :=
   Json.parse id >>= fromJson?
+
+def callOfId (id : String) : Except String Model.Uuid :=
+  if canonical : Model.Uuid.isCanonical id then .ok ⟨id, canonical⟩ else .error "Invalid call id"
+
+def responseJson : Wire.HttpOutcome → Except String Json
+  | .response status body => if 200 ≤ status && status < 300 then Json.parse body
+    else .error s!"The server responded with status {status}."
+  | .unreachable message => .error message
 
 def ModelForm.Snapshot.toWire
   {α : Type}
@@ -75,6 +84,7 @@ def ModelForm.Snapshot.toWire
           headers := { «Content-Type» := "application/json" }
           body := some submission.compress }
       | .fetch request => fetchEffect request
+      | .call call => .call call.id.value (httpEffect call.request)
       | .focus key => .focus (ControlKeyProtocol.toString key) }
 
 def ModelForm.Event.fromWire
@@ -93,10 +103,8 @@ def ModelForm.Event.fromWire
       else .ofFailure status body))
   | .submitted (.unreachable message) => .ok (.submitted (.unreachable message))
   | .fetched id outcome => do
-    let response := match outcome with
-      | .response status body => if 200 ≤ status && status < 300 then Json.parse body
-        else .error s!"The server responded with status {status}."
-      | .unreachable message => .error message
-    pure (.loaded (← fetchOfId id) response)
+    pure (.loaded (← fetchOfId id) (responseJson outcome))
+  | .called id outcome => do
+    pure (.called (← callOfId id) (responseJson outcome))
 
 end Forms.Runtime

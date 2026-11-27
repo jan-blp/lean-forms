@@ -114,8 +114,9 @@ def run : IO Unit := do
     (ModelForm.openState (model := Collection Nat) (supply := supply) rows
       (.numbered [10, 20]) Env.nil) "Increment" 1
   let removed ← press (model := Collection Nat) rowUpdated "Remove"
-  let states : Std.HashMap Uuid (ObservationState (Binding Nat (ObservationState Unit Unit))
-      (ObservationState Unit Unit)) :=
+  let states : Std.HashMap Uuid
+      (ObservationState (Binding Nat (ObservationState (Option PendingCall) Unit))
+        (ObservationState (Option PendingCall) Unit)) :=
     removed.locals.producer.producer
   check "ActionRowStateFollowsRemoval"
     (removed.value.values == [20] && states.size == 1 &&

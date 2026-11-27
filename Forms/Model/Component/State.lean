@@ -31,8 +31,20 @@ structure PendingReaction (α : Type) where
   epoch : Nat
   location : ErasedLocation
 
+/-- `results` answer the action's earlier calls; the action is replayed with them. -/
+structure PendingCall where
+  id : Uuid
+  location : ErasedLocation
+  results : List (Except String Lean.Json)
+
+structure ReactionCall (α : Type) where
+  old : α
+  new : α
+  call : PendingCall
+
 structure ReactionState (α state : Type) where
   pending : Option (PendingReaction α)
+  call : Option (ReactionCall α)
   body : state
 
 end Forms.Model

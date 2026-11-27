@@ -5,7 +5,7 @@
 
 # Comments
 
-- Only add short and concise comments when they are essential to understanding the code.
+- Only add comments when they are essential to understanding the code. They should be concise and short.
 
 # Formatting
 

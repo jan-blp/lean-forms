@@ -76,7 +76,8 @@ private def apply (state : State) (label : String) (argument : Input) : IO State
 private def fetches (state : State) : List HttpRequest :=
   state.outbox.filterMap fun
     | .fetch fetch => some fetch.request
-    | .submit => none
+    | .submit
+    | .call _
     | .focus _ => none
 
 private def answer (request : HttpRequest) : Except String Json :=
@@ -154,7 +155,8 @@ def run : IO Unit := do
   let fetch : HttpFetch := { request := supplier "acme", generation := 7 }
   check "RemoteFetchEffectRoundtrip" (match fetchEffect fetch with
     | .fetch id _ => (fetchOfId id).toOption == some fetch
-    | .submit _ => false
+    | .submit _
+    | .call ..
     | .focus _ => false)
   let definition := FormDefinition.ofModel Lookup Lookup.form Lookup.initial
   let (opened, _) ← IO.ofExcept (definition.openState (toJson Lookup.initial) supply)

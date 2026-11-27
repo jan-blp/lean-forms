@@ -39,8 +39,9 @@ private def focuses
   : List ControlKey :=
   state.outbox.filterMap fun
     | .focus key => some key
-    | .submit => none
-    | .fetch _ => none
+    | .submit
+    | .fetch _
+    | .call _ => none
 
 private def remembered : Component [] Person.Raw :=
   .bind (none : Option Destination) <|

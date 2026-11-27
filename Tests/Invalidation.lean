@@ -59,7 +59,8 @@ private def press (state : State) (label : String) : IO State := do
 private def fetches (state : State) : List HttpFetch :=
   state.outbox.filterMap fun
     | .fetch fetch => some fetch
-    | .submit => none
+    | .submit
+    | .call _
     | .focus _ => none
 
 private def ready (state : State) (request : HttpRequest) (expected : Nat) : Bool :=

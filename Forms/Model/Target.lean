@@ -31,8 +31,9 @@ def Target.set
   (env : Env Γ)
   : ComponentUpdate Γ α Unit :=
   match target with
-  | .path focus => { value := focus.set new value, state := env, locals := (), invalidations := [] }
-  | .var ref => { value, state := ref.set new env, locals := (), invalidations := [] }
+  | .path focus =>
+    { value := focus.set new value, state := env, locals := (), invalidations := [], call := none }
+  | .var ref => { value, state := ref.set new env, locals := (), invalidations := [], call := none }
 
 def Target.rename
   {Γ Δ : Context}

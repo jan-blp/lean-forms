@@ -30,7 +30,8 @@ def run : IO Unit := do
   for event in [Event.apply "key" Json.null, .apply "key" (toJson "12"),
       .draft "key" (some "Incomplete"), .draft "key" none,
       .submit, .reset, .submitted (.response 200 "ok"), .submitted (.unreachable "offline"),
-      .fetched "id" (.response 200 "[]"), .fetched "id" (.unreachable "offline")] do
+      .fetched "id" (.response 200 "[]"), .fetched "id" (.unreachable "offline"),
+      .called "id" (.response 200 "1"), .called "id" (.unreachable "offline")] do
     roundtrip event
   check "Payload-free constructors encode as strings" (toJson Event.submit == toJson "submit")
   check "Payload constructors encode under their name" ((toJson (Event.apply "key" (toJson "12"))).getObjValD "apply" ==

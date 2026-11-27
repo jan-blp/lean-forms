@@ -19,6 +19,7 @@ inductive Event where
   | reset
   | submitted (outcome : HttpOutcome)
   | fetched (id : String) (outcome : HttpOutcome)
+  | called (id : String) (outcome : HttpOutcome)
   deriving ToJson, FromJson
 
 structure FormStart where
@@ -56,6 +57,8 @@ inductive Effect where
   | submit (request : HttpEffect)
   /-- Answered by `fetched` with `id`. -/
   | fetch (id : String) (request : HttpEffect)
+  /-- Answered by `called` with `id`. -/
+  | call (id : String) (request : HttpEffect)
   deriving ToJson, FromJson
 
 structure Snapshot where

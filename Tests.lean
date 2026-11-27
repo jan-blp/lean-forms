@@ -29,6 +29,7 @@ import Tests.Evidence
 import Tests.Endpoints
 import Tests.Lookup
 import Tests.OnChange
+import Tests.Call
 import Tests.SearchSelect
 import Tests.LookupCandidates
 import Tests.Invalidation
@@ -64,6 +65,7 @@ public def main : IO Unit := do
   Tests.Evidence.run
   Tests.Lookup.run
   Tests.OnChange.run
+  Tests.Call.run
   Tests.SearchSelect.run
   Tests.LookupCandidates.run
   Tests.Invalidation.run

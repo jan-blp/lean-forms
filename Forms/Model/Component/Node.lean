@@ -105,7 +105,7 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       {α : Type}
       (caption : Computation Γ α String)
       (action : Action Γ α)
-      : ComponentNode Γ α Unit Unit 0
+      : ComponentNode Γ α (Option PendingCall) Unit 0
   | tabBar {Γ : Context}
       {α : Type}
       {n : Nat}

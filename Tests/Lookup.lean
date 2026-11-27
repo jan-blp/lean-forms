@@ -32,7 +32,8 @@ private def apply (state : State) (label : String) (argument : Input) : IO State
 private def fetches (state : State) : List HttpRequest :=
   state.outbox.filterMap fun
     | .fetch fetch => some fetch.request
-    | .submit => none
+    | .submit
+    | .call _
     | .focus _ => none
 
 private def settle (state : State) : IO State :=

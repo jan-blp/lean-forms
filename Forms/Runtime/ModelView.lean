@@ -128,15 +128,23 @@ def noArgument
   | none => pure invocation
   | some _ => throw (.decode (.clientBug .unexpectedArgument))
 
+def absent {m : Type → Type} {α : Type} [MonadExcept ActionError m] : m α :=
+  throw (.invalid .absent)
+
 def runAction
   {Γ : Context}
   {α : Type}
   (action : Model.Action Γ α)
+  (results : List (Except String Lean.Json))
   (value : α)
   (env : Env Γ)
-  : StateT Supply (Except ActionError) (ComponentUpdate Γ α Unit) := do
+  (location : ErasedLocation)
+  : StateT Supply (Except ActionError) (ComponentUpdate Γ α (Option PendingCall)) := do
+  let some action := action.resume results | absent
   match ← (action.run value env).run with
-  | .ok updated => pure updated
+  | .ok updated =>
+    pure (updated.mapLocals fun () =>
+      updated.call.map fun call => { id := call.id, location, results })
   | .error collision => throw (.idCollision collision.id)
 
 inductive Trigger where
@@ -144,10 +152,20 @@ inductive Trigger where
   | input (argument : Option Input) (epoch : Nat)
   /-- Runs the pending reaction of the `onChange` node at the route. -/
   | react
+  | resume (id : Uuid) (result : Except String Lean.Json)
+
+inductive Waiting where
+  | reaction (epoch : Nat)
+  | call (id : Uuid)
+  deriving BEq
+
+def Waiting.isCall : Waiting → Bool
+  | .reaction _ => false
+  | .call _ => true
 
 structure PendingRoute where
   route : List Nat
-  epoch : Nat
+  waiting : Waiting
 
 def PendingRoute.under (index : Nat) (pending : PendingRoute) : PendingRoute :=
   { pending with route := index :: pending.route }
@@ -160,8 +178,8 @@ structure NodeEvaluation
   locals : state
   view : viewType
   requests : List HttpRequest
-  /-- The `onChange` nodes with a pending reaction, innermost first. -/
-  reactions : List PendingRoute
+  /-- Reactions innermost first. -/
+  pending : List PendingRoute
   /-- Draws new item ids from the `Supply` state. -/
   apply :
     List Nat → Trigger →
@@ -221,16 +239,14 @@ structure Evaluated (Γ : Context) (α state β : Type)
   value : α
   env : Env Γ
 
-def absent {m : Type → Type} {α : Type} [MonadExcept ActionError m] : m α :=
-  throw (.invalid .absent)
-
 def Trigger.argument
   {m : Type → Type}
   [Monad m]
   [MonadExcept ActionError m]
   : Trigger → m (Option Input)
   | .input argument _ => pure argument
-  | .react => absent
+  | .react
+  | .resume .. => absent
 
 /-- A `bind` around an evaluated `body`, which stores the bound value at its head. -/
 def bound
@@ -243,7 +259,7 @@ def bound
   locals := { value := stored, tail := body.locals }
   view := body.view
   requests := body.requests
-  reactions := body.reactions.map (·.under 0)
+  pending := body.pending.map (·.under 0)
   apply := fun route trigger => match route with
     | 0 :: rest => do
       let updated ← body.apply rest trigger
@@ -264,7 +280,7 @@ def observed
   locals := { producer := producer.locals, consumers := body.locals }
   view := view
   requests := producer.requests ++ body.requests
-  reactions := producer.reactions.map (·.under 0) ++ body.reactions.map (·.under 1)
+  pending := producer.pending.map (·.under 0) ++ body.pending.map (·.under 1)
   apply := fun route trigger => match route with
     | 0 :: rest => do
       let updated ← producer.apply rest trigger
@@ -375,7 +391,7 @@ def evaluateNode
       locals := ()
       view := fun _ => .control control
       requests := []
-      reactions := []
+      pending := []
       apply := fun route trigger => match route with
         | [] => do
           if disabled then throw (.invalid .disabled)
@@ -387,7 +403,7 @@ def evaluateNode
               return {
                 value := slot.path.set (some picked) (path.set updated value)
                 state := env
-                locals := (), invalidations := [] }
+                locals := (), invalidations := [], call := none }
             | .path _, .none
             | .var _, .none => throw (.decode (.clientBug .noEvidence))
           | .text _
@@ -402,25 +418,34 @@ def evaluateNode
       locals := ()
       view := fun _ => .computed (label.eval value env) (computation.eval value env)
       requests := []
-      reactions := []
+      pending := []
       apply := fun _ _ => absent }
   | .button caption action =>
+    let current := locals.filter fun call =>
+      call.location == location && ambient.fetchState.inFlight call.id
     { output := ()
-      locals := ()
+      locals := current
       view := fun _ => .control {
         key := .press target.indices location
-        target, location, disabled
+        target, location
+        disabled := disabled || current.isSome
         label := caption.eval value env
         input := .action
         messages := [] }
       requests := []
-      reactions := []
-      apply := fun route trigger => match route with
-        | [] => do
-          if disabled then throw (.invalid .disabled)
-          noArgument (← trigger.argument) ()
-          runAction action value env
-        | _ => absent }
+      pending := (current.map fun call => { route := [], waiting := .call call.id }).toList
+      apply := fun route trigger => match route, trigger with
+        | [], .input argument _ => do
+          if disabled || current.isSome then throw (.invalid .disabled)
+          noArgument argument ()
+          runAction action [] value env location
+        | [], .resume id result => do
+          let some call := current.filter (·.id == id) | absent
+          runAction action (call.results ++ [result]) value env location
+        | [], .react
+        | _ :: _, .input ..
+        | _ :: _, .react
+        | _ :: _, .resume .. => absent }
   | .tabBar (n := n) label active tabs =>
     { output := ()
       locals := ()
@@ -431,14 +456,16 @@ def evaluateNode
         input := .tabs (active.get env).val (tabs.eval value env).toList
         messages := [] }
       requests := []
-      reactions := []
+      pending := []
       apply := fun route trigger => match route with
         | [] => do
           if disabled then throw (.invalid .disabled)
           let some (.text chosen) ← trigger.argument | throw (.decode (.clientBug (.wrongArgument "text")))
           let some index := chosen.toNat? | throw (.decode (.clientBug .unknownOption))
           if h : index < n then
-            return { value, state := active.set ⟨index, h⟩ env, locals := (), invalidations := [] }
+            return {
+              value, state := active.set ⟨index, h⟩ env
+              locals := (), invalidations := [], call := none }
           throw (.decode (.clientBug .unknownOption))
         | _ => absent }
   | .withAvailability availability body =>
@@ -449,38 +476,56 @@ def evaluateNode
       locals := body.locals
       view := fun content => if availability == .hidden then .hidden else body.view content
       requests := if availability == .hidden then [] else body.requests
-      reactions := if availability == .hidden then [] else body.reactions
+      pending := if availability == .hidden then [] else body.pending
       apply := fun route trigger => match availability, trigger with
         | .hidden, .input ..
-        | .hidden, .react => throw (.invalid .hidden)
+        | .hidden, .react
+        | .hidden, .resume .. => throw (.invalid .hidden)
         | .disabled, .input .. => throw (.invalid .disabled)
         | .disabled, .react
+        | .disabled, .resume ..
         | .enabled, .input ..
-        | .enabled, .react => body.apply route trigger }
+        | .enabled, .react
+        | .enabled, .resume .. => body.apply route trigger }
   | .onChange react body =>
     let body := evaluateNode body value env ambient locals.body (target.child 0) location disabled
     let current := locals.pending.filter (·.location == location)
+    let call := locals.call.filter fun reaction =>
+      reaction.call.location == location && ambient.fetchState.inFlight reaction.call.id
+    let sent (old new : α) (sent : Option PendingCall) := sent.map fun call => { old, new, call }
     { output := body.output
-      locals := { locals with body := body.locals }
+      locals := { locals with call, body := body.locals }
       view := body.view
       requests := body.requests
-      reactions := body.reactions.map (·.under 0) ++
-        (current.map fun pending => { route := [], epoch := pending.epoch }).toList
+      pending := body.pending.map (·.under 0) ++
+        (current.map fun pending => { route := [], waiting := .reaction pending.epoch }).toList ++
+        (call.map fun reaction => { route := [], waiting := .call reaction.call.id }).toList
       apply := fun route trigger => match route, trigger with
         | 0 :: rest, .input argument epoch => do
           let updated ← body.apply rest (.input argument epoch)
           return updated.mapLocals fun state =>
-            { pending := some { old := value, epoch, location }, body := state }
+            { pending := some { old := value, epoch, location }, call, body := state }
         | 0 :: rest, .react => do
           let updated ← body.apply rest .react
-          return updated.mapLocals fun state => { locals with body := state }
+          return updated.mapLocals fun state => { locals with call, body := state }
+        | 0 :: rest, .resume id result => do
+          let updated ← body.apply rest (.resume id result)
+          return updated.mapLocals fun state => { locals with call, body := state }
         | [], .react => do
           let some pending := current | absent
-          let reaction ← runAction (react pending.old value) value env
-          return reaction.mapLocals fun () => { pending := none, body := body.locals }
+          let reaction ← runAction (react pending.old value) [] value env location
+          return reaction.mapLocals fun call =>
+            { pending := none, call := sent pending.old value call, body := body.locals }
+        | [], .resume id result => do
+          let some reaction := call.filter (·.call.id == id) | absent
+          let updated ← runAction (react reaction.old reaction.new)
+            (reaction.call.results ++ [result]) value env location
+          return updated.mapLocals fun call =>
+            { locals with call := sent reaction.old reaction.new call, body := body.locals }
         | [], .input ..
         | (_ + 1) :: _, .input ..
-        | (_ + 1) :: _, .react => absent }
+        | (_ + 1) :: _, .react
+        | (_ + 1) :: _, .resume .. => absent }
   | .select (decidableEq := _) (key := _) written label options selected availability =>
     let options := options.eval value env
     let availability := availability.eval value env
@@ -498,7 +543,7 @@ def evaluateNode
       locals := ()
       view := fun _ => .control control
       requests := []
-      reactions := []
+      pending := []
       apply := fun route trigger => do
         if disabled then throw (.invalid .disabled)
         match route, ← trigger.argument with
@@ -509,7 +554,7 @@ def evaluateNode
             | .error .unlisted => throw (.invalid (.unavailableBranch wire))
             | .error (.disabled reason) => throw (.invalid (.disabledBranch wire reason))
           if option.key == selected then
-            return { value, state := env, locals := (), invalidations := [] }
+            return { value, state := env, locals := (), invalidations := [], call := none }
           return written.set option.start value env
         | [], some _ => throw (.decode (.clientBug (.wrongArgument "an option")))
         | [], none => throw (.decode (.clientBug .missingArgument))
@@ -530,18 +575,20 @@ def evaluateNode
       locals
       view := fun _ => .control control
       requests := (locals.bind (search · |>.request?)).toList
-      reactions := []
+      pending := []
       apply := fun route trigger => match route with
         | [] => do
           if disabled then throw (.invalid .disabled)
           match ← trigger.argument with
           | some (.lookup input) => match input with
             | .search text =>
-              return { value, state := env, locals := some text, invalidations := [] }
-            | .close => return { value, state := env, locals := none, invalidations := [] }
+              return {
+                value, state := env, locals := some text, invalidations := [], call := none }
+            | .close =>
+              return { value, state := env, locals := none, invalidations := [], call := none }
             | .clear =>
               return { value := path.set none value, state := env
-                       locals := none, invalidations := [] }
+                       locals := none, invalidations := [], call := none }
             | .choose key =>
               let some results := (match locals.map status with
                 | some (.ready results) => some results
@@ -553,7 +600,7 @@ def evaluateNode
                 | .error (.unlisted key) => throw (.invalid (.unlistedMatch key))
                 | .error (.disabled key reason) => throw (.invalid (.disabledMatch key reason))
               return { value := path.set (some reference) value, state := env
-                       locals := none, invalidations := [] }
+                       locals := none, invalidations := [], call := none }
           | some (.text _)
           | some (.boolean _)
           | some (.texts _)
@@ -565,28 +612,28 @@ def evaluateNode
       locals := ()
       view := fun _ => .hidden
       requests := []
-      reactions := []
+      pending := []
       apply := fun _ _ => absent }
   | .issues =>
     { output := Diagnostic.issues ambient.diagnostics location
       locals := ()
       view := fun _ => .hidden
       requests := []
-      reactions := []
+      pending := []
       apply := fun _ _ => absent }
   | .reports path =>
     { output := Message.reports (ambient.messagesAt (location ++ path.erase))
       locals := ()
       view := fun _ => .hidden
       requests := []
-      reactions := []
+      pending := []
       apply := fun _ _ => absent }
   | .statusMarker reports =>
     { output := ()
       locals := ()
       view := fun _ => .marker (reports.eval value env)
       requests := []
-      reactions := []
+      pending := []
       apply := fun _ _ => absent }
   | .zoom? computation body =>
     let path? := computation.eval value env
@@ -597,7 +644,7 @@ def evaluateNode
         locals
         view := fun _ => .hidden
         requests := []
-        reactions := []
+        pending := []
         apply := fun _ _ => absent }
     | some path, some focused =>
       let body := evaluateNode body focused env ambient locals target (location ++ path.erase)
@@ -606,7 +653,7 @@ def evaluateNode
         locals := body.locals
         view := body.view
         requests := body.requests
-        reactions := body.reactions
+        pending := body.pending
         apply := fun route trigger => do
           let updated ← body.apply route trigger
           return updated.mapValue (fun focused => path.set focused value) }
@@ -626,7 +673,7 @@ def evaluateNode
       locals := ⟨status, body.locals⟩
       view := body.view
       requests := source.request?.toList ++ body.requests
-      reactions := body.reactions
+      pending := body.pending
       apply := fun route trigger => do
         let updated ← body.apply route trigger
         return updated.mapLocals (fun state => ⟨status, state⟩) }
@@ -652,7 +699,7 @@ def evaluateNode
       locals := states
       view := render (rows.map (·.view))
       requests := rows.flatMap (·.requests)
-      reactions := rows.zipIdx.flatMap fun (row, index) => row.reactions.map (·.under index)
+      pending := rows.zipIdx.flatMap fun (row, index) => row.pending.map (·.under index)
       apply := fun route trigger => match route with
         | index :: rest => do
           let some row := rows[index]? | absent
@@ -692,7 +739,7 @@ def evaluatePresentation
       locals := ()
       view := layouts.map (renderLayout fun view => (presentations view).view)
       requests := []
-      reactions := []
+      pending := []
       apply := fun _ _ => absent }
   | .own (holes := owns) component body =>
     let child := evaluateNode component value env ambient locals.producer (target.child 0)
