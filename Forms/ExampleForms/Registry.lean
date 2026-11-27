@@ -17,6 +17,7 @@ public import Forms.ExampleForms.Delivery
 public import Forms.ExampleForms.BusinessPartners
 public import Forms.ExampleForms.PrivateState
 public import Forms.ExampleForms.Shipping
+public import Forms.ExampleForms.ExchangeRate
 public import Forms.Runtime.FormDefinition
 public import Std.Data.HashMap
 
@@ -91,10 +92,14 @@ def forms : List (String × RegisteredForm) := [
     submitUrl := "/api/submit" }),
   ("parcel", {
     definition := .ofModel Shipping.Parcel Shipping.form Shipping.initial
+    submitUrl := "/api/submit" }),
+  ("exchange-rate", {
+    definition := .ofModel ExchangeRate.Transfer ExchangeRate.form ExchangeRate.initial
     submitUrl := "/api/submit" })]
 
 def api (request : Model.HttpRequest) : Option Lean.Json :=
-  (Delivery.serve request).orElse fun () => BusinessPartners.serve request
+  (Delivery.serve request).orElse fun () =>
+    (BusinessPartners.serve request).orElse fun () => ExchangeRate.serve request
 
 def registeredForms : Std.HashMap String RegisteredForm := .ofList forms
 

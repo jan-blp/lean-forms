@@ -42,7 +42,8 @@ def ComponentNode.rename
   | .tabBar label active tabs => .tabBar (label.rename rename) (rename active) (tabs.rename rename)
   | .withAvailability availability body =>
     .withAvailability (availability.rename rename) (body.rename rename)
-  | .onChange update body => .onChange update (body.rename rename)
+  | .onChange react body =>
+    .onChange (fun old new => (react old new).rename rename) (body.rename rename)
   | .select (decidableEq := _) (key := _) target label options selected availability =>
     .select (target.rename rename) (label.rename rename) (options.rename rename) selected
       (availability.rename rename)

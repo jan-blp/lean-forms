@@ -22,7 +22,7 @@ def ComponentNode.initialState
   | .reports .. => ()
   | .statusMarker .. => ()
   | .withAvailability _ body => body.initialState
-  | .onChange _ body => body.initialState
+  | .onChange _ body => { pending := none, body := body.initialState }
   | .select (decidableEq := _) (key := _) .. => ()
   | .lookup (toJson := _) .. => none
   | .collection .. => {}
@@ -42,6 +42,51 @@ def PresentationNode.initialState
   | .layout .. => ()
   | .own component body => ⟨component.initialState, body.initialState⟩
   | .bind initial body => ⟨initial, body.initialState⟩
+
+end
+
+mutual
+def ComponentNode.dropReactions
+  {Γ : Context}
+  {α state β : Type}
+  {holes : Nat}
+  (component : ComponentNode Γ α state β holes)
+  (locals : state)
+  : state :=
+  match component with
+  | .field .. => locals
+  | .computed .. => locals
+  | .button .. => locals
+  | .tabBar .. => locals
+  | .output .. => locals
+  | .issues => locals
+  | .reports .. => locals
+  | .statusMarker .. => locals
+  | .withAvailability _ body => body.dropReactions locals
+  | .onChange _ body => { pending := none, body := body.dropReactions locals.body }
+  | .select (decidableEq := _) (key := _) .. => locals
+  | .lookup (toJson := _) .. => locals
+  | .collection (row := row) .. => locals.map fun _ rowLocals => row.dropReactions rowLocals
+  | .zoom? _ body => body.dropReactions locals
+  | .zoom _ body => body.dropReactions locals
+  | .load (inst := _inst) (body := body) .. =>
+    { status := locals.status, body := (body locals.status).dropReactions locals.body }
+  | .present body => body.dropReactions locals
+
+def PresentationNode.dropReactions
+  {Δ : ViewContext}
+  {Γ : Context}
+  {α state β : Type}
+  {views : Nat}
+  (presentation : PresentationNode Δ Γ α state β views)
+  (locals : state)
+  : state :=
+  match presentation with
+  | .layout .. => locals
+  | .own component body =>
+    { producer := component.dropReactions locals.producer
+      consumers := body.dropReactions locals.consumers }
+  | .bind _ body => { value := locals.value, tail := body.dropReactions locals.tail }
 
 end
 

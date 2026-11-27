@@ -284,6 +284,26 @@ def applyUpdate
     outbox := state.outbox ++ focus.toList.map .focus
     ui := { state.ui with notice := .info "", resultVisible := false } }
 
+/-- Runs pending reactions innermost first, each on a fresh evaluation. A reaction never makes
+another one pending, so `fuel` starts at the number pending after the input. -/
+def react
+  {Γ : Model.Context}
+  {model β : Type}
+  [FormModel model]
+  [Model.Validation model]
+  [Model.Reports model]
+  [Lean.ToJson (Model.Raw model)]
+  (form : Model.Component Γ (Model.Raw model) β)
+  (state : State form)
+  : (fuel : Nat) → Except Rejection (State form)
+  | 0 => pure state
+  | fuel + 1 => match state.evaluation.reactions with
+    | [] => pure state
+    | route :: _ => do
+      let (updated, supply) ←
+        ((state.evaluation.apply route .react).run state.supply).mapError .ofAction
+      react form (applyUpdate (model := model) form { state with supply } updated) fuel
+
 def apply
   {Γ : Model.Context}
   {model β : Type}
@@ -302,6 +322,7 @@ def apply
     draftDiagnostics := state.draftDiagnostics.filter (·.control != key)
     stateDrafts := state.stateDrafts.filter (·.control != key) }
   let state := applyUpdate (model := model) form state updated
+  let state ← react (model := model) form state state.evaluation.reactions.length
   let drafts := state.draftDiagnostics.filter fun draft =>
     state.evaluation.view.controls.any (·.key == draft.control)
   return refresh form { state with draftDiagnostics := drafts }

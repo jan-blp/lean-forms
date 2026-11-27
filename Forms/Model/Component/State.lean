@@ -24,4 +24,9 @@ structure ObservationState (producer consumers : Type) where
   producer : producer
   consumers : consumers
 
+structure ReactionState (α state : Type) where
+  /-- The model before the input whose reaction has not run yet. -/
+  pending : Option α
+  body : state
+
 end Forms.Model

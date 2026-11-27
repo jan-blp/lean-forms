@@ -132,15 +132,14 @@ abbrev Component.withAvailability
   : Component Γ α β holes :=
   { LocalState := body.LocalState, node := .withAvailability availability body.node }
 
-/-- Adjusts a successful edit using the previous and updated model. -/
 abbrev Component.onChange
   {Γ : Context}
   {α β : Type}
   {holes : Nat}
-  (update : α → α → α)
+  (react : (old new : α) → Action Γ α)
   (body : Component Γ α β holes)
   : Component Γ α β holes :=
-  { LocalState := body.LocalState, node := .onChange update body.node }
+  { LocalState := ReactionState α body.LocalState, node := .onChange react body.node }
 
 abbrev Component.collection
   {Γ : Context}
