@@ -40,6 +40,7 @@ structure State {Γ : Model.Context} {α β : Type} (form : Model.Component Γ �
   reportDiagnostics : List Model.Diagnostic
   supply : Model.Supply
   draftDiagnostics : List DraftDiagnostic := []
+  stateDrafts : List ModelView.ControlMessage
 
 variable {Γ : Model.Context} {α β : Type} {form : Model.Component Γ α β}
 
@@ -99,7 +100,8 @@ private def openWith
     outbox := []
     validationDiagnostics
     reportDiagnostics
-    supply }
+    supply
+    stateDrafts := [] }
 
 @[no_expose] def openState
   {Γ : Model.Context}
@@ -123,10 +125,11 @@ def refresh
   let diagnostics := state.draftDiagnostics.map (·.diagnostic) ++
     (state.serverFeedback.map (·.errors)).getD state.validationDiagnostics ++
     state.reportDiagnostics
-  if diagnostics == state.evaluation.diagnostics then state else
+  if diagnostics == state.evaluation.diagnostics &&
+      state.stateDrafts == state.evaluation.controlMessages then state else
     { state with
       evaluation := ModelView.evaluate form state.value state.fetchState state.env state.locals
-        diagnostics }
+        diagnostics state.stateDrafts }
 
 /-- Marks the requests `form` reads but has not loaded as loading, and queues them. -/
 def load
@@ -138,7 +141,7 @@ def load
   let queued := state.fetchState.queue state.evaluation.requests
   if queued.fetches.isEmpty then state else
     let evaluation := ModelView.evaluate form state.value queued.state state.env state.locals
-      state.evaluation.diagnostics
+      state.evaluation.diagnostics state.evaluation.controlMessages
     let outbox := state.outbox.filter (·.applies evaluation.view)
     { state with
       evaluation
@@ -271,6 +274,7 @@ def applyUpdate
   let fetchState := state.fetchState.invalidate updated.invalidations
   let evaluation :=
     ModelView.evaluate form updated.value fetchState updated.state updated.locals diagnostics
+      state.stateDrafts
   let focus := updated.visit.bind (evaluation.view.resolve ·.locations)
   { state with
     evaluation
@@ -295,11 +299,35 @@ def apply
   let (updated, supply) ← (validateAction form state key argument).run state.supply
   let state := { state with
     supply
-    draftDiagnostics := state.draftDiagnostics.filter (·.control != key) }
+    draftDiagnostics := state.draftDiagnostics.filter (·.control != key)
+    stateDrafts := state.stateDrafts.filter (·.control != key) }
   let state := applyUpdate (model := model) form state updated
   let drafts := state.draftDiagnostics.filter fun draft =>
     state.evaluation.view.controls.any (·.key == draft.control)
   return refresh form { state with draftDiagnostics := drafts }
+
+def keepRejected
+  {Γ : Model.Context}
+  {α β : Type}
+  {form : Model.Component Γ α β}
+  (state : State form)
+  (key : ControlKey)
+  (message : String)
+  : State form :=
+  match key with
+  | .edit location
+  | .select location =>
+    { state with
+      draftDiagnostics :=
+        { control := key
+          diagnostic := { kind := .error, message, targets := .locations location [] } } ::
+          state.draftDiagnostics.filter (·.control != key) }
+  | .state .. =>
+    { state with
+      stateDrafts := { control := key, message := { kind := .error, text := message } } ::
+        state.stateDrafts.filter (·.control != key) }
+  | .press ..
+  | .tab .. => state
 
 def submit
   {Γ : Model.Context}
@@ -338,26 +366,20 @@ def event {Γ : Model.Context}
     | .error rejection =>
       let message := toString rejection
       let ui := if state.ui.pending then state.ui else state.ui.announce message true
-      let diagnostics ← match rejection with
+      let state ← match rejection with
         | .clientBug error => throw (toString error)
         | .idCollision _ => throw message
         | .input _ =>
-          let control := if argument.any Input.typed
-            then state.evaluation.view.controls.find? (·.key == key) else none
-          pure <| match control.bind (·.key.edits) with
-          | none => state.draftDiagnostics
-          | some location =>
-            { control := key
-              diagnostic := { kind := .error, message, targets := .locations location [] } } ::
-              state.draftDiagnostics.filter (·.control != key)
-        | .stale _ => pure state.draftDiagnostics
-      pure (refresh form { state with
-        draftDiagnostics := diagnostics
-        ui := { ui with rejection := some message } })
+          let typed := argument.any Input.typed &&
+            state.evaluation.view.controls.any (·.key == key)
+          pure (if typed then keepRejected state key message else state)
+        | .stale _ => pure state
+      pure (refresh form { state with ui := { ui with rejection := some message } })
   | .draft key message =>
     if state.ui.pending then return state
     let some control := state.evaluation.view.controls.find? (·.key == key) | return state
-    unless control.acceptsDrafts do return state
+    unless control.acceptsDrafts do
+      return refresh form { state with stateDrafts := state.stateDrafts.filter (·.control != key) }
     let diagnostics := state.draftDiagnostics.filter (·.control != key)
     let diagnostics := match message with
       | none => diagnostics
@@ -391,7 +413,7 @@ def event {Γ : Model.Context}
     | some fetchState =>
       pure { state with
         evaluation := ModelView.evaluate form state.value fetchState state.env state.locals
-          state.evaluation.diagnostics }
+          state.evaluation.diagnostics state.evaluation.controlMessages }
 
 def execute {Γ : Model.Context}
   {model β : Type}
@@ -409,8 +431,11 @@ def execute {Γ : Model.Context}
   let drafts := state.draftDiagnostics.filter fun draft =>
     state.evaluation.view.controls.any fun control =>
       control.key == draft.control && control.acceptsDrafts
-  let state := if drafts == state.draftDiagnostics then state
-    else load form (refresh form { state with draftDiagnostics := drafts })
+  let stateDrafts := state.stateDrafts.filter fun draft =>
+    state.evaluation.view.controls.any fun control =>
+      control.key == draft.control && !control.disabled
+  let state := if drafts == state.draftDiagnostics && stateDrafts == state.stateDrafts then state
+    else load form (refresh form { state with draftDiagnostics := drafts, stateDrafts })
   let outbox := state.outbox.filter (·.applies state.evaluation.view)
   return { state with outbox }
 

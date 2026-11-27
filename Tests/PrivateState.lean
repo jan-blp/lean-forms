@@ -3,10 +3,11 @@ module
 public import Forms.ExampleForms.PrivateState
 public import Forms.Runtime.ModelForm
 public import Tests.FreshId
+meta import Forms.Model.Derive
 
 public section
 namespace Tests.PrivateState
-open Lean Forms.Model Forms.Runtime
+open Lean Forms.Model Forms.Model.Sugar Forms.Runtime
 open Forms.ExampleForms.PrivateState
 
 private def check (message : String) (ok : Bool) : IO Unit := do
@@ -65,7 +66,39 @@ private def isState : ControlKey → Bool
   | .press ..
   | .tab .. => false
 
+structure Label where
+  recipient : String
+  deriving FormModel
+
+def labelForm : Component [] Label.Raw := named%
+  state% copies := (1 : Nat);
+  .group "Label" [
+    .field path[Label.Field.recipient] "Recipient" .text,
+    .stateField ref[copies] "Copies" .natural]
+
+private def copies (state : ModelForm.State labelForm) : Option Display.Control :=
+  state.evaluation.view.controls.find? (·.label == "Copies")
+
+private def label
+  (state : ModelForm.State labelForm)
+  (event : ModelForm.Event Label.Raw)
+  : IO (ModelForm.State labelForm) :=
+  IO.ofExcept (ModelForm.execute (model := Label) labelForm state event)
+
+private def rejectedText : IO Unit := do
+  let opened := ModelForm.openState (model := Label) labelForm ⟨"Ada"⟩ Env.nil supply
+  let some key := (copies opened).map (·.key) | throw (IO.userError "FAIL missing copies")
+  let rejected ← label opened (.apply key (some (.text "-3")))
+  let shown (state : ModelForm.State labelForm) :=
+    (copies state).any (·.messages.any (·.kind == .error))
+  check "PrivateStateRejectedTextShowsOnControl" (shown rejected)
+  check "PrivateStateRejectedTextDoesNotBlockSubmit" (← label rejected .submit).ui.pending
+  check "PrivateStateDraftClearsRejection" !(shown (← label rejected (.draft key none)))
+  let fixed ← label rejected (.apply key (some (.text "2")))
+  check "PrivateStateCommitClearsRejection" !(shown fixed)
+
 def run : IO Unit := do
+  rejectedText
   let opened := ModelForm.openState (model := Shipment) form initial Env.nil supply
   check "PrivateStateControlsAreKeyedAsState"
     ((control opened "Show advanced options").any (isState ·.key) &&

@@ -137,23 +137,33 @@ structure NodeEvaluation
     List Nat → Option Input →
       StateT Supply (Except ModelView.ActionError) (ComponentUpdate Γ α state)
 
+structure ControlMessage where
+  control : ControlKey
+  message : Message
+  deriving BEq
+
 /-- Runtime facts shared by one evaluation; unlike `Env`, components cannot bind or set them.
 Build with `Ambient.of`, which derives `messages` from `diagnostics`. -/
 structure Ambient where
   fetchState : FetchState
   diagnostics : List Diagnostic
   messages : Std.HashMap ErasedLocation (List Message)
+  controlMessages : List ControlMessage
 
 def Ambient.of
   (fetchState : FetchState)
   (diagnostics : List Diagnostic)
+  (controlMessages : List ControlMessage)
   : Ambient :=
-  { fetchState, diagnostics, messages := Diagnostic.messageIndex diagnostics }
+  { fetchState, diagnostics, messages := Diagnostic.messageIndex diagnostics, controlMessages }
 
 abbrev Ambient.cache (ambient : Ambient) : HttpRequest.Cache := ambient.fetchState.cache
 
 def Ambient.messagesAt (ambient : Ambient) (location : ErasedLocation) : List Message :=
   ambient.messages.getD location []
+
+def Ambient.messagesFor (ambient : Ambient) (key : ControlKey) : List Message :=
+  (ambient.controlMessages.filter (·.control == key)).map (·.message)
 
 def targetControl
   {Γ : Context}
@@ -173,8 +183,8 @@ def targetControl
     { key := key location, target, location, label, disabled, input
       messages := ambient.messagesAt location }
   | .var _ =>
-    { key := .state target.indices location, target, location, label, disabled, input
-      messages := [] }
+    let key := .state target.indices location
+    { key, target, location, label, disabled, input, messages := ambient.messagesFor key }
 
 structure Evaluated (Γ : Context) (α state β : Type)
   extends NodeEvaluation Γ α state β, Ambient where
@@ -624,8 +634,9 @@ def evaluate
   (env : Env Γ)
   (locals : component.LocalState := component.initialState)
   (diagnostics : List Diagnostic := [])
+  (controlMessages : List ControlMessage := [])
   : Evaluated Γ α component.LocalState β :=
-  let ambient := Ambient.of fetchState diagnostics
+  let ambient := Ambient.of fetchState diagnostics controlMessages
   let evaluated := (evaluateNode component.node value env ambient locals {} []).closed
   { toNodeEvaluation := { evaluated with view := evaluated.view.dedupe }
     toAmbient := ambient
