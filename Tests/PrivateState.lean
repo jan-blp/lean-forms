@@ -52,7 +52,7 @@ private def chosen : Display.Editor → Option String
   | .action
   | .tabs .. => none
 
-private def choiceOptions : Display.Editor → List Display.ChoiceOption
+private def choiceOptions : Display.Editor → List Display.SelectableOption
   | .choice _ options => options
   | .field ..
   | .lookup ..

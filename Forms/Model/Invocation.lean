@@ -14,6 +14,7 @@ inductive InvocationError where
   | absent
   /-- No option of the select has the requested key. -/
   | unavailableBranch (key : String)
+  | disabledBranch (key : String) (reason : String)
   | unlistedMatch (key : LookupKey)
   | disabledMatch (key : LookupKey) (reason : String)
   deriving DecidableEq, Repr
@@ -25,6 +26,7 @@ instance : ToString InvocationError where
       | .disabled => "the control is disabled"
       | .absent => "the control is no longer shown"
       | .unavailableBranch key => s!"branch '{key}' is no longer available"
+      | .disabledBranch key reason => s!"branch '{key}' cannot be selected: {reason}"
       | .unlistedMatch key => s!"{key.value} is no longer among the matches"
       | .disabledMatch key reason => s!"{key.value} cannot be selected: {reason}"
     s!"This action is unavailable: {reason}."

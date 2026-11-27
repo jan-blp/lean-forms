@@ -9,4 +9,5 @@ public meta import Forms.Model.PartialPath.Theorems
 public meta import Forms.Model.Computation.Theorems
 public meta import Forms.Model.Lookup.Theorems
 public meta import Forms.Model.Target.Theorems
+public meta import Forms.Model.Select.Theorems
 public meta import Forms.Model.Derive

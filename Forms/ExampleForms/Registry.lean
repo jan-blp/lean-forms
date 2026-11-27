@@ -16,6 +16,7 @@ public import Forms.ExampleForms.InvoiceEvidence
 public import Forms.ExampleForms.Delivery
 public import Forms.ExampleForms.BusinessPartners
 public import Forms.ExampleForms.PrivateState
+public import Forms.ExampleForms.Shipping
 public import Forms.Runtime.FormDefinition
 public import Std.Data.HashMap
 
@@ -87,6 +88,9 @@ def forms : List (String × RegisteredForm) := [
     submitUrl := "/api/submit" }),
   ("private-state", {
     definition := .ofModel PrivateState.Shipment PrivateState.form PrivateState.initial
+    submitUrl := "/api/submit" }),
+  ("parcel", {
+    definition := .ofModel Shipping.Parcel Shipping.form Shipping.initial
     submitUrl := "/api/submit" })]
 
 def api (request : Model.HttpRequest) : Option Lean.Json :=

@@ -95,12 +95,18 @@ structure ChoiceOption where
   label : String
   deriving ToJson, FromJson, BEq, Repr
 
+structure SelectableOption where
+  value : String
+  label : String
+  disabledReason : Option String
+  deriving ToJson, FromJson, BEq, Repr
+
 /-- Picks one of `options`; `onChange` receives the chosen option's `value`. -/
 structure Choice where
   name : String
   label : String
   value : String
-  options : List ChoiceOption
+  options : List SelectableOption
   disabled : Bool
   errors : List String
   onChange : Action
@@ -118,16 +124,10 @@ structure Choices where
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
-structure LookupOption where
-  value : String
-  label : String
-  disabledReason : Option String
-  deriving ToJson, FromJson, BEq, Repr
-
 inductive SearchResults where
   | loading
   | failed (message : String)
-  | found (options : List LookupOption) (more : Bool)
+  | found (options : List SelectableOption) (more : Bool)
   deriving ToJson, FromJson, BEq, Repr
 
 structure Search where
