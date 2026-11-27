@@ -92,7 +92,7 @@ private def openWith
   let validationDiagnostics := validationErrors (model := model) value
   let reportDiagnostics := reports (model := model) value true
   { evaluation := ModelView.evaluate form value fetchState env form.initialState
-      (validationDiagnostics ++ reportDiagnostics)
+      (validationDiagnostics ++ reportDiagnostics) []
     initial := value
     initialEnv := env
     ui := .initial
