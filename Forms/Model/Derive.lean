@@ -331,7 +331,7 @@ private def emitKey (model : ModelInfo) (tagType : Ident) : CommandElabM Unit :=
       (toString position))) (by decide +kernel)))
   emitIn model.tagType (← `(command| instance : Forms.Model.Key $tagType :=
     Forms.Model.Key.ofSorted $all $encode (fun $selected:ident => $(← matchOn #[selected] members))
-      (by decide +kernel) (by decide +kernel)))
+      (Forms.Model.Key.isChain_of_toList (by decide +kernel)) (by decide +kernel)))
 
 /-- An enum's raw values are its tags, so projection compares tags and stays linear in
 constructors. -/

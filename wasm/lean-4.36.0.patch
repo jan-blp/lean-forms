@@ -1,6 +1,6 @@
 --- a/src/runtime/uv/system.cpp
 +++ b/src/runtime/uv/system.cpp
-@@ -633,7 +633,7 @@
+@@ -630,7 +630,7 @@
  }
  
  // Std.Internal.UV.System.osGetGroup : IO (Option GroupInfo)
@@ -33,7 +33,7 @@
  #else
 --- a/src/runtime/io.cpp
 +++ b/src/runtime/io.cpp
-@@ -1258,7 +1258,7 @@
+@@ -1257,7 +1257,7 @@
  }
  
  /* createTempFile : IO (Handle × FilePath) */
@@ -42,7 +42,7 @@
      char path[PATH_MAX];
      size_t base_len = PATH_MAX;
      int ret = uv_os_tmpdir(path, &base_len);
-@@ -1304,7 +1304,7 @@
+@@ -1303,7 +1303,7 @@
  }
  
  /* createTempDir : IO FilePath */
@@ -82,7 +82,7 @@
      bool is_mmap = lean_ctor_get_uint8(region, sizeof(void*) * 5) != 0;
 --- a/src/library/ir_interpreter.cpp
 +++ b/src/library/ir_interpreter.cpp
-@@ -1200,7 +1200,7 @@
+@@ -1208,7 +1208,7 @@
      }
  }
  
@@ -93,7 +93,7 @@
      });
 --- a/src/include/lean/lean.h
 +++ b/src/include/lean/lean.h
-@@ -3498,7 +3498,7 @@
+@@ -3721,7 +3721,7 @@
      return lean_box(0);
  }
  

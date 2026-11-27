@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Assertion text of every stub, e.g.
-# https://github.com/leanprover/lean4/blob/v4.35.0/src/runtime/uv/tcp.cpp#L768-L778
+# https://github.com/leanprover/lean4/blob/v4.36.0/src/runtime/uv/tcp.cpp#L885-L889
 STUB='Please build a version of Lean4 with libuv'
 
 if (($# != 1)); then

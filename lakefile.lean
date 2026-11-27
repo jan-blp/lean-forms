@@ -8,11 +8,13 @@ package «lean-forms» where
     { name := `autoImplicit
       value := false },
     { name := `relaxedAutoImplicit
+      value := false },
+    { name := `weak.linter.concreteInstances
       value := false }]
 
-require batteries from git "https://github.com/jan-blp/batteries" @ "v4.35.0-wasm.1"
-require mathlib from git "https://github.com/jan-blp/mathlib4" @ "v4.35.0-wasm.1"
-require «lean-lens» from git "https://github.com/janmasrovira/lean-lens" @ "816a71f8264c700c200d01149ac43e96ae5d694a"
+require batteries from git "https://github.com/jan-blp/batteries" @ "v4.36.0-wasm.1"
+require «lean-lens» from git "https://github.com/janmasrovira/lean-lens" @ "fede57ef164bb9cd2ae2a6c42230f7bbad6613de"
+require mathlib from git "https://github.com/jan-blp/mathlib4" @ "v4.36.0-wasm.1"
 
 @[default_target]
 lean_lib Forms
@@ -38,7 +40,7 @@ target webAssets pkg : FilePath := do
     closure := closure.insert root.name root
     for mod in ← (← root.transImports.fetch).await do
       closure := closure.insert mod.name mod
-  let modules ← closure.toArray.qsort (·.1.quickLt ·.1) |>.mapM fun (_, mod) => mod.leanArts.fetch
+  let modules ← closure.toArray.qsort (·.1.quickLt ·.1) |>.mapM fun (_, mod) => mod.elabArts.fetch
   -- web/tsconfig.json includes every web/*.tsx.
   let webSources := (← (pkg.dir / "web").readDir).filterMap fun entry =>
     if entry.path.extension == some "tsx" then some entry.path else none
