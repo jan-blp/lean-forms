@@ -111,7 +111,7 @@ abbrev Component.button
   (caption : Computation Γ α String)
   (action : Action Γ α)
   : Component Γ α :=
-  { LocalState := Unit, node := .button caption action }
+  { LocalState := Option PendingCall, node := .button caption action }
 
 abbrev Component.tabBar
   {Γ : Context}

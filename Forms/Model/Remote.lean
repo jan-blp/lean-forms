@@ -34,6 +34,11 @@ structure HttpFetch where
   generation : Nat
   deriving BEq, Repr, ToJson, FromJson
 
+structure HttpCall where
+  id : Uuid
+  request : HttpRequest
+  deriving BEq
+
 inductive Source (α : Type) where
   | pure (value : α)
   | fetch (request : HttpRequest) (decode : Json → Except String α)

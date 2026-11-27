@@ -30,7 +30,8 @@ private def apply (state : State) (label : String) (argument : Option Input) : I
 private def settle (state : State) : IO State :=
   (state.outbox.filterMap fun
     | .fetch fetch => some fetch.request
-    | .submit => none
+    | .submit
+    | .call _
     | .focus _ => none).foldlM (init := state) fun state request => do
     execute state (.loaded (← pendingFetch state request)
       ((Delivery.serve request).elim (.error "Not found.") .ok))

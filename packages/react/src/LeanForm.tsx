@@ -102,13 +102,17 @@ function OpenForm({ model, components, evidence, transport, onSnapshot, onFailur
   }
 
   async function perform(effect: Exclude<Wire.Effect, { focus: unknown }>) {
-    const request = 'submit' in effect ? effect.submit.request : effect.fetch.request;
+    const request = 'submit' in effect ? effect.submit.request
+      : 'fetch' in effect ? effect.fetch.request
+      : effect.call.request;
     let outcome: Wire.HttpOutcome;
     try {
       const response = await (currentTransport.current ?? defaultTransport)(request);
       outcome = { response: { status: response.status, body: await response.text() } };
     } catch (error) { outcome = { unreachable: { message: message(error) } }; }
-    const event: Wire.Event = 'submit' in effect ? { submitted: { outcome } } : { fetched: { id: effect.fetch.id, outcome } };
+    const event: Wire.Event = 'submit' in effect ? { submitted: { outcome } }
+      : 'fetch' in effect ? { fetched: { id: effect.fetch.id, outcome } }
+      : { called: { id: effect.call.id, outcome } };
     try { send(event); } catch (error) { onFailure(error); }
   }
 

@@ -9,11 +9,12 @@ structure FetchState where
   private mk ::
   private responses : Model.HttpRequest.Cache
   private nextGeneration : Nat
+  private calls : List Model.Uuid
 
 namespace FetchState
 
 def empty : FetchState :=
-  { responses := {}, nextGeneration := 0 }
+  { responses := {}, nextGeneration := 0, calls := [] }
 
 instance : EmptyCollection FetchState where
   emptyCollection := empty
@@ -30,7 +31,7 @@ def queue
   : Queued :=
   let missing := requests.filter (!state.responses.contains ·) |>.eraseDups
   if missing.isEmpty then { state, fetches := [] } else
-    { state := {
+    { state := { state with
         responses := missing.foldl
           (fun cache request => cache.insert request (.loading state.nextGeneration))
           state.responses
@@ -68,6 +69,24 @@ def accept
   | none
   | some (.loaded _)
   | some (.failed _) => none
+
+def send (state : FetchState) (call : Model.HttpCall) : FetchState :=
+  { state with calls := call.id :: state.calls }
+
+def inFlight (state : FetchState) (id : Model.Uuid) : Bool :=
+  state.calls.contains id
+
+def finish (state : FetchState) (id : Model.Uuid) : Option FetchState :=
+  if state.inFlight id then some { state with calls := state.calls.filter (· != id) } else none
+
+theorem finish_inFlight
+  (state finished : FetchState)
+  (id : Model.Uuid)
+  (finishes : state.finish id = some finished)
+  : finished.finish id = none := by
+  simp [finish, inFlight] at finishes
+  obtain ⟨_, rfl⟩ := finishes
+  simp [finish, inFlight]
 
 theorem accept_stale
   (state : FetchState)

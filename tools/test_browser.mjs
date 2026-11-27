@@ -659,6 +659,29 @@ try {
     check(saved.id === 'vic' && Object.keys(saved).sort().join(',') === 'displayText,id',
       'Submission persisted candidate data instead of the reference');
   `);
+  await example('fill-from-db', `
+    const fill = () => [...document.querySelectorAll('button')].find(button => button.textContent === 'Fill from DB');
+    const originalFetch = window.fetch;
+    let calls = 0;
+    let release;
+    const held = new Promise(resolve => { release = resolve; });
+    window.fetch = async (...args) => {
+      if (String(args[0]).endsWith('/api/account')) { calls++; await held; }
+      return originalFetch(...args);
+    };
+    fill().click();
+    await tick();
+    check(fill().disabled, 'Fill from DB was enabled while its call was pending');
+    release();
+    await wait(() => input('IBAN').value === 'CH93 0076 2011 6238 5295 7');
+    check(calls === 1 && !fill().disabled, 'Fill from DB did not call once and re-enable');
+    await edit('Partner', 'nobody');
+    fill().click();
+    await wait(() => document.body.textContent.includes('The server responded with status 404.'));
+    check(calls === 2 && input('IBAN').value === 'CH93 0076 2011 6238 5295 7',
+      'A failed call changed the IBAN');
+    window.fetch = originalFetch;
+  `);
   const fixture = await build({
     entryPoints: [join(cwd, 'tools/fixtures/Transport.tsx')],
     bundle: true, write: false, format: 'esm', jsx: 'automatic', alias,

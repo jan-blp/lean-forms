@@ -46,6 +46,7 @@ private def settle (state : State) : IO State :=
       execute state (.loaded (← pendingFetch state fetch.request)
         ((serve fetch.request).elim (.error "Not found.") .ok))
     | .submit
+    | .call _
     | .focus _ => pure state
 
 structure Order where

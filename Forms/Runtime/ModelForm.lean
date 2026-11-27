@@ -12,6 +12,7 @@ namespace Forms.Runtime.ModelForm
 inductive Effect where
   | submit
   | fetch (fetch : Model.HttpFetch)
+  | call (call : Model.HttpCall)
   | focus (key : ControlKey)
   deriving BEq
 
@@ -19,6 +20,7 @@ inductive Effect where
 def Effect.applies (view : Display.View) : Effect → Bool
   | .submit => true
   | .fetch _ => true
+  | .call _ => true
   | .focus key => view.controls.any fun control => control.key == key && control.editable
 
 /-- An error about a control's text that cannot enter the model, e.g. "abc" in a natural field;
@@ -51,6 +53,9 @@ abbrev State.env (state : State form) : Model.Env Γ := state.evaluation.env
 abbrev State.fetchState (state : State form) : FetchState := state.evaluation.fetchState
 abbrev State.cache (state : State form) : Model.HttpRequest.Cache := state.fetchState.cache
 abbrev State.locals (state : State form) : form.LocalState := state.evaluation.locals
+
+def State.calling (state : State form) : Bool :=
+  state.evaluation.pending.any (·.waiting.isCall)
 
 def validationErrors
   {model : Type}
@@ -189,6 +194,7 @@ inductive Event (α : Type) where
   | reset
   | submitted (outcome : SubmitOutcome α)
   | loaded (fetch : Model.HttpFetch) (response : Except String Lean.Json)
+  | called (id : Model.Uuid) (result : Except String Lean.Json)
 
 -- Message from Lean to Ts (see `Wire.Snapshot` for the serialized type)
 structure Snapshot (α : Type) where
@@ -276,6 +282,9 @@ def applyUpdate
   let diagnostics := state.draftDiagnostics.map (·.diagnostic) ++ validationDiagnostics ++
     reportDiagnostics
   let fetchState := state.fetchState.invalidate updated.invalidations
+  let fetchState := match updated.call with
+    | some call => fetchState.send call
+    | none => fetchState
   let evaluation :=
     ModelView.evaluate form updated.value fetchState updated.state updated.locals diagnostics
       state.stateDrafts
@@ -285,7 +294,7 @@ def applyUpdate
     validationDiagnostics
     reportDiagnostics
     serverFeedback := none
-    outbox := state.outbox ++ focus.toList.map .focus
+    outbox := state.outbox ++ focus.toList.map .focus ++ updated.call.toList.map .call
     ui := { state.ui with notice := .info "", resultVisible := false } }
 
 /-- Runs the reactions `epoch` made pending, innermost first, each on a fresh evaluation.
@@ -302,7 +311,7 @@ def react
   (epoch : Nat)
   : (fuel : Nat) → Except Rejection (State form)
   | 0 => pure state
-  | fuel + 1 => match state.evaluation.reactions.filter (·.epoch == epoch) with
+  | fuel + 1 => match state.evaluation.pending.filter (·.waiting == .reaction epoch) with
     | [] => pure state
     | pending :: _ => do
       let (updated, supply) ←
@@ -330,7 +339,7 @@ def apply
     stateDrafts := state.stateDrafts.filter (·.control != key) }
   let state := applyUpdate (model := model) form state updated
   let state ← react (model := model) form state epoch
-    (state.evaluation.reactions.filter (·.epoch == epoch)).length
+    (state.evaluation.pending.filter (·.waiting == .reaction epoch)).length
   let drafts := state.draftDiagnostics.filter fun draft =>
     state.evaluation.view.controls.any (·.key == draft.control)
   return refresh form { state with draftDiagnostics := drafts }
@@ -365,6 +374,9 @@ def submit
   (state : State form)
   : State form :=
   if state.ui.pending then state else
+  if state.calling then
+    { state with ui := state.ui.announce "Wait for the pending request, then submit again." true }
+  else
   let errors := state.validationDiagnostics
   let state := refresh form { state with serverFeedback := none }
   if errors.isEmpty && state.draftDiagnostics.isEmpty then
@@ -377,6 +389,16 @@ def submit
     { state with
       ui := state.ui.announce (Model.Diagnostic.summary diagnostics) true
       outbox := state.outbox ++ focus.toList.map .focus }
+
+theorem submit_calling
+  {Γ : Model.Context}
+  {α β : Type}
+  {form : Model.Component Γ α β}
+  (state : State form)
+  (calling : state.calling)
+  : (submit state).outbox = state.outbox ∧ (submit state).ui.pending = state.ui.pending := by
+  unfold submit
+  split <;> simp_all [Interaction.State.announce]
 
 def event {Γ : Model.Context}
   {model β : Type}
@@ -429,7 +451,8 @@ def event {Γ : Model.Context}
     | .accepted saved =>
       -- The saved document becomes the new starting point; UI state is kept.
       let state := applyUpdate (model := model) form { state with initial := saved }
-        { value := saved, state := state.env, locals := state.locals, invalidations := [] }
+        { value := saved, state := state.env, locals := state.locals
+          invalidations := [], call := none }
       pure { state with ui := { state.ui with
         pending := false, resultVisible := true, notice := .info "Submitted successfully." } }
     | .rejected feedback => pure (refresh form { state with
@@ -443,6 +466,19 @@ def event {Γ : Model.Context}
       pure { state with
         evaluation := ModelView.evaluate form state.value fetchState state.env state.locals
           state.evaluation.diagnostics state.evaluation.controlMessages }
+  | .called id result =>
+    let some fetchState := state.fetchState.finish id | pure state
+    let finished := { state with
+      evaluation := ModelView.evaluate form state.value fetchState state.env state.locals
+        state.evaluation.diagnostics state.evaluation.controlMessages }
+    if state.ui.pending then return finished
+    let some pending := state.evaluation.pending.find? (·.waiting == .call id) | pure finished
+    match (state.evaluation.apply pending.route (.resume id result)).run state.supply with
+    | .ok (updated, supply) =>
+      pure (applyUpdate (model := model) form { finished with supply } updated)
+    | .error (.idCollision collision) => throw (toString (Rejection.idCollision collision))
+    | .error (.decode _)
+    | .error (.invalid _) => pure finished
 
 def execute {Γ : Model.Context}
   {model β : Type}

@@ -54,7 +54,8 @@ private def settle (state : State) : IO State :=
     | .fetch fetch =>
       execute state
         (.loaded fetch ((BusinessPartners.serve fetch.request).elim (.error "Not found.") .ok))
-    | .submit => pure state
+    | .submit
+    | .call _
     | .focus _ => pure state
 
 structure Restricted where

@@ -15,14 +15,14 @@ def ComponentNode.initialState
   match component with
   | .field .. => ()
   | .computed .. => ()
-  | .button .. => ()
+  | .button .. => none
   | .tabBar .. => ()
   | .output .. => ()
   | .issues => ()
   | .reports .. => ()
   | .statusMarker .. => ()
   | .withAvailability _ body => body.initialState
-  | .onChange _ body => { pending := none, body := body.initialState }
+  | .onChange _ body => { pending := none, call := none, body := body.initialState }
   | .select (decidableEq := _) (key := _) .. => ()
   | .lookup (toJson := _) .. => none
   | .collection .. => {}
