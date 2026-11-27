@@ -108,7 +108,8 @@ def run : IO Unit := do
   let definition := FormDefinition.ofModel Delivery Delivery.form Delivery.initial
   let (opened, _) ← IO.ofExcept (definition.openState (toJson Delivery.initial) supply)
   let opened : State := opened
-  check "LookupClosedFetchesNothing" (fetches opened).isEmpty
+  check "LookupClosedFetchesNothing" (fetches opened == [countries ""])
+  let opened ← settle opened
   check "LookupDependentDisabled" (← control opened "City").disabled
   let searching ← apply opened "Country" (.lookup (.search "an"))
   check "LookupSearchFetches" (fetches searching == [countries "an"])

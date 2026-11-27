@@ -620,3 +620,31 @@ test('select shows disabled options with a reason and refuses them', async () =>
     assert.equal(model.snapshot().submission.value.speed, 'express');
   } finally { model.dispose(); }
 });
+
+test('a composed search commits while typing and chooses from loaded results', async () => {
+  const model = await open(fixture('delivery').start);
+  const find = (value, keep) => !value || typeof value !== 'object' ? [] :
+    [...(keep(value) ? [value] : []), ...Object.values(value).flatMap(child => find(child, keep))];
+  const choice = () => find(page(model), value => value.choice?.label === 'Country (composed)')[0].choice;
+  const key = label => model.snapshot().controls.find(c => c.label === label).key;
+  const found = ['austria', 'germany'].map(id => ({ reference: { id, displayText: id }, details: {} }));
+  try {
+    const search = find(page(model), value => value.textField?.label === 'Search countries');
+    assert.equal(search[0].textField.commit, 'whileTyping');
+    const answer = more => {
+      const [{ fetch }] = model.snapshot().effects;
+      model.send({ fetched: { id: fetch.id, outcome: {
+        response: { status: 200, body: JSON.stringify({ found, more }) } } } });
+    };
+    const hint = () => find(page(model), value => value.output?.value === 'Keep typing to narrow the list.');
+    answer(true);
+    assert.equal(hint().length, 1);
+    model.send({ apply: { key: key('Search countries'), argument: 'a' } });
+    answer(false);
+    assert.equal(hint().length, 0);
+    const germany = choice().options.find(option => option.label === 'germany');
+    const chosen = model.send({ apply: { key: key('Country (composed)'), argument: germany.value } });
+    assert.equal(chosen.rejection, null);
+    assert.equal(choice().value, germany.value);
+  } finally { model.dispose(); }
+});

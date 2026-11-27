@@ -79,6 +79,23 @@ structure LookupResults (Key Details : Type) [ToJson Key] where
 def LookupResults.empty {Key Details : Type} [ToJson Key] : LookupResults Key Details :=
   { found := [], more := false, keys_nodup := List.nodup_nil }
 
+instance
+  {Key Details : Type}
+  [ToJson Key]
+  [DecidableEq Key]
+  [DecidableEq Details]
+  : DecidableEq (LookupResults Key Details) :=
+  fun first second =>
+    if same : first.found = second.found ∧ first.more = second.more then
+      .isTrue (by
+        cases first
+        cases second
+        simp_all)
+    else .isFalse (by
+      intro equal
+      subst equal
+      exact same ⟨rfl, rfl⟩)
+
 inductive LookupError where
   | duplicateKeys
   deriving DecidableEq, Repr
