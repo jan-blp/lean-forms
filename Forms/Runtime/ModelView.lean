@@ -642,7 +642,7 @@ def evaluate
   (env : Env Γ)
   (locals : component.LocalState := component.initialState)
   (diagnostics : List Diagnostic := [])
-  (controlMessages : List ControlMessage := [])
+  (controlMessages : List ControlMessage)
   : Evaluated Γ α component.LocalState β :=
   let ambient := Ambient.of fetchState diagnostics controlMessages
   let evaluated := (evaluateNode component.node value env ambient locals {} []).closed
@@ -674,7 +674,7 @@ def render
   (env : Env Γ)
   (locals : component.LocalState := component.initialState)
   : Rendered :=
-  let view := (evaluate component value fetchState env locals errors).view
+  let view := (evaluate component value fetchState env locals errors []).view
   ⟨view, view.controls⟩
 
 def decodeKey
@@ -688,7 +688,7 @@ def decodeKey
   (env : Env Γ)
   (locals : component.LocalState := component.initialState)
   : StateT Supply (Except ActionError) (ComponentUpdate Γ α component.LocalState) :=
-  (evaluate component value fetchState env locals).applyKey key argument
+  (evaluate component value fetchState env locals [] []).applyKey key argument
 
 end Forms.Runtime.ModelView
 
@@ -704,6 +704,6 @@ def Component.evaluate
   (locals : component.LocalState := component.initialState)
   (diagnostics : List Diagnostic := [])
   : Runtime.ModelView.Evaluated Γ α component.LocalState β :=
-  Runtime.ModelView.evaluate component value fetchState env locals diagnostics
+  Runtime.ModelView.evaluate component value fetchState env locals diagnostics []
 
 end Forms.Model
