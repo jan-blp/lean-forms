@@ -73,6 +73,14 @@ inductive Editor where
   | hostWidget (contract : String) (input : Lean.Json)
   deriving BEq
 
+def Editor.disabledChoice : Editor → Option String
+  | .choice selected options => (options.find? (·.value == selected)).bind (·.disabledReason)
+  | .field ..
+  | .lookup ..
+  | .action
+  | .tabs ..
+  | .hostWidget .. => none
+
 def Editor.retiresRejection (before now : Editor) : Bool :=
   match before with
   | .hostWidget .. => before != now

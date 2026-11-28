@@ -560,6 +560,9 @@ def evaluateNode
         disabledReason := match availability option with
           | .enabled => none
           | .disabled reason => some reason }))
+    let control := { control with
+      messages := control.messages ++
+        (control.input.disabledChoice.map ({ kind := .error, text := · })).toList }
     { output := ()
       locals := ()
       view := fun _ => .control control
