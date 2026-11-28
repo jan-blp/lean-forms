@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { defaultComponents } from './components.js';
-import { Context, type Components, type EvidenceHost, type LeanFormContext, type HostWidgets } from './context.js';
+import { Context, type Components, type EvidenceHost, type FocusTarget, type LeanFormContext, type HostWidgets } from './context.js';
 import type * as Wire from './protocol/Forms/Runtime/Wire.js';
 import type * as FormsReact from './protocol/FormsReact.js';
 import { Render } from './render.js';
@@ -81,7 +81,7 @@ function OpenForm({ model, components, hostWidgets, evidence, transport, onSnaps
   const [snapshot, setSnapshot] = useState(opened);
   const [drafts, setDrafts] = useState<ReadonlyMap<string, Draft>>(new Map());
   const currentDrafts = useRef(drafts);
-  const targets = useRef(new Map<string, HTMLElement>());
+  const targets = useRef(new Map<string, FocusTarget>());
   const currentTransport = useRef(transport);
   useLayoutEffect(() => { currentTransport.current = transport; }, [transport]);
   const picking = useRef<string | null>(null);
@@ -197,8 +197,8 @@ function OpenForm({ model, components, hostWidgets, evidence, transport, onSnaps
     evidence,
     draft: name => currentDrafts.current.get(name)?.text,
     draftError: name => currentDrafts.current.get(name)?.error,
-    registerTarget: (name, element) => {
-      if (element) targets.current.set(name, element); else targets.current.delete(name);
+    registerTarget: (name, target) => {
+      if (target) targets.current.set(name, target); else targets.current.delete(name);
     },
     setDraft: (name, text, error) => {
       const previousError = currentDrafts.current.get(name)?.error;

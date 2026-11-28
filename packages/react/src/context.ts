@@ -26,6 +26,9 @@ export function hostWidget<Input, Output>(
 /** Host widgets by the `name` of their Lean contract. */
 export type HostWidgets = Readonly<Record<string, HostWidgetComponent>>;
 
+/** Where focus goes for a control: an element, or a host widget's first focusable element. */
+export type FocusTarget = Pick<HTMLElement, 'focus'>;
+
 export type LinkedEvidence = Extract<FormsReact.Evidence, { linked: unknown }>['linked'];
 
 export interface EvidenceHost {
@@ -45,7 +48,7 @@ export interface LeanFormContext {
   evidence: EvidenceHost | null;
   draft(name: string): string | undefined;
   draftError(name: string): string | undefined;
-  registerTarget(name: string, element: HTMLElement | null): void;
+  registerTarget(name: string, target: FocusTarget | null): void;
   /** Records the text of field `name`; `undefined` drops the draft. */
   setDraft(name: string, text: string | undefined, error?: string): void;
   run(action: FormsReact.Action, argument?: unknown): void;

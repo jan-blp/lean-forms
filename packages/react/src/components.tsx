@@ -404,7 +404,14 @@ export function TabBar({ label, active, labels, disabled, onChange }: FormsReact
   );
 }
 
-const focusable = 'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]';
+/** Focuses the first element inside `container` that takes focus when asked, as host markup may hide some. */
+function focusFirst(container: HTMLElement, options?: FocusOptions) {
+  for (const element of container.querySelectorAll<HTMLElement>('*')) {
+    if (element.tabIndex < 0) continue;
+    element.focus(options);
+    if (element.ownerDocument.activeElement === element) return;
+  }
+}
 
 export function HostWidget(
     { name, contract, label, input, disabled, errors, onChange }: FormsReact.HostWidget) {
@@ -413,7 +420,7 @@ export function HostWidget(
   const Host = form.hostWidgets[contract];
   if (!Host) throw new Error(`No host widget is registered as "${contract}".`);
   return (
-    <fieldset ref={element => form.registerTarget(name, element?.querySelector<HTMLElement>(focusable) ?? null)}
+    <fieldset ref={element => form.registerTarget(name, element && { focus: options => focusFirst(element, options) })}
       className="host-widget" {...described(errors, feedback)}>
       <legend>{label}</legend>
       <Host input={input} disabled={disabled} onChange={output => form.run(onChange, { hostWidget: output })} />

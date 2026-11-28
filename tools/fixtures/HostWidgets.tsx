@@ -1,8 +1,10 @@
 import { createRoot } from 'react-dom/client';
 import { LeanForm, hostWidget, type Wire } from '../../packages/react/src/index.js';
 
-const Unoffered = hostWidget<unknown, { id: string }>(({ onChange }) =>
-  <button type="button" className="unoffered" onClick={() => onChange({ id: 'red' })}>Red</button>);
+const Unoffered = hostWidget<unknown, { id: string }>(({ onChange }) => <>
+  <input type="hidden" />
+  <button type="button" className="unoffered" onClick={() => onChange({ id: 'red' })}>Red</button>
+</>);
 
 export async function checkHostWidgets() {
   const host = document.createElement('div');
@@ -32,6 +34,9 @@ export async function checkHostWidgets() {
       '"red" is not one of the offered colours.' &&
       host.querySelector('.host-widget')!.getAttribute('aria-invalid') === 'true' && accent() === 'blue',
       'An unoffered output reached the model or was not reported');
+    phase = 'focus on submit';
+    host.querySelector<HTMLButtonElement>('[data-action=submit]')!.click();
+    await wait(() => document.activeElement === host.querySelector('.unoffered'));
 
     phase = 'unregistered host widget';
     root.render(<LeanForm start={{ ...start }} moduleUrl={moduleUrl} hostWidgets={{}} />);

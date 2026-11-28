@@ -1,7 +1,7 @@
 export { LeanForm, type HttpTransport, type LeanFormProps } from './LeanForm.js';
 export {
-  useLeanForm, hostWidget, type Components, type EvidenceHost, type Kind, type LeanFormContext, type LinkedEvidence,
-  type Props, type HostWidgetComponent, type HostWidgetProps, type HostWidgets,
+  useLeanForm, hostWidget, type Components, type EvidenceHost, type FocusTarget, type Kind, type LeanFormContext,
+  type LinkedEvidence, type Props, type HostWidgetComponent, type HostWidgetProps, type HostWidgets,
 } from './context.js';
 export { Children, Render } from './render.js';
 export * as defaults from './components.js';
