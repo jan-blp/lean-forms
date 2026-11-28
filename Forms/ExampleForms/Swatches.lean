@@ -62,7 +62,6 @@ def palette (dark : Bool) : List Swatch :=
      { id := accent "orange", label := "Orange", color := "#c2410c" },
      { id := accent "purple", label := "Purple", color := "#7e22ce" }]
 
-/-- Writes the offered swatch's own id, so the accent is a known colour by construction. -/
 def picker : HostWidget PickerInput PickerOutput Accent where
   name := "swatchPicker"
   accept input output :=

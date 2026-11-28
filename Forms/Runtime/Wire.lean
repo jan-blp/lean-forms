@@ -69,7 +69,6 @@ structure Snapshot where
   draftFields : List String
   /-- Names of the fields that take a pick from the document. -/
   pickFields : List String
-  /-- Contracts of the host widgets the view shows; the host must have registered each. -/
   hostWidgets : List String
   effects : List Effect
   controls : List Json

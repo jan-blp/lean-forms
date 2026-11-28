@@ -97,8 +97,6 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (editor : Editor β)
       (evidence : FieldEvidence target)
       : ComponentNode Γ α Unit Unit 0
-  /-- Shows the host's widget `contract.name` with `input`; writes the value `contract.accept`
-  returns for its output and the current input. -/
   | hostWidget {Γ : Context}
       {α β Input Output : Type}
       (contract : HostWidget Input Output β)

@@ -21,8 +21,7 @@ inductive Input where
   | lookup (input : LookupInput)
   | hostWidget (output : Lean.Json)
 
-/-- Whether a rejection stays on the control until it writes again: typed text, kept as a draft,
-or a host widget's output. -/
+/-- Whether a rejection stays on the control until it writes again. -/
 def Input.keepsRejection : Input → Bool
   | .text _ => true
   | .boolean _ => false
@@ -37,7 +36,6 @@ inductive ClientBug where
   | wrongArgument (expected : String)
   | unknownOption
   | noEvidence
-  | hostWidgetOutput (message : String)
   deriving DecidableEq, Repr
 
 instance : ToString ClientBug where
@@ -47,7 +45,6 @@ instance : ToString ClientBug where
     | .wrongArgument expected => s!"Expected {expected}."
     | .unknownOption => "Unknown option."
     | .noEvidence => "This field takes no evidence."
-    | .hostWidgetOutput message => s!"Invalid host widget output: {message}"
 
 inductive DecodeError where
   | input (message : String)

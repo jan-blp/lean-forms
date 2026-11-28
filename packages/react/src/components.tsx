@@ -404,7 +404,7 @@ export function TabBar({ label, active, labels, disabled, onChange }: FormsReact
   );
 }
 
-/** Focuses the first element inside `container` that takes focus when asked, as host markup may hide some. */
+/** Host markup may contain elements that do not take focus. */
 function focusFirst(container: HTMLElement, options?: FocusOptions) {
   for (const element of container.querySelectorAll<HTMLElement>('*')) {
     if (element.tabIndex < 0) continue;

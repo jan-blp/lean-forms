@@ -70,7 +70,6 @@ inductive Editor where
   | action
   /-- Tab labels with `active` selected; its argument is the chosen tab's index. -/
   | tabs (active : Nat) (labels : List String)
-  /-- The host widget registered as `contract`; its argument is `{ "hostWidget": output }`. -/
   | hostWidget (contract : String) (input : Lean.Json)
   deriving BEq
 
@@ -208,8 +207,7 @@ def Control.editable (control : Control) : Bool :=
     | .tabs .. => false
     | .hostWidget .. => true
 
-/-- Whether the control keeps errors about input that did not enter the model, as draft
-diagnostics. -/
+/-- Whether the control keeps errors about input that did not enter the model. -/
 def Control.acceptsDrafts (control : Control) : Bool :=
   !control.disabled && control.key.edits.isSome && match control.input with
     | .field (.text ..) _ => true

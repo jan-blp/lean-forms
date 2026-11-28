@@ -21,7 +21,7 @@ private partial def tsType (type : Expr) : MetaM TS.Type := do
   let type ← whnfR type
   let fn := type.getAppFn.constName!
   let args := type.getAppArgs
-  -- The wire carries a subtype's value; decoding checks the property.
+  -- Decoding checks the property.
   if fn == ``Subtype then return ← tsType args[0]!
   if fn == ``String then return .string
   if fn == ``Bool then return .boolean

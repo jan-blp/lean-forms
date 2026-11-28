@@ -59,7 +59,10 @@ def run : IO Unit := do
   check "HostWidgetWriteClearsRefusal"
     (repicked.value.accent.val == "green" && (← control repicked "Accent").errors.isEmpty &&
       submitted repicked)
-  check "HostWidgetUndecodableOutputIsClientBug" (send opened "Accent" (.hostWidget (toJson 3))).toBool.not
+  let undecodable ← pick opened (toJson 3)
+  check "HostWidgetRefusesUndecodableOutput"
+    (undecodable.value.accent.val == "blue" && (← control undecodable "Accent").errors.length == 1 &&
+      !submitted undecodable)
   check "HostWidgetRejectsOtherInput" (send opened "Accent" (.text "green")).toBool.not
   let wire := (ModelForm.snapshot form opened).toWire "swatches" "test" "/api/submit"
   check "HostWidgetListedInSnapshot" (wire.hostWidgets == ["swatchPicker"])

@@ -182,8 +182,7 @@ structure TabBar where
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
-/-- The host widget registered as `contract`, shown with `input`; `onChange` receives
-`{ "hostWidget": output }`. -/
+/-- `onChange` receives `{ "hostWidget": output }`. -/
 structure HostWidget where
   name : String
   contract : String
@@ -298,7 +297,6 @@ def pickFieldsOfRows : List TableRow → List String
 end
 
 mutual
-/-- Contracts of the host widgets shown, which the host must have registered. -/
 def Component.hostWidgets : Component → List String
   | .hostWidget { contract, .. } => [contract]
   | .textField _

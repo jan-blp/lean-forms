@@ -5,8 +5,7 @@ public import Lean.Data.Json
 @[expose] public section
 namespace Forms.Model
 
-/-- A control the host draws, registered as `name`. It sees only an `Input` and sends back an
-`Output`; only what `accept` returns reaches the model. -/
+/-- A control the host draws; only what `accept` returns reaches the model. -/
 structure HostWidget (Input Output β : Type) where
   name : String
   [inputToJson : Lean.ToJson Input]

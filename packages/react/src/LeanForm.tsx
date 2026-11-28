@@ -13,7 +13,7 @@ export interface LeanFormProps {
   /** URL of the app's compiled `forms.mjs`. */
   moduleUrl: string | URL;
   components?: Partial<Components>;
-  /** Every host widget the form can show; an unregistered one fails the form. */
+  /** By contract name; an unregistered one fails the form. */
   hostWidgets?: HostWidgets;
   evidence?: EvidenceHost;
   /** Handles lookup and submission requests using the host app's authentication. */

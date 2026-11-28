@@ -429,7 +429,7 @@ def evaluateNode
           let some (.hostWidget sent) ← trigger.argument
             | throw (.decode (.clientBug (.wrongArgument "a host widget output")))
           let output ← MonadExcept.ofExcept <| (contract.outputFromJson.fromJson? sent).mapError
-            (.decode ∘ .clientBug ∘ .hostWidgetOutput)
+            fun message => .decode (.input s!"Invalid value: {message}")
           let accepted ← MonadExcept.ofExcept <| (contract.accept current output).mapError
             (.decode ∘ .input)
           return written.set accepted value env

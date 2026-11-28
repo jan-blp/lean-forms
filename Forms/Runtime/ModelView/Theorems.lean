@@ -22,7 +22,6 @@ theorem render_keys_nodup
 attribute [local simp] StateT.run bind StateT.bind Except.bind pure StateT.pure Except.pure throw
   throwThe MonadExcept.throw MonadExceptOf.throw StateT.lift StateT.instMonadExceptOf
   instMonadExceptOfExcept Except.mapError MonadExcept.ofExcept in
-/-- A host widget writes only what `accept` returns for the current input. -/
 theorem hostWidget_writes_accepted
     {Γ : Model.Context}
     {α β Input Output : Type}
