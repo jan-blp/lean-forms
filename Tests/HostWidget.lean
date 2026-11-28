@@ -49,15 +49,15 @@ def run : IO Unit := do
   let dark ← IO.ofExcept (send opened "Dark background" (.boolean true))
   check "HostWidgetInputFollowsModel" ((← offered dark) == ["blue", "green", "purple"])
   let chosen ← pick opened (Json.mkObj [("id", "orange")])
-  check "HostWidgetWritesAcceptedOutput" (chosen.value.accent == "orange")
+  check "HostWidgetWritesAcceptedOutput" (chosen.value.accent.val == "orange")
   let refused ← pick dark (Json.mkObj [("id", "orange")])
   check "HostWidgetRefusesUnofferedOutput"
-    (refused.value.accent == "blue" && refused.ui.rejection.isSome &&
+    (refused.value.accent.val == "blue" && refused.ui.rejection.isSome &&
       (← control refused "Accent").errors == ["\"orange\" is not one of the offered colours."])
   check "HostWidgetRefusalBlocksSubmit" (submitted opened && !submitted refused)
   let repicked ← pick refused (Json.mkObj [("id", "green")])
   check "HostWidgetWriteClearsRefusal"
-    (repicked.value.accent == "green" && (← control repicked "Accent").errors.isEmpty &&
+    (repicked.value.accent.val == "green" && (← control repicked "Accent").errors.isEmpty &&
       submitted repicked)
   check "HostWidgetUndecodableOutputIsClientBug" (send opened "Accent" (.hostWidget (toJson 3))).toBool.not
   check "HostWidgetRejectsOtherInput" (send opened "Accent" (.text "green")).toBool.not

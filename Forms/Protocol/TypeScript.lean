@@ -18,8 +18,11 @@ private def modulePath (name : Name) : MetaM (List String) := do
   return name.getPrefix.components.map Name.getString!
 
 private partial def tsType (type : Expr) : MetaM TS.Type := do
+  let type ← whnfR type
   let fn := type.getAppFn.constName!
   let args := type.getAppArgs
+  -- The wire carries a subtype's value; decoding checks the property.
+  if fn == ``Subtype then return ← tsType args[0]!
   if fn == ``String then return .string
   if fn == ``Bool then return .boolean
   if fn == ``Nat || fn == ``Int then return .number
@@ -67,8 +70,10 @@ private def declaration (name : Name) : MetaM TypeAlias := do
   return ⟨name.getString!, type⟩
 
 private partial def collectTypes (type : Expr) (seen : Array Name) : MetaM (Array Name) := do
+  let type ← whnfR type
   let fn := type.getAppFn.constName!
   if [``String, ``Bool, ``Nat, ``Int, ``Json].contains fn then return seen
+  if fn == ``Subtype then return ← collectTypes type.getAppArgs[0]! seen
   if [``Option, ``List, ``Array, ``Prod].contains fn then
     type.getAppArgs.foldlM (fun seen arg => collectTypes arg seen) seen
   else
