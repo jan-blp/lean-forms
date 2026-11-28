@@ -21,9 +21,10 @@ def fromJson : Json → Except String Input
   | json@(.obj _) =>
     if let .ok evidence := json.getObjVal? "pick" then .pick <$> fromJson? evidence
     else if let .ok input := json.getObjVal? "lookup" then .lookup <$> fromJson? input
-    else .error "Expected a pick or lookup command."
+    else if let .ok output := json.getObjVal? "hostWidget" then .ok (.hostWidget output)
+    else .error "Expected a pick, lookup command or host widget output."
   | .null
-  | .num _ => .error "Expected a text, boolean, list of texts, pick or lookup command."
+  | .num _ => .error "Expected a text, boolean, list of texts, pick, lookup command or host widget output."
 
 def argumentFromJson : Option Json → Except String (Option Input)
   | none => .ok none

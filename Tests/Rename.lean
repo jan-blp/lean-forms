@@ -22,6 +22,7 @@ private def argument : Display.Editor → Option Input
   | .lookup .. => some (.lookup (.search "x"))
   | .action => none
   | .tabs active labels => some (.text (toString ((active + 1) % labels.length.max 1)))
+  | .hostWidget .. => none
 
 /-- A weakened component renders, outputs and reacts to every control like the original. -/
 private def weakeningPreserves

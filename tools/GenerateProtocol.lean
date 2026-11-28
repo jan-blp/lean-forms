@@ -2,6 +2,7 @@ import Forms.Runtime.Wire
 import Forms.Runtime.Web
 import FormsReact.Component
 import Forms.Protocol.TypeScript
+import Forms.ExampleForms.Swatches
 
 open Lean Forms.Protocol Forms.Runtime Forms.Runtime.Wire Forms.Runtime.Web
 
@@ -16,7 +17,8 @@ def outputs : List (System.FilePath × List (System.FilePath × String)) := [
       Forms.Model.Evidence]).modules.map
       fun module => (module.file, module.pretty)),
   ("web/generated", ("routes.ts", routesModule) ::
-    (typescript% [Viewer.Document]).modules.map fun module => (module.file, module.pretty))]
+    (typescript% [Viewer.Document, Forms.ExampleForms.Swatches.PickerInput,
+      Forms.ExampleForms.Swatches.PickerOutput]).modules.map fun module => (module.file, module.pretty))]
 
 def banner : String := "// Generated from Lean. Run npm --prefix web run generate.\n"
 

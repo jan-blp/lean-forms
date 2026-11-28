@@ -421,7 +421,7 @@ def event {Γ : Model.Context}
         | .clientBug error => throw (toString error)
         | .idCollision _ => throw message
         | .input _ =>
-          let typed := argument.any Input.typed &&
+          let typed := argument.any Input.keepsRejection &&
             state.evaluation.view.controls.any (·.key == key)
           pure (if typed then keepRejected state key message else state)
         | .stale _ => pure state

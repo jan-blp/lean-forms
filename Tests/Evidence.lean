@@ -33,7 +33,8 @@ private def evidence (control : Display.Control) : Display.Evidence :=
   | .choice .. => .unsupported
   | .lookup .. => .unsupported
   | .action => .unsupported
-  | .tabs .. => .unsupported
+  | .tabs ..
+  | .hostWidget .. => .unsupported
 
 private def isStale : Display.Evidence → Bool
   | .linked _ stale => stale
@@ -90,6 +91,7 @@ def run : IO Unit := do
     | .ok (.boolean _)
     | .ok (.texts _)
     | .ok (.lookup _)
+    | .ok (.hostWidget _)
     | .error _ => false)
 
 end Tests.Evidence

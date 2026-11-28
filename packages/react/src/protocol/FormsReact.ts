@@ -1,5 +1,5 @@
 // Generated from Lean. Run npm --prefix web run generate.
-export type Component = { "textField": TextField } | { "checkbox": Checkbox } | { "choice": Choice } | { "choices": Choices } | { "lookup": Lookup } | { "output": Output } | { "button": Button } | { "tabBar": TabBar } | { "group": Group } | { "table": Table } | { "page": Page } | { "statusMarker": Checks };
+export type Component = { "textField": TextField } | { "checkbox": Checkbox } | { "choice": Choice } | { "choices": Choices } | { "lookup": Lookup } | { "output": Output } | { "button": Button } | { "tabBar": TabBar } | { "hostWidget": HostWidget } | { "group": Group } | { "table": Table } | { "page": Page } | { "statusMarker": Checks };
 export type TextField = { "name": string; "label": string; "kind": TextKind; "value": string; "commit": Commit; "disabled": boolean; "errors": string[]; "evidence": Evidence; "onCommit": Action };
 export type TextKind = "plain" | "natural" | "integer" | "decimal" | "date" | "uuid";
 export type Commit = "onLeave" | "whileTyping";
@@ -17,6 +17,7 @@ export type Output = { "label": string; "value": string };
 export type Button = { "label": string; "variant": ButtonVariant; "disabled": boolean; "onClick": Action };
 export type ButtonVariant = "primary" | "secondary";
 export type TabBar = { "name": string; "label": string; "active": number; "labels": string[]; "disabled": boolean; "onChange": Action };
+export type HostWidget = { "name": string; "contract": string; "label": string; "input": unknown; "disabled": boolean; "errors": string[]; "onChange": Action };
 export type Group = { "label": string | null; "children": Component[]; "errors": string[]; "key": string | null };
 export type Table = { "label": string; "headers": string[]; "rows": TableRow[]; "footer": Component; "errors": string[] };
 export type TableRow = { "key": string; "label": string; "cells": Component[]; "selected": boolean | null };

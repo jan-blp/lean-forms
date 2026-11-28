@@ -45,7 +45,8 @@ private def shown (state : State) : IO String := do
   | .field ..
   | .lookup ..
   | .action
-  | .tabs .. => throw (IO.userError "FAIL composed country is no choice")
+  | .tabs ..
+  | .hostWidget .. => throw (IO.userError "FAIL composed country is no choice")
 
 private def options (state : State) : IO (List Display.SelectableOption) := do
   match ← editor state with
@@ -53,7 +54,8 @@ private def options (state : State) : IO (List Display.SelectableOption) := do
   | .field ..
   | .lookup ..
   | .action
-  | .tabs .. => throw (IO.userError "FAIL composed country is no choice")
+  | .tabs ..
+  | .hostWidget .. => throw (IO.userError "FAIL composed country is no choice")
 
 private def search (state : State) (text : String) : IO State := do
   settle (← apply state "Search countries" (some (.text text)))
@@ -83,7 +85,8 @@ def run : IO Unit := do
       | .field ..
       | .choice ..
       | .action
-      | .tabs .. => false)
+      | .tabs ..
+      | .hostWidget .. => false)
   let other ← search chosen "cat"
   check "SearchSelectKeepsChosenWhileSearching"
     (other.value.country == some germany && (← shown other) == germanyOption.value &&

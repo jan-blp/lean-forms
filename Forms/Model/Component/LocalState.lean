@@ -14,6 +14,7 @@ def ComponentNode.initialState
   : state :=
   match component with
   | .field .. => ()
+  | .hostWidget .. => ()
   | .computed .. => ()
   | .button .. => none
   | .tabBar .. => ()

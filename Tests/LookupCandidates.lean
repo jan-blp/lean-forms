@@ -47,7 +47,8 @@ private def searchOpen (state : State) : Bool :=
     | .field ..
     | .choice ..
     | .action
-    | .tabs .. => false
+    | .tabs ..
+    | .hostWidget .. => false
 
 private def settle (state : State) : IO State :=
   state.outbox.foldlM (init := state) fun state effect => match effect with
@@ -102,7 +103,8 @@ def run : IO Unit := do
     | .field ..
     | .choice ..
     | .action
-    | .tabs .. => throw (IO.userError "FAIL missing candidate options")
+    | .tabs ..
+    | .hostWidget .. => throw (IO.userError "FAIL missing candidate options")
   check "CandidateDisabledReasonProjected"
     (options.map (·.disabledReason) ==
       [some "Account is blocked.", none, some "Account is closed.", none,

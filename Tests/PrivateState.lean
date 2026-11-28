@@ -50,14 +50,16 @@ private def chosen : Display.Editor → Option String
   | .field ..
   | .lookup ..
   | .action
-  | .tabs .. => none
+  | .tabs ..
+  | .hostWidget .. => none
 
 private def choiceOptions : Display.Editor → List Display.SelectableOption
   | .choice _ options => options
   | .field ..
   | .lookup ..
   | .action
-  | .tabs .. => []
+  | .tabs ..
+  | .hostWidget .. => []
 
 private def isState : ControlKey → Bool
   | .state .. => true

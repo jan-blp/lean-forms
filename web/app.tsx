@@ -4,6 +4,7 @@ import { LeanForm, type EvidenceHost, type LinkedEvidence, type Model, type Wire
 import { routes } from './generated/routes';
 import type { Document } from './generated/Forms/Runtime/Viewer';
 import { DocumentViewer } from './viewer';
+import { hostWidgets } from './hostWidgets';
 
 const main = document.querySelector('main')!;
 const root = createRoot(main);
@@ -23,7 +24,8 @@ function WithDocument({ start, source }: { start: Wire.FormStart; source: Docume
   };
   return (
     <div className="with-document">
-      <LeanForm start={start} moduleUrl={moduleUrl} evidence={evidence} onSnapshot={setTitle} />
+      <LeanForm start={start} moduleUrl={moduleUrl} hostWidgets={hostWidgets} evidence={evidence}
+        onSnapshot={setTitle} />
       <DocumentViewer document={source} highlighted={hovered ?? focused} request={request}
         onClose={() => setRequest(null)} />
     </div>
@@ -44,7 +46,7 @@ try {
   root.render(
     <StrictMode>
       {source === null
-        ? <LeanForm start={start} moduleUrl={moduleUrl} onSnapshot={setTitle} />
+        ? <LeanForm start={start} moduleUrl={moduleUrl} hostWidgets={hostWidgets} onSnapshot={setTitle} />
         : <WithDocument start={start} source={source} />}
     </StrictMode>);
 } catch (error) {

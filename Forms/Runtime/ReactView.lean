@@ -160,6 +160,11 @@ def Display.Control.toReact (pending : Bool) (c : Control) : FormsReact.Componen
   | .action => .button { label := c.label, variant := .secondary, disabled, onClick := .press name }
   | .tabs active labels =>
     .tabBar { name, label := c.label, active, labels, disabled, onChange := .apply name }
+  | .hostWidget contract input => .hostWidget {
+      name, contract, input, disabled
+      label := c.label
+      errors := Model.Message.errors c.messages
+      onChange := .apply name }
 
 /-- A group with no label or messages. -/
 def plainGroup
@@ -192,6 +197,7 @@ def Display.View.toReact (pending : Bool) : View → Option FormsReact.Component
     | .output _
     | .button _
     | .tabBar _
+    | .hostWidget _
     | .table _
     | .page _
     | .statusMarker _ => plainGroup (some key.value) [component]

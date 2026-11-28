@@ -182,6 +182,18 @@ structure TabBar where
   onChange : Action
   deriving ToJson, FromJson, BEq, Repr
 
+/-- The host widget registered as `contract`, shown with `input`; `onChange` receives
+`{ "hostWidget": output }`. -/
+structure HostWidget where
+  name : String
+  contract : String
+  label : String
+  input : Json
+  disabled : Bool
+  errors : List String
+  onChange : Action
+  deriving ToJson, FromJson, BEq
+
 mutual
 /-- Children grouped under an optional legend; `errors` are about the group as a whole. -/
 structure Group where
@@ -221,13 +233,14 @@ inductive Component where
   | output : Output → Component
   | button : Button → Component
   | tabBar : TabBar → Component
+  | hostWidget : HostWidget → Component
   | group : Group → Component
   | table : Table → Component
   | page : Page → Component
   | statusMarker : Checks → Component
 end
 
-deriving instance ToJson, FromJson, BEq, Repr for Group, TableRow, Table, Page, Component
+deriving instance ToJson, FromJson, BEq for Group, TableRow, Table, Page, Component
 
 mutual
 /-- Names of the enabled fields that commit typed text, whose drafts React keeps. -/
@@ -240,6 +253,7 @@ def Component.draftFields : Component → List String
   | .output _ => []
   | .button _ => []
   | .tabBar _ => []
+  | .hostWidget _ => []
   | .group { children, .. } => draftFieldsOf children
   | .table { rows, footer, .. } => draftFieldsOfRows rows ++ footer.draftFields
   | .page { body, toolbar, .. } => draftFieldsOf body ++ draftFieldsOf toolbar
@@ -268,6 +282,7 @@ def Component.pickFields : Component → List String
   | .output _ => []
   | .button _ => []
   | .tabBar _ => []
+  | .hostWidget _ => []
   | .group { children, .. } => pickFieldsOf children
   | .table { rows, footer, .. } => pickFieldsOfRows rows ++ footer.pickFields
   | .page { body, toolbar, .. } => pickFieldsOf body ++ pickFieldsOf toolbar
@@ -280,6 +295,32 @@ def pickFieldsOf : List Component → List String
 def pickFieldsOfRows : List TableRow → List String
   | [] => []
   | { cells, .. } :: rest => pickFieldsOf cells ++ pickFieldsOfRows rest
+end
+
+mutual
+/-- Contracts of the host widgets shown, which the host must have registered. -/
+def Component.hostWidgets : Component → List String
+  | .hostWidget { contract, .. } => [contract]
+  | .textField _
+  | .checkbox _
+  | .choice _
+  | .choices _
+  | .lookup _
+  | .output _
+  | .button _
+  | .tabBar _
+  | .statusMarker _ => []
+  | .group { children, .. } => hostWidgetsOf children
+  | .table { rows, footer, .. } => hostWidgetsOfRows rows ++ footer.hostWidgets
+  | .page { body, toolbar, .. } => hostWidgetsOf body ++ hostWidgetsOf toolbar
+
+def hostWidgetsOf : List Component → List String
+  | [] => []
+  | component :: rest => component.hostWidgets ++ hostWidgetsOf rest
+
+def hostWidgetsOfRows : List TableRow → List String
+  | [] => []
+  | { cells, .. } :: rest => hostWidgetsOf cells ++ hostWidgetsOfRows rest
 end
 
 end FormsReact

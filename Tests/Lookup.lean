@@ -47,7 +47,8 @@ private def search? (state : State) (label : String) : IO (Option Display.Search
   | .field ..
   | .choice ..
   | .action
-  | .tabs .. => throw (IO.userError s!"FAIL {label} is no lookup")
+  | .tabs ..
+  | .hostWidget .. => throw (IO.userError s!"FAIL {label} is no lookup")
 
 private def picked? (state : State) (label : String) : IO (Option Display.ChoiceOption) := do
   match (← control state label).input with
@@ -55,7 +56,8 @@ private def picked? (state : State) (label : String) : IO (Option Display.Choice
   | .field ..
   | .choice ..
   | .action
-  | .tabs .. => throw (IO.userError s!"FAIL {label} is no lookup")
+  | .tabs ..
+  | .hostWidget .. => throw (IO.userError s!"FAIL {label} is no lookup")
 
 private def lookupOf (json : Json) : Option LookupInput :=
   match InputProtocol.fromJson json with
@@ -64,6 +66,7 @@ private def lookupOf (json : Json) : Option LookupInput :=
   | .ok (.boolean _)
   | .ok (.texts _)
   | .ok (.pick _)
+  | .ok (.hostWidget _)
   | .error _ => none
 
 private def command (input : FormsReact.LookupInput) : Json :=

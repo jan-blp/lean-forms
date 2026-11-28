@@ -8,6 +8,24 @@ export type Props<K extends Kind> = Extract<FormsReact.Component, Record<K, unkn
 /** One React component per Lean constructor; containers render nested lists with `<Children>`. */
 export type Components = { [K in Kind]: ComponentType<Props<K>> };
 
+/** What a host widget receives: Lean's `Input`, and `onChange` to send back an `Output`. */
+export interface HostWidgetProps<Input, Output> {
+  input: Input;
+  disabled: boolean;
+  onChange(output: Output): void;
+}
+
+export type HostWidgetComponent = ComponentType<HostWidgetProps<unknown, unknown>>;
+
+/** Types a host widget by the `Input` and `Output` of its Lean contract. */
+export function hostWidget<Input, Output>(
+    component: ComponentType<HostWidgetProps<Input, Output>>): HostWidgetComponent {
+  return component as HostWidgetComponent;
+}
+
+/** Host widgets by the `name` of their Lean contract. */
+export type HostWidgets = Readonly<Record<string, HostWidgetComponent>>;
+
 export type LinkedEvidence = Extract<FormsReact.Evidence, { linked: unknown }>['linked'];
 
 export interface EvidenceHost {
@@ -23,6 +41,7 @@ export interface EvidenceHost {
 
 export interface LeanFormContext {
   components: Components;
+  hostWidgets: HostWidgets;
   evidence: EvidenceHost | null;
   draft(name: string): string | undefined;
   draftError(name: string): string | undefined;

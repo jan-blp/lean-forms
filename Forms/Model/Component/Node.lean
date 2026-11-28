@@ -7,6 +7,7 @@ public import Forms.Model.Lookup
 public import Forms.Model.PartialPath
 public import Forms.Model.Target
 public import Forms.Model.Select
+public import Forms.Model.HostWidget
 public import Forms.Model.Component.State
 public import Forms.Model.Component.Layout
 public import Std.Data.HashMap
@@ -95,6 +96,15 @@ inductive ComponentNode : (Γ : Context) → (model state output : Type) → (ho
       (label : Computation Γ α String)
       (editor : Editor β)
       (evidence : FieldEvidence target)
+      : ComponentNode Γ α Unit Unit 0
+  /-- Shows the host's widget `contract.name` with `input`; writes the value `contract.accept`
+  returns for its output and the current input. -/
+  | hostWidget {Γ : Context}
+      {α β Input Output : Type}
+      (contract : HostWidget Input Output β)
+      (target : Target Γ α β)
+      (label : Computation Γ α String)
+      (input : Computation Γ α Input)
       : ComponentNode Γ α Unit Unit 0
   | computed {Γ : Context}
       {α : Type}
