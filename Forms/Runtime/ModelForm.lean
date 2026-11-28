@@ -23,8 +23,8 @@ def Effect.applies (view : Display.View) : Effect → Bool
   | .call _ => true
   | .focus key => view.controls.any fun control => control.key == key && control.editable
 
-/-- An error about a control's text that cannot enter the model, e.g. "abc" in a natural field;
-dropped when the control commits or leaves the view. -/
+/-- An error about input that cannot enter the model, e.g. "abc" in a natural field; dropped when
+the control commits, leaves the view, or its host widget input changes. -/
 structure DraftDiagnostic where
   control : ControlKey
   diagnostic : Model.Diagnostic
@@ -490,15 +490,18 @@ def execute {Γ : Model.Context}
   (state : State form)
   (input : Event (Model.Raw model))
   : Except String (State form) := do
+  let before := state.evaluation.view.controls
   let state := { state with outbox := [] }
   let state ← event (model := model) form state input
   let state := load form state
+  let holds (control : Display.Control) := before.all fun old =>
+    old.key != control.key || !old.input.retiresRejection control.input
   let drafts := state.draftDiagnostics.filter fun draft =>
     state.evaluation.view.controls.any fun control =>
-      control.key == draft.control && control.acceptsDrafts
+      control.key == draft.control && control.acceptsDrafts && holds control
   let stateDrafts := state.stateDrafts.filter fun draft =>
     state.evaluation.view.controls.any fun control =>
-      control.key == draft.control && !control.disabled
+      control.key == draft.control && !control.disabled && holds control
   let state := if drafts == state.draftDiagnostics && stateDrafts == state.stateDrafts then state
     else load form (refresh form { state with draftDiagnostics := drafts, stateDrafts })
   let outbox := state.outbox.filter (·.applies state.evaluation.view)

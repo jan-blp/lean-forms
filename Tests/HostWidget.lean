@@ -55,6 +55,11 @@ def run : IO Unit := do
     (refused.value.accent.val == "blue" && refused.ui.rejection.isSome &&
       (← control refused "Accent").errors == ["\"orange\" is not one of the offered colours."])
   check "HostWidgetRefusalBlocksSubmit" (submitted opened && !submitted refused)
+  let blocked ← IO.ofExcept (ModelForm.execute (model := Theme) form refused .submit)
+  check "HostWidgetRefusalOutlivesOtherEvents" ((← control blocked "Accent").errors.length == 1)
+  let light ← IO.ofExcept (send refused "Dark background" (.boolean false))
+  check "HostWidgetInputChangeClearsRefusal"
+    (light.value.accent.val == "blue" && (← control light "Accent").errors.isEmpty && submitted light)
   let repicked ← pick refused (Json.mkObj [("id", "green")])
   check "HostWidgetWriteClearsRefusal"
     (repicked.value.accent.val == "green" && (← control repicked "Accent").errors.isEmpty &&

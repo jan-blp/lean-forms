@@ -73,6 +73,15 @@ inductive Editor where
   | hostWidget (contract : String) (input : Lean.Json)
   deriving BEq
 
+def Editor.retiresRejection (before now : Editor) : Bool :=
+  match before with
+  | .hostWidget .. => before != now
+  | .field ..
+  | .choice ..
+  | .lookup ..
+  | .action
+  | .tabs .. => false
+
 structure Control where
   key : ControlKey
   target : Target
