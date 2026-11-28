@@ -21,22 +21,35 @@ export interface LeanFormProps {
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 
+interface Opened {
+  model: FormModel;
+  key: number;
+}
+
+let opens = 0;
+
 export function LeanForm({ start, moduleUrl, components, evidence, transport, onSnapshot }: LeanFormProps) {
-  const [model, setModel] = useState<FormModel>();
+  const [opened, setOpened] = useState<Opened>();
   const [failure, setFailure] = useState<string>();
   const url = String(moduleUrl);
   useEffect(() => {
-    let opened: FormModel | undefined;
+    let current: FormModel | undefined;
     let cancelled = false;
     openForm(start, url).then(model => {
       if (cancelled) model.dispose();
-      else setModel(opened = model);
+      else setOpened({ model: current = model, key: ++opens });
     }, error => { if (!cancelled) setFailure(message(error)); });
-    return () => { cancelled = true; opened?.dispose(); };
+    return () => {
+      cancelled = true;
+      current?.dispose();
+      setOpened(undefined);
+      setFailure(undefined);
+    };
   }, [start, url]);
   if (failure !== undefined) return <p className="error" role="alert">{failure}</p>;
-  if (!model) return <p role="status">Loading…</p>;
-  return <OpenForm model={model} components={{ ...defaultComponents, ...components }}
+  if (!opened) return <p role="status">Loading…</p>;
+  return <OpenForm key={opened.key} model={opened.model}
+    components={{ ...defaultComponents, ...components }}
     evidence={evidence ?? null} transport={transport} onSnapshot={onSnapshot}
     onFailure={error => setFailure(message(error))} />;
 }
@@ -60,7 +73,8 @@ async function defaultTransport({ url, ...request }: Wire.HttpEffect): Promise<R
 }
 
 function OpenForm({ model, components, evidence, transport, onSnapshot, onFailure }: OpenFormProps) {
-  const [snapshot, setSnapshot] = useState(() => model.snapshot());
+  const [opened] = useState(() => model.snapshot());
+  const [snapshot, setSnapshot] = useState(opened);
   const [drafts, setDrafts] = useState<ReadonlyMap<string, Draft>>(new Map());
   const currentDrafts = useRef(drafts);
   const targets = useRef(new Map<string, HTMLElement>());
@@ -69,7 +83,7 @@ function OpenForm({ model, components, evidence, transport, onSnapshot, onFailur
   const picking = useRef<string | null>(null);
   useEffect(() => onSnapshot?.(snapshot), [snapshot, onSnapshot]);
   // The opened snapshot may already request data; Lean ignores repeated responses.
-  useEffect(() => performAll(model.snapshot()), [model]);
+  useEffect(() => performAll(opened), [opened]);
   useEffect(() => {
     for (const effect of snapshot.effects) {
       if ('focus' in effect) targets.current.get(effect.focus.key)?.focus({ focusVisible: true });
