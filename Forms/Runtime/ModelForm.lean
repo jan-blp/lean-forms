@@ -367,6 +367,10 @@ def keepRejected
   | .press ..
   | .tab .. => state
 
+def disabledChoices (view : Display.View) : List Model.Diagnostic :=
+  view.controls.filterMap fun control => control.input.disabledChoice.map fun message =>
+    { kind := .error, message, targets := .locations control.location [] }
+
 def submit
   {Γ : Model.Context}
   {α β : Type}
@@ -379,12 +383,13 @@ def submit
   else
   let errors := state.validationDiagnostics
   let state := refresh form { state with serverFeedback := none }
-  if errors.isEmpty && state.draftDiagnostics.isEmpty then
+  let disabled := disabledChoices state.evaluation.view
+  if errors.isEmpty && state.draftDiagnostics.isEmpty && disabled.isEmpty then
     { state with
       ui := { state.ui with pending := true, notice := .info "Submitting…" }
       outbox := state.outbox ++ [.submit] }
   else
-    let diagnostics := state.draftDiagnostics.map (·.diagnostic) ++ errors
+    let diagnostics := state.draftDiagnostics.map (·.diagnostic) ++ disabled ++ errors
     let focus := state.evaluation.view.resolveFirst (diagnostics.map (·.locations))
     { state with
       ui := state.ui.announce (Model.Diagnostic.summary diagnostics) true
@@ -399,6 +404,37 @@ theorem submit_calling
   : (submit state).outbox = state.outbox ∧ (submit state).ui.pending = state.ui.pending := by
   unfold submit
   split <;> simp_all [Interaction.State.announce]
+
+theorem submit_disabledChoice
+  {Γ : Model.Context}
+  {α β : Type}
+  {form : Model.Component Γ α β}
+  (state : State form)
+  (fresh : Effect.submit ∉ state.outbox)
+  (submitted : Effect.submit ∈ (submit state).outbox)
+  : ∀ control ∈ (submit state).evaluation.view.controls, control.input.disabledChoice = none := by
+  have keeps : (refresh form { state with serverFeedback := none }).outbox = state.outbox := by
+    unfold refresh
+    simp only
+    split <;> rfl
+  intro control shown
+  unfold submit at submitted shown
+  by_cases pending : state.ui.pending = true
+  · simp only [ite_eq_left pending] at submitted
+    contradiction
+  by_cases calling : state.calling = true
+  · simp only [ite_eq_right pending, ite_eq_left calling] at submitted
+    contradiction
+  simp only [ite_eq_right pending, ite_eq_right calling] at submitted shown
+  generalize refresh form { state with serverFeedback := none } = refreshed at keeps submitted shown
+  by_cases clean : (state.validationDiagnostics.isEmpty && refreshed.draftDiagnostics.isEmpty &&
+      (disabledChoices refreshed.evaluation.view).isEmpty) = true
+  · simp only [ite_eq_left clean] at shown
+    simp only [Bool.and_eq_true, List.isEmpty_iff] at clean
+    simp only [disabledChoices, List.filterMap_eq_nil_iff, Option.map_eq_none_iff] at clean
+    exact clean.2 control shown
+  · rw [ite_eq_right clean] at submitted
+    simp [keeps, fresh] at submitted
 
 def event {Γ : Model.Context}
   {model β : Type}

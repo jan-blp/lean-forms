@@ -28,10 +28,14 @@ private def options : Display.Editor → List Display.SelectableOption
   | .tabs ..
   | .hostWidget .. => []
 
-private def express (state : ModelForm.State form) : IO Display.SelectableOption := do
-  let some option := (options (← control state "Speed").input).find? (·.label == "Express")
-    | throw (IO.userError "FAIL missing Express")
+private def speed (state : ModelForm.State form) (label : String) : IO Display.SelectableOption := do
+  let some option := (options (← control state "Speed").input).find? (·.label == label)
+    | throw (IO.userError s!"FAIL missing {label}")
   return option
+
+private def submitted (state : ModelForm.State form) : Bool :=
+  (ModelForm.execute (model := Parcel) form state .submit).toOption.any fun state =>
+    state.outbox.any fun effect => effect == .submit
 
 private def apply
   (state : ModelForm.State form)
@@ -43,13 +47,21 @@ private def apply
 
 def run : IO Unit := do
   let opened := ModelForm.openState (model := Parcel) form initial Env.nil supply
-  check "SelectOptionEnabledWithinLimit" ((← express opened).disabledReason == none)
+  check "SelectOptionEnabledWithinLimit" ((← speed opened "Express").disabledReason == none)
   let heavy ← apply opened "Weight (g)" "40000"
-  let option ← express heavy
+  let option ← speed heavy "Express"
   check "SelectOptionDisabledWithReason"
     (option.disabledReason == some "Express takes parcels up to 30 kg.")
   let light ← apply heavy "Weight (g)" "1000"
-  let chosen ← apply light "Speed" (← express light).value
+  let chosen ← apply light "Speed" (← speed light "Express").value
   check "SelectAcceptsReenabledOption" (chosen.value.speed matches .express)
+  let overweight ← apply chosen "Weight (g)" "40000"
+  check "SelectShowsDisabledChoice"
+    ((overweight.value.speed matches .express) &&
+      (← control overweight "Speed").errors == ["Express takes parcels up to 30 kg."])
+  check "DisabledChoiceBlocksSubmit" (!submitted overweight)
+  let switched ← apply overweight "Speed" (← speed overweight "Economy").value
+  check "ChangingDisabledChoiceUnblocksSubmit"
+    ((← control switched "Speed").errors.isEmpty && submitted switched)
 
 end Tests.Shipping
