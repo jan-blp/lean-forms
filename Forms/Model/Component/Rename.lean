@@ -37,6 +37,8 @@ def ComponentNode.rename
   match component with
   | .field target label editor evidence =>
     .field (target.rename rename) (label.rename rename) editor (evidence.rename rename)
+  | .hostWidget contract target label input =>
+    .hostWidget contract (target.rename rename) (label.rename rename) (input.rename rename)
   | .computed label value => .computed (label.rename rename) (value.rename rename)
   | .button caption action => .button (caption.rename rename) (action.rename rename)
   | .tabBar label active tabs => .tabBar (label.rename rename) (rename active) (tabs.rename rename)

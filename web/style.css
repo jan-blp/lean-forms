@@ -84,6 +84,10 @@ label:has(> input[type="checkbox"]) { display: flex; flex-direction: row-reverse
 .choice { display: flex; flex-wrap: wrap; gap: var(--space-xs) var(--space-m); margin: var(--space-m) 0; padding: 0; border: 0; }
 .choice > legend { flex-basis: 100%; }
 .choice > .feedback { flex-basis: 100%; }
+.host-widget { margin: var(--space-m) 0; padding: 0; border: 0; }
+.swatches { display: flex; flex-wrap: wrap; gap: var(--space-s); margin-top: var(--space-xs); }
+.swatch { width: 32px; height: 32px; padding: 0; border: 2px solid var(--surface); border-radius: 50%; box-shadow: 0 0 0 1px var(--border); }
+.swatch[aria-checked="true"] { box-shadow: 0 0 0 2px var(--text); }
 .choice-disabled-reason { display: block; color: var(--disabled-text); font-size: 0.875em; }
 label:has(> input[type="radio"]) { display: flex; align-items: center; gap: var(--space-xs); }
 input[type="radio"] { width: 16px; height: 16px; min-height: 0; margin: 0; accent-color: var(--primary); }

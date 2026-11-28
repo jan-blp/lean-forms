@@ -691,6 +691,22 @@ try {
   `, async evaluate => {
     await evaluate(`await (await import(${JSON.stringify(await fixture('Reopen'))})).checkReopen();`);
   });
+  await example('swatches', `
+    const swatch = label => document.querySelector(\`.swatch[aria-label="\${label}"]\`);
+    const accent = () => [...document.querySelectorAll('.computed label')].find(label =>
+      label.firstChild.textContent === 'Chosen accent').querySelector('output').textContent;
+    check(document.querySelectorAll('.swatch').length === 4 &&
+      swatch('Blue').getAttribute('aria-checked') === 'true', 'The picker did not show the light palette');
+    swatch('Orange').click();
+    await wait(() => accent() === 'orange');
+    check(swatch('Orange').getAttribute('aria-checked') === 'true', 'The picker did not show the chosen swatch');
+    document.querySelector('input[type=checkbox]').click();
+    await wait(() => document.querySelectorAll('.swatch').length === 3);
+    swatch('Purple').click();
+    await wait(() => accent() === 'purple');
+  `, async evaluate => {
+    await evaluate(`await (await import(${JSON.stringify(await fixture('HostWidgets'))})).checkHostWidgets();`);
+  });
   await example('delivery', '', async evaluate => {
     await evaluate(`await (await import(${JSON.stringify(await fixture('Transport'))})).checkTransport();`);
   });

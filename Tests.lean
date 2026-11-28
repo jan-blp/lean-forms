@@ -35,6 +35,7 @@ import Tests.LookupCandidates
 import Tests.Invalidation
 import Tests.PrivateState
 import Tests.Shipping
+import Tests.HostWidget
 
 meta import Forms.Model.Computation.Theorems
 meta import Forms.Runtime.ModelView.Theorems
@@ -71,3 +72,4 @@ public def main : IO Unit := do
   Tests.Invalidation.run
   Tests.PrivateState.run
   Tests.Shipping.run
+  Tests.HostWidget.run

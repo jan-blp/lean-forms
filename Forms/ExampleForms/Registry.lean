@@ -16,6 +16,7 @@ public import Forms.ExampleForms.InvoiceEvidence
 public import Forms.ExampleForms.Delivery
 public import Forms.ExampleForms.BusinessPartners
 public import Forms.ExampleForms.FillFromDb
+public import Forms.ExampleForms.Swatches
 public import Forms.ExampleForms.PrivateState
 public import Forms.ExampleForms.Shipping
 public import Forms.ExampleForms.ExchangeRate
@@ -99,6 +100,9 @@ def forms : List (String × RegisteredForm) := [
     submitUrl := "/api/submit" }),
   ("fill-from-db", {
     definition := .ofModel FillFromDb.Payee FillFromDb.form FillFromDb.initial
+    submitUrl := "/api/submit" }),
+  ("swatches", {
+    definition := .ofModel Swatches.Theme Swatches.form Swatches.initial
     submitUrl := "/api/submit" })]
 
 def api (request : Model.HttpRequest) : Option Lean.Json :=

@@ -25,7 +25,8 @@ private def options : Display.Editor → List Display.SelectableOption
   | .field ..
   | .lookup ..
   | .action
-  | .tabs .. => []
+  | .tabs ..
+  | .hostWidget .. => []
 
 private def express (state : ModelForm.State form) : IO Display.SelectableOption := do
   let some option := (options (← control state "Speed").input).find? (·.label == "Express")

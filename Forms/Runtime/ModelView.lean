@@ -409,9 +409,30 @@ def evaluateNode
           | .text _
           | .boolean _
           | .texts _
-          | .lookup _ =>
+          | .lookup _
+          | .hostWidget _ =>
             let updated ← MonadExcept.ofExcept ((Input.decode widget input).mapError .decode)
             return written.set updated value env
+        | _ => absent }
+  | .hostWidget contract written label input =>
+    let current := input.eval value env
+    let control := targetControl written .edit ambient target location (label.eval value env)
+      disabled (.hostWidget contract.name (contract.inputToJson.toJson current))
+    { output := ()
+      locals := ()
+      view := fun _ => .control control
+      requests := []
+      pending := []
+      apply := fun route trigger => match route with
+        | [] => do
+          if disabled then throw (.invalid .disabled)
+          let some (.hostWidget sent) ← trigger.argument
+            | throw (.decode (.clientBug (.wrongArgument "a host widget output")))
+          let output ← MonadExcept.ofExcept <| (contract.outputFromJson.fromJson? sent).mapError
+            fun message => .decode (.input s!"Invalid value: {message}")
+          let accepted ← MonadExcept.ofExcept <| (contract.accept current output).mapError
+            (.decode ∘ .input)
+          return written.set accepted value env
         | _ => absent }
   | .computed label computation =>
     { output := ()
@@ -604,7 +625,8 @@ def evaluateNode
           | some (.text _)
           | some (.boolean _)
           | some (.texts _)
-          | some (.pick _) => throw (.decode (.clientBug (.wrongArgument "a lookup command")))
+          | some (.pick _)
+          | some (.hostWidget _) => throw (.decode (.clientBug (.wrongArgument "a lookup command")))
           | none => throw (.decode (.clientBug .missingArgument))
         | _ => absent }
   | .output computation =>

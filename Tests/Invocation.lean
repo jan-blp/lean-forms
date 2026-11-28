@@ -20,6 +20,7 @@ private def argument : Display.Editor → Option Input
   | .lookup .. => some (.lookup (.search "x"))
   | .action => none
   | .tabs active labels => some (.text (toString ((active + 1) % labels.length.max 1)))
+  | .hostWidget .. => none
 
 private def keyOf
   {α : Type}

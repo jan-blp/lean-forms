@@ -35,7 +35,8 @@ private def choose (state : State) (option : String) : IO State := do
     | .field ..
     | .lookup ..
     | .action
-    | .tabs .. => []
+    | .tabs ..
+    | .hostWidget .. => []
   let some chosen := options.find? (·.label == option)
     | throw (IO.userError s!"FAIL no option {option}")
   apply state "Currency" (.text chosen.value)

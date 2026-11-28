@@ -8,6 +8,23 @@ export type Props<K extends Kind> = Extract<FormsReact.Component, Record<K, unkn
 /** One React component per Lean constructor; containers render nested lists with `<Children>`. */
 export type Components = { [K in Kind]: ComponentType<Props<K>> };
 
+export interface HostWidgetProps<Input, Output> {
+  input: Input;
+  disabled: boolean;
+  onChange(output: Output): void;
+}
+
+export type HostWidgetComponent = ComponentType<HostWidgetProps<unknown, unknown>>;
+
+export function hostWidget<Input, Output>(
+    component: ComponentType<HostWidgetProps<Input, Output>>): HostWidgetComponent {
+  return component as HostWidgetComponent;
+}
+
+export type HostWidgets = Readonly<Record<string, HostWidgetComponent>>;
+
+export type FocusTarget = Pick<HTMLElement, 'focus'>;
+
 export type LinkedEvidence = Extract<FormsReact.Evidence, { linked: unknown }>['linked'];
 
 export interface EvidenceHost {
@@ -23,10 +40,11 @@ export interface EvidenceHost {
 
 export interface LeanFormContext {
   components: Components;
+  hostWidgets: HostWidgets;
   evidence: EvidenceHost | null;
   draft(name: string): string | undefined;
   draftError(name: string): string | undefined;
-  registerTarget(name: string, element: HTMLElement | null): void;
+  registerTarget(name: string, target: FocusTarget | null): void;
   /** Records the text of field `name`; `undefined` drops the draft. */
   setDraft(name: string, text: string | undefined, error?: string): void;
   run(action: FormsReact.Action, argument?: unknown): void;

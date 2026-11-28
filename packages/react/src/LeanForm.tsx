@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { defaultComponents } from './components.js';
-import { Context, type Components, type EvidenceHost, type LeanFormContext } from './context.js';
+import { Context, type Components, type EvidenceHost, type FocusTarget, type LeanFormContext, type HostWidgets } from './context.js';
 import type * as Wire from './protocol/Forms/Runtime/Wire.js';
 import type * as FormsReact from './protocol/FormsReact.js';
 import { Render } from './render.js';
@@ -13,6 +13,8 @@ export interface LeanFormProps {
   /** URL of the app's compiled `forms.mjs`. */
   moduleUrl: string | URL;
   components?: Partial<Components>;
+  /** By contract name; an unregistered one fails the form. */
+  hostWidgets?: HostWidgets;
   evidence?: EvidenceHost;
   /** Handles lookup and submission requests using the host app's authentication. */
   transport?: HttpTransport;
@@ -28,7 +30,8 @@ interface Opened {
 
 let opens = 0;
 
-export function LeanForm({ start, moduleUrl, components, evidence, transport, onSnapshot }: LeanFormProps) {
+export function LeanForm(
+    { start, moduleUrl, components, hostWidgets, evidence, transport, onSnapshot }: LeanFormProps) {
   const [opened, setOpened] = useState<Opened>();
   const [failure, setFailure] = useState<string>();
   const url = String(moduleUrl);
@@ -49,7 +52,7 @@ export function LeanForm({ start, moduleUrl, components, evidence, transport, on
   if (failure !== undefined) return <p className="error" role="alert">{failure}</p>;
   if (!opened) return <p role="status">Loading…</p>;
   return <OpenForm key={opened.key} model={opened.model}
-    components={{ ...defaultComponents, ...components }}
+    components={{ ...defaultComponents, ...components }} hostWidgets={hostWidgets ?? {}}
     evidence={evidence ?? null} transport={transport} onSnapshot={onSnapshot}
     onFailure={error => setFailure(message(error))} />;
 }
@@ -57,6 +60,7 @@ export function LeanForm({ start, moduleUrl, components, evidence, transport, on
 interface OpenFormProps {
   model: FormModel;
   components: Components;
+  hostWidgets: HostWidgets;
   evidence: EvidenceHost | null;
   transport?: HttpTransport;
   onSnapshot?(snapshot: Wire.Snapshot): void;
@@ -72,15 +76,19 @@ async function defaultTransport({ url, ...request }: Wire.HttpEffect): Promise<R
   return fetch(url, request);
 }
 
-function OpenForm({ model, components, evidence, transport, onSnapshot, onFailure }: OpenFormProps) {
+function OpenForm({ model, components, hostWidgets, evidence, transport, onSnapshot, onFailure }: OpenFormProps) {
   const [opened] = useState(() => model.snapshot());
   const [snapshot, setSnapshot] = useState(opened);
   const [drafts, setDrafts] = useState<ReadonlyMap<string, Draft>>(new Map());
   const currentDrafts = useRef(drafts);
-  const targets = useRef(new Map<string, HTMLElement>());
+  const targets = useRef(new Map<string, FocusTarget>());
   const currentTransport = useRef(transport);
   useLayoutEffect(() => { currentTransport.current = transport; }, [transport]);
   const picking = useRef<string | null>(null);
+  const unregistered = snapshot.hostWidgets.find(name => !Object.hasOwn(hostWidgets, name));
+  useEffect(() => {
+    if (unregistered !== undefined) onFailure(new Error(`No host widget is registered as "${unregistered}".`));
+  }, [unregistered, onFailure]);
   useEffect(() => onSnapshot?.(snapshot), [snapshot, onSnapshot]);
   // The opened snapshot may already request data; Lean ignores repeated responses.
   useEffect(() => performAll(opened), [opened]);
@@ -185,11 +193,12 @@ function OpenForm({ model, components, evidence, transport, onSnapshot, onFailur
 
   const context: LeanFormContext = {
     components,
+    hostWidgets,
     evidence,
     draft: name => currentDrafts.current.get(name)?.text,
     draftError: name => currentDrafts.current.get(name)?.error,
-    registerTarget: (name, element) => {
-      if (element) targets.current.set(name, element); else targets.current.delete(name);
+    registerTarget: (name, target) => {
+      if (target) targets.current.set(name, target); else targets.current.delete(name);
     },
     setDraft: (name, text, error) => {
       const previousError = currentDrafts.current.get(name)?.error;
@@ -209,6 +218,7 @@ function OpenForm({ model, components, evidence, transport, onSnapshot, onFailur
       });
     },
   };
+  if (unregistered !== undefined) return null;
   return <Context.Provider value={context}><Render component={snapshot.view} /></Context.Provider>;
 }
 

@@ -97,6 +97,16 @@ abbrev Component.fieldWithEvidence
   : Component Γ α :=
   { LocalState := Unit, node := .field (.path path) label editor (.recordedAt evidence) }
 
+abbrev Component.hostWidget
+  {Γ : Context}
+  {α β Input Output : Type}
+  (contract : HostWidget Input Output β)
+  (path : Path α β)
+  (label : Computation Γ α String)
+  (input : Computation Γ α Input)
+  : Component Γ α :=
+  { LocalState := Unit, node := .hostWidget contract (.path path) label input }
+
 abbrev Component.computed
   {Γ : Context}
   {α : Type}

@@ -18,6 +18,8 @@ private def actionArgument (input : Display.Editor) : Json :=
   | .action => Json.null
   | .tabs active labels => toJson (toString ((active + 1) % labels.length.max 1))
   | .lookup .. => Json.mkObj [("lookup", toJson (LookupInput.search "a"))]
+  | .hostWidget "swatchPicker" _ => Json.mkObj [("hostWidget", Json.mkObj [("id", "green")])]
+  | .hostWidget .. => Json.null
   | .choice selected options => toJson ((options.find? (·.value != selected)).map (·.value) |>.getD selected)
   | .field (.choices selected options) _ =>
     let toggled := (options.head?.map (·.value)).getD ""

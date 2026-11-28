@@ -69,6 +69,7 @@ structure Snapshot where
   draftFields : List String
   /-- Names of the fields that take a pick from the document. -/
   pickFields : List String
+  hostWidgets : List String
   effects : List Effect
   controls : List Json
   submission : Json

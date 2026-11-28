@@ -404,6 +404,31 @@ export function TabBar({ label, active, labels, disabled, onChange }: FormsReact
   );
 }
 
+/** Host markup may contain elements that do not take focus. */
+function focusFirst(container: HTMLElement, options?: FocusOptions) {
+  for (const element of container.querySelectorAll<HTMLElement>('*')) {
+    if (element.tabIndex < 0) continue;
+    element.focus(options);
+    if (element.ownerDocument.activeElement === element) return;
+  }
+}
+
+export function HostWidget(
+    { name, contract, label, input, disabled, errors, onChange }: FormsReact.HostWidget) {
+  const form = useLeanForm();
+  const feedback = useId();
+  const Host = form.hostWidgets[contract];
+  if (!Host) throw new Error(`No host widget is registered as "${contract}".`);
+  return (
+    <fieldset ref={element => form.registerTarget(name, element && { focus: options => focusFirst(element, options) })}
+      className="host-widget" {...described(errors, feedback)}>
+      <legend>{label}</legend>
+      <Host input={input} disabled={disabled} onChange={output => form.run(onChange, { hostWidget: output })} />
+      <Feedback id={feedback} errors={errors} />
+    </fieldset>
+  );
+}
+
 export function Group({ label, children, errors }: FormsReact.Group) {
   const feedback = useId();
   const message = <Feedback id={feedback} errors={errors} />;
@@ -463,6 +488,7 @@ export const defaultComponents: Components = {
   output: Output,
   button: Button,
   tabBar: TabBar,
+  hostWidget: HostWidget,
   group: Group,
   table: Table,
   page: Page,

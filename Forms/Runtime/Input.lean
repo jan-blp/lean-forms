@@ -19,14 +19,16 @@ inductive Input where
   | texts (values : List String)
   | pick (evidence : Model.Evidence)
   | lookup (input : LookupInput)
+  | hostWidget (output : Lean.Json)
 
-/-- Whether the input is text the user typed, which stays in the field as a draft when rejected. -/
-def Input.typed : Input → Bool
+/-- Whether a rejection stays on the control until it writes again. -/
+def Input.keepsRejection : Input → Bool
   | .text _ => true
   | .boolean _ => false
   | .texts _ => false
   | .pick _ => false
   | .lookup _ => false
+  | .hostWidget _ => true
 
 inductive ClientBug where
   | missingArgument

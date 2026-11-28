@@ -25,6 +25,7 @@ def widgetName : Editor → String
   | .lookup .. => "lookup"
   | .action => "action"
   | .tabs .. => "tabs"
+  | .hostWidget .. => "hostWidget"
 
 def controlToJson (control : Control) : Json :=
   Json.mkObj ([
