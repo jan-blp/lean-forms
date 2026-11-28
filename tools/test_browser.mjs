@@ -100,6 +100,13 @@ try {
       assert.equal(result.result.value, true, `Horizontal page overflow at ${width}px`);
     }
   }
+  async function fixture(name) {
+    const result = await build({
+      entryPoints: [join(cwd, `tools/fixtures/${name}.tsx`)],
+      bundle: true, write: false, format: 'esm', jsx: 'automatic', alias,
+    });
+    return `data:text/javascript;base64,${Buffer.from(result.outputFiles[0].contents).toString('base64')}`;
+  }
   /** Loads `name` in Firefox, runs `body`, then submits through the real server. */
   async function example(name, body, interact) {
     const port = await freePort();
@@ -681,14 +688,11 @@ try {
     check(calls === 2 && input('IBAN').value === 'CH93 0076 2011 6238 5295 7',
       'A failed call changed the IBAN');
     window.fetch = originalFetch;
-  `);
-  const fixture = await build({
-    entryPoints: [join(cwd, 'tools/fixtures/Transport.tsx')],
-    bundle: true, write: false, format: 'esm', jsx: 'automatic', alias,
+  `, async evaluate => {
+    await evaluate(`await (await import(${JSON.stringify(await fixture('Reopen'))})).checkReopen();`);
   });
-  const fixtureUrl = `data:text/javascript;base64,${Buffer.from(fixture.outputFiles[0].contents).toString('base64')}`;
   await example('delivery', '', async evaluate => {
-    await evaluate(`await (await import(${JSON.stringify(fixtureUrl)})).checkTransport();`);
+    await evaluate(`await (await import(${JSON.stringify(await fixture('Transport'))})).checkTransport();`);
   });
   const marker = `const marker = () => document.querySelector('.status-marker');
     const issues = () => [...document.querySelectorAll('output')].find(output =>
